@@ -1,0 +1,7 @@
+downloads/
+output/
+browser_state/
+credentials.json
+token.json
+.env
+__pycache__/
