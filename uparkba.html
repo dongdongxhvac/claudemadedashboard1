@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>COVE · Building Assignments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;600&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --bg-elev: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #5a5a58;
+    --ink-muted: #8a8a86;
+    --rule: #e3dfd5;
+    --rule-strong: #c9c4b6;
+
+    --c-major:  #b8531a;
+    --c-filter: #4a6fa5;
+    --c-test:   #6b8e3d;
+    --c-minor:  #8a8a86;
+
+    --c-major-soft: #f0d8c4;
+    --c-filter-soft: #e3ebf3;
+
+    --warn: #a02c2c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1320px; margin: 0 auto; padding: 48px 40px 80px; }
+
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 20px; border-bottom: 1px solid var(--rule-strong); margin-bottom: 32px;
+  }
+  .brand {
+    font-family: 'Fraunces', serif; font-weight: 400; font-size: 32px;
+    letter-spacing: -0.01em; font-style: italic;
+  }
+  .brand b { font-style: normal; font-weight: 500; }
+  .meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em; text-align: right;
+  }
+  .meta .date { color: var(--ink); font-weight: 500; }
+
+  /* ---------- Section head ---------- */
+  section { margin-bottom: 36px; }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
+    margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--rule);
+  }
+  .section-head h2 {
+    font-family: 'Fraunces', serif; font-weight: 400; font-size: 24px; letter-spacing: -0.01em;
+  }
+  .section-head h2 .num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-muted);
+    letter-spacing: 0.1em; margin-right: 12px; text-transform: uppercase; font-weight: 500;
+  }
+  .section-head .total { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .section-head .total b { color: var(--ink); font-weight: 600; }
+  .head-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .head-btn {
+    background: none; border: 1px solid var(--rule-strong); border-radius: 2px;
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-soft); font-weight: 500;
+    cursor: pointer; transition: all 120ms ease; white-space: nowrap;
+  }
+  .head-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); background: #faf8f3; }
+  .head-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .head-btn .lbl {
+    text-transform: none; letter-spacing: 0;
+    margin-left: 6px; color: var(--ink-muted); font-weight: 400;
+  }
+  .head-btn:hover:not(:disabled) .lbl { color: var(--ink-soft); }
+
+  /* ---------- Legend ---------- */
+  .legend {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+  }
+  .legend .swatch {
+    display: inline-block;
+    padding: 3px 8px; border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    font-weight: 500; vertical-align: middle; margin-right: 6px;
+  }
+  .legend .swatch.primary {
+    background: #faf8f3; border: 1px solid var(--rule); color: var(--ink);
+  }
+  .legend .swatch.support {
+    background: var(--c-filter-soft); border: 1px dashed var(--c-filter); color: var(--c-filter);
+  }
+  .legend .hint { color: var(--ink-soft); }
+  .legend .kbd {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+    background: #faf8f3; border: 1px solid var(--rule);
+    padding: 1px 5px; border-radius: 2px;
+    color: var(--ink); margin: 0 2px;
+  }
+
+  /* ---------- Panel & Table ---------- */
+  .panel { background: var(--bg-elev); border: 1px solid var(--rule); border-radius: 2px; padding: 0; overflow: hidden; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+  th {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+    font-weight: 500; background: #faf8f3; border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+  }
+  td { font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.eng-row:hover { background: #faf8f3; }
+  tbody tr.eng-row.drop-row-above td { box-shadow: inset 0 2px 0 0 var(--c-major); }
+  tbody tr.eng-row.drop-row-below td { box-shadow: inset 0 -2px 0 0 var(--c-major); }
+  tbody tr.eng-row.dragging-row { opacity: 0.4; }
+
+  td.col-handle {
+    width: 22px; padding-left: 12px; padding-right: 4px;
+    color: var(--rule-strong);
+    user-select: none;
+  }
+  td.col-handle .handle {
+    display: inline-block; cursor: grab;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1;
+    padding: 2px 4px; border-radius: 2px;
+  }
+  td.col-handle .handle:hover { color: var(--ink-soft); background: var(--rule); }
+  td.col-handle .handle:active { cursor: grabbing; }
+
+  td.col-name { font-weight: 500; white-space: nowrap; }
+  td.col-time {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--ink-soft); white-space: nowrap;
+  }
+  td.col-phone {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--ink); white-space: nowrap;
+  }
+  td.col-actions {
+    width: 60px; text-align: right; padding-right: 12px;
+  }
+  .remove-btn {
+    background: none; border: none; padding: 2px 6px; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  tr.eng-row:hover .remove-btn { opacity: 1; }
+  .remove-btn:hover { color: var(--warn); background: #faf0f0; }
+
+  /* ---------- Shift header row ---------- */
+  tr.shift-head td {
+    background: #f0ede4;
+    border-bottom: 1px solid var(--rule-strong);
+    border-top: 1px solid var(--rule-strong);
+    padding: 8px 14px;
+  }
+  tr.shift-head:first-child td { border-top: none; }
+  .shift-head-inner {
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .shift-head-inner .label {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink); font-weight: 600;
+  }
+  .shift-head-inner .label .count {
+    color: var(--ink-muted); font-weight: 400; margin-left: 8px;
+  }
+  .add-link {
+    background: none; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--c-major); font-weight: 500;
+    padding: 2px 6px; border-radius: 2px;
+  }
+  .add-link:hover { background: var(--c-major-soft); }
+
+  /* ---------- Building chips ---------- */
+  td.col-bld {
+    line-height: 1.9;
+    max-width: 420px;
+  }
+  td.col-bld.drop-hover {
+    background: var(--c-major-soft);
+    outline: 1px dashed var(--c-major);
+    outline-offset: -3px;
+  }
+  .bld-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    margin-right: 4px;
+    margin-bottom: 3px;
+    border-radius: 2px;
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: grab;
+    transition: all 100ms ease;
+    user-select: none;
+  }
+  /* Primary chip — solid, filled */
+  .bld-chip.primary {
+    background: #faf8f3;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+  }
+  .bld-chip.primary:hover {
+    background: var(--c-major-soft);
+    border-color: var(--c-major);
+  }
+  /* Support chip — outlined, dashed blue */
+  .bld-chip.support {
+    background: var(--c-filter-soft);
+    border: 1px dashed var(--c-filter);
+    color: var(--c-filter);
+  }
+  .bld-chip.support:hover {
+    background: var(--c-major-soft);
+    border-color: var(--c-major);
+    border-style: solid;
+    color: var(--c-major);
+  }
+  .bld-chip:active { cursor: grabbing; }
+  .bld-chip.dragging { opacity: 0.4; }
+  .bld-chip.drop-before { box-shadow: -2px 0 0 0 var(--c-major); }
+  .bld-chip.drop-after  { box-shadow:  2px 0 0 0 var(--c-major); }
+
+  td.col-bld .empty-hint {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em;
+    font-style: italic;
+  }
+
+  /* ---------- Add-engineer inline row ---------- */
+  tr.add-row td {
+    background: #fdf6f0; border-bottom: 1px solid var(--rule);
+    padding: 10px 14px;
+  }
+  tr.add-row input {
+    font-family: 'Inter Tight', system-ui, sans-serif; font-size: 13px;
+    border: 1px solid var(--rule-strong); background: white;
+    border-radius: 2px; padding: 5px 8px; color: var(--ink);
+    width: 100%;
+  }
+  tr.add-row input:focus { outline: none; border-color: var(--c-major); }
+  tr.add-row input[type="time"] {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 4px 6px;
+  }
+  tr.add-row td.col-time { padding: 8px 6px; }
+  tr.add-row td.col-name input { font-weight: 500; }
+  tr.add-row td.col-phone input { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .add-row-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .add-row-actions .btn-save {
+    background: var(--c-major); color: white; border: 1px solid var(--c-major);
+    border-radius: 2px; padding: 5px 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
+    cursor: pointer;
+  }
+  .add-row-actions .btn-save:disabled {
+    background: var(--rule-strong); border-color: var(--rule-strong); cursor: not-allowed;
+  }
+  .add-row-actions .btn-cancel {
+    background: none; border: 1px solid var(--rule-strong); border-radius: 2px;
+    padding: 5px 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted); cursor: pointer;
+  }
+  .add-row-actions .btn-cancel:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ---------- Unassigned tray ---------- */
+  .tray {
+    margin-top: 24px;
+    background: var(--bg-elev); border: 1px dashed var(--warn); border-radius: 2px;
+    padding: 14px 18px;
+    display: none;
+  }
+  .tray.visible { display: block; }
+  .tray.drop-hover { background: var(--c-major-soft); border-color: var(--c-major); }
+  .tray .tray-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--warn); font-weight: 500; margin-bottom: 10px;
+  }
+  .tray .tray-chips { line-height: 2; }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: white;
+    padding: 10px 18px; border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms ease;
+    z-index: 1000; max-width: 90vw;
+  }
+  .toast.visible { opacity: 1; }
+  .toast.warn { background: var(--warn); }
+  .toast.ok { background: var(--c-test); }
+
+  /* ---------- Footer ---------- */
+  footer {
+    margin-top: 48px; padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+  }
+  footer .footer-right { display: flex; align-items: center; gap: 14px; }
+  .reset-link {
+    background: none; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-muted);
+    padding: 2px 6px; border-radius: 2px;
+  }
+  .reset-link:hover { color: var(--warn); background: #faf0f0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="brand">COVE <b>· Building Assignments</b></div>
+    <div class="meta">
+      <div class="date" id="todayDate">—</div>
+      <div>uparkba.html</div>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <h2><span class="num">§--</span>building assignments · by engineer</h2>
+      <div class="head-meta">
+        <button id="undoBtn" class="head-btn" disabled title="Ctrl+Z">↶ undo<span class="lbl"></span></button>
+        <button id="redoBtn" class="head-btn" disabled title="Ctrl+Y">↷ redo<span class="lbl"></span></button>
+        <span class="total" id="totalCount">—</span>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch primary">40</span><span class="hint">primary · 1 per building</span></span>
+      <span><span class="swatch support">40</span><span class="hint">support · 1 per building max</span></span>
+      <span class="hint"><span class="kbd">drag</span> to move · <span class="kbd">double-click</span> primary to create support · <span class="kbd">double-click</span> support to delete</span>
+    </div>
+
+    <div class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Engineer</th>
+            <th>Start</th>
+            <th>Lunch Out</th>
+            <th>Lunch In</th>
+            <th>End</th>
+            <th>Assigned Buildings</th>
+            <th>Phone</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+    </div>
+
+    <div class="tray" id="unassignedTray">
+      <div class="tray-label">Unassigned buildings · drag onto an engineer</div>
+      <div class="tray-chips" id="trayChips"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>self-contained · runs locally · drag chips · double-click to toggle support · ctrl+z to undo</div>
+    <div class="footer-right">
+      <span>localStorage: uparkba_v1</span>
+      <button class="reset-link" id="resetLink">reset board</button>
+    </div>
+  </footer>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============================================================================
+// Seed data
+// ============================================================================
+const SHIFT_DEFAULTS = {
+  '7AM':    { startTime: '7:00AM',  lunchOut: '12:00PM', lunchIn: '12:30PM', endTime: '3:30PM' },
+  '9:30AM': { startTime: '9:30AM',  lunchOut: '1:00PM',  lunchIn: '1:30PM',  endTime: '6:00PM' },
+};
+
+// mk: build an engineer entry. P = primary buildings, S = support buildings.
+function mk(id, name, shift, phone, P = [], S = []) {
+  return {
+    id, name, shift, ...SHIFT_DEFAULTS[shift], phone,
+    buildings: [
+      ...P.map(bid => ({ id: bid, role: 'primary' })),
+      ...S.map(bid => ({ id: bid, role: 'support' })),
+    ],
+  };
+}
+
+const SEED_ENGINEERS = [
+  mk('sean',    'Sean M.', '7AM',    '(617) 212-5548', ['10','26','35','40','55','80','300','350']),
+  mk('eduin',   'Eduin',   '7AM',    '(617) 719-0225', [], ['730','750']),
+  mk('dariusz', 'Dariusz', '7AM',    '(857) 276-7567', ['30','38','64','65','45','75','88','730','750']),
+  mk('evan',    'Evan',    '7AM',    '(857) 262-7122', [], ['65','88']),
+  mk('jorge',   'Jorge',   '7AM',    '(781) 230-9075', [], ['300','350']),
+  mk('rodney',  'Rodney',  '9:30AM', '(617) 413-3841', [], ['30','38','64','80']),
+  mk('peter',   'Peter',   '9:30AM', '(617) 312-4374', [], ['26','40']),
+  mk('mark',    'Mark',    '9:30AM', '(978) 987-5845', [], ['45','75']),
+  mk('brandon', 'Brandon', '9:30AM', '(781) 579-5493', [], ['10','35','55']),
+];
+
+const STORAGE_KEY = 'uparkba_v1';
+const SHIFTS = ['7AM', '9:30AM'];
+const HISTORY_MAX = 50;
+const MASTERS = new Set(['sean', 'dariusz']);  // used only when migrating legacy string data
+
+// ============================================================================
+// State
+// ============================================================================
+let state = loadState();
+let addingShift = null;
+let dragging = null;
+const history = { undo: [], redo: [] };
+
+function buildInitialState() {
+  return { engineers: structuredClone(SEED_ENGINEERS), unassigned: [] };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.engineers)) {
+        const wasLegacy = parsed.engineers.some(e =>
+          (e.buildings || []).some(b => typeof b === 'string'));
+        const engineers = parsed.engineers.map(({ fixed, ...rest }) => ({
+          ...rest,
+          buildings: (rest.buildings || []).map(b =>
+            typeof b === 'string' ? { id: b, role: 'primary' } : b
+          ),
+        }));
+        let s = {
+          engineers,
+          unassigned: Array.isArray(parsed.unassigned) ? parsed.unassigned : [],
+        };
+        if (wasLegacy) s = migrateLegacyToRoles(s);
+        return s;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  return buildInitialState();
+}
+
+// Convert old string-only buildings to primary/support based on duplicates.
+// Master engineers (sean, dariusz) get primary on conflicts.
+function migrateLegacyToRoles(s) {
+  const seen = new Set();
+  const ordered = [
+    ...s.engineers.filter(e => MASTERS.has(e.id)),
+    ...s.engineers.filter(e => !MASTERS.has(e.id)),
+  ];
+  for (const eng of ordered) {
+    for (const b of eng.buildings) {
+      if (seen.has(b.id)) b.role = 'support';
+      else { b.role = 'primary'; seen.add(b.id); }
+    }
+  }
+  return s;
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// ---- Undo / Redo ----
+function snapshot() {
+  return {
+    engineers: structuredClone(state.engineers),
+    unassigned: structuredClone(state.unassigned),
+  };
+}
+function pushHistory(label) {
+  history.undo.push({ snap: snapshot(), label });
+  if (history.undo.length > HISTORY_MAX) history.undo.shift();
+  history.redo.length = 0;
+}
+function applySnapshot(snap) {
+  state.engineers = structuredClone(snap.engineers);
+  state.unassigned = structuredClone(snap.unassigned);
+}
+function undo() {
+  if (history.undo.length === 0) return;
+  const entry = history.undo.pop();
+  history.redo.push({ snap: snapshot(), label: entry.label });
+  applySnapshot(entry.snap);
+  addingShift = null;
+  saveState();
+  render();
+}
+function redo() {
+  if (history.redo.length === 0) return;
+  const entry = history.redo.pop();
+  history.undo.push({ snap: snapshot(), label: entry.label });
+  applySnapshot(entry.snap);
+  addingShift = null;
+  saveState();
+  render();
+}
+
+function resetBoard() {
+  if (!confirm('Reset the board to its initial state? This goes onto the undo stack so you can revert.')) return;
+  pushHistory('reset board');
+  state = buildInitialState();
+  addingShift = null;
+  saveState();
+  render();
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+function engById(id) { return state.engineers.find(e => e.id === id); }
+
+// Find which engineer holds a given building+role (null if none / tray)
+function findOwner(bldId, role) {
+  for (const eng of state.engineers) {
+    if (eng.buildings.some(b => b.id === bldId && b.role === role)) return eng;
+  }
+  return null;
+}
+function findIn(eng, bldId, role = null) {
+  return eng.buildings.findIndex(b => b.id === bldId && (role === null || b.role === role));
+}
+
+function maskPhone(s) {
+  const digits = (s || '').replace(/\D/g, '');
+  if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  return s;
+}
+function fmtDate(d) {
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function genId(name) {
+  const base = (name || 'eng').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'eng';
+  let id = base, i = 1;
+  while (state.engineers.some(e => e.id === id)) { id = `${base}${++i}`; }
+  return id;
+}
+
+function showToast(msg, kind = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast visible ${kind}`;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { t.classList.remove('visible'); }, 2400);
+}
+
+// ============================================================================
+// Render
+// ============================================================================
+function render() {
+  document.getElementById('todayDate').textContent = fmtDate(new Date());
+
+  const tbody = document.getElementById('boardBody');
+  tbody.innerHTML = '';
+
+  let pCount = 0, sCount = 0;
+  for (const sh of SHIFTS) {
+    const inShift = state.engineers.filter(e => e.shift === sh);
+    tbody.appendChild(renderShiftHeader(sh, inShift.length));
+    for (const eng of inShift) {
+      tbody.appendChild(renderEngineerRow(eng));
+      for (const b of eng.buildings) {
+        if (b.role === 'primary') pCount++; else sCount++;
+      }
+    }
+    if (addingShift === sh) {
+      tbody.appendChild(renderAddRow(sh));
+    }
+  }
+
+  document.getElementById('totalCount').innerHTML =
+    `<b>${state.engineers.length}</b> engineers · <b>${pCount}</b> primary · <b>${sCount}</b> support`;
+
+  renderTray();
+  renderHistoryButtons();
+}
+
+function renderHistoryButtons() {
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const undoLast = history.undo[history.undo.length - 1];
+  const redoLast = history.redo[history.redo.length - 1];
+  undoBtn.disabled = !undoLast;
+  redoBtn.disabled = !redoLast;
+  undoBtn.querySelector('.lbl').textContent = undoLast ? ` · ${undoLast.label}` : '';
+  redoBtn.querySelector('.lbl').textContent = redoLast ? ` · ${redoLast.label}` : '';
+}
+
+function renderShiftHeader(shift, count) {
+  const tr = document.createElement('tr');
+  tr.className = 'shift-head';
+  const td = document.createElement('td');
+  td.colSpan = 9;
+  td.innerHTML = `
+    <div class="shift-head-inner">
+      <div class="label">${shift} shift <span class="count">· ${count} engineer${count===1?'':'s'}</span></div>
+      <button class="add-link" data-add-shift="${shift}">+ add engineer</button>
+    </div>`;
+  tr.appendChild(td);
+  td.querySelector('.add-link').addEventListener('click', () => {
+    addingShift = shift;
+    render();
+    const firstInput = document.querySelector(`tr.add-row[data-shift="${shift}"] input[name="name"]`);
+    if (firstInput) firstInput.focus();
+  });
+  return tr;
+}
+
+function renderEngineerRow(eng) {
+  const tr = document.createElement('tr');
+  tr.className = 'eng-row';
+  tr.dataset.engId = eng.id;
+
+  // Drag handle
+  const tdHandle = document.createElement('td');
+  tdHandle.className = 'col-handle';
+  const handle = document.createElement('span');
+  handle.className = 'handle';
+  handle.textContent = '⋮⋮';
+  handle.title = 'Drag to reorder within shift';
+  handle.draggable = true;
+  handle.addEventListener('dragstart', (e) => {
+    dragging = { kind: 'row', engId: eng.id, shift: eng.shift };
+    tr.classList.add('dragging-row');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `row:${eng.id}`);
+  });
+  handle.addEventListener('dragend', () => {
+    tr.classList.remove('dragging-row');
+    document.querySelectorAll('.drop-row-above, .drop-row-below').forEach(el => el.classList.remove('drop-row-above', 'drop-row-below'));
+    dragging = null;
+  });
+  tdHandle.appendChild(handle);
+  tr.appendChild(tdHandle);
+
+  // Name
+  const tdName = document.createElement('td');
+  tdName.className = 'col-name';
+  tdName.textContent = eng.name;
+  tr.appendChild(tdName);
+
+  // Times
+  for (const k of ['startTime', 'lunchOut', 'lunchIn', 'endTime']) {
+    const td = document.createElement('td');
+    td.className = 'col-time';
+    td.textContent = eng[k] || '—';
+    tr.appendChild(td);
+  }
+
+  // Buildings cell
+  const tdBld = document.createElement('td');
+  tdBld.className = 'col-bld';
+  tdBld.dataset.engId = eng.id;
+  if (eng.buildings.length === 0) {
+    const hint = document.createElement('span');
+    hint.className = 'empty-hint';
+    hint.textContent = 'drop here';
+    tdBld.appendChild(hint);
+  } else {
+    for (const b of eng.buildings) {
+      tdBld.appendChild(renderChip(eng.id, b));
+    }
+  }
+  attachCellDropHandlers(tdBld);
+  tr.appendChild(tdBld);
+
+  // Phone
+  const tdPhone = document.createElement('td');
+  tdPhone.className = 'col-phone';
+  tdPhone.textContent = eng.phone || '—';
+  tr.appendChild(tdPhone);
+
+  // Remove
+  const tdActions = document.createElement('td');
+  tdActions.className = 'col-actions';
+  const btn = document.createElement('button');
+  btn.className = 'remove-btn';
+  btn.innerHTML = '× remove';
+  btn.title = 'Remove this engineer';
+  btn.addEventListener('click', () => removeEngineer(eng.id));
+  tdActions.appendChild(btn);
+  tr.appendChild(tdActions);
+
+  // Row drop target
+  tr.addEventListener('dragover', (e) => {
+    if (!dragging || dragging.kind !== 'row') return;
+    if (dragging.engId === eng.id) return;
+    if (dragging.shift !== eng.shift) return;
+    e.preventDefault();
+    const rect = tr.getBoundingClientRect();
+    const above = (e.clientY - rect.top) < rect.height / 2;
+    tr.classList.toggle('drop-row-above', above);
+    tr.classList.toggle('drop-row-below', !above);
+  });
+  tr.addEventListener('dragleave', () => {
+    tr.classList.remove('drop-row-above', 'drop-row-below');
+  });
+  tr.addEventListener('drop', (e) => {
+    if (!dragging || dragging.kind !== 'row') return;
+    if (dragging.shift !== eng.shift) return;
+    e.preventDefault();
+    const above = tr.classList.contains('drop-row-above');
+    tr.classList.remove('drop-row-above', 'drop-row-below');
+    reorderEngineer(dragging.engId, eng.id, above);
+  });
+
+  return tr;
+}
+
+function renderChip(fromEngId, b) {
+  const { id: bldId, role } = b;
+  const chip = document.createElement('span');
+  chip.className = `bld-chip ${role}`;
+  chip.textContent = bldId;
+  chip.draggable = true;
+  chip.dataset.bld = bldId;
+  chip.dataset.role = role;
+  chip.dataset.fromEng = fromEngId;
+  chip.title = (fromEngId === '_unassigned')
+    ? `Primary ${bldId} (unassigned) — drag to an engineer to assign`
+    : (role === 'primary'
+        ? `Primary ${bldId} — double-click to create a support copy on this engineer`
+        : `Support ${bldId} — double-click to delete`);
+
+  chip.addEventListener('dragstart', (e) => {
+    dragging = { kind: 'chip', fromEng: fromEngId, bld: bldId, role };
+    chip.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `chip:${fromEngId}:${bldId}:${role}`);
+    e.stopPropagation();
+  });
+  chip.addEventListener('dragend', () => {
+    chip.classList.remove('dragging');
+    document.querySelectorAll('.drop-before, .drop-after, .drop-hover').forEach(el => el.classList.remove('drop-before', 'drop-after', 'drop-hover'));
+    dragging = null;
+  });
+
+  chip.addEventListener('dragover', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = chip.getBoundingClientRect();
+    const before = (e.clientX - rect.left) < rect.width / 2;
+    chip.parentElement.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    chip.classList.toggle('drop-before', before);
+    chip.classList.toggle('drop-after', !before);
+    chip.parentElement.classList.add('drop-hover');
+  });
+  chip.addEventListener('drop', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const before = chip.classList.contains('drop-before');
+    const targetCell = chip.parentElement;
+    const targetEngId = targetCell.dataset.engId || '_unassigned';
+    const targetIndex = computeInsertIndex(targetCell, chip, before);
+    moveChip(dragging.fromEng, dragging.bld, dragging.role, targetEngId, targetIndex);
+  });
+
+  // Double-click: create-support (on primary) / delete-support (on support)
+  chip.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fromEngId === '_unassigned') return;  // tray chips have no double-click action
+    if (role === 'primary') createSupport(fromEngId, bldId);
+    else deleteSupport(fromEngId, bldId);
+  });
+
+  return chip;
+}
+
+function computeInsertIndex(cellEl, chipEl, before) {
+  const chips = Array.from(cellEl.querySelectorAll('.bld-chip'));
+  const idx = chips.indexOf(chipEl);
+  return before ? idx : idx + 1;
+}
+
+function attachCellDropHandlers(cellEl) {
+  cellEl.addEventListener('dragover', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    e.preventDefault();
+    cellEl.classList.add('drop-hover');
+  });
+  cellEl.addEventListener('dragleave', (e) => {
+    if (!cellEl.contains(e.relatedTarget)) {
+      cellEl.classList.remove('drop-hover');
+      cellEl.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    }
+  });
+  cellEl.addEventListener('drop', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    const targetEngId = cellEl.dataset.engId || '_unassigned';
+    moveChip(dragging.fromEng, dragging.bld, dragging.role, targetEngId, -1);
+  });
+}
+
+function renderAddRow(shift) {
+  const defs = SHIFT_DEFAULTS[shift];
+  const tr = document.createElement('tr');
+  tr.className = 'add-row';
+  tr.dataset.shift = shift;
+
+  const to24 = (s) => {
+    const m = /^(\d{1,2}):(\d{2})(AM|PM)$/i.exec(s);
+    if (!m) return '';
+    let h = parseInt(m[1], 10);
+    const ampm = m[3].toUpperCase();
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2,'0')}:${m[2]}`;
+  };
+  const from24 = (s) => {
+    const m = /^(\d{2}):(\d{2})$/.exec(s);
+    if (!m) return '';
+    let h = parseInt(m[1], 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    if (h === 0) h = 12;
+    else if (h > 12) h -= 12;
+    return `${h}:${m[2]}${ampm}`;
+  };
+
+  tr.innerHTML = `
+    <td class="col-handle"></td>
+    <td class="col-name"><input type="text" name="name" placeholder="Engineer name" autocomplete="off"></td>
+    <td class="col-time"><input type="time" name="startTime" value="${to24(defs.startTime)}"></td>
+    <td class="col-time"><input type="time" name="lunchOut" value="${to24(defs.lunchOut)}"></td>
+    <td class="col-time"><input type="time" name="lunchIn"  value="${to24(defs.lunchIn)}"></td>
+    <td class="col-time"><input type="time" name="endTime"  value="${to24(defs.endTime)}"></td>
+    <td class="col-bld"><span class="empty-hint">— add buildings by dragging chips after saving —</span></td>
+    <td class="col-phone"><input type="tel" name="phone" placeholder="(617) 555-1234" autocomplete="off"></td>
+    <td class="col-actions">
+      <div class="add-row-actions">
+        <button class="btn-save" disabled>Save</button>
+        <button class="btn-cancel">Cancel</button>
+      </div>
+    </td>`;
+
+  const nameInput = tr.querySelector('input[name="name"]');
+  const saveBtn = tr.querySelector('.btn-save');
+  const cancelBtn = tr.querySelector('.btn-cancel');
+
+  nameInput.addEventListener('input', () => {
+    saveBtn.disabled = nameInput.value.trim().length === 0;
+  });
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !saveBtn.disabled) save();
+    if (e.key === 'Escape') cancel();
+  });
+
+  const phoneInput = tr.querySelector('input[name="phone"]');
+  phoneInput.addEventListener('blur', () => {
+    phoneInput.value = maskPhone(phoneInput.value);
+  });
+
+  saveBtn.addEventListener('click', save);
+  cancelBtn.addEventListener('click', cancel);
+
+  function save() {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    const newEng = {
+      id: genId(name),
+      name,
+      shift,
+      startTime: from24(tr.querySelector('input[name="startTime"]').value),
+      lunchOut:  from24(tr.querySelector('input[name="lunchOut"]').value),
+      lunchIn:   from24(tr.querySelector('input[name="lunchIn"]').value),
+      endTime:   from24(tr.querySelector('input[name="endTime"]').value),
+      phone: maskPhone(phoneInput.value.trim()),
+      buildings: [],
+    };
+    pushHistory(`add ${name}`);
+    state.engineers.push(newEng);
+    addingShift = null;
+    saveState();
+    render();
+  }
+  function cancel() {
+    addingShift = null;
+    render();
+  }
+
+  return tr;
+}
+
+function renderTray() {
+  const tray = document.getElementById('unassignedTray');
+  const chipsEl = document.getElementById('trayChips');
+  chipsEl.innerHTML = '';
+  if (state.unassigned.length === 0) {
+    tray.classList.remove('visible');
+    return;
+  }
+  tray.classList.add('visible');
+  for (const bldStr of state.unassigned.slice().sort((a,b) => Number(a) - Number(b))) {
+    chipsEl.appendChild(renderChip('_unassigned', { id: bldStr, role: 'primary' }));
+  }
+}
+
+// ============================================================================
+// Mutations
+// ============================================================================
+function moveChip(fromEngId, bldId, fromRole, toEngId, toIndex) {
+  const fromIsTray = fromEngId === '_unassigned';
+  const toIsTray   = toEngId   === '_unassigned';
+  const fromArr = fromIsTray ? state.unassigned : engById(fromEngId)?.buildings;
+  const toArr   = toIsTray   ? state.unassigned : engById(toEngId)?.buildings;
+  if (!fromArr || !toArr) return;
+
+  // Locate source
+  const srcIdx = fromIsTray
+    ? fromArr.indexOf(bldId)
+    : fromArr.findIndex(b => b.id === bldId && b.role === fromRole);
+  if (srcIdx === -1) return;
+
+  const effRole = fromIsTray ? 'primary' : fromRole;
+  const fromEng = fromIsTray ? null : engById(fromEngId);
+  const toEng   = toIsTray   ? null : engById(toEngId);
+  const fromName = fromEng?.name || 'tray';
+  const toName   = toEng?.name   || 'tray';
+
+  // === Engineer → Tray ===
+  if (toIsTray) {
+    if (effRole === 'support') {
+      // Support has no tray representation — just delete it
+      pushHistory(`delete support ${bldId} (${fromName})`);
+      fromArr.splice(srcIdx, 1);
+    } else {
+      // Primary → tray
+      pushHistory(`unassign primary ${bldId} (${fromName})`);
+      fromArr.splice(srcIdx, 1);
+      if (!toArr.includes(bldId)) toArr.push(bldId);
+    }
+    saveState();
+    render();
+    return;
+  }
+
+  // === Tray → Engineer (primary lands) ===
+  if (fromIsTray) {
+    const existing = toArr.findIndex(b => b.id === bldId);
+    // If target already has the building as primary, weird (shouldn't happen) — bail
+    if (existing !== -1 && toArr[existing].role === 'primary') return;
+    pushHistory(`assign primary ${bldId} → ${toName}`);
+    fromArr.splice(srcIdx, 1);
+    let insertAt = (toIndex === -1) ? toArr.length : toIndex;
+    if (existing !== -1 && toArr[existing].role === 'support') {
+      // Promote support slot → replace with primary
+      toArr.splice(existing, 1);
+      if (existing < insertAt) insertAt -= 1;
+    }
+    insertAt = Math.max(0, Math.min(insertAt, toArr.length));
+    toArr.splice(insertAt, 0, { id: bldId, role: 'primary' });
+    saveState();
+    render();
+    return;
+  }
+
+  // === Engineer → Engineer (same cell counts) ===
+  // No-op short-circuit (same cell, same position)
+  if (fromArr === toArr) {
+    let insertAt = (toIndex === -1) ? toArr.length : toIndex;
+    if (srcIdx < insertAt) insertAt -= 1;
+    if (srcIdx === insertAt) return;
+  }
+
+  // Check target conflict (same building already there)
+  let conflictIdx = -1, conflictRole = null;
+  if (fromArr !== toArr) {
+    conflictIdx = toArr.findIndex(b => b.id === bldId);
+    if (conflictIdx !== -1) conflictRole = toArr[conflictIdx].role;
+  }
+
+  // Support landing on a cell that already has the primary → redundant, drop the support
+  if (conflictRole === 'primary' && effRole === 'support') {
+    pushHistory(`delete support ${bldId} (${fromName})`);
+    fromArr.splice(srcIdx, 1);
+    saveState();
+    render();
+    showToast(`support ${bldId} dropped — ${toName} already has the primary`, '');
+    return;
+  }
+
+  // Primary landing on a cell that already has the support → absorb (remove support, plant primary)
+  let absorbedSupport = false;
+  if (conflictRole === 'support' && effRole === 'primary') {
+    absorbedSupport = true;
+  }
+
+  // Same-role same-building conflict shouldn't happen given constraints
+  if (conflictRole === effRole) return;
+
+  const label = (fromArr === toArr)
+    ? `reorder ${effRole} ${bldId} (${fromName})`
+    : `move ${effRole} ${bldId}: ${fromName} → ${toName}`;
+  pushHistory(label);
+
+  // Remove from source
+  fromArr.splice(srcIdx, 1);
+
+  // If we're absorbing a support on target, remove it first
+  let insertAt = (toIndex === -1) ? toArr.length : toIndex;
+  if (absorbedSupport) {
+    // Re-locate since indices may have shifted (source was in different array)
+    const idx = toArr.findIndex(b => b.id === bldId && b.role === 'support');
+    if (idx !== -1) {
+      toArr.splice(idx, 1);
+      if (idx < insertAt) insertAt -= 1;
+    }
+  }
+  if (fromArr === toArr && srcIdx < insertAt) insertAt -= 1;
+  insertAt = Math.max(0, Math.min(insertAt, toArr.length));
+
+  toArr.splice(insertAt, 0, { id: bldId, role: effRole });
+  saveState();
+  render();
+}
+
+function createSupport(engId, bldId) {
+  const eng = engById(engId);
+  if (!eng) return;
+
+  // Constraint: at most 1 support per building, anywhere
+  const existingSupportOwner = findOwner(bldId, 'support');
+  if (existingSupportOwner) {
+    showToast(`support ${bldId} already exists on ${existingSupportOwner.name}`, 'warn');
+    return;
+  }
+
+  // Insert the new support chip right after the primary (or at end if not present here)
+  const primaryIdx = eng.buildings.findIndex(b => b.id === bldId && b.role === 'primary');
+  pushHistory(`create support ${bldId} (${eng.name})`);
+  const insertAt = primaryIdx !== -1 ? primaryIdx + 1 : eng.buildings.length;
+  eng.buildings.splice(insertAt, 0, { id: bldId, role: 'support' });
+  saveState();
+  render();
+  showToast(`support ${bldId} created on ${eng.name} — drag to assign coverage`, 'ok');
+}
+
+function deleteSupport(engId, bldId) {
+  const eng = engById(engId);
+  if (!eng) return;
+  const idx = eng.buildings.findIndex(b => b.id === bldId && b.role === 'support');
+  if (idx === -1) return;
+  pushHistory(`delete support ${bldId} (${eng.name})`);
+  eng.buildings.splice(idx, 1);
+  saveState();
+  render();
+}
+
+function reorderEngineer(srcId, targetId, above) {
+  const src = engById(srcId);
+  const tgt = engById(targetId);
+  if (!src || !tgt || src.shift !== tgt.shift) return;
+  const list = state.engineers;
+  const srcIdx = list.indexOf(src);
+  const tgtIdxRaw = list.indexOf(tgt);
+  let insertAtRaw = above ? tgtIdxRaw : tgtIdxRaw + 1;
+  if (srcIdx === insertAtRaw || srcIdx === insertAtRaw - 1) return;
+  pushHistory(`reorder ${src.name}`);
+  list.splice(srcIdx, 1);
+  const tgtIdx = list.indexOf(tgt);
+  const insertAt = above ? tgtIdx : tgtIdx + 1;
+  list.splice(insertAt, 0, src);
+  saveState();
+  render();
+}
+
+function removeEngineer(engId) {
+  const eng = engById(engId);
+  if (!eng) return;
+  const primaries = eng.buildings.filter(b => b.role === 'primary');
+  const supports  = eng.buildings.filter(b => b.role === 'support');
+  const parts = [];
+  if (primaries.length) parts.push(`${primaries.length} primary chip${primaries.length === 1 ? '' : 's'} (will move to unassigned tray)`);
+  if (supports.length)  parts.push(`${supports.length} support chip${supports.length === 1 ? '' : 's'} (will be deleted)`);
+  const desc = parts.length ? `\n${parts.join('\n')}` : '';
+  if (!confirm(`Remove ${eng.name}?${desc}\n\n(Ctrl+Z to undo)`)) return;
+
+  pushHistory(`remove ${eng.name}`);
+  for (const b of primaries) {
+    if (!state.unassigned.includes(b.id)) state.unassigned.push(b.id);
+  }
+  // supports just vanish
+  state.engineers = state.engineers.filter(e => e.id !== engId);
+  saveState();
+  render();
+}
+
+// ============================================================================
+// Wiring
+// ============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
+  document.getElementById('resetLink').addEventListener('click', resetBoard);
+
+  // Tray as a chip drop target
+  const tray = document.getElementById('unassignedTray');
+  tray.addEventListener('dragover', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    e.preventDefault();
+    tray.classList.add('drop-hover');
+  });
+  tray.addEventListener('dragleave', () => tray.classList.remove('drop-hover'));
+  tray.addEventListener('drop', (e) => {
+    if (!dragging || dragging.kind !== 'chip') return;
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    tray.classList.remove('drop-hover');
+    moveChip(dragging.fromEng, dragging.bld, dragging.role, '_unassigned', -1);
+  });
+  document.getElementById('trayChips').dataset.engId = '_unassigned';
+  attachCellDropHandlers(document.getElementById('trayChips'));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target && e.target.matches && e.target.matches('input, textarea, select')) return;
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!ctrl) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
+  });
+
+  render();
+});
+</script>
+</body>
+</html>
