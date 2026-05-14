@@ -6,3 +6,10 @@ token.json
 .env
 __pycache__/
 .claude/
+
+# Google Drive Desktop sync artifacts
+.tmp.driveupload/
+*.gdoc
+*.gsheet
+*.gslides
+*.gform

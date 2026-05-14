@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>COVE PM12 Daily Export</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 16px; width: 280px; color: #111; }
+    h1 { font-size: 14px; margin: 0 0 12px; font-weight: 600; }
+    button { width: 100%; background: #2563eb; color: white; border: 0; padding: 10px 14px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    #status { margin-top: 10px; font-size: 12px; color: #555; min-height: 16px; }
+    #status.error { color: #dc2626; }
+    #status.success { color: #16a34a; }
+    .footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 12px; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>COVE PM12 Daily Export</h1>
+  <button id="run">Download today&#39;s CSV</button>
+  <div id="status"></div>
+  <div class="footer">
+    <a href="#" id="opts">Settings</a>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
