@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "COVE Labor Weekly Export (TEST)",
+  "version": "0.1.0",
+  "description": "TEST extension. Captures Cove labor hours per assignee for the current Mon-Sun week and downloads as CSV.",
+  "permissions": ["downloads", "storage", "tabs"],
+  "host_permissions": ["https://manage.cove.is/*", "https://api.cove.is/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Download this week's labor CSV (TEST)",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://manage.cove.is/networks/*/work-order-labor-reports*"],
+      "js": ["labor-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://manage.cove.is/networks/*/work-order-labor-reports*"],
+      "js": ["labor-bridge.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ]
+}
