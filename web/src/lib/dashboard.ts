@@ -68,6 +68,6 @@ export function fmtDateShort(d: Date): string {
 
 /** Returns "MM/DD" formatted from a YYYY-MM-DD string (treated as local). */
 export function fmtMd(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
+  const [, m, d] = iso.split('-').map(Number);
   return `${m}/${d}`;
 }
