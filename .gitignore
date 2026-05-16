@@ -4,8 +4,17 @@ browser_state/
 credentials.json
 token.json
 .env
+**/.env
 __pycache__/
 .claude/
+watcher/.venv/
+watcher/logs/
+web/node_modules/
+web/dist/
+
+# CSVs land here from the user's CMMS daily — data, not source. Already-tracked
+# files stay tracked; new drops won't get auto-staged.
+CSV DB/
 
 # Google Drive Desktop sync artifacts
 .tmp.driveupload/

@@ -1,0 +1,94 @@
+/* =============================================================================
+   Theme tokens. Each style defines the same set of CSS variables so components
+   reference --space-card, --color-card, etc. The visible style is selected by
+   the data-style attribute on <html>, set by <StyleProvider>.
+   ========================================================================== */
+
+:root {
+  /* defaults (also = V5) */
+  --color-bg:          #f7f7f5;
+  --color-card:        #ffffff;
+  --color-border:      #e5e7eb;
+  --color-border-soft: #f3f4f6;
+  --color-text:        #1a1a1a;
+  --color-text-muted:  #6b7280;
+  --color-accent:      #8b5cf6;
+  --color-accent-soft: #f3e8ff;
+  --color-danger:      #dc2626;
+  --color-warn:        #d97706;
+  --color-ok:          #10b981;
+
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body:    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:    ui-monospace, "JetBrains Mono", Consolas, monospace;
+
+  --font-size-section-title: 1.125rem;  /* 18px */
+  --font-size-base:          0.875rem;  /* 14px */
+  --font-size-small:         0.75rem;   /* 12px */
+  --font-size-stat:          2rem;      /* 32px — V5 big-number cards */
+  --font-size-comp-num:      1.5rem;    /* 24px — comp grid card numbers */
+
+  --space-card-pad: 1.25rem;  /* 20px — V5 airy */
+  --space-row-pad:  0.5rem;
+  --radius-card:    0.5rem;
+  --radius-pill:    9999px;
+
+  --border-card: 1px solid var(--color-border);
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+/* ---------- Linear (denser, monospace-leaning, more compact) -------------- */
+[data-style="linear"] {
+  --color-bg:          #f4f4f5;        /* visibly cooler/grayer than V5's warm bg */
+  --color-card:        #ffffff;
+  --color-border:      #d4d4d8;        /* slightly darker so cards pop against denser bg */
+  --color-border-soft: #f4f4f5;
+  --color-text:        #18181b;
+  --color-text-muted:  #71717a;
+  --color-accent:      #5e6ad2;        /* Linear app's signature blue-violet */
+  --color-accent-soft: #eef0ff;
+
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --font-size-section-title: 0.875rem;  /* 14px — smaller headers */
+  --font-size-base:          0.8125rem; /* 13px */
+  --font-size-small:         0.6875rem; /* 11px */
+  --font-size-stat:          1.25rem;   /* 20px — way denser than V5's 32px */
+  --font-size-comp-num:      1rem;      /* 16px */
+
+  --space-card-pad: 0.625rem;           /* 10px — much tighter */
+  --space-row-pad:  0.125rem;
+  --radius-card:    0.25rem;
+
+  --shadow-card: none;
+}
+
+/* ---------- Token-driven primitive classes -------------------------------- */
+/* Components opt into these via className so a style swap is purely CSS. */
+
+/* ---------- TV mode — bumps up sizes for across-the-room viewing --------- */
+/* Sits on top of whatever data-style is active. */
+[data-mode="tv"] {
+  --font-size-section-title: 1.5rem;    /* 24px */
+  --font-size-base:          1.0625rem; /* 17px */
+  --font-size-small:         0.8125rem; /* 13px */
+  --font-size-stat:          3rem;      /* 48px */
+  --font-size-comp-num:      2.25rem;   /* 36px */
+  --space-card-pad:          1.5rem;
+  --radius-card:             0.5rem;
+}
+
+.t-bg            { background: var(--color-bg); }
+.t-card          { background: var(--color-card); border: var(--border-card); border-radius: var(--radius-card); padding: var(--space-card-pad); box-shadow: var(--shadow-card); }
+.t-section-title { font-family: var(--font-display); font-size: var(--font-size-section-title); font-weight: 500; color: var(--color-text); }
+.t-text          { font-family: var(--font-body); font-size: var(--font-size-base); color: var(--color-text); }
+.t-muted         { color: var(--color-text-muted); }
+.t-mono          { font-family: var(--font-mono); }
+.t-accent        { color: var(--color-accent); }
+.t-danger        { color: var(--color-danger); }
+.t-warn          { color: var(--color-warn); }
+.t-small         { font-size: var(--font-size-small); }
+.t-row-divider   { border-bottom: 1px solid var(--color-border-soft); }
+.t-stat-num      { font-family: var(--font-mono); font-size: var(--font-size-stat); font-weight: 500; line-height: 1.1; }
+.t-comp-num      { font-family: var(--font-mono); font-size: var(--font-size-comp-num); font-weight: 500; line-height: 1.1; }
