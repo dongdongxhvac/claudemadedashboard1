@@ -171,28 +171,62 @@ export function OncallTab() {
   const startWarning = startDate && !isFriday(startDate)
     ? `Heads up: ${startDate} is a ${dayName(startDate)}, not a Friday. Rotation will run ${dayName(startDate)}–${dayName(startDate)}.`
     : null;
+  const updatedAt = settingsQ.data?.updated_at;
+  const updatedAtLocal = updatedAt
+    ? new Date(updatedAt).toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : null;
   const headerSummary = `${displayedParticipants.length} engineer${displayedParticipants.length === 1 ? '' : 's'} · ${displayedSettings.rotations_per_engineer} cycles + 1 preview · ${startDate ? 'starts ' + formatStartLong(startDate) : 'no start date set'}`;
 
   return (
-    <div className="space-y-3">
-      <div className="t-card" style={{ padding: '0.75rem 1rem' }}>
+    <div className="space-y-3 oncall-root">
+      {/* Print-only overrides: strip the on-screen highlight chrome so paper
+          copies are neutral, hide UI chrome (buttons, edit controls). */}
+      <style>{`
+        @media print {
+          .oncall-no-print { display: none !important; }
+          .oncall-row     { background: white !important; border-left: 1px solid #999 !important; }
+          .oncall-cell    { background: white !important; border: 1px solid #ccc !important;
+                            color: black !important; font-weight: normal !important; }
+          .oncall-on-call-chip { display: none !important; }
+          .oncall-card    { box-shadow: none !important; border: none !important; padding: 0 !important; }
+          .oncall-root    { padding: 0 !important; }
+          body            { background: white !important; }
+        }
+      `}</style>
+      <div className="t-card oncall-card" style={{ padding: '0.75rem 1rem' }}>
         <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
           <div>
             <h2 className="t-section-title">On-call schedule</h2>
             <p className="t-small t-muted">{headerSummary}</p>
-            <p className="t-small t-muted">
+            {updatedAtLocal && (
+              <p className="t-small t-muted">Last updated {updatedAtLocal}</p>
+            )}
+            <p className="t-small t-muted oncall-no-print">
               Holiday weeks shown in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 oncall-no-print">
             {!editing ? (
-              <button
-                onClick={onStartEdit}
-                className="t-small px-3 py-1 rounded border font-medium text-white"
-                style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
-              >
-                Web Edit
-              </button>
+              <>
+                <button
+                  onClick={() => window.print()}
+                  className="t-small px-3 py-1 rounded border"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                  title="Print this schedule without the highlight colors"
+                >
+                  ⎙ Print
+                </button>
+                <button
+                  onClick={onStartEdit}
+                  className="t-small px-3 py-1 rounded border font-medium text-white"
+                  style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
+                >
+                  Web Edit
+                </button>
+              </>
             ) : (
               <>
                 <button
@@ -286,7 +320,7 @@ export function OncallTab() {
                   return (
                     <tr
                       key={p.user_id}
-                      className="border-b t-row-hover"
+                      className={`border-b t-row-hover ${anyActive ? 'oncall-row' : ''}`}
                       style={{
                         borderColor: 'var(--color-border-soft)',
                         background: anyActive ? 'rgba(34,197,94,0.16)' : undefined,
@@ -294,7 +328,7 @@ export function OncallTab() {
                       }}
                     >
                       {editing && (
-                        <td className="py-1 px-1 whitespace-nowrap">
+                        <td className="py-1 px-1 whitespace-nowrap oncall-no-print">
                           <div className="flex items-center gap-0.5">
                             <button onClick={() => moveUp(idx)}   disabled={idx === 0}              className="px-1 disabled:opacity-30 t-text" title="Move up">↑</button>
                             <button onClick={() => moveDown(idx)} disabled={idx === draft.length-1} className="px-1 disabled:opacity-30 t-text" title="Move down">↓</button>
@@ -307,7 +341,7 @@ export function OncallTab() {
                           <span className="font-medium t-text">{p.full_name}</span>
                           {anyActive && (
                             <span
-                              className="px-2 py-0.5 rounded text-white font-semibold"
+                              className="px-2 py-0.5 rounded text-white font-semibold oncall-on-call-chip"
                               style={{ background: 'var(--color-ok)', fontSize: '11px', letterSpacing: '0.5px' }}
                             >
                               ON CALL
@@ -341,7 +375,7 @@ export function OncallTab() {
                         return (
                           <td
                             key={c}
-                            className="py-1 px-1.5 text-center t-mono whitespace-nowrap"
+                            className={`py-1 px-1.5 text-center t-mono whitespace-nowrap ${info.active ? 'oncall-cell' : ''}`}
                             title={info.holiday ? `${info.holiday.name} · ${info.holiday.date}` : undefined}
                             style={{
                               background: info.active ? 'rgba(34,197,94,0.28)' : undefined,
