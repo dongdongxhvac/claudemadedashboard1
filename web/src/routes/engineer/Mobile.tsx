@@ -13,7 +13,7 @@ import {
   useMyWoRows,
   useMyLaborRows,
 } from '../../hooks/useMyAssignedData';
-import { isClosed, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
+import { isClosed, isCompletedStatus, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 
 type Tab = 'now' | 'mine' | 'profile';
@@ -154,24 +154,40 @@ function NowTab({
   const weekStart = mondayOf(new Date());
   const weekEnd = addDays(weekStart, 6);
   const weekStartStr = localISODate(weekStart);
+  const tomorrow = addDays(new Date(), 1);
+  const tomorrowStr = localISODate(tomorrow);
 
-  const { overdue, today, openWos, weekHours } = useMemo(() => {
+  const { overdue, today, tomorrowPms, openWos, weekHours, doneThisWeek, snapshotTaken } = useMemo(() => {
     const overdue: typeof pmRows = [];
     const today: typeof pmRows = [];
+    const tomorrowPms: typeof pmRows = [];
+    let doneThisWeek = 0;
+
     for (const r of pmRows) {
+      // Count completions falling in this week. Mirrors the §00 WeeklyCompletions
+      // logic in Manager view.
+      if (isCompletedStatus(r.status) && r.updated_at_cmms) {
+        const d = new Date(r.updated_at_cmms);
+        if (d >= weekStart && d <= addDays(weekEnd, 1)) doneThisWeek++;
+      }
+
       if (isClosed(r.status)) continue;
       if (!r.due_date) continue;
       if (r.due_date < todayStr) overdue.push(r);
       else if (r.due_date === todayStr) today.push(r);
+      else if (r.due_date === tomorrowStr) tomorrowPms.push(r);
     }
     overdue.sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
     today.sort((a, b) => (a.task_no ?? '').localeCompare(b.task_no ?? ''));
+    tomorrowPms.sort((a, b) => (a.task_no ?? '').localeCompare(b.task_no ?? ''));
+
     const openWos = (woRows ?? []).filter((w) => w.is_open !== false);
     const weekHours = (laborRows ?? [])
       .filter((l) => l.week_start === weekStartStr)
       .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
-    return { overdue, today, openWos, weekHours };
-  }, [pmRows, woRows, laborRows, todayStr, weekStartStr]);
+    const snapshotTaken = pmRows[0]?.snapshot_taken_at ?? null;
+    return { overdue, today, tomorrowPms, openWos, weekHours, doneThisWeek, snapshotTaken };
+  }, [pmRows, woRows, laborRows, todayStr, tomorrowStr, weekStartStr, weekStart, weekEnd]);
 
   if (loading) return <p className="t-text t-muted p-4">Loading your day...</p>;
 
@@ -179,7 +195,13 @@ function NowTab({
   const dueNowAccent: 'danger' | 'warn' | undefined =
     overdue.length > 0 ? 'danger' : today.length > 0 ? 'warn' : undefined;
   const dueNowSub =
-    dueNowTotal === 0 ? '' : `${overdue.length} overdue · ${today.length} today`;
+    dueNowTotal === 0 ? 'all caught up' : `${overdue.length} overdue · ${today.length} today`;
+
+  const snapshotLocal = snapshotTaken
+    ? new Date(snapshotTaken).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      })
+    : null;
 
   return (
     <div className="p-4 space-y-4">
@@ -189,12 +211,17 @@ function NowTab({
         <p className="t-small t-muted italic">No announcements right now.</p>
       )}
 
-      {/* glance stats */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* glance stats — 4 cards in 2x2 (phones) / 1x4 (md+) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Stat
           label="Hours · this week"
           value={weekHours.toFixed(1)}
           sub={`${fmtMd(localISODate(weekStart))} → ${fmtMd(localISODate(weekEnd))}`}
+        />
+        <Stat
+          label="Done · this week"
+          value={doneThisWeek}
+          sub="completed PMs"
         />
         <Stat
           label="Due now"
@@ -202,8 +229,15 @@ function NowTab({
           accent={dueNowAccent}
           sub={dueNowSub}
         />
-        <Stat label="WOs open" value={openWos.length} />
+        <Stat
+          label="Tomorrow"
+          value={tomorrowPms.length}
+          sub={tomorrowPms.length === 0 ? 'nothing scheduled' : 'PMs due tomorrow'}
+        />
       </div>
+
+      {/* WOs out of the strip since they get a full section below; keep the WOs
+          count subtle if you want it back in the strip later. */}
 
       {overdue.length > 0 && (
         <Section title={`OVERDUE · ${overdue.length}`}>
@@ -217,14 +251,27 @@ function NowTab({
         </Section>
       )}
 
+      {tomorrowPms.length > 0 && (
+        <Section title={`DUE TOMORROW · ${tomorrowPms.length}`}>
+          <PmList rows={tomorrowPms} todayStr={todayStr} />
+        </Section>
+      )}
+
       {openWos.length > 0 && (
         <Section title={`OPEN WORK ORDERS · ${openWos.length}`}>
           <WoList rows={openWos} />
         </Section>
       )}
 
-      {overdue.length === 0 && today.length === 0 && openWos.length === 0 && (
+      {overdue.length === 0 && today.length === 0 && tomorrowPms.length === 0 && openWos.length === 0 && (
         <p className="t-text t-muted text-center py-8">All caught up. ✓</p>
+      )}
+
+      {/* snapshot freshness footer */}
+      {snapshotLocal && (
+        <p className="t-small t-muted text-center pt-2 pb-1">
+          Data as of {snapshotLocal}
+        </p>
       )}
     </div>
   );
