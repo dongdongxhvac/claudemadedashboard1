@@ -15,6 +15,7 @@ export type EngineerRow = {
   full_name: string;
   email: string | null;
   phone: string | null;
+  hiring_date: string | null;
   auth_user_id: string | null;
   active: boolean;
   cmms_assignee_name: string | null;
@@ -35,7 +36,7 @@ export function useEngineers() {
       const { data, error } = await supabase
         .from('users')
         .select(`
-          id, full_name, email, phone, auth_user_id, active,
+          id, full_name, email, phone, hiring_date, auth_user_id, active,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp,
             visible_to_self, notes, updated_at
@@ -52,6 +53,7 @@ export function useEngineers() {
       };
       type Joined = {
         id: string; full_name: string; email: string | null; phone: string | null;
+        hiring_date: string | null;
         auth_user_id: string | null; active: boolean;
         engineer_profiles: Profile | Profile[] | null;
       };
@@ -66,6 +68,7 @@ export function useEngineers() {
             full_name: r.full_name,
             email: r.email,
             phone: r.phone,
+            hiring_date: r.hiring_date,
             auth_user_id: r.auth_user_id,
             active: r.active,
             cmms_assignee_name: ep.cmms_assignee_name,

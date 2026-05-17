@@ -92,3 +92,5 @@
 .t-row-divider   { border-bottom: 1px solid var(--color-border-soft); }
 .t-stat-num      { font-family: var(--font-mono); font-size: var(--font-size-stat); font-weight: 500; line-height: 1.1; }
 .t-comp-num      { font-family: var(--font-mono); font-size: var(--font-size-comp-num); font-weight: 500; line-height: 1.1; }
+.t-row-hover     { transition: background-color 80ms ease; }
+.t-row-hover:hover { background: var(--color-accent-soft); }

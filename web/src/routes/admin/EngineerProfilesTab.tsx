@@ -27,7 +27,7 @@ export function EngineerProfilesTab() {
               <tr className="text-left t-small t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 px-2">Email · sign-in</th>
-                <th className="py-2 px-2">CMMS name</th>
+                <th className="py-2 px-2">Hired</th>
                 <th className="py-2 px-2">Discipline</th>
                 <th className="py-2 px-2 text-right">Level</th>
                 <th className="py-2 px-2 text-right">XP</th>
@@ -37,7 +37,7 @@ export function EngineerProfilesTab() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.user_id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
+                <tr key={r.user_id} className="border-b t-row-hover" style={{ borderColor: 'var(--color-border-soft)' }}>
                   <td className="py-2 pr-3 font-medium">{r.full_name}</td>
                   <td className="py-2 px-2">
                     {r.email ? (
@@ -64,7 +64,15 @@ export function EngineerProfilesTab() {
                       <span className="t-small t-muted italic">— not set —</span>
                     )}
                   </td>
-                  <td className="py-2 px-2 t-mono t-small t-muted">{r.cmms_assignee_name}</td>
+                  <td className="py-2 px-2 t-mono t-small t-muted whitespace-nowrap">
+                    {r.hiring_date
+                      ? new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : '—'}
+                  </td>
                   <td className="py-2 px-2">{r.discipline ? labelFor(r.discipline) : <span className="t-muted">—</span>}</td>
                   <td className="py-2 px-2 text-right t-mono">{r.level}</td>
                   <td className="py-2 px-2 text-right t-mono">{r.xp}</td>
