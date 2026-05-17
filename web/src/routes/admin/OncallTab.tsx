@@ -189,6 +189,7 @@ export function OncallTab() {
           Keep on-screen highlights (active week green, ON CALL chip, holiday
           red) on paper too via print-color-adjust: exact. */}
       <style>{`
+        @page { size: letter landscape; margin: 0.4in; }
         @media print {
           body * { visibility: hidden !important; }
           .oncall-root, .oncall-root * { visibility: visible !important; }
