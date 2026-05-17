@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useEngineers, useUpdateEngineerProfile, DISCIPLINES, type EngineerRow } from '../../hooks/useEngineers';
 
 export function EngineerProfilesTab() {
@@ -48,10 +49,10 @@ export function EngineerProfilesTab() {
                       }
                     />
                   </td>
-                  <td className="py-2 pl-2">
+                  <td className="py-2 pl-2 whitespace-nowrap">
                     <button
                       onClick={() => setEditing(r)}
-                      className="t-small px-2 py-0.5 rounded border"
+                      className="t-small px-2 py-0.5 rounded border mr-1"
                       style={{
                         color: 'var(--color-accent)',
                         borderColor: 'var(--color-border)',
@@ -60,6 +61,18 @@ export function EngineerProfilesTab() {
                     >
                       Edit
                     </button>
+                    <Link
+                      to={`/engineer/${r.user_id}/profile`}
+                      className="t-small px-2 py-0.5 rounded border inline-block"
+                      style={{
+                        color: 'var(--color-accent)',
+                        borderColor: 'var(--color-border)',
+                        background: 'var(--color-card)',
+                      }}
+                      title="Preview the RPG profile this engineer would see (if visible_to_self is on)"
+                    >
+                      Profile →
+                    </Link>
                   </td>
                 </tr>
               ))}
