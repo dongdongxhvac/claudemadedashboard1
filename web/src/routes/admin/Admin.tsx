@@ -4,8 +4,9 @@ import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { EngineerProfilesTab } from './EngineerProfilesTab';
 import { OncallTab } from './OncallTab';
+import { BuildingsTab } from './BuildingsTab';
 
-type Tab = 'engineers' | 'oncall';
+type Tab = 'engineers' | 'oncall' | 'buildings';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -46,12 +47,15 @@ export default function Admin() {
               <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
                 On-call
               </TabButton>
-              <TabButton disabled title="Coming next">Buildings</TabButton>
+              <TabButton active={tab === 'buildings'} onClick={() => setTab('buildings')}>
+                Buildings
+              </TabButton>
               <TabButton disabled title="Coming next">Rounds</TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
             {tab === 'engineers' && <EngineerProfilesTab />}
             {tab === 'oncall'    && <OncallTab />}
+            {tab === 'buildings' && <BuildingsTab />}
           </div>
         )}
       </main>

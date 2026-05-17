@@ -33,6 +33,8 @@ export type EngineerRow = {
   xp: number;
   visible_to_self: boolean;
   notes: string | null;
+  shift_id: string | null;
+  is_lead: boolean;
   updated_at: string;
 };
 
@@ -48,7 +50,7 @@ export function useEngineers() {
           id, full_name, email, phone, hiring_date, auth_user_id, active, role,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp,
-            visible_to_self, notes, updated_at
+            visible_to_self, notes, shift_id, is_lead, updated_at
           )
         `)
         .eq('role', 'engineer')
@@ -58,7 +60,8 @@ export function useEngineers() {
       type Profile = {
         cmms_assignee_name: string | null; discipline: Discipline | null;
         level: number; xp: number; visible_to_self: boolean;
-        notes: string | null; updated_at: string;
+        notes: string | null; shift_id: string | null; is_lead: boolean;
+        updated_at: string;
       };
       type Joined = {
         id: string; full_name: string; email: string | null; phone: string | null;
@@ -87,6 +90,8 @@ export function useEngineers() {
             xp: ep.xp,
             visible_to_self: ep.visible_to_self,
             notes: ep.notes,
+            shift_id: ep.shift_id,
+            is_lead: ep.is_lead,
             updated_at: ep.updated_at,
           } satisfies EngineerRow;
         })
