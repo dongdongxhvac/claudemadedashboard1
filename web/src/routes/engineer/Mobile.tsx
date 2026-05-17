@@ -11,8 +11,9 @@ import {
   useMyEngineerContext,
   useMyPmRows,
   useMyWoRows,
+  useMyLaborRows,
 } from '../../hooks/useMyAssignedData';
-import { isClosed, isNpm, localISODate, fmtMd } from '../../lib/dashboard';
+import { isClosed, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 
 type Tab = 'now' | 'mine' | 'profile';
@@ -26,6 +27,7 @@ export default function EngineerMobile() {
 
   const pmQ = useMyPmRows(ctx.data?.cmms_assignee_name);
   const woQ = useMyWoRows(ctx.data?.cmms_assignee_name);
+  const laborQ = useMyLaborRows(ctx.data?.cmms_assignee_name);
 
   const [tab, setTab] = useState<Tab>('now');
 
@@ -67,7 +69,14 @@ export default function EngineerMobile() {
 
       {/* tab body — pad bottom for the fixed nav */}
       <main className="pb-24">
-        {tab === 'now' && <NowTab pmRows={pmQ.data ?? []} woRows={woQ.data ?? []} loading={pmQ.isLoading || woQ.isLoading} />}
+        {tab === 'now' && (
+          <NowTab
+            pmRows={pmQ.data ?? []}
+            woRows={woQ.data ?? []}
+            laborRows={laborQ.data ?? []}
+            loading={pmQ.isLoading || woQ.isLoading}
+          />
+        )}
         {tab === 'mine' && (
           <MineTab
             engineerName={ctx.data.cmms_assignee_name ?? 'Engineer'}
@@ -130,17 +139,23 @@ function Wrap({ children }: { children: React.ReactNode }) {
 function NowTab({
   pmRows,
   woRows,
+  laborRows,
   loading,
 }: {
   pmRows: import('../../hooks/useCurrentSnapshots').PmRow[];
   woRows: import('../../hooks/useCurrentSnapshots').WoRow[];
+  laborRows: import('../../hooks/useCurrentSnapshots').LaborRow[];
   loading: boolean;
 }) {
   const focus = useActiveFocusItems();
   const todayStr = localISODate(new Date());
   const fb = focus.data ?? [];
 
-  const { overdue, today, openWos } = useMemo(() => {
+  const weekStart = mondayOf(new Date());
+  const weekEnd = addDays(weekStart, 6);
+  const weekStartStr = localISODate(weekStart);
+
+  const { overdue, today, openWos, weekHours } = useMemo(() => {
     const overdue: typeof pmRows = [];
     const today: typeof pmRows = [];
     for (const r of pmRows) {
@@ -152,10 +167,19 @@ function NowTab({
     overdue.sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
     today.sort((a, b) => (a.task_no ?? '').localeCompare(b.task_no ?? ''));
     const openWos = (woRows ?? []).filter((w) => w.is_open !== false);
-    return { overdue, today, openWos };
-  }, [pmRows, woRows, todayStr]);
+    const weekHours = (laborRows ?? [])
+      .filter((l) => l.week_start === weekStartStr)
+      .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
+    return { overdue, today, openWos, weekHours };
+  }, [pmRows, woRows, laborRows, todayStr, weekStartStr]);
 
   if (loading) return <p className="t-text t-muted p-4">Loading your day...</p>;
+
+  const dueNowTotal = overdue.length + today.length;
+  const dueNowAccent: 'danger' | 'warn' | undefined =
+    overdue.length > 0 ? 'danger' : today.length > 0 ? 'warn' : undefined;
+  const dueNowSub =
+    dueNowTotal === 0 ? '' : `${overdue.length} overdue · ${today.length} today`;
 
   return (
     <div className="p-4 space-y-4">
@@ -167,25 +191,34 @@ function NowTab({
 
       {/* glance stats */}
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="Overdue" value={overdue.length} accent={overdue.length > 0 ? 'danger' : undefined} />
-        <Stat label="Due today" value={today.length} accent={today.length > 0 ? 'warn' : undefined} />
+        <Stat
+          label="Hours · this week"
+          value={weekHours.toFixed(1)}
+          sub={`${fmtMd(localISODate(weekStart))} → ${fmtMd(localISODate(weekEnd))}`}
+        />
+        <Stat
+          label="Due now"
+          value={dueNowTotal}
+          accent={dueNowAccent}
+          sub={dueNowSub}
+        />
         <Stat label="WOs open" value={openWos.length} />
       </div>
 
       {overdue.length > 0 && (
-        <Section title="OVERDUE">
+        <Section title={`OVERDUE · ${overdue.length}`}>
           <PmList rows={overdue} highlightOverdue todayStr={todayStr} />
         </Section>
       )}
 
       {today.length > 0 && (
-        <Section title="DUE TODAY">
+        <Section title={`DUE TODAY · ${today.length}`}>
           <PmList rows={today} todayStr={todayStr} />
         </Section>
       )}
 
       {openWos.length > 0 && (
-        <Section title="OPEN WORK ORDERS">
+        <Section title={`OPEN WORK ORDERS · ${openWos.length}`}>
           <WoList rows={openWos} />
         </Section>
       )}
@@ -485,12 +518,26 @@ function FilterBtn({
 // ============================================================================
 // Shared mobile-friendly primitives
 // ============================================================================
-function Stat({ label, value, accent }: { label: string; value: number; accent?: 'danger' | 'warn' }) {
-  const color = accent === 'danger' ? 'var(--color-danger)' : accent === 'warn' ? 'var(--color-warn)' : 'var(--color-text)';
+function Stat({
+  label,
+  value,
+  accent,
+  sub,
+}: {
+  label: string;
+  value: number | string;
+  accent?: 'danger' | 'warn';
+  sub?: string;
+}) {
+  const color =
+    accent === 'danger' ? 'var(--color-danger)' :
+    accent === 'warn'   ? 'var(--color-warn)'   :
+    'var(--color-text)';
   return (
     <div className="t-card text-center">
       <div className="t-small t-muted uppercase tracking-wider mb-1">{label}</div>
       <div className="text-3xl font-medium font-mono" style={{ color }}>{value}</div>
+      {sub && <div className="t-small t-muted mt-1">{sub}</div>}
     </div>
   );
 }

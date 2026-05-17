@@ -4,7 +4,7 @@
 // follow-up; current RLS is permissive (any authenticated user reads all).
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import type { PmRow, WoRow } from './useCurrentSnapshots';
+import type { PmRow, WoRow, LaborRow } from './useCurrentSnapshots';
 
 export type MyContext = {
   user_id: string;
@@ -92,6 +92,23 @@ export function useMyWoRows(cmmsName: string | null | undefined) {
         .eq('assigned_to_name', cmmsName!);
       if (error) throw error;
       return (data ?? []) as WoRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Current Labor snapshot rows filtered to the given assignee. */
+export function useMyLaborRows(cmmsName: string | null | undefined) {
+  return useQuery({
+    queryKey: ['my_labor_rows', cmmsName],
+    enabled: !!cmmsName,
+    queryFn: async (): Promise<LaborRow[]> => {
+      const { data, error } = await supabase
+        .from('current_labor_snapshot')
+        .select('*')
+        .eq('assigned_to_name', cmmsName!);
+      if (error) throw error;
+      return (data ?? []) as LaborRow[];
     },
     staleTime: 30_000,
   });
