@@ -41,16 +41,23 @@ export function EngineerProfilesTab() {
                   <td className="py-2 pr-3 font-medium">{r.full_name}</td>
                   <td className="py-2 px-2">
                     {r.email ? (
-                      <div className="flex items-center gap-2">
-                        <span className="t-small">{r.email}</span>
-                        {r.auth_user_id ? (
-                          <span className="t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }} title="Engineer has signed in; auth.users linked to public.users">
-                            ✓ LINKED
-                          </span>
-                        ) : (
-                          <span className="t-small px-1.5 py-0.5 rounded t-muted" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }} title="Email set, awaiting first sign-in">
-                            ⌛ PENDING
-                          </span>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="t-small">{r.email}</span>
+                          {r.auth_user_id ? (
+                            <span className="t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }} title="Engineer has signed in; auth.users linked to public.users">
+                              ✓ LINKED
+                            </span>
+                          ) : (
+                            <span className="t-small px-1.5 py-0.5 rounded t-muted" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }} title="Email set, awaiting first sign-in">
+                              ⌛ PENDING
+                            </span>
+                          )}
+                        </div>
+                        {r.phone && (
+                          <a href={`tel:${r.phone.replace(/[^0-9+]/g, '')}`} className="t-small t-muted t-mono hover:underline">
+                            {r.phone}
+                          </a>
                         )}
                       </div>
                     ) : (
@@ -106,11 +113,14 @@ export function EngineerProfilesTab() {
           row={editing}
           onClose={() => setEditing(null)}
           onSave={async (patch) => {
-            // Split: email goes to public.users, profile fields to engineer_profiles.
-            const { email, ...profilePatch } = patch;
+            // Split: email + phone go to public.users; rest to engineer_profiles.
+            const { email, phone, ...profilePatch } = patch;
             const tasks: Promise<unknown>[] = [];
-            if (email !== undefined && email !== editing.email) {
-              tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: { email } }));
+            const userPatch: { email?: string | null; phone?: string | null } = {};
+            if (email !== undefined && email !== editing.email) userPatch.email = email;
+            if (phone !== undefined && phone !== editing.phone) userPatch.phone = phone;
+            if (Object.keys(userPatch).length > 0) {
+              tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: userPatch }));
             }
             if (Object.keys(profilePatch).length > 0) {
               tasks.push(updateProfile.mutateAsync({ user_id: editing.user_id, patch: profilePatch }));
@@ -154,12 +164,14 @@ function EditDrawer({
   onSave: (patch: Partial<EngineerRow>) => Promise<void>;
 }) {
   const [email, setEmail] = useState<string>(row.email ?? '');
+  const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
   const [level, setLevel] = useState<number>(row.level);
   const [notes, setNotes] = useState<string>(row.notes ?? '');
   const [saving, setSaving] = useState(false);
 
   const emailTrimmed = email.trim();
+  const phoneTrimmed = phone.trim();
   const isLinked = !!row.auth_user_id;
 
   const submit = async (e: React.FormEvent) => {
@@ -168,6 +180,7 @@ function EditDrawer({
     try {
       await onSave({
         email: emailTrimmed === '' ? null : emailTrimmed,
+        phone: phoneTrimmed === '' ? null : phoneTrimmed,
         discipline,
         level,
         notes: notes.trim() || null,
@@ -218,6 +231,18 @@ function EditDrawer({
             Set this, then tell the engineer to sign in at <code>/login</code> with this email.
             The link is automatic.
           </p>
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Phone</span>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="617-555-1234"
+            className="w-full border rounded px-2 py-1 t-text t-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
         </label>
 
         <label className="block mb-3">

@@ -14,6 +14,7 @@ export type EngineerRow = {
   user_id: string;
   full_name: string;
   email: string | null;
+  phone: string | null;
   auth_user_id: string | null;
   active: boolean;
   cmms_assignee_name: string | null;
@@ -34,7 +35,7 @@ export function useEngineers() {
       const { data, error } = await supabase
         .from('users')
         .select(`
-          id, full_name, email, auth_user_id, active,
+          id, full_name, email, phone, auth_user_id, active,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp,
             visible_to_self, notes, updated_at
@@ -50,7 +51,7 @@ export function useEngineers() {
         notes: string | null; updated_at: string;
       };
       type Joined = {
-        id: string; full_name: string; email: string | null;
+        id: string; full_name: string; email: string | null; phone: string | null;
         auth_user_id: string | null; active: boolean;
         engineer_profiles: Profile | Profile[] | null;
       };
@@ -64,6 +65,7 @@ export function useEngineers() {
             user_id: r.id,
             full_name: r.full_name,
             email: r.email,
+            phone: r.phone,
             auth_user_id: r.auth_user_id,
             active: r.active,
             cmms_assignee_name: ep.cmms_assignee_name,
@@ -101,17 +103,18 @@ export function useUpdateEngineerProfile() {
   });
 }
 
-/** Update fields that live on public.users (currently just email). */
+/** Update fields that live on public.users (email + phone). */
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'email'>>;
+      patch: Partial<Pick<EngineerRow, 'email' | 'phone'>>;
     }) => {
-      // Normalize empty string to null so the trigger logic stays clean.
+      // Normalize empty strings to null so the trigger logic stays clean.
       const cleaned: Partial<EngineerRow> = { ...input.patch };
       if (cleaned.email === '') cleaned.email = null;
+      if (cleaned.phone === '') cleaned.phone = null;
 
       const { error, data } = await supabase
         .from('users')

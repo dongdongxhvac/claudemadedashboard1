@@ -6,6 +6,7 @@ export type EngineerProfileFull = {
   user_id: string;
   full_name: string;
   email: string | null;
+  phone: string | null;
   hiring_date: string | null;
   cmms_assignee_name: string | null;
   discipline: Discipline | null;
@@ -35,7 +36,7 @@ export function useEngineerProfile(userId: string | undefined) {
       const { data: u, error: ue } = await supabase
         .from('users')
         .select(`
-          id, full_name, email, hiring_date,
+          id, full_name, email, phone, hiring_date,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp, skill_tree,
             certifications, badges, visible_to_self, notes
@@ -51,12 +52,13 @@ export function useEngineerProfile(userId: string | undefined) {
       type EP = EngineerProfileFull;
       const epRaw = (u as { engineer_profiles: unknown }).engineer_profiles;
       const ep = (Array.isArray(epRaw) ? epRaw[0] : epRaw) as Omit<EP,
-        'user_id' | 'full_name' | 'email' | 'hiring_date'>;
+        'user_id' | 'full_name' | 'email' | 'phone' | 'hiring_date'>;
 
       const profile: EP = {
         user_id: (u as { id: string }).id,
         full_name: (u as { full_name: string }).full_name,
         email: (u as { email: string | null }).email,
+        phone: (u as { phone: string | null }).phone,
         hiring_date: (u as { hiring_date: string | null }).hiring_date,
         ...ep,
       };

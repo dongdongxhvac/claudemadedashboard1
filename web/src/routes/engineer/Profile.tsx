@@ -105,6 +105,21 @@ export default function EngineerProfile() {
               </div>
               <p className="text-sm opacity-60">{p.cmms_assignee_name ?? '—'}{p.hiring_date && ` · hired ${p.hiring_date}`}</p>
 
+              {(p.email || p.phone) && (
+                <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                  {p.email && (
+                    <a href={`mailto:${p.email}`} className="opacity-80 hover:opacity-100" style={{ fontFamily: 'ui-monospace, monospace' }}>
+                      ✉ {p.email}
+                    </a>
+                  )}
+                  {p.phone && (
+                    <a href={`tel:${p.phone.replace(/[^0-9+]/g, '')}`} className="opacity-80 hover:opacity-100" style={{ fontFamily: 'ui-monospace, monospace' }}>
+                      ☎ {p.phone}
+                    </a>
+                  )}
+                </div>
+              )}
+
               <div className="mt-4 flex items-center gap-4">
                 <div className="px-3 py-1 rounded-md font-mono text-sm" style={{ background: tier.bg }}>
                   LVL {p.level}
