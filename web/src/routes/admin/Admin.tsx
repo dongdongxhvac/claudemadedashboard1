@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { EngineerProfilesTab } from './EngineerProfilesTab';
+import { OncallTab } from './OncallTab';
+
+type Tab = 'engineers' | 'oncall';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
   const me = useMe();
+  const [tab, setTab] = useState<Tab>('engineers');
 
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -35,13 +40,18 @@ export default function Admin() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              <TabButton active>Engineer Profiles</TabButton>
-              <TabButton disabled title="Coming in Phase 4">Buildings</TabButton>
-              <TabButton disabled title="Coming in Phase 4">Rounds</TabButton>
-              <TabButton disabled title="Coming in Phase 4">On-call</TabButton>
+              <TabButton active={tab === 'engineers'} onClick={() => setTab('engineers')}>
+                Engineer Profiles
+              </TabButton>
+              <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
+                On-call
+              </TabButton>
+              <TabButton disabled title="Coming next">Buildings</TabButton>
+              <TabButton disabled title="Coming next">Rounds</TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
-            <EngineerProfilesTab />
+            {tab === 'engineers' && <EngineerProfilesTab />}
+            {tab === 'oncall'    && <OncallTab />}
           </div>
         )}
       </main>
@@ -54,16 +64,19 @@ function TabButton({
   active,
   disabled,
   title,
+  onClick,
 }: {
   children: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
   title?: string;
+  onClick?: () => void;
 }) {
   return (
     <button
       disabled={disabled}
       title={title}
+      onClick={onClick}
       className="px-3 py-2 t-text disabled:opacity-40 disabled:cursor-not-allowed"
       style={{
         borderBottom: active ? '2px solid var(--color-accent)' : '2px solid transparent',

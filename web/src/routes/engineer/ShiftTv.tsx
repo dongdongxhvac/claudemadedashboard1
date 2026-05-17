@@ -9,6 +9,7 @@ import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useMe } from '../../hooks/useMe';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
+import { OncallBadge } from '../../components/OncallBadge';
 import { isClosed, localISODate, fmtMd } from '../../lib/dashboard';
 
 const MAX_ITEMS_PER_CARD = 6;
@@ -102,6 +103,7 @@ export default function EngineerShiftTv() {
             {snapshotLocal && ` · snapshot ${snapshotLocal}`}
           </p>
         </div>
+        <OncallBadge size="tv" />
       </header>
 
       <div className="px-4 pt-4">

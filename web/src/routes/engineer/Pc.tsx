@@ -9,6 +9,7 @@ import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
+import { OncallBadge } from '../../components/OncallBadge';
 import {
   useMyEngineerContext, useMyPmRows, useMyWoRows, useMyLaborRows,
 } from '../../hooks/useMyAssignedData';
@@ -154,6 +155,7 @@ export default function EngineerPc() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <OncallBadge />
             <StyleSwitcher />
             {profileAllowed && (
               <Link to={`/engineer/${ctx.data.user_id}/profile`} className="t-small t-accent hover:underline">

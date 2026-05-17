@@ -10,6 +10,7 @@ import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { AnnouncementComposer } from '../../components/AnnouncementComposer';
+import { OncallBadge } from '../../components/OncallBadge';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useIsAdmin } from '../../hooks/useMe';
 import { Link } from 'react-router-dom';
@@ -130,6 +131,7 @@ export default function ManagerPc() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <OncallBadge />
             <StyleSwitcher />
             {isAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">

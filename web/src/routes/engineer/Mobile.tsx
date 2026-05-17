@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useMyAssignedData';
 import { isClosed, isCompletedStatus, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
+import { OncallBadge } from '../../components/OncallBadge';
 import { openPrintWindow } from '../../lib/printPmList';
 
 type Tab = 'now' | 'mine' | 'profile';
@@ -60,12 +61,15 @@ export default function EngineerMobile() {
   return (
     <Wrap>
       {/* slim header */}
-      <header className="px-4 py-3 border-b flex items-baseline justify-between" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+      <header className="px-4 py-3 border-b flex items-baseline justify-between gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
         <div>
           <h1 className="t-section-title">My Day</h1>
           <p className="t-small t-muted">{ctx.data.cmms_assignee_name}</p>
         </div>
-        <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
+        <div className="flex items-center gap-3">
+          <OncallBadge />
+          <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
+        </div>
       </header>
 
       {/* tab body — pad bottom for the fixed nav */}
