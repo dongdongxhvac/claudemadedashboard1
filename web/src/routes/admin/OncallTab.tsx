@@ -87,6 +87,8 @@ export function OncallTab() {
       };
 
   const visibleCycles = displayedSettings.rotations_per_engineer + 1; // +1 preview
+  // Column indices: -1 = previous cycle, 0..R-1 = regular cycles, R = preview
+  const columnIndices = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
 
   // Picker source: engineers not yet in the (draft) participants list.
   const participantIds = useMemo(() => new Set(displayedParticipants.map((p) => p.user_id)), [displayedParticipants]);
@@ -172,14 +174,14 @@ export function OncallTab() {
   const headerSummary = `${displayedParticipants.length} engineer${displayedParticipants.length === 1 ? '' : 's'} · ${displayedSettings.rotations_per_engineer} cycles + 1 preview · ${startDate ? 'starts ' + formatStartLong(startDate) : 'no start date set'}`;
 
   return (
-    <div className="space-y-4">
-      <div className="t-card">
-        <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
+    <div className="space-y-3">
+      <div className="t-card" style={{ padding: '0.75rem 1rem' }}>
+        <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
           <div>
             <h2 className="t-section-title">On-call schedule</h2>
             <p className="t-small t-muted">{headerSummary}</p>
             <p className="t-small t-muted">
-              Holiday weeks shown in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.18)' }}>green</span> = active rotation. — = before effective date.
+              Holiday weeks shown in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -255,14 +257,17 @@ export function OncallTab() {
         <div className="overflow-x-auto">
           <table className="min-w-full t-text border-collapse">
             <thead>
-              <tr className="text-left t-small t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
-                {editing && <th className="py-2 px-1 w-16"></th>}
-                <th className="py-2 pr-3">Engineer</th>
-                {Array.from({ length: visibleCycles }).map((_, c) => {
+              <tr className="text-left t-text t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
+                {editing && <th className="py-1 px-1 w-16"></th>}
+                <th className="py-1 pr-2">Engineer</th>
+                {columnIndices.map((c) => {
                   const isPreview = c === visibleCycles - 1;
+                  const isPrev = c === -1;
+                  const label = isPrev ? 'Prev' : isPreview ? '+1 preview' : `Cycle ${c + 1}`;
+                  const dim = isPreview || isPrev;
                   return (
-                    <th key={c} className="py-2 px-2 text-center whitespace-nowrap" style={isPreview ? { fontStyle: 'italic', opacity: 0.7 } : undefined}>
-                      {isPreview ? `+1 preview` : `Cycle ${c + 1}`}
+                    <th key={c} className="py-1 px-1.5 text-center whitespace-nowrap" style={dim ? { fontStyle: 'italic', opacity: 0.7 } : undefined}>
+                      {label}
                     </th>
                   );
                 })}
@@ -271,38 +276,46 @@ export function OncallTab() {
             <tbody>
               {displayedParticipants.length === 0 ? (
                 <tr>
-                  <td colSpan={1 + visibleCycles + (editing ? 1 : 0)} className="py-6 text-center t-small t-muted italic">
+                  <td colSpan={1 + columnIndices.length + (editing ? 1 : 0)} className="py-6 text-center t-text t-muted italic">
                     {editing ? 'No participants yet. Use "+ Add to rotation" below.' : 'No on-call rotation defined yet. Click Web Edit to set it up.'}
                   </td>
                 </tr>
               ) : (
                 displayedParticipants.map((p, idx) => {
-                  const anyActive = Array.from({ length: visibleCycles }).some((_, c) => cellInfo(p, idx, c).active);
+                  const anyActive = columnIndices.some((c) => cellInfo(p, idx, c).active);
                   return (
-                    <tr key={p.user_id} className="border-b t-row-hover" style={{
-                      borderColor: 'var(--color-border-soft)',
-                      background: anyActive ? 'rgba(34,197,94,0.06)' : undefined,
-                    }}>
+                    <tr
+                      key={p.user_id}
+                      className="border-b t-row-hover"
+                      style={{
+                        borderColor: 'var(--color-border-soft)',
+                        background: anyActive ? 'rgba(34,197,94,0.16)' : undefined,
+                        borderLeft: anyActive ? '4px solid var(--color-ok)' : '4px solid transparent',
+                      }}
+                    >
                       {editing && (
-                        <td className="py-2 px-1 whitespace-nowrap">
+                        <td className="py-1 px-1 whitespace-nowrap">
                           <div className="flex items-center gap-0.5">
-                            <button onClick={() => moveUp(idx)}   disabled={idx === 0}              className="px-1 disabled:opacity-30" title="Move up">↑</button>
-                            <button onClick={() => moveDown(idx)} disabled={idx === draft.length-1} className="px-1 disabled:opacity-30" title="Move down">↓</button>
-                            <button onClick={() => remove(idx)} className="px-1" style={{ color: 'var(--color-danger)' }} title="Remove from rotation">✕</button>
+                            <button onClick={() => moveUp(idx)}   disabled={idx === 0}              className="px-1 disabled:opacity-30 t-text" title="Move up">↑</button>
+                            <button onClick={() => moveDown(idx)} disabled={idx === draft.length-1} className="px-1 disabled:opacity-30 t-text" title="Move down">↓</button>
+                            <button onClick={() => remove(idx)} className="px-1 t-text" style={{ color: 'var(--color-danger)' }} title="Remove from rotation">✕</button>
                           </div>
                         </td>
                       )}
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        <div className="font-medium">
-                          {p.full_name}
+                      <td className="py-1 pr-2 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium t-text">{p.full_name}</span>
                           {anyActive && (
-                            <span className="ml-2 t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }}>
+                            <span
+                              className="px-2 py-0.5 rounded text-white font-semibold"
+                              style={{ background: 'var(--color-ok)', fontSize: '11px', letterSpacing: '0.5px' }}
+                            >
                               ON CALL
                             </span>
                           )}
                         </div>
                         {editing ? (
-                          <div className="mt-1 t-small t-muted">
+                          <div className="mt-0.5 t-small t-muted">
                             <label>
                               eff from:{' '}
                               <input
@@ -320,20 +333,23 @@ export function OncallTab() {
                           )
                         )}
                       </td>
-                      {Array.from({ length: visibleCycles }).map((_, c) => {
+                      {columnIndices.map((c) => {
                         const info = cellInfo(p, idx, c);
                         const isPreview = c === visibleCycles - 1;
+                        const isPrev = c === -1;
+                        const dim = isPreview || isPrev;
                         return (
                           <td
                             key={c}
-                            className="py-2 px-2 text-center t-mono t-small whitespace-nowrap"
+                            className="py-1 px-1.5 text-center t-mono whitespace-nowrap"
                             title={info.holiday ? `${info.holiday.name} · ${info.holiday.date}` : undefined}
                             style={{
-                              background: info.active ? 'rgba(34,197,94,0.18)' : undefined,
-                              fontWeight: info.active ? 600 : undefined,
+                              background: info.active ? 'rgba(34,197,94,0.28)' : undefined,
+                              fontWeight: info.active ? 700 : undefined,
                               color: info.holiday ? 'var(--color-danger)' : info.preEffective ? 'var(--color-text-muted)' : undefined,
-                              opacity: isPreview ? 0.7 : 1,
-                              fontStyle: isPreview ? 'italic' : undefined,
+                              opacity: dim ? 0.7 : 1,
+                              fontStyle: dim ? 'italic' : undefined,
+                              border: info.active ? '1px solid var(--color-ok)' : undefined,
                             }}
                           >
                             {info.display}
