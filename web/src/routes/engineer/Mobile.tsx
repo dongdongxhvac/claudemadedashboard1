@@ -204,6 +204,7 @@ function MineTab({
 }) {
   const todayStr = localISODate(new Date());
   const [filter, setFilter] = useState<'month' | 'all'>('month');
+  const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null);
 
   const now = new Date();
   const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -220,20 +221,29 @@ function MineTab({
     [openPms, eomStr],
   );
 
-  const displayedPms = filter === 'month' ? monthPms : openPms;
+  // First narrow by date, then (optionally) by equipment chip.
+  const dateFiltered = filter === 'month' ? monthPms : openPms;
 
-  // Equipment categories with count > 4 in the displayed window — matches the
-  // §03 chips behaviour from Manager view.
+  // Equipment chips: counts computed against the date-filtered set so toggling
+  // Month/All updates the chip counts; clicking a chip narrows displayedPms
+  // without affecting the chip counts (otherwise the other chips would zero out).
   const equipmentChips = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of displayedPms) {
+    for (const r of dateFiltered) {
       const cat = r.equipment_category ?? r.equipment ?? 'Other';
       map.set(cat, (map.get(cat) ?? 0) + 1);
     }
     return Array.from(map.entries())
       .filter(([, n]) => n > 4)
       .sort((a, b) => b[1] - a[1]);
-  }, [displayedPms]);
+  }, [dateFiltered]);
+
+  const displayedPms = useMemo(() => {
+    if (!equipmentFilter) return dateFiltered;
+    return dateFiltered.filter(
+      (r) => (r.equipment_category ?? r.equipment ?? 'Other') === equipmentFilter,
+    );
+  }, [dateFiltered, equipmentFilter]);
 
   // NPMs are scoped to ALL open PMs (no date filter), per the same rule used
   // in stat strip + §03 NPM column in Manager view.
@@ -248,23 +258,51 @@ function MineTab({
 
   return (
     <div className="p-4 space-y-4">
+      {/* 1. WOs */}
+      <Section title={`MY OPEN WOs · ${myWos.length}`}>
+        {myWos.length === 0 ? (
+          <p className="t-small t-muted italic px-3 py-2">None.</p>
+        ) : (
+          <WoList rows={myWos} />
+        )}
+      </Section>
+
+      {/* 2. NPMs */}
+      {myNpms.length > 0 && (
+        <Section title={`MY OPEN NPMs · ${myNpms.length}`}>
+          <PmList rows={myNpms} todayStr={todayStr} />
+        </Section>
+      )}
+
+      {/* 3. Equipment chips + PMs */}
       {equipmentChips.length > 0 && (
         <section>
           <h3 className="t-small t-muted uppercase tracking-wider mb-2 px-1">
-            EQUIPMENT · {filter === 'month' ? 'this month' : 'all open'} · count &gt; 4
+            EQUIPMENT · {filter === 'month' ? 'this month' : 'all open'} · count &gt; 4 · tap to filter
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            {equipmentChips.map(([name, count]) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1 px-2 py-1 t-small border rounded"
-                style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
-                title={name}
-              >
-                {name}
-                <span className="t-muted t-mono">{count}</span>
-              </span>
-            ))}
+            {equipmentChips.map(([name, count]) => {
+              const active = equipmentFilter === name;
+              return (
+                <button
+                  key={name}
+                  onClick={() => setEquipmentFilter(active ? null : name)}
+                  className="inline-flex items-center gap-1 px-2 py-1 t-small border rounded transition-colors"
+                  style={{
+                    background: active ? 'var(--color-accent)' : 'var(--color-card)',
+                    color: active ? '#fff' : 'var(--color-text)',
+                    borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
+                  }}
+                  title={active ? 'Tap to clear filter' : `Show only ${name}`}
+                >
+                  {name}
+                  <span className={active ? 'opacity-90' : 't-muted'}>
+                    {count}
+                  </span>
+                  {active && <span className="ml-1 opacity-90">✕</span>}
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
@@ -273,8 +311,18 @@ function MineTab({
         <div className="flex items-center justify-between mb-2 px-1 gap-2">
           <h3 className="t-small t-muted uppercase tracking-wider">
             MY OPEN PMs · {displayedPms.length}
-            {filter === 'month' && openPms.length !== displayedPms.length && (
+            {displayedPms.length !== openPms.length && (
               <span className="t-muted ml-1">of {openPms.length}</span>
+            )}
+            {equipmentFilter && (
+              <button
+                onClick={() => setEquipmentFilter(null)}
+                className="ml-2"
+                style={{ color: 'var(--color-accent)' }}
+                title="Clear equipment filter"
+              >
+                · {equipmentFilter} ✕
+              </button>
             )}
           </h3>
           <div className="flex gap-1">
@@ -290,20 +338,6 @@ function MineTab({
           )}
         </div>
       </section>
-
-      {myNpms.length > 0 && (
-        <Section title={`MY OPEN NPMs · ${myNpms.length}`}>
-          <PmList rows={myNpms} todayStr={todayStr} />
-        </Section>
-      )}
-
-      <Section title={`MY OPEN WOs · ${myWos.length}`}>
-        {myWos.length === 0 ? (
-          <p className="t-small t-muted italic px-3 py-2">None.</p>
-        ) : (
-          <WoList rows={myWos} />
-        )}
-      </Section>
     </div>
   );
 }
