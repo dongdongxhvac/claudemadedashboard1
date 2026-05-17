@@ -182,16 +182,25 @@ export function OncallTab() {
 
   return (
     <div className="space-y-3 oncall-root">
-      {/* Print rules: keep the on-screen content (highlights, ON CALL chip,
-          legend, last-updated, table — everything in the 2nd screenshot the
-          user pointed at), just drop the buttons and the surrounding
-          dashboard chrome. Forces print-color-adjust so background highlights
-          render on paper. */}
+      {/* Print rules: hide ALL surrounding chrome (Admin header, tab bar,
+          everything in the Admin route shell). Only the on-call card prints.
+          Trick: visibility:hidden on everything, then re-show the .oncall-root
+          subtree and pin it to the top of the page so nothing crops.
+          Keep on-screen highlights (active week green, ON CALL chip, holiday
+          red) on paper too via print-color-adjust: exact. */}
       <style>{`
         @media print {
+          body * { visibility: hidden !important; }
+          .oncall-root, .oncall-root * { visibility: visible !important; }
+          .oncall-root {
+            position: absolute !important;
+            top: 0; left: 0;
+            width: 100%;
+            padding: 12px !important;
+            background: white !important;
+          }
           .oncall-no-print { display: none !important; }
           .oncall-card     { box-shadow: none !important; border: none !important; padding: 0 !important; }
-          .oncall-root     { padding: 0 !important; }
           body             { background: white !important; }
           .oncall-row,
           .oncall-cell,
@@ -199,6 +208,8 @@ export function OncallTab() {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          tr { page-break-inside: avoid; }
+          table { page-break-inside: auto; }
         }
       `}</style>
       <div className="t-card oncall-card" style={{ padding: '0.75rem 1rem' }}>
