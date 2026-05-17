@@ -11,6 +11,8 @@ import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
+import { useIsAdmin } from '../../hooks/useMe';
+import { Link } from 'react-router-dom';
 
 function isClosed(status: string | null): boolean {
   if (!status) return false;
@@ -92,6 +94,7 @@ export default function ManagerPc() {
   const { session, signOut } = useAuth();
   useSnapshotRealtime();
   useFocusBoardRealtime();
+  const isAdmin = useIsAdmin();
   const pmQ = useCurrentPmRows();
   const woQ = useCurrentWoRows();
 
@@ -128,6 +131,11 @@ export default function ManagerPc() {
           </div>
           <div className="flex items-center gap-4">
             <StyleSwitcher />
+            {isAdmin && (
+              <Link to="/admin" className="t-small t-accent hover:underline">
+                Admin
+              </Link>
+            )}
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">
               Sign out
