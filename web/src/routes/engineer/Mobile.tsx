@@ -12,7 +12,7 @@ import {
   useMyPmRows,
   useMyWoRows,
 } from '../../hooks/useMyAssignedData';
-import { isClosed, localISODate, fmtMd } from '../../lib/dashboard';
+import { isClosed, isNpm, localISODate, fmtMd } from '../../lib/dashboard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 
 type Tab = 'now' | 'mine' | 'profile';
@@ -203,12 +203,44 @@ function MineTab({
   loading: boolean;
 }) {
   const todayStr = localISODate(new Date());
+  const [filter, setFilter] = useState<'month' | 'all'>('month');
 
-  const myPms = useMemo(() => {
+  const now = new Date();
+  const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const eomStr = localISODate(eom);
+
+  const openPms = useMemo(() => {
     return pmRows
       .filter((r) => !isClosed(r.status))
       .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
   }, [pmRows]);
+
+  const monthPms = useMemo(
+    () => openPms.filter((r) => r.due_date && r.due_date <= eomStr),
+    [openPms, eomStr],
+  );
+
+  const displayedPms = filter === 'month' ? monthPms : openPms;
+
+  // Equipment categories with count > 4 in the displayed window — matches the
+  // §03 chips behaviour from Manager view.
+  const equipmentChips = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of displayedPms) {
+      const cat = r.equipment_category ?? r.equipment ?? 'Other';
+      map.set(cat, (map.get(cat) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .filter(([, n]) => n > 4)
+      .sort((a, b) => b[1] - a[1]);
+  }, [displayedPms]);
+
+  // NPMs are scoped to ALL open PMs (no date filter), per the same rule used
+  // in stat strip + §03 NPM column in Manager view.
+  const myNpms = useMemo(
+    () => pmRows.filter((r) => !isClosed(r.status) && isNpm(r)),
+    [pmRows],
+  );
 
   const myWos = useMemo(() => (woRows ?? []).filter((w) => w.is_open !== false), [woRows]);
 
@@ -216,21 +248,87 @@ function MineTab({
 
   return (
     <div className="p-4 space-y-4">
-      <Section title={`MY OPEN PMs · ${myPms.length}`}>
-        {myPms.length === 0 ? (
-          <p className="t-small t-muted italic px-1">None.</p>
-        ) : (
-          <PmList rows={myPms} todayStr={todayStr} highlightOverdue />
-        )}
-      </Section>
+      {equipmentChips.length > 0 && (
+        <section>
+          <h3 className="t-small t-muted uppercase tracking-wider mb-2 px-1">
+            EQUIPMENT · {filter === 'month' ? 'this month' : 'all open'} · count &gt; 4
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {equipmentChips.map(([name, count]) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-1 px-2 py-1 t-small border rounded"
+                style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
+                title={name}
+              >
+                {name}
+                <span className="t-muted t-mono">{count}</span>
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="flex items-center justify-between mb-2 px-1 gap-2">
+          <h3 className="t-small t-muted uppercase tracking-wider">
+            MY OPEN PMs · {displayedPms.length}
+            {filter === 'month' && openPms.length !== displayedPms.length && (
+              <span className="t-muted ml-1">of {openPms.length}</span>
+            )}
+          </h3>
+          <div className="flex gap-1">
+            <FilterBtn label="Month" active={filter === 'month'} onClick={() => setFilter('month')} />
+            <FilterBtn label="All"   active={filter === 'all'}   onClick={() => setFilter('all')} />
+          </div>
+        </div>
+        <div className="t-card p-0 overflow-hidden">
+          {displayedPms.length === 0 ? (
+            <p className="t-small t-muted italic px-3 py-2">None.</p>
+          ) : (
+            <PmList rows={displayedPms} todayStr={todayStr} highlightOverdue />
+          )}
+        </div>
+      </section>
+
+      {myNpms.length > 0 && (
+        <Section title={`MY OPEN NPMs · ${myNpms.length}`}>
+          <PmList rows={myNpms} todayStr={todayStr} />
+        </Section>
+      )}
+
       <Section title={`MY OPEN WOs · ${myWos.length}`}>
         {myWos.length === 0 ? (
-          <p className="t-small t-muted italic px-1">None.</p>
+          <p className="t-small t-muted italic px-3 py-2">None.</p>
         ) : (
           <WoList rows={myWos} />
         )}
       </Section>
     </div>
+  );
+}
+
+function FilterBtn({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="t-small px-2 py-0.5 rounded border"
+      style={{
+        background: active ? 'var(--color-accent)' : 'var(--color-card)',
+        color: active ? '#fff' : 'var(--color-text-muted)',
+        borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
