@@ -245,15 +245,9 @@ function NowTab({
         </Section>
       )}
 
-      {today.length > 0 && (
-        <Section title={`DUE TODAY · ${today.length}`}>
-          <PmList rows={today} todayStr={todayStr} />
-        </Section>
-      )}
-
-      {tomorrowPms.length > 0 && (
-        <Section title={`DUE TOMORROW · ${tomorrowPms.length}`}>
-          <PmList rows={tomorrowPms} todayStr={todayStr} />
+      {(today.length + tomorrowPms.length) > 0 && (
+        <Section title={`DUE NEXT 48 HOURS · ${today.length + tomorrowPms.length}`}>
+          <PmList rows={[...today, ...tomorrowPms]} todayStr={todayStr} />
         </Section>
       )}
 
