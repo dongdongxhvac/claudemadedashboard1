@@ -182,18 +182,23 @@ export function OncallTab() {
 
   return (
     <div className="space-y-3 oncall-root">
-      {/* Print-only overrides: strip the on-screen highlight chrome so paper
-          copies are neutral, hide UI chrome (buttons, edit controls). */}
+      {/* Print rules: keep the on-screen content (highlights, ON CALL chip,
+          legend, last-updated, table — everything in the 2nd screenshot the
+          user pointed at), just drop the buttons and the surrounding
+          dashboard chrome. Forces print-color-adjust so background highlights
+          render on paper. */}
       <style>{`
         @media print {
           .oncall-no-print { display: none !important; }
-          .oncall-row     { background: white !important; border-left: 1px solid #999 !important; }
-          .oncall-cell    { background: white !important; border: 1px solid #ccc !important;
-                            color: black !important; font-weight: normal !important; }
-          .oncall-on-call-chip { display: none !important; }
-          .oncall-card    { box-shadow: none !important; border: none !important; padding: 0 !important; }
-          .oncall-root    { padding: 0 !important; }
-          body            { background: white !important; }
+          .oncall-card     { box-shadow: none !important; border: none !important; padding: 0 !important; }
+          .oncall-root     { padding: 0 !important; }
+          body             { background: white !important; }
+          .oncall-row,
+          .oncall-cell,
+          .oncall-on-call-chip {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
         }
       `}</style>
       <div className="t-card oncall-card" style={{ padding: '0.75rem 1rem' }}>
@@ -204,7 +209,7 @@ export function OncallTab() {
             {updatedAtLocal && (
               <p className="t-small t-muted">Last updated {updatedAtLocal}</p>
             )}
-            <p className="t-small t-muted oncall-no-print">
+            <p className="t-small t-muted">
               Holiday weeks shown in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
             </p>
           </div>
