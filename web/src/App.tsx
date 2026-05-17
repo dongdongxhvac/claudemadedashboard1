@@ -5,6 +5,7 @@ import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
 import EngineerProfile from './routes/engineer/Profile';
 import EngineerMe from './routes/engineer/Me';
+import EngineerShiftTv from './routes/engineer/ShiftTv';
 import { useMe } from './hooks/useMe';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/manager" element={<Protected><Manager /></Protected>} />
         <Route path="/admin"   element={<Protected><Admin /></Protected>} />
         <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
+        <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
