@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
@@ -10,63 +10,9 @@ export type OncallRotation = {
   notes: string | null;
 };
 
-export type OncallEngineer = {
-  user_id: string;
-  full_name: string;
-  cmms_assignee_name: string | null;
-};
-
-const KEY_ALL = ['oncall_all'];
 const KEY_CURRENT = ['oncall_current'];
 const KEY_PARTICIPANTS = ['oncall_participants'];
 const KEY_SETTINGS = ['oncall_settings'];
-
-/** Fetch every rotation row + the active engineers, for the Admin table. */
-export function useOncallData() {
-  return useQuery({
-    queryKey: KEY_ALL,
-    queryFn: async () => {
-      const [rRes, eRes] = await Promise.all([
-        supabase
-          .from('oncall_rotations')
-          .select('*')
-          .order('week_start', { ascending: true }),
-        supabase
-          .from('users')
-          .select('id, full_name, engineer_profiles!inner(cmms_assignee_name)')
-          .eq('role', 'engineer')
-          .eq('active', true)
-          .order('full_name'),
-      ]);
-      if (rRes.error) throw rRes.error;
-      if (eRes.error) throw eRes.error;
-
-      type EngJoin = {
-        id: string;
-        full_name: string;
-        engineer_profiles:
-          | { cmms_assignee_name: string | null }
-          | { cmms_assignee_name: string | null }[]
-          | null;
-      };
-      const engineers: OncallEngineer[] = (eRes.data as unknown as EngJoin[]).map((u) => {
-        const epRaw = u.engineer_profiles;
-        const ep = Array.isArray(epRaw) ? epRaw[0] : epRaw;
-        return {
-          user_id: u.id,
-          full_name: u.full_name,
-          cmms_assignee_name: ep?.cmms_assignee_name ?? null,
-        };
-      });
-
-      return {
-        rotations: (rRes.data ?? []) as OncallRotation[],
-        engineers,
-      };
-    },
-    staleTime: 60_000,
-  });
-}
 
 /** Current week's rotation (Friday → next Friday) joined with engineer name. */
 export function useCurrentOncall() {
@@ -103,70 +49,12 @@ export function useCurrentOncall() {
   });
 }
 
-/** Per-engineer view used by the Admin table: each engineer + their N rotations in order. */
-export function useEngineerRotationGrid() {
-  const q = useOncallData();
-  const data = useMemo(() => {
-    if (!q.data) return null;
-    const rotationsByUser = new Map<string, OncallRotation[]>();
-    for (const r of q.data.rotations) {
-      if (!r.primary_user_id) continue;
-      const arr = rotationsByUser.get(r.primary_user_id) ?? [];
-      arr.push(r);
-      rotationsByUser.set(r.primary_user_id, arr);
-    }
-    for (const arr of rotationsByUser.values()) {
-      arr.sort((a, b) => a.week_start.localeCompare(b.week_start));
-    }
-    const maxCols = Math.max(0, ...Array.from(rotationsByUser.values()).map((a) => a.length));
-    return { engineers: q.data.engineers, rotationsByUser, maxCols };
-  }, [q.data]);
-  return { ...q, data };
-}
-
-/** Add or update a rotation cell. Looks up by (week_start) since it's unique. */
-export function useSetRotation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { week_start: string; primary_user_id: string | null }) => {
-      // upsert by week_start
-      const { error, data } = await supabase
-        .from('oncall_rotations')
-        .upsert({ week_start: input.week_start, primary_user_id: input.primary_user_id }, { onConflict: 'week_start' })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY_ALL });
-      qc.invalidateQueries({ queryKey: KEY_CURRENT });
-    },
-  });
-}
-
-/** Delete a rotation by id. */
-export function useDeleteRotation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('oncall_rotations').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY_ALL });
-      qc.invalidateQueries({ queryKey: KEY_CURRENT });
-    },
-  });
-}
-
 /** Realtime: any change to oncall_rotations / oncall_participants /
  *  oncall_schedule_settings invalidates the relevant query keys. */
 export function useOncallRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const invalidate = () => {
-      qc.invalidateQueries({ queryKey: KEY_ALL });
       qc.invalidateQueries({ queryKey: KEY_CURRENT });
       qc.invalidateQueries({ queryKey: KEY_PARTICIPANTS });
       qc.invalidateQueries({ queryKey: KEY_SETTINGS });
@@ -377,7 +265,6 @@ export function useSaveOncallSchedule() {
       return { rotationsWritten: rotationsToInsert.length };
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY_ALL });
       qc.invalidateQueries({ queryKey: KEY_CURRENT });
       qc.invalidateQueries({ queryKey: KEY_PARTICIPANTS });
       qc.invalidateQueries({ queryKey: KEY_SETTINGS });
