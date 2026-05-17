@@ -202,18 +202,17 @@ export function OncallTab() {
         }
       `}</style>
       <div className="t-card oncall-card" style={{ padding: '0.75rem 1rem' }}>
-        <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <div className="flex items-start justify-between mb-2 gap-4 flex-wrap">
           <div>
             <h2 className="t-section-title">On-call schedule</h2>
             <p className="t-small t-muted">{headerSummary}</p>
-            {updatedAtLocal && (
-              <p className="t-small t-muted">Last updated {updatedAtLocal}</p>
-            )}
-            <p className="t-small t-muted">
-              Holiday weeks shown in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
-            </p>
           </div>
-          <div className="flex items-center gap-2 oncall-no-print">
+          <div className="flex flex-col items-end gap-2">
+            <p className="t-small t-muted text-right" style={{ maxWidth: '560px' }}>
+              {updatedAtLocal && <>Last updated {updatedAtLocal} · </>}
+              Holiday weeks in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
+            </p>
+            <div className="flex items-center gap-2 oncall-no-print">
             {!editing ? (
               <>
                 <button
@@ -252,6 +251,7 @@ export function OncallTab() {
                 </button>
               </>
             )}
+            </div>
           </div>
         </div>
 
