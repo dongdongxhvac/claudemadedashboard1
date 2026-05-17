@@ -4,7 +4,7 @@ import Login from './routes/Login';
 import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
 import EngineerProfile from './routes/engineer/Profile';
-import EngineerMobile from './routes/engineer/Mobile';
+import EngineerMe from './routes/engineer/Me';
 import { useMe } from './hooks/useMe';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -36,7 +36,7 @@ export default function App() {
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/manager" element={<Protected><Manager /></Protected>} />
         <Route path="/admin"   element={<Protected><Admin /></Protected>} />
-        <Route path="/engineer/me" element={<Protected><EngineerMobile /></Protected>} />
+        <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
