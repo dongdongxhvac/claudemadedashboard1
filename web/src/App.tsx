@@ -4,6 +4,8 @@ import Login from './routes/Login';
 import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
 import EngineerProfile from './routes/engineer/Profile';
+import EngineerMobile from './routes/engineer/Mobile';
+import { useMe } from './hooks/useMe';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -15,8 +17,16 @@ function Protected({ children }: { children: React.ReactNode }) {
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   if (loading) return <div className="p-8 text-gray-500">Loading...</div>;
-  if (session) return <Navigate to="/manager" replace />;
+  if (session) return <Navigate to="/" replace />;
   return <>{children}</>;
+}
+
+/** Role-aware home redirect: engineers go to /engineer/me, others to /manager. */
+function Home() {
+  const me = useMe();
+  if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
+  return <Navigate to="/manager" replace />;
 }
 
 export default function App() {
@@ -26,9 +36,10 @@ export default function App() {
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/manager" element={<Protected><Manager /></Protected>} />
         <Route path="/admin"   element={<Protected><Admin /></Protected>} />
+        <Route path="/engineer/me" element={<Protected><EngineerMobile /></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
-        <Route path="/"        element={<Navigate to="/manager" replace />} />
-        <Route path="*"        element={<Navigate to="/manager" replace />} />
+        <Route path="/"        element={<Protected><Home /></Protected>} />
+        <Route path="*"        element={<Protected><Home /></Protected>} />
       </Routes>
     </BrowserRouter>
   );

@@ -29,7 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithMagicLink = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + '/manager' },
+      // Land on the role-aware home, which redirects based on the user's role.
+      options: { emailRedirectTo: window.location.origin + '/' },
     });
     return { error: error?.message ?? null };
   };
