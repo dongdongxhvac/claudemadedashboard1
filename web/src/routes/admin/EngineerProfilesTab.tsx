@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useEngineers, useUpdateEngineerProfile, DISCIPLINES, type EngineerRow } from '../../hooks/useEngineers';
+import { useEngineers, useUpdateEngineerProfile, useUpdateUser, DISCIPLINES, type EngineerRow } from '../../hooks/useEngineers';
 
 export function EngineerProfilesTab() {
   const q = useEngineers();
-  const update = useUpdateEngineerProfile();
+  const updateProfile = useUpdateEngineerProfile();
+  const updateUser = useUpdateUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
 
   if (q.isLoading) return <p className="t-text t-muted">Loading engineers...</p>;
@@ -25,6 +26,7 @@ export function EngineerProfilesTab() {
             <thead>
               <tr className="text-left t-small t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
                 <th className="py-2 pr-3">Name</th>
+                <th className="py-2 px-2">Email · sign-in</th>
                 <th className="py-2 px-2">CMMS name</th>
                 <th className="py-2 px-2">Discipline</th>
                 <th className="py-2 px-2 text-right">Level</th>
@@ -37,6 +39,24 @@ export function EngineerProfilesTab() {
               {rows.map((r) => (
                 <tr key={r.user_id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
                   <td className="py-2 pr-3 font-medium">{r.full_name}</td>
+                  <td className="py-2 px-2">
+                    {r.email ? (
+                      <div className="flex items-center gap-2">
+                        <span className="t-small">{r.email}</span>
+                        {r.auth_user_id ? (
+                          <span className="t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }} title="Engineer has signed in; auth.users linked to public.users">
+                            ✓ LINKED
+                          </span>
+                        ) : (
+                          <span className="t-small px-1.5 py-0.5 rounded t-muted" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }} title="Email set, awaiting first sign-in">
+                            ⌛ PENDING
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="t-small t-muted italic">— not set —</span>
+                    )}
+                  </td>
                   <td className="py-2 px-2 t-mono t-small t-muted">{r.cmms_assignee_name}</td>
                   <td className="py-2 px-2">{r.discipline ? labelFor(r.discipline) : <span className="t-muted">—</span>}</td>
                   <td className="py-2 px-2 text-right t-mono">{r.level}</td>
@@ -45,7 +65,7 @@ export function EngineerProfilesTab() {
                     <Toggle
                       checked={r.visible_to_self}
                       onChange={(v) =>
-                        update.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
+                        updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
                       }
                     />
                   </td>
@@ -86,7 +106,16 @@ export function EngineerProfilesTab() {
           row={editing}
           onClose={() => setEditing(null)}
           onSave={async (patch) => {
-            await update.mutateAsync({ user_id: editing.user_id, patch });
+            // Split: email goes to public.users, profile fields to engineer_profiles.
+            const { email, ...profilePatch } = patch;
+            const tasks: Promise<unknown>[] = [];
+            if (email !== undefined && email !== editing.email) {
+              tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: { email } }));
+            }
+            if (Object.keys(profilePatch).length > 0) {
+              tasks.push(updateProfile.mutateAsync({ user_id: editing.user_id, patch: profilePatch }));
+            }
+            await Promise.all(tasks);
             setEditing(null);
           }}
         />
@@ -124,16 +153,25 @@ function EditDrawer({
   onClose: () => void;
   onSave: (patch: Partial<EngineerRow>) => Promise<void>;
 }) {
+  const [email, setEmail] = useState<string>(row.email ?? '');
   const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
   const [level, setLevel] = useState<number>(row.level);
   const [notes, setNotes] = useState<string>(row.notes ?? '');
   const [saving, setSaving] = useState(false);
 
+  const emailTrimmed = email.trim();
+  const isLinked = !!row.auth_user_id;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({ discipline, level, notes: notes.trim() || null });
+      await onSave({
+        email: emailTrimmed === '' ? null : emailTrimmed,
+        discipline,
+        level,
+        notes: notes.trim() || null,
+      });
     } finally {
       setSaving(false);
     }
@@ -158,6 +196,29 @@ function EditDrawer({
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
         </div>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">
+            Sign-in email{' '}
+            {isLinked && (
+              <span className="t-small text-white px-1 rounded ml-2" style={{ background: 'var(--color-ok)', fontSize: '9px' }}>
+                ✓ LINKED
+              </span>
+            )}
+          </span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="engineer@company.com"
+            className="w-full border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+          <p className="t-small t-muted mt-1">
+            Set this, then tell the engineer to sign in at <code>/login</code> with this email.
+            The link is automatic.
+          </p>
+        </label>
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">Discipline</span>

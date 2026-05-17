@@ -14,6 +14,7 @@ export type EngineerRow = {
   user_id: string;
   full_name: string;
   email: string | null;
+  auth_user_id: string | null;
   active: boolean;
   cmms_assignee_name: string | null;
   discipline: Discipline | null;
@@ -33,7 +34,7 @@ export function useEngineers() {
       const { data, error } = await supabase
         .from('users')
         .select(`
-          id, full_name, email, active,
+          id, full_name, email, auth_user_id, active,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp,
             visible_to_self, notes, updated_at
@@ -49,7 +50,8 @@ export function useEngineers() {
         notes: string | null; updated_at: string;
       };
       type Joined = {
-        id: string; full_name: string; email: string | null; active: boolean;
+        id: string; full_name: string; email: string | null;
+        auth_user_id: string | null; active: boolean;
         engineer_profiles: Profile | Profile[] | null;
       };
       return (data as unknown as Joined[])
@@ -62,6 +64,7 @@ export function useEngineers() {
             user_id: r.id,
             full_name: r.full_name,
             email: r.email,
+            auth_user_id: r.auth_user_id,
             active: r.active,
             cmms_assignee_name: ep.cmms_assignee_name,
             discipline: ep.discipline,
@@ -89,6 +92,31 @@ export function useUpdateEngineerProfile() {
         .from('engineer_profiles')
         .update({ ...input.patch, updated_at: new Date().toISOString() })
         .eq('user_id', input.user_id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/** Update fields that live on public.users (currently just email). */
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      user_id: string;
+      patch: Partial<Pick<EngineerRow, 'email'>>;
+    }) => {
+      // Normalize empty string to null so the trigger logic stays clean.
+      const cleaned: Partial<EngineerRow> = { ...input.patch };
+      if (cleaned.email === '') cleaned.email = null;
+
+      const { error, data } = await supabase
+        .from('users')
+        .update({ ...cleaned, updated_at: new Date().toISOString() })
+        .eq('id', input.user_id)
         .select()
         .single();
       if (error) throw error;
