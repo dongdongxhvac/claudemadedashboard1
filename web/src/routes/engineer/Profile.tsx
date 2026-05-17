@@ -46,26 +46,42 @@ export default function EngineerProfile() {
   if (q.isLoading || me.isLoading) return <Wrap><p>Loading...</p></Wrap>;
   if (q.isError) return <Wrap><p style={{ color: '#fecaca' }}>Error: {(q.error as Error).message}</p></Wrap>;
 
-  // RLS returned no row → either not an engineer, doesn't exist, or self with visible_to_self=false.
+  // No row from RLS → either bad id, deleted, or not an engineer.
   if (!q.data || !q.data.profile) {
-    const isSelf = me.data && id === me.data.id;
     return (
       <Wrap>
         <div className="text-center py-16">
           <div className="text-6xl mb-4">🔒</div>
           <h2 className="text-2xl font-medium mb-2">Profile not available</h2>
-          <p className="opacity-70">
-            {isSelf
-              ? 'Your profile is being set up by your admin. It will appear here once ready.'
-              : 'This profile is private or has not been set up.'}
-          </p>
-          <Link to="/manager" className="inline-block mt-6 underline opacity-80 hover:opacity-100">← Back to dashboard</Link>
+          <p className="opacity-70">This profile doesn't exist or has been removed.</p>
+          <Link to="/" className="inline-block mt-6 underline opacity-80 hover:opacity-100">← Back</Link>
         </div>
       </Wrap>
     );
   }
 
   const { profile: p, completions } = q.data;
+
+  // Privacy gate: engineer-self can only see their RPG page after admin flips
+  // visible_to_self. Admin/manager can always see.
+  const isSelf = me.data?.id === p.user_id;
+  const isAdminOrMgr = me.data?.role === 'admin' || me.data?.role === 'manager';
+  if (isSelf && !isAdminOrMgr && !p.visible_to_self) {
+    return (
+      <Wrap>
+        <div className="text-center py-16">
+          <div className="text-6xl mb-4">🔒</div>
+          <h2 className="text-2xl font-medium mb-2">Profile not yet shared</h2>
+          <p className="opacity-70">
+            Your profile is being set up by your admin. It will appear here once ready.
+          </p>
+          <Link to="/engineer/me" className="inline-block mt-6 underline opacity-80 hover:opacity-100">
+            ← Back to my work
+          </Link>
+        </div>
+      </Wrap>
+    );
+  }
   const tier = tierFor(p.level);
   const prog = xpProgress(p.xp, p.level);
   const initials = p.full_name.split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();

@@ -3,15 +3,18 @@
 // V5 style (no RPG flourishes). data-mode="tv" bumps fonts up for across-the-room
 // viewing — same trick used in Manager TV.
 import { useEffect, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useCurrentPmRows } from '../../hooks/useCurrentSnapshots';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
+import { useMe } from '../../hooks/useMe';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { isClosed, localISODate, fmtMd } from '../../lib/dashboard';
 
 const MAX_ITEMS_PER_CARD = 6;
 
 export default function EngineerShiftTv() {
+  const me = useMe();
   useSnapshotRealtime();
   useFocusBoardRealtime();
   const pmQ = useCurrentPmRows();
@@ -21,6 +24,14 @@ export default function EngineerShiftTv() {
     document.documentElement.setAttribute('data-mode', 'tv');
     return () => document.documentElement.removeAttribute('data-mode');
   }, []);
+
+  // After Phase 3.5 RLS, engineers can only see their own rows in pm_rows —
+  // grouping by assignee would render exactly one card (themselves), useless
+  // for shift handoff. Send them back to their personal /engineer/me view.
+  // Same idea for clients (Phase 6 will refine).
+  if (me.data && me.data.role !== 'admin' && me.data.role !== 'manager') {
+    return <Navigate to="/engineer/me" replace />;
+  }
 
   const todayStr = localISODate(new Date());
   const pmRows = pmQ.data ?? [];
