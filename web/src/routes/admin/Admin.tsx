@@ -16,16 +16,29 @@ export default function Admin() {
 
   const today = new Date().toLocaleDateString('en-CA');
 
+  const isAdmin = me.data?.role === 'admin';
+  const isLead  = me.data?.is_lead === true;
+  const canAccess = isAdmin || isLead;
+
   return (
     <div className="min-h-screen t-bg">
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div>
-            <h1 className="t-section-title">COVE · Admin</h1>
+            <h1 className="t-section-title">
+              COVE · Admin
+              {!isAdmin && isLead && (
+                <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
+                  ★ Lead view
+                </span>
+              )}
+            </h1>
             <p className="t-small t-muted">{today}</p>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/manager" className="t-small t-accent hover:underline">← Dashboard</Link>
+            <Link to={isAdmin ? '/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
+              ← {isAdmin ? 'Dashboard' : 'My view'}
+            </Link>
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
           </div>
@@ -35,7 +48,7 @@ export default function Admin() {
       <main className="max-w-7xl mx-auto px-6 py-6">
         {me.isLoading ? (
           <p className="t-text t-muted">Loading...</p>
-        ) : me.data?.role !== 'admin' ? (
+        ) : !canAccess ? (
           <p className="t-text t-danger">
             Admin access required. You're signed in as <b>{me.data?.role ?? 'unknown'}</b>.
           </p>
@@ -43,7 +56,7 @@ export default function Admin() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
-                User Profiles
+                User Profiles {!isAdmin && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
               </TabButton>
               <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
                 On-call
@@ -56,7 +69,7 @@ export default function Admin() {
               </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
-            {tab === 'users'     && <UserProfilesTab />}
+            {tab === 'users'     && <UserProfilesTab canManageUsers={isAdmin} />}
             {tab === 'oncall'    && <OncallTab />}
             {tab === 'buildings' && <BuildingsTab />}
             {tab === 'rounds'    && <RoundsTab />}

@@ -68,6 +68,11 @@ export default function EngineerMobile() {
         </div>
         <div className="flex items-center gap-3">
           <OncallBadge />
+          {(me.data?.role === 'admin' || me.data?.is_lead === true) && (
+            <Link to="/admin" className="t-small t-accent hover:underline">
+              {me.data?.role === 'admin' ? 'Admin' : 'Admin (lead)'}
+            </Link>
+          )}
           <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
         </div>
       </header>

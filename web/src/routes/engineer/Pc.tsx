@@ -35,6 +35,7 @@ export default function EngineerPc() {
   const { session, signOut } = useAuth();
   const me = useMe();
   const isAdmin = useIsAdmin();
+  const canAdmin = isAdmin || me.data?.is_lead === true;
   const ctx = useMyEngineerContext();
   useSnapshotRealtime();
   useFocusBoardRealtime();
@@ -162,7 +163,11 @@ export default function EngineerPc() {
                 View profile →
               </Link>
             )}
-            {isAdmin && <Link to="/admin" className="t-small t-accent hover:underline">Admin</Link>}
+            {canAdmin && (
+              <Link to="/admin" className="t-small t-accent hover:underline">
+                {isAdmin ? 'Admin' : 'Admin (lead)'}
+              </Link>
+            )}
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
           </div>

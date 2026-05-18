@@ -8,13 +8,19 @@ import {
 import { useShifts } from '../../hooks/useShifts';
 import { supabase } from '../../lib/supabase';
 
-type Filter = 'active' | 'engineer' | 'manager' | 'admin' | 'inactive';
-const FILTERS: { key: Filter; label: string }[] = [
+type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
+const FILTERS_ADMIN: { key: Filter; label: string }[] = [
   { key: 'active',   label: 'All active' },
   { key: 'engineer', label: 'Engineers' },
   { key: 'manager',  label: 'Managers' },
+  { key: 'director', label: 'Directors' },
   { key: 'admin',    label: 'Admins' },
   { key: 'inactive', label: 'Inactive' },
+];
+// Leads only see engineers (active + inactive). No managers / directors / admins.
+const FILTERS_LEAD: { key: Filter; label: string }[] = [
+  { key: 'engineer', label: 'Engineers' },
+  { key: 'inactive', label: 'Inactive engineers' },
 ];
 
 function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
@@ -22,12 +28,13 @@ function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
     case 'active':   return rows.filter((r) => r.active);
     case 'engineer': return rows.filter((r) => r.active && r.role === 'engineer');
     case 'manager':  return rows.filter((r) => r.active && r.role === 'manager');
+    case 'director': return rows.filter((r) => r.active && r.role === 'director');
     case 'admin':    return rows.filter((r) => r.active && r.role === 'admin');
     case 'inactive': return rows.filter((r) => !r.active);
   }
 }
 
-export function UserProfilesTab() {
+export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: boolean }) {
   const q = useAllUsers();
   const shiftsQ = useShifts();
   const updateProfile = useUpdateEngineerProfile();
@@ -35,18 +42,22 @@ export function UserProfilesTab() {
   const addEngineer = useAddEngineer();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [filter, setFilter] = useState<Filter>('active');
+  const [filter, setFilter] = useState<Filter>(canManageUsers ? 'active' : 'engineer');
 
-  const allRows = q.data ?? [];
+  const FILTERS = canManageUsers ? FILTERS_ADMIN : FILTERS_LEAD;
+
+  // Leads only ever see engineer rows (active + inactive).
+  const allRows = (q.data ?? []).filter((r) => canManageUsers || r.role === 'engineer');
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, admin: 0, inactive: 0 };
+    const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0 };
     for (const r of allRows) {
       if (r.active) {
         c.active++;
         if (r.role === 'engineer') c.engineer++;
-        else if (r.role === 'manager') c.manager++;
-        else if (r.role === 'admin') c.admin++;
+        else if (r.role === 'manager')  c.manager++;
+        else if (r.role === 'director') c.director++;
+        else if (r.role === 'admin')    c.admin++;
       } else {
         c.inactive++;
       }
@@ -99,13 +110,20 @@ export function UserProfilesTab() {
           </div>
           <div className="flex items-center gap-3">
             <span className="t-small t-muted">{rows.length} shown</span>
-            <button
-              onClick={() => setAdding(true)}
-              className="t-small px-3 py-1 rounded border font-medium text-white"
-              style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
-            >
-              + Add user
-            </button>
+            {canManageUsers && (
+              <button
+                onClick={() => setAdding(true)}
+                className="t-small px-3 py-1 rounded border font-medium text-white"
+                style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
+              >
+                + Add user
+              </button>
+            )}
+            {!canManageUsers && (
+              <span className="t-small px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }} title="Leads can view but not edit user profiles">
+                ★ View only
+              </span>
+            )}
           </div>
         </div>
 
@@ -198,12 +216,16 @@ export function UserProfilesTab() {
                     <td className="py-2 px-2 text-right t-mono">{r.level}</td>
                     <td className="py-2 px-2 text-right t-mono">{r.xp}</td>
                     <td className="py-2 px-2 text-center">
-                      <Toggle
-                        checked={r.visible_to_self}
-                        onChange={(v) =>
-                          updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
-                        }
-                      />
+                      {canManageUsers ? (
+                        <Toggle
+                          checked={r.visible_to_self}
+                          onChange={(v) =>
+                            updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
+                          }
+                        />
+                      ) : (
+                        <span className="t-small t-muted">{r.visible_to_self ? '✓' : '—'}</span>
+                      )}
                     </td>
                     <td className="py-2 pl-2 whitespace-nowrap">
                       <button
@@ -215,7 +237,7 @@ export function UserProfilesTab() {
                           background: 'var(--color-card)',
                         }}
                       >
-                        Edit
+                        {canManageUsers ? 'Edit' : 'View'}
                       </button>
                       <Link
                         to={`/engineer/${r.user_id}/profile`}
@@ -242,6 +264,7 @@ export function UserProfilesTab() {
         <EditDrawer
           row={editing}
           shifts={shifts}
+          readOnly={!canManageUsers}
           onClose={() => setEditing(null)}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
@@ -286,6 +309,7 @@ function RoleBadge({ role }: { role: Role }) {
   const cfg: Record<Role, { label: string; bg: string; color: string }> = {
     engineer: { label: 'Engineer', bg: 'rgba(59,130,246,0.12)', color: '#1e40af' },
     manager:  { label: 'Manager',  bg: 'rgba(168,85,247,0.12)', color: '#7e22ce' },
+    director: { label: 'Director', bg: 'rgba(245,158,11,0.15)', color: '#b45309' },
     admin:    { label: 'Admin',    bg: 'rgba(244,63,94,0.12)',  color: '#be123c' },
     client:   { label: 'Client',   bg: 'rgba(20,184,166,0.12)', color: '#0f766e' },
   };
@@ -320,11 +344,13 @@ type UserPatch = { full_name: string; email: string | null; phone: string | null
 function EditDrawer({
   row,
   shifts,
+  readOnly = false,
   onClose,
   onSave,
 }: {
   row: EngineerRow;
   shifts: { id: string; name: string }[];
+  readOnly?: boolean;
   onClose: () => void;
   onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
 }) {
@@ -385,11 +411,20 @@ function EditDrawer({
       >
         <div className="flex items-baseline justify-between mb-4">
           <div>
-            <h3 className="t-section-title">{row.full_name}</h3>
+            <h3 className="t-section-title">
+              {row.full_name}
+              {readOnly && (
+                <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
+                  ★ View only
+                </span>
+              )}
+            </h3>
             <p className="t-small t-muted">CMMS: {row.cmms_assignee_name ?? '—'}</p>
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
         </div>
+
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, opacity: readOnly ? 0.85 : 1 }}>
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">Full name</span>
@@ -548,43 +583,49 @@ function EditDrawer({
           />
         </label>
 
-        <PasswordPanel userId={row.user_id} email={email} />
+        </fieldset>
 
-        <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="t-small t-muted uppercase tracking-wider block">Account status</span>
-              <p className="t-small t-muted mt-0.5">
-                Inactive users are hidden from Buildings, On-call, and other tabs.
-              </p>
+        {!readOnly && <PasswordPanel userId={row.user_id} email={email} />}
+
+        {!readOnly && (
+          <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="t-small t-muted uppercase tracking-wider block">Account status</span>
+                <p className="t-small t-muted mt-0.5">
+                  Inactive users are hidden from Buildings, On-call, and other tabs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActive(!active)}
+                className="t-small px-3 py-1 rounded border font-medium"
+                style={
+                  active
+                    ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger)', background: 'transparent' }
+                    : { color: 'white', background: 'var(--color-ok)', borderColor: 'var(--color-ok)' }
+                }
+              >
+                {active ? 'Deactivate user' : 'Reactivate user'}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setActive(!active)}
-              className="t-small px-3 py-1 rounded border font-medium"
-              style={
-                active
-                  ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger)', background: 'transparent' }
-                  : { color: 'white', background: 'var(--color-ok)', borderColor: 'var(--color-ok)' }
-              }
-            >
-              {active ? 'Deactivate user' : 'Reactivate user'}
-            </button>
           </div>
-        </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="t-small px-3 py-1 rounded border" style={{ borderColor: 'var(--color-border)' }}>
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
-            style={{ background: 'var(--color-accent)' }}
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
+          {!readOnly && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+              style={{ background: 'var(--color-accent)' }}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          )}
         </div>
       </form>
     </div>
