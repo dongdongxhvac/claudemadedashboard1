@@ -39,69 +39,87 @@ export type EngineerRow = {
   updated_at: string;
 };
 
-const KEY = ['engineers'];
+const KEY_ENGINEERS = ['engineers'];
+const KEY_ALL_USERS = ['users_all'];
 
-export function useEngineers() {
+async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
+  let q = supabase
+    .from('users')
+    .select(`
+      id, full_name, email, phone, hiring_date, auth_user_id, active, role,
+      engineer_profiles!inner (
+        cmms_assignee_name, discipline, level, xp,
+        visible_to_self, notes, title, shift_id, is_lead, updated_at
+      )
+    `);
+  if (roleFilter) q = q.eq('role', roleFilter);
+  const { data, error } = await q.order('full_name');
+  if (error) throw error;
+  type Profile = {
+    cmms_assignee_name: string | null; discipline: Discipline | null;
+    level: number; xp: number; visible_to_self: boolean;
+    notes: string | null; title: string | null;
+    shift_id: string | null; is_lead: boolean;
+    updated_at: string;
+  };
+  type Joined = {
+    id: string; full_name: string; email: string | null; phone: string | null;
+    hiring_date: string | null;
+    auth_user_id: string | null; active: boolean; role: Role;
+    engineer_profiles: Profile | Profile[] | null;
+  };
+  return (data as unknown as Joined[])
+    .map((r) => {
+      const ep = Array.isArray(r.engineer_profiles)
+        ? r.engineer_profiles[0]
+        : r.engineer_profiles;
+      if (!ep) return null;
+      return {
+        user_id: r.id,
+        full_name: r.full_name,
+        email: r.email,
+        phone: r.phone,
+        hiring_date: r.hiring_date,
+        auth_user_id: r.auth_user_id,
+        active: r.active,
+        role: r.role,
+        cmms_assignee_name: ep.cmms_assignee_name,
+        discipline: ep.discipline,
+        level: ep.level,
+        xp: ep.xp,
+        visible_to_self: ep.visible_to_self,
+        notes: ep.notes,
+        title: ep.title,
+        shift_id: ep.shift_id,
+        is_lead: ep.is_lead,
+        updated_at: ep.updated_at,
+      } satisfies EngineerRow;
+    })
+    .filter((r): r is EngineerRow => r !== null);
+}
+
+/** All users (any role). Used by the User Profiles admin tab. */
+export function useAllUsers() {
   return useQuery({
-    queryKey: KEY,
-    queryFn: async (): Promise<EngineerRow[]> => {
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          id, full_name, email, phone, hiring_date, auth_user_id, active, role,
-          engineer_profiles!inner (
-            cmms_assignee_name, discipline, level, xp,
-            visible_to_self, notes, title, shift_id, is_lead, updated_at
-          )
-        `)
-        .eq('role', 'engineer')
-        .order('full_name');
-      if (error) throw error;
-      // Supabase types the join result as an array even though it's 1:1.
-      type Profile = {
-        cmms_assignee_name: string | null; discipline: Discipline | null;
-        level: number; xp: number; visible_to_self: boolean;
-        notes: string | null; title: string | null;
-        shift_id: string | null; is_lead: boolean;
-        updated_at: string;
-      };
-      type Joined = {
-        id: string; full_name: string; email: string | null; phone: string | null;
-        hiring_date: string | null;
-        auth_user_id: string | null; active: boolean; role: Role;
-        engineer_profiles: Profile | Profile[] | null;
-      };
-      return (data as unknown as Joined[])
-        .map((r) => {
-          const ep = Array.isArray(r.engineer_profiles)
-            ? r.engineer_profiles[0]
-            : r.engineer_profiles;
-          if (!ep) return null;
-          return {
-            user_id: r.id,
-            full_name: r.full_name,
-            email: r.email,
-            phone: r.phone,
-            hiring_date: r.hiring_date,
-            auth_user_id: r.auth_user_id,
-            active: r.active,
-            role: r.role,
-            cmms_assignee_name: ep.cmms_assignee_name,
-            discipline: ep.discipline,
-            level: ep.level,
-            xp: ep.xp,
-            visible_to_self: ep.visible_to_self,
-            notes: ep.notes,
-            title: ep.title,
-            shift_id: ep.shift_id,
-            is_lead: ep.is_lead,
-            updated_at: ep.updated_at,
-          } satisfies EngineerRow;
-        })
-        .filter((r): r is EngineerRow => r !== null);
-    },
+    queryKey: KEY_ALL_USERS,
+    queryFn: () => fetchUsers(null),
     staleTime: 30_000,
   });
+}
+
+/** Active or inactive engineers only. Used by BuildingsTab, OncallTab,
+ *  EngineerMobile/PC/TV, etc. — places that should never list managers/admins. */
+export function useEngineers() {
+  return useQuery({
+    queryKey: KEY_ENGINEERS,
+    queryFn: () => fetchUsers('engineer'),
+    staleTime: 30_000,
+  });
+}
+
+function invalidateUserQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: KEY_ENGINEERS });
+  qc.invalidateQueries({ queryKey: KEY_ALL_USERS });
 }
 
 export function useUpdateEngineerProfile() {
@@ -109,7 +127,7 @@ export function useUpdateEngineerProfile() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead'>>;
+      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')
@@ -120,19 +138,18 @@ export function useUpdateEngineerProfile() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => invalidateUserQueries(qc),
   });
 }
 
-/** Update fields that live on public.users (email + phone + role). */
+/** Update fields that live on public.users (email + phone + role + active). */
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role' | 'active'>>;
+      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role' | 'active' | 'full_name' | 'hiring_date'>>;
     }) => {
-      // Normalize empty strings to null so the trigger logic stays clean.
       const cleaned: Partial<EngineerRow> = { ...input.patch };
       if (cleaned.email === '') cleaned.email = null;
       if (cleaned.phone === '') cleaned.phone = null;
@@ -146,11 +163,12 @@ export function useUpdateUser() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => invalidateUserQueries(qc),
   });
 }
 
-/** Create a new engineer: inserts public.users + engineer_profiles. */
+/** Create a new user. Inserts public.users (the trigger auto-creates the
+ *  engineer_profiles row) then UPSERTs profile fields. */
 export function useAddEngineer() {
   const qc = useQueryClient();
   return useMutation({
@@ -161,8 +179,8 @@ export function useAddEngineer() {
       phone?: string | null;
       hiring_date?: string | null;
       discipline?: Discipline | null;
+      role?: Role;
     }) => {
-      // Two inserts. If the second fails we delete the first to avoid an orphan.
       const { data: u, error: ue } = await supabase
         .from('users')
         .insert({
@@ -170,27 +188,30 @@ export function useAddEngineer() {
           email: input.email?.trim() || null,
           phone: input.phone?.trim() || null,
           hiring_date: input.hiring_date || null,
-          role: 'engineer',
+          role: input.role ?? 'engineer',
           active: true,
         })
         .select()
         .single();
       if (ue) throw ue;
 
+      // Trigger ensure_engineer_profile_trg has already created an empty
+      // engineer_profiles row. Update it with cmms_assignee_name + discipline.
       const { error: pe } = await supabase
         .from('engineer_profiles')
-        .insert({
-          user_id: (u as { id: string }).id,
-          cmms_assignee_name: input.cmms_assignee_name.trim(),
+        .update({
+          cmms_assignee_name: input.cmms_assignee_name.trim() || null,
           discipline: input.discipline ?? null,
-        });
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', (u as { id: string }).id);
       if (pe) {
-        // Roll back the users insert so we don't leave an orphan.
+        // Roll back the user insert so we don't leave a half-configured user.
         await supabase.from('users').delete().eq('id', (u as { id: string }).id);
         throw pe;
       }
       return u;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => invalidateUserQueries(qc),
   });
 }

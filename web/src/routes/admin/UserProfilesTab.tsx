@@ -1,52 +1,109 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  useEngineers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer,
+  useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer,
   DISCIPLINES, ROLES,
   type EngineerRow, type Role, type Discipline,
 } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
 
+type Filter = 'active' | 'engineer' | 'manager' | 'admin' | 'inactive';
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'active',   label: 'All active' },
+  { key: 'engineer', label: 'Engineers' },
+  { key: 'manager',  label: 'Managers' },
+  { key: 'admin',    label: 'Admins' },
+  { key: 'inactive', label: 'Inactive' },
+];
+
+function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
+  switch (f) {
+    case 'active':   return rows.filter((r) => r.active);
+    case 'engineer': return rows.filter((r) => r.active && r.role === 'engineer');
+    case 'manager':  return rows.filter((r) => r.active && r.role === 'manager');
+    case 'admin':    return rows.filter((r) => r.active && r.role === 'admin');
+    case 'inactive': return rows.filter((r) => !r.active);
+  }
+}
+
 export function UserProfilesTab() {
-  const q = useEngineers();
+  const q = useAllUsers();
   const shiftsQ = useShifts();
   const updateProfile = useUpdateEngineerProfile();
   const updateUser = useUpdateUser();
   const addEngineer = useAddEngineer();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
+  const [filter, setFilter] = useState<Filter>('active');
+
+  const allRows = q.data ?? [];
+
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, admin: 0, inactive: 0 };
+    for (const r of allRows) {
+      if (r.active) {
+        c.active++;
+        if (r.role === 'engineer') c.engineer++;
+        else if (r.role === 'manager') c.manager++;
+        else if (r.role === 'admin') c.admin++;
+      } else {
+        c.inactive++;
+      }
+    }
+    return c;
+  }, [allRows]);
 
   if (q.isLoading) return <p className="t-text t-muted">Loading users...</p>;
   if (q.isError) return <p className="t-text t-danger">Error: {(q.error as Error).message}</p>;
 
-  const allRows = q.data ?? [];
-  const rows = showInactive ? allRows : allRows.filter((r) => r.active);
-  const inactiveCount = allRows.length - allRows.filter((r) => r.active).length;
+  const rows = applyFilter(allRows, filter);
   const shifts = shiftsQ.data ?? [];
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   return (
     <div className="space-y-4">
       <div className="t-card">
-        <div className="flex items-baseline justify-between mb-3 gap-2">
-          <h2 className="t-section-title">User profiles</h2>
+        <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h2 className="t-section-title">User profiles</h2>
+            <div className="flex items-center gap-1 flex-wrap">
+              {FILTERS.map((f) => {
+                const isActive = filter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setFilter(f.key)}
+                    className="t-small px-2.5 py-0.5 rounded-full border"
+                    style={
+                      isActive
+                        ? {
+                            background: 'var(--color-accent)',
+                            borderColor: 'var(--color-accent)',
+                            color: 'white',
+                            fontWeight: 600,
+                          }
+                        : {
+                            background: 'var(--color-card)',
+                            borderColor: 'var(--color-border)',
+                            color: 'var(--color-text-muted)',
+                          }
+                    }
+                  >
+                    {f.label} <span style={{ opacity: isActive ? 0.85 : 0.6, fontSize: 11 }}>· {counts[f.key]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex items-center gap-3">
-            <label className="t-small t-muted inline-flex items-center gap-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-              />
-              Show inactive ({inactiveCount})
-            </label>
             <span className="t-small t-muted">{rows.length} shown</span>
             <button
               onClick={() => setAdding(true)}
               className="t-small px-3 py-1 rounded border font-medium text-white"
               style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
             >
-              + Add engineer
+              + Add user
             </button>
           </div>
         </div>
@@ -56,17 +113,23 @@ export function UserProfilesTab() {
             <thead>
               <tr className="text-left t-small t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
                 <th className="py-2 pr-3">Name</th>
+                <th className="py-2 px-2">Role</th>
                 <th className="py-2 px-2">Title</th>
                 <th className="py-2 px-2">Shift</th>
                 <th className="py-2 px-2">Email · sign-in</th>
                 <th className="py-2 px-2">Discipline</th>
-                <th className="py-2 px-2 text-right">Level</th>
+                <th className="py-2 px-2 text-right">Lvl</th>
                 <th className="py-2 px-2 text-right">XP</th>
                 <th className="py-2 px-2 text-center">Visible</th>
                 <th className="py-2 pl-2"></th>
               </tr>
             </thead>
             <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={10} className="py-6 text-center t-text t-muted italic">
+                  No users match this filter.
+                </td></tr>
+              )}
               {rows.map((r) => {
                 const shift = r.shift_id ? shiftById.get(r.shift_id) : null;
                 return (
@@ -75,7 +138,7 @@ export function UserProfilesTab() {
                     className="border-b t-row-hover"
                     style={{
                       borderColor: 'var(--color-border-soft)',
-                      opacity: r.active ? 1 : 0.5,
+                      opacity: r.active ? 1 : 0.55,
                     }}
                   >
                     <td className="py-2 pr-3 font-medium">
@@ -95,6 +158,9 @@ export function UserProfilesTab() {
                           hired {new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
                       )}
+                    </td>
+                    <td className="py-2 px-2">
+                      <RoleBadge role={r.role} />
                     </td>
                     <td className="py-2 px-2 t-small">
                       {r.title ?? <span className="t-muted italic">—</span>}
@@ -178,7 +244,8 @@ export function UserProfilesTab() {
           onClose={() => setEditing(null)}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
-            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean } = {};
+            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string } = {};
+            if (userPatch.full_name !== undefined && userPatch.full_name !== editing.full_name) _userPatch.full_name = userPatch.full_name;
             if (userPatch.email !== undefined && userPatch.email !== editing.email) _userPatch.email = userPatch.email;
             if (userPatch.phone !== undefined && userPatch.phone !== editing.phone) _userPatch.phone = userPatch.phone;
             if (userPatch.role !== undefined && userPatch.role !== editing.role)    _userPatch.role  = userPatch.role;
@@ -196,7 +263,7 @@ export function UserProfilesTab() {
       )}
 
       {adding && (
-        <AddEngineerDrawer
+        <AddUserDrawer
           onClose={() => setAdding(false)}
           onSubmit={async (input) => {
             await addEngineer.mutateAsync(input);
@@ -212,6 +279,21 @@ export function UserProfilesTab() {
 
 function labelFor(d: string): string {
   return DISCIPLINES.find((x) => x.value === d)?.label ?? d;
+}
+
+function RoleBadge({ role }: { role: Role }) {
+  const cfg: Record<Role, { label: string; bg: string; color: string }> = {
+    engineer: { label: 'Engineer', bg: 'rgba(59,130,246,0.12)', color: '#1e40af' },
+    manager:  { label: 'Manager',  bg: 'rgba(168,85,247,0.12)', color: '#7e22ce' },
+    admin:    { label: 'Admin',    bg: 'rgba(244,63,94,0.12)',  color: '#be123c' },
+    client:   { label: 'Client',   bg: 'rgba(20,184,166,0.12)', color: '#0f766e' },
+  };
+  const c = cfg[role];
+  return (
+    <span className="t-small px-2 py-0.5 rounded-full" style={{ background: c.bg, color: c.color, fontWeight: 500, fontSize: 11 }}>
+      {c.label}
+    </span>
+  );
 }
 
 function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: boolean) => void; title?: string }) {
@@ -231,8 +313,8 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
   );
 }
 
-type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead'>>;
-type UserPatch = { email: string | null; phone: string | null; role: Role; active: boolean };
+type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name'>>;
+type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean };
 
 function EditDrawer({
   row,
@@ -245,7 +327,9 @@ function EditDrawer({
   onClose: () => void;
   onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
 }) {
+  const [fullName, setFullName] = useState<string>(row.full_name);
   const [title, setTitle] = useState<string>(row.title ?? '');
+  const [cmmsName, setCmmsName] = useState<string>(row.cmms_assignee_name ?? '');
   const [email, setEmail] = useState<string>(row.email ?? '');
   const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [role, setRole] = useState<Role>(row.role);
@@ -258,7 +342,6 @@ function EditDrawer({
   const [saving, setSaving] = useState(false);
 
   const isLinked = !!row.auth_user_id;
-  const roleWillRemove = role !== 'engineer';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,6 +350,7 @@ function EditDrawer({
       await onSave(
         {
           title: title.trim() || null,
+          cmms_assignee_name: cmmsName.trim() || null,
           shift_id: shiftId || null,
           is_lead: isLead,
           discipline,
@@ -274,6 +358,7 @@ function EditDrawer({
           notes: notes.trim() || null,
         },
         {
+          full_name: fullName.trim() || row.full_name,
           email: email.trim() === '' ? null : email.trim(),
           phone: phone.trim() === '' ? null : phone.trim(),
           role,
@@ -304,6 +389,29 @@ function EditDrawer({
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
         </div>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Full name</span>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Role</span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            className="border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </label>
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">Title</span>
@@ -387,21 +495,18 @@ function EditDrawer({
         </label>
 
         <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Role</span>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="border rounded px-2 py-1 t-text"
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">CMMS assignee name</span>
+          <input
+            type="text"
+            value={cmmsName}
+            onChange={(e) => setCmmsName(e.target.value)}
+            placeholder="exact spelling from CMMS exports (engineers only)"
+            className="w-full border rounded px-2 py-1 t-text t-mono"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          >
-            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          {roleWillRemove && (
-            <p className="t-small mt-1" style={{ color: 'var(--color-warn)' }}>
-              Changing role to <b>{role}</b> will hide this user from the User Profiles list
-              (this view shows role = engineer; toggle "Show inactive" doesn't affect role filtering).
-            </p>
-          )}
+          />
+          <p className="t-small t-muted mt-1">
+            Must match the <code>Assigned To</code> column in PM CSV exports exactly. Only relevant for engineers; XP won't accumulate if this doesn't match.
+          </p>
         </label>
 
         <label className="block mb-3">
@@ -447,7 +552,7 @@ function EditDrawer({
             <div>
               <span className="t-small t-muted uppercase tracking-wider block">Account status</span>
               <p className="t-small t-muted mt-0.5">
-                Inactive users are hidden from Buildings, On-call, and other tabs by default.
+                Inactive users are hidden from Buildings, On-call, and other tabs.
               </p>
             </div>
             <button
@@ -483,7 +588,7 @@ function EditDrawer({
   );
 }
 
-function AddEngineerDrawer({
+function AddUserDrawer({
   onClose,
   onSubmit,
   submitting,
@@ -497,11 +602,13 @@ function AddEngineerDrawer({
     phone: string | null;
     hiring_date: string | null;
     discipline: Discipline | null;
+    role?: Role;
   }) => Promise<void>;
   submitting: boolean;
   error: string | null;
 }) {
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<Role>('engineer');
   const [cmmsName, setCmmsName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -509,9 +616,12 @@ function AddEngineerDrawer({
   const [discipline, setDiscipline] = useState<Discipline | ''>('');
   const [cmmsTouched, setCmmsTouched] = useState(false);
 
+  const cmmsRequired = role === 'engineer';
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !cmmsName.trim()) return;
+    if (!fullName.trim()) return;
+    if (cmmsRequired && !cmmsName.trim()) return;
     await onSubmit({
       full_name: fullName,
       cmms_assignee_name: cmmsName,
@@ -519,6 +629,7 @@ function AddEngineerDrawer({
       phone: phone.trim() || null,
       hiring_date: hiringDate || null,
       discipline: discipline || null,
+      role,
     });
   };
 
@@ -535,15 +646,15 @@ function AddEngineerDrawer({
         style={{ background: 'var(--color-card)' }}
       >
         <div className="flex items-baseline justify-between mb-4">
-          <h3 className="t-section-title">Add engineer</h3>
+          <h3 className="t-section-title">Add user</h3>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">
             Close
           </button>
         </div>
 
         <p className="t-small t-muted mb-4">
-          Creates a public.users row (role = engineer) + an engineer_profiles
-          row. Title / shift / lead can be set after creation via Edit.
+          Creates a public.users row. The engineer_profiles row is auto-created
+          by trigger. Title / shift / lead can be set after creation via Edit.
         </p>
 
         <label className="block mb-3">
@@ -566,18 +677,30 @@ function AddEngineerDrawer({
         </label>
 
         <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Role</span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            className="border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </label>
+
+        <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">
-            CMMS assignee name <span style={{ color: 'var(--color-danger)' }}>*</span>
+            CMMS assignee name {cmmsRequired && <span style={{ color: 'var(--color-danger)' }}>*</span>}
           </span>
           <input
             type="text"
-            required
+            required={cmmsRequired}
             value={cmmsName}
             onChange={(e) => {
               setCmmsName(e.target.value);
               setCmmsTouched(true);
             }}
-            placeholder="exact spelling from CMMS exports"
+            placeholder={cmmsRequired ? 'exact spelling from CMMS exports' : '(optional for non-engineers)'}
             className="w-full border rounded px-2 py-1 t-text t-mono"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
@@ -650,11 +773,11 @@ function AddEngineerDrawer({
           </button>
           <button
             type="submit"
-            disabled={submitting || !fullName.trim() || !cmmsName.trim()}
+            disabled={submitting || !fullName.trim() || (cmmsRequired && !cmmsName.trim())}
             className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
             style={{ background: 'var(--color-accent)' }}
           >
-            {submitting ? 'Adding...' : 'Add engineer'}
+            {submitting ? 'Adding...' : 'Add user'}
           </button>
         </div>
       </form>
