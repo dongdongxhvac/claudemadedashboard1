@@ -31,13 +31,19 @@ export function openPrintWindow(
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  const rows = pms
+  // Sort by building, then due date so the printed list groups by location.
+  const sorted = [...pms].sort((a, b) => {
+    const ba = (a.building_code ?? '').localeCompare(b.building_code ?? '', undefined, { numeric: true });
+    if (ba !== 0) return ba;
+    return (a.due_date ?? '').localeCompare(b.due_date ?? '');
+  });
+
+  const rows = sorted
     .map((r) => `
       <tr>
         <td>${r.due_date ? new Date(r.due_date + 'T00:00:00').toLocaleDateString() : '—'}</td>
         <td><code>${esc(r.task_no)}</code></td>
         <td>${esc(r.name)}</td>
-        <td>${esc(r.building_code)}</td>
         <td>${esc(r.equipment)}</td>
         <td style="width:60px;"></td>
       </tr>`)
@@ -48,20 +54,20 @@ export function openPrintWindow(
 <meta charset="utf-8">
 <title>${esc(engineerName)} — PM List · ${dateStr}</title>
 <style>
-  body { font-family: Georgia, "Times New Roman", serif; padding: 24px; max-width: 8.5in; margin: 0 auto; color: #000; }
-  header { border-bottom: 2px solid #000; margin-bottom: 14px; padding-bottom: 6px; }
-  h1 { margin: 0 0 4px; font-size: 18pt; }
-  .meta { font-size: 11pt; color: #444; }
-  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  th, td { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; }
-  th { background: #eee; font-weight: bold; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
-  code { font-family: ui-monospace, Consolas, monospace; font-size: 9pt; }
-  .sign { margin-top: 32px; display: flex; gap: 32px; }
-  .sign-line { flex: 1; border-bottom: 1px solid #000; padding-bottom: 28px; }
-  .sign-label { font-size: 9pt; color: #666; margin-top: 4px; }
-  .toolbar { margin-bottom: 16px; }
-  .toolbar button { font-size: 11pt; padding: 6px 14px; cursor: pointer; }
-  footer { margin-top: 24px; text-align: center; font-size: 9pt; color: #666; }
+  body { font-family: Georgia, "Times New Roman", serif; padding: 18px; max-width: 8.5in; margin: 0 auto; color: #000; font-size: 9pt; }
+  header { border-bottom: 2px solid #000; margin-bottom: 10px; padding-bottom: 4px; }
+  h1 { margin: 0 0 2px; font-size: 14pt; }
+  .meta { font-size: 9pt; color: #444; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; vertical-align: top; }
+  th { background: #eee; font-weight: bold; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.4px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 8pt; }
+  .sign { margin-top: 24px; display: flex; gap: 24px; }
+  .sign-line { flex: 1; border-bottom: 1px solid #000; padding-bottom: 22px; }
+  .sign-label { font-size: 7.5pt; color: #666; margin-top: 3px; }
+  .toolbar { margin-bottom: 12px; }
+  .toolbar button { font-size: 10pt; padding: 5px 12px; cursor: pointer; }
+  footer { margin-top: 18px; text-align: center; font-size: 7.5pt; color: #666; }
   @media print { body { padding: 0; } .toolbar { display: none; } }
 </style>
 </head><body>
@@ -78,7 +84,6 @@ export function openPrintWindow(
     <th>Due Date</th>
     <th>Task #</th>
     <th>PM Name</th>
-    <th>Building</th>
     <th>Equipment</th>
     <th>Notes / Initial</th>
   </tr></thead>
