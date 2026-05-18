@@ -207,17 +207,25 @@ function ShiftBlock(props: {
             </tr>
           </thead>
           <tbody>
-            {rounds.map((r) => (
-              <RoundRow
-                key={r.id}
-                round={r}
-                editing={editing}
-                openMenu={openMenu}
-                setOpenMenu={setOpenMenu}
-                engineers={engineers}
-                buildings={buildings}
-              />
-            ))}
+            {rounds.map((r) => {
+              const siblingBuildingIds = new Set<string>();
+              for (const other of rounds) {
+                if (other.id === r.id) continue;
+                for (const s of other.stops) siblingBuildingIds.add(s.building_id);
+              }
+              return (
+                <RoundRow
+                  key={r.id}
+                  round={r}
+                  editing={editing}
+                  openMenu={openMenu}
+                  setOpenMenu={setOpenMenu}
+                  engineers={engineers}
+                  buildings={buildings}
+                  siblingBuildingIds={siblingBuildingIds}
+                />
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -250,8 +258,9 @@ function RoundRow(props: {
   setOpenMenu: (k: MenuKey | null) => void;
   engineers: EngineerRow[];
   buildings: Building[];
+  siblingBuildingIds: Set<string>;
 }) {
-  const { round, editing, openMenu, setOpenMenu, engineers, buildings } = props;
+  const { round, editing, openMenu, setOpenMenu, engineers, buildings, siblingBuildingIds } = props;
 
   const update    = useUpdateRound();
   const remove    = useDeleteRound();
@@ -272,7 +281,11 @@ function RoundRow(props: {
   const isOpen = (k: MenuKey) => openMenu === k;
 
   const usedBuildingIds = new Set(round.stops.map((s) => s.building_id));
-  const availableBuildings = buildings.filter((b) => !usedBuildingIds.has(b.id));
+  // Exclude buildings already covered by another round in the same shift —
+  // a building should only be walked once per shift.
+  const availableBuildings = buildings.filter(
+    (b) => !usedBuildingIds.has(b.id) && !siblingBuildingIds.has(b.id),
+  );
 
   const closeMenu = () => setOpenMenu(null);
 
@@ -558,7 +571,7 @@ function BuildingMenu(props: {
       <div className="space-y-2">
         <p className="t-small t-muted uppercase tracking-wider">Add building stop</p>
         {sorted.length === 0 ? (
-          <p className="t-small t-muted italic">All active buildings are already in this round.</p>
+          <p className="t-small t-muted italic">All buildings are already covered by rounds in this shift.</p>
         ) : (
           <select
             autoFocus
@@ -686,12 +699,12 @@ function RoundsTabStyles() {
         border: 1px solid var(--color-border);
         border-radius: 8px;
         padding: 8px 10px;
-        background: var(--color-card);
+        background: transparent;
       }
       .shift-band {
         margin: -8px -10px 6px -10px;
         padding: 6px 10px;
-        background: var(--color-bg);
+        background: transparent;
         border-bottom: 1px solid var(--color-border);
         border-radius: 8px 8px 0 0;
       }
