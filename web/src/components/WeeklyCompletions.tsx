@@ -1,49 +1,113 @@
-// §00 — Weekly completions by assignee.
-// Ported from cove_pm_dashboard_REAL_DATA_v5.html#renderTrend.
-import { useMemo } from 'react';
+// §00 — Crew performance by assignee.
+// Originally hard-anchored to Mon-Sun "this week"; rebuilt to support a
+// configurable window so the section stays meaningful on Mondays (when the
+// week-since-Monday count is naturally zero).
+//
+// Default window: trailing 7 days. Toggle bar offers Today / 7d / This wk /
+// Last wk / 30d. Per-card trend arrow compares against the immediately
+// preceding window. Sort selector lets the user reorder by metric.
+import { useMemo, useState } from 'react';
 import { useCurrentPmRows, useCurrentLaborRows } from '../hooks/useCurrentSnapshots';
-import { mondayOf, addDays, fmtDateShort, isCompletedStatus, localISODate, isNpm, isClosed } from '../lib/dashboard';
+import { mondayOf, addDays, fmtDateShort, isCompletedStatus, isNpm, isClosed } from '../lib/dashboard';
 import { Section } from './Section';
 
-type Card = { name: string; count: number; hours: number; npm: number; npmHours: number };
+type Period = 'today' | '7d' | 'this_wk' | 'last_wk' | '30d';
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'today',   label: 'Today' },
+  { key: '7d',      label: '7d' },
+  { key: 'this_wk', label: 'This wk' },
+  { key: 'last_wk', label: 'Last wk' },
+  { key: '30d',     label: '30d' },
+];
+
+type Sort = 'hours' | 'pms' | 'open_npms' | 'name';
+const SORTS: { key: Sort; label: string }[] = [
+  { key: 'hours',     label: 'Hours' },
+  { key: 'pms',       label: 'PMs' },
+  { key: 'open_npms', label: 'Open NPMs' },
+  { key: 'name',      label: 'Name' },
+];
+
+type Card = {
+  name: string;
+  count: number;
+  hours: number;
+  npm: number;       // open NPM count (current state — not window-bound)
+  npmHours: number;
+  prevCount: number; // for trend arrow
+  prevHours: number;
+};
+
+type Win = { start: Date; end: Date; label: string };
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function windowFor(period: Period, anchor: Date): Win {
+  switch (period) {
+    case 'today': {
+      const start = startOfDay(anchor);
+      const end = addDays(start, 1);
+      return { start, end, label: fmtDateShort(start) };
+    }
+    case '7d': {
+      const end = addDays(startOfDay(anchor), 1);
+      const start = addDays(end, -7);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+    }
+    case 'this_wk': {
+      const start = mondayOf(anchor);
+      const end = addDays(start, 7);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
+    }
+    case 'last_wk': {
+      const thisMon = mondayOf(anchor);
+      const start = addDays(thisMon, -7);
+      const end = thisMon;
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
+    }
+    case '30d': {
+      const end = addDays(startOfDay(anchor), 1);
+      const start = addDays(end, -30);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+    }
+  }
+}
+
+function prevWindow(current: Win): Win {
+  const spanMs = current.end.getTime() - current.start.getTime();
+  const start = new Date(current.start.getTime() - spanMs);
+  const end = current.start;
+  return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+}
+
+/** True if a labor week [week_start, +7d) overlaps the window. */
+function laborOverlaps(weekStartStr: string | null, win: Win): boolean {
+  if (!weekStartStr) return false;
+  const ws = new Date(weekStartStr + 'T00:00:00');
+  const we = addDays(ws, 7);
+  return ws < win.end && we > win.start;
+}
 
 export function WeeklyCompletions() {
   const pmQ = useCurrentPmRows();
   const laborQ = useCurrentLaborRows();
 
+  const [period, setPeriod] = useState<Period>('7d');
+  const [sort,   setSort]   = useState<Sort>('hours');
+
   const data = useMemo(() => {
     const pmRows = pmQ.data ?? [];
     const laborRows = laborQ.data ?? [];
 
-    // The anchor week is the snapshot date (or today if no snapshot).
+    // Anchor on the latest snapshot timestamp, falling back to "now".
     const snapshotTakenAt = pmRows[0]?.snapshot_taken_at;
     const anchor = snapshotTakenAt ? new Date(snapshotTakenAt) : new Date();
-    const weekStart = mondayOf(anchor);
-    const weekEnd = addDays(weekStart, 6);
-    const weekStartStr = localISODate(weekStart);
+    const win  = windowFor(period, anchor);
+    const prev = prevWindow(win);
 
-    // Completed rows where updated_at_cmms is within this week.
-    const completedThisWeek = pmRows.filter((r) => {
-      if (!isCompletedStatus(r.status)) return false;
-      const ts = (r as any).updated_at_cmms as string | null;
-      if (!ts) return false;
-      const d = new Date(ts);
-      return d >= weekStart && d <= addDays(weekEnd, 1);
-    });
-
-    // Labor for this week, keyed by Monday-of-week ISO date.
-    const laborByAssignee = new Map<string, number>();
-    for (const l of laborRows) {
-      if (l.week_start !== weekStartStr) continue;
-      laborByAssignee.set(
-        (l.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned',
-        (laborByAssignee.get(l.assigned_to_name ?? 'Unassigned') ?? 0) + (l.labor_hours ?? 0),
-      );
-    }
-    const hasLabor = laborByAssignee.size > 0;
-
-    // Per-assignee NPM totals — across ALL open PMs (no week filter), per user spec:
-    // NPM rule + "all open PMs" definition lives in lib/dashboard.ts.
+    // Open NPMs are a CURRENT-STATE metric — same across all windows.
     const openNpmByAssignee = new Map<string, { count: number; hours: number }>();
     for (const r of pmRows) {
       if (isClosed(r.status)) continue;
@@ -55,68 +119,147 @@ export function WeeklyCompletions() {
       openNpmByAssignee.set(a, cur);
     }
 
-    // Aggregate PM completions by assignee (count always from PM12).
-    const byAssignee = new Map<string, Card>();
+    const cardByName = new Map<string, Card>();
     const blank = (a: string): Card => {
       const n = openNpmByAssignee.get(a);
-      return { name: a, count: 0, hours: 0, npm: n?.count ?? 0, npmHours: n?.hours ?? 0 };
+      return {
+        name: a,
+        count: 0, hours: 0,
+        npm: n?.count ?? 0, npmHours: n?.hours ?? 0,
+        prevCount: 0, prevHours: 0,
+      };
     };
-    for (const r of completedThisWeek) {
-      const a = (r.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
-      const card = byAssignee.get(a) ?? blank(a);
-      card.count++;
-      if (!hasLabor) card.hours += r.labor_hours ?? 0;
-      byAssignee.set(a, card);
-    }
+    const bump = (a: string, win: 'cur' | 'prev', count = 0, hours = 0) => {
+      const card = cardByName.get(a) ?? blank(a);
+      if (win === 'cur')  { card.count    += count; card.hours    += hours; }
+      else                { card.prevCount += count; card.prevHours += hours; }
+      cardByName.set(a, card);
+    };
 
-    // Override hours from Labor CSV (and surface labor-only assignees).
-    if (hasLabor) {
-      for (const [a, hrs] of laborByAssignee) {
-        const card = byAssignee.get(a) ?? blank(a);
-        card.hours = hrs;
-        byAssignee.set(a, card);
-      }
-    }
-
-    // Also include assignees with any completed PM in *any* week (zero cards).
+    // Count PM completions whose updated_at_cmms falls inside the window.
     for (const r of pmRows) {
       if (!isCompletedStatus(r.status)) continue;
+      const ts = r.updated_at_cmms;
+      if (!ts) continue;
+      const d = new Date(ts);
       const a = (r.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
-      if (!byAssignee.has(a)) byAssignee.set(a, blank(a));
+      if (d >= win.start && d < win.end)   bump(a, 'cur',  1, 0);
+      if (d >= prev.start && d < prev.end) bump(a, 'prev', 1, 0);
     }
 
-    // ...and assignees who have open NPMs but no completions at all — so a
-    // data-quality problem can't hide just because someone hasn't closed anything.
+    // Labor: only week-aligned. Sum labor rows whose week overlaps the window.
+    // Labor data is week-bucketed at ingest time; for rolling windows this is
+    // an approximation noted in the freshness banner tooltip.
+    for (const l of laborRows) {
+      const a = (l.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
+      const hrs = l.labor_hours ?? 0;
+      if (laborOverlaps(l.week_start, win))  bump(a, 'cur',  0, hrs);
+      if (laborOverlaps(l.week_start, prev)) bump(a, 'prev', 0, hrs);
+    }
+
+    // Ensure assignees with open NPMs but no completions/labor still appear.
     for (const a of openNpmByAssignee.keys()) {
-      if (!byAssignee.has(a)) byAssignee.set(a, blank(a));
+      if (!cardByName.has(a)) cardByName.set(a, blank(a));
     }
 
-    const cards = Array.from(byAssignee.values()).sort(
-      (a, b) => b.hours - a.hours || b.count - a.count || a.name.localeCompare(b.name),
-    );
+    const cards = Array.from(cardByName.values());
+    sortCards(cards, sort);
 
-    const totalCount = cards.reduce((s, c) => s + c.count, 0);
-    const totalHours = cards.reduce((s, c) => s + c.hours, 0);
-    const totalNpm = cards.reduce((s, c) => s + c.npm, 0);
-    const totalNpmHours = cards.reduce((s, c) => s + c.npmHours, 0);
-    const activeCount = cards.filter((c) => c.count > 0).length;
+    const totalCount     = cards.reduce((s, c) => s + c.count, 0);
+    const totalHours     = cards.reduce((s, c) => s + c.hours, 0);
+    const totalPrevCount = cards.reduce((s, c) => s + c.prevCount, 0);
+    const totalPrevHours = cards.reduce((s, c) => s + c.prevHours, 0);
+    const totalNpm       = cards.reduce((s, c) => s + c.npm, 0);
+    const totalNpmHours  = cards.reduce((s, c) => s + c.npmHours, 0);
+    const activeCount    = cards.filter((c) => c.count > 0).length;
 
-    return { cards, totalCount, totalHours, totalNpm, totalNpmHours, activeCount, weekStart, weekEnd };
-  }, [pmQ.data, laborQ.data]);
+    return {
+      cards, win, prev,
+      totalCount, totalHours, totalPrevCount, totalPrevHours,
+      totalNpm, totalNpmHours, activeCount,
+      snapshotTakenAt,
+    };
+  }, [pmQ.data, laborQ.data, period, sort]);
 
-  if (pmQ.isLoading) return <Section title="§00 Weekly completions" loading />;
+  if (pmQ.isLoading) return <Section title="§00 Crew performance" loading />;
+
+  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? '';
+  const isWeekAligned = period === 'this_wk' || period === 'last_wk';
 
   return (
     <Section
-      title="§00 Weekly completions · Total NPM by assignee"
-      subtitle={`Snapshot week · ${fmtDateShort(data.weekStart)} → ${fmtDateShort(data.weekEnd)}`}
+      title={`§00 Crew performance · ${periodLabel}`}
+      subtitle={
+        <>
+          Window · {data.win.label}
+          {data.snapshotTakenAt && (
+            <span title={`Last CSV import ${new Date(data.snapshotTakenAt).toLocaleString()}`}>
+              {' · '}
+              <span className="t-mono">snapshot {new Date(data.snapshotTakenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+            </span>
+          )}
+          {!isWeekAligned && (
+            <span title="Labor CSVs are aggregated weekly. Rolling windows include any week that overlaps the window — labor totals approximate.">
+              {' · '}labor ≈ overlapping weeks
+            </span>
+          )}
+        </>
+      }
     >
+      {/* Controls strip */}
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <div className="flex items-center gap-1" role="tablist" aria-label="Period">
+          {PERIODS.map((p) => {
+            const active = p.key === period;
+            return (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                role="tab"
+                aria-selected={active}
+                className="t-small px-2.5 py-0.5 rounded-full border"
+                style={
+                  active
+                    ? { background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'white', fontWeight: 600 }
+                    : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+                }
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="t-small t-muted uppercase tracking-wider">Sort</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            className="t-small border rounded px-2 py-0.5"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Summary strip */}
       <div
         className="flex flex-wrap gap-8 px-4 py-3 mb-4 border rounded"
         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
       >
-        <SummaryItem label="Team total" value={data.totalCount} unit="PMs completed" />
-        <SummaryItem label="Labor hours" value={data.totalHours.toFixed(1)} unit="hours logged" />
+        <SummaryItem
+          label="Team total"
+          value={data.totalCount}
+          unit="PMs completed"
+          delta={data.totalCount - data.totalPrevCount}
+        />
+        <SummaryItem
+          label="Labor hours"
+          value={data.totalHours.toFixed(1)}
+          unit="hours logged"
+          delta={data.totalHours - data.totalPrevHours}
+          fmtDelta={(d) => d.toFixed(1)}
+        />
         <SummaryItem
           label="Active techs"
           value={data.activeCount}
@@ -126,9 +269,10 @@ export function WeeklyCompletions() {
         <SummaryItem label="NPM hours" value={data.totalNpmHours.toFixed(1)} unit="hours unassigned" />
       </div>
 
+      {/* Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {data.cards.map((c) => {
-          const isZero = c.count === 0;
+          const isZero = c.count === 0 && c.hours === 0;
           return (
             <div
               key={c.name}
@@ -144,18 +288,20 @@ export function WeeklyCompletions() {
               <div className="text-sm font-medium truncate" title={c.name}>
                 {c.name}
               </div>
-              <div className="mt-1">
-                <span className="t-comp-num">{c.count}</span>{' '}
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="t-comp-num">{c.count}</span>
                 <span className="t-small t-muted">PMs</span>
+                <TrendArrow delta={c.count - c.prevCount} />
               </div>
-              <div>
-                <span className="t-comp-num">{c.hours.toFixed(1)}</span>{' '}
+              <div className="flex items-baseline gap-1">
+                <span className="t-comp-num">{c.hours.toFixed(1)}</span>
                 <span className="t-small t-muted">hours</span>
+                <TrendArrow delta={c.hours - c.prevHours} fmt={(d) => d.toFixed(1)} />
               </div>
               <div
                 className="mt-1 pt-1"
                 style={{ borderTop: '1px solid var(--color-border-soft)' }}
-                title="Total open NPMs assigned to this tech (all open PMs, not just this week)"
+                title="Total open NPMs assigned to this tech (all open PMs, not just this window)"
               >
                 <span className="t-small t-muted">Open NPMs</span>{' '}
                 <span className="t-mono t-small">{c.npm}</span>
@@ -171,13 +317,58 @@ export function WeeklyCompletions() {
   );
 }
 
-function SummaryItem({ label, value, unit }: { label: string; value: number | string; unit: string }) {
+function sortCards(cards: Card[], sort: Sort): void {
+  switch (sort) {
+    case 'hours':
+      cards.sort((a, b) => b.hours - a.hours || b.count - a.count || a.name.localeCompare(b.name));
+      break;
+    case 'pms':
+      cards.sort((a, b) => b.count - a.count || b.hours - a.hours || a.name.localeCompare(b.name));
+      break;
+    case 'open_npms':
+      cards.sort((a, b) => b.npm - a.npm || b.npmHours - a.npmHours || a.name.localeCompare(b.name));
+      break;
+    case 'name':
+      cards.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+  }
+}
+
+function SummaryItem({
+  label, value, unit, delta, fmtDelta,
+}: {
+  label: string;
+  value: number | string;
+  unit: string;
+  delta?: number;
+  fmtDelta?: (d: number) => string;
+}) {
   return (
     <div className="flex items-baseline gap-2">
       <span className="text-[10px] uppercase tracking-wider text-gray-500">{label}</span>
       <span className="text-xl font-medium text-gray-900">{value}</span>
+      {delta !== undefined && <TrendArrow delta={delta} fmt={fmtDelta} />}
       <span className="text-[10px] uppercase tracking-wider text-gray-500">{unit}</span>
     </div>
   );
 }
 
+function TrendArrow({ delta, fmt }: { delta: number; fmt?: (d: number) => string }) {
+  // Hide trend if both periods are zero (no signal).
+  if (delta === 0) return null;
+  const positive = delta > 0;
+  const text = fmt ? fmt(Math.abs(delta)) : String(Math.abs(Math.round(delta)));
+  return (
+    <span
+      className="t-small"
+      style={{
+        color: positive ? '#16a34a' : '#dc2626',
+        fontSize: 10,
+        fontWeight: 600,
+      }}
+      title={`vs prior period: ${positive ? '+' : '−'}${text}`}
+    >
+      {positive ? '▲' : '▼'}{text}
+    </span>
+  );
+}
