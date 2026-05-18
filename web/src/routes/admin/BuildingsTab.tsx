@@ -171,15 +171,15 @@ export function BuildingsTab() {
 
         <table className="min-w-full t-text border-collapse">
           <colgroup>
-            <col style={{ width: editing ? '260px' : '220px' }} />
-            <col style={{ width: '140px' }} />
+            <col style={{ width: editing ? '220px' : '180px' }} />
             <col />
+            <col style={{ width: '120px' }} />
           </colgroup>
           <thead>
             <tr className="text-left t-text t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
-              <th className="py-1 pr-2">Engineer</th>
-              <th className="py-1 px-2">Phone</th>
-              <th className="py-1 px-2">Assigned buildings</th>
+              <th className="py-0.5 pr-1">Engineer</th>
+              <th className="py-0.5 px-1">Assigned buildings</th>
+              <th className="py-0.5 px-1">Phone</th>
             </tr>
           </thead>
           <tbody>
@@ -311,7 +311,7 @@ function EngineerRowView(props: {
 
   return (
     <tr className="border-b eng-row" style={{ borderColor: 'var(--color-border-soft)' }}>
-      <td className="py-2 pr-2 align-top">
+      <td className="py-1 pr-1 align-top">
         <div className="flex items-center flex-wrap gap-1">
           {editing ? (
             <button
@@ -353,8 +353,7 @@ function EngineerRowView(props: {
           </div>
         )}
       </td>
-      <td className="py-2 px-2 t-small t-mono align-top">{eng.phone ?? <span className="t-muted">—</span>}</td>
-      <td className="py-2 px-2 align-top">
+      <td className="py-1 px-1 align-top">
         {eng.primary.length === 0 && eng.backup.length === 0 && !editing ? (
           <span className="t-small t-muted italic">No buildings assigned</span>
         ) : (
@@ -416,6 +415,7 @@ function EngineerRowView(props: {
           </>
         )}
       </td>
+      <td className="py-1 px-1 t-small t-mono align-top">{eng.phone ?? <span className="t-muted">—</span>}</td>
     </tr>
   );
 }
@@ -719,11 +719,11 @@ function BuildingsTabStyles() {
       }
       .bld-chip {
         display: inline-block;
-        padding: 2px 8px;
-        margin: 2px 3px 2px 0;
-        border-radius: 6px;
+        padding: 0px 6px;
+        margin: 1px 2px 1px 0;
+        border-radius: 5px;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12px;
+        font-size: 11px;
         line-height: 1.4;
         white-space: nowrap;
       }
@@ -752,7 +752,7 @@ function BuildingsTabStyles() {
       .shift-band {
         background: var(--color-bg);
         border-top: 2px solid var(--color-border);
-        padding: 8px 10px;
+        padding: 4px 8px;
       }
     `}</style>
   );
