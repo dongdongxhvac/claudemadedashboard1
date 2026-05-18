@@ -108,9 +108,9 @@ export function BuildingsTab() {
           border: 1px solid var(--color-accent);
         }
         .bld-chip.backup {
-          background: transparent;
-          color: var(--color-accent);
-          border: 1.5px dashed var(--color-accent);
+          background: rgba(148, 163, 184, 0.12);
+          color: #64748b;
+          border: 1.5px dashed #94a3b8;
         }
         .lead-star {
           display: inline-block;
@@ -131,13 +131,13 @@ export function BuildingsTab() {
             <h2 className="t-section-title">Building assignments</h2>
             <p className="t-small t-muted">
               <b>{totals.engineers}</b> engineer{totals.engineers === 1 ? '' : 's'} ·{' '}
-              <b>{totals.primary}</b> primary · <b>{totals.backup}</b> backup
+              <b>{totals.primary}</b> primary · <b>{totals.backup}</b> coverage
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <p className="t-small t-muted text-right">
-              <span className="bld-chip primary" style={{ marginRight: 6 }}>40</span> primary · 1 per building &nbsp;
-              <span className="bld-chip backup" style={{ marginRight: 6 }}>40</span> backup &nbsp;
+              <span className="bld-chip primary" style={{ marginRight: 6 }}>40</span> primary · day-to-day owner &nbsp;
+              <span className="bld-chip backup" style={{ marginRight: 6 }}>40</span> coverage · alarm + high-level repair &nbsp;
               <span className="lead-star">★</span> lead engineer
             </p>
             <div className="flex items-center gap-2 buildings-no-print">
@@ -240,7 +240,7 @@ function EngineerRow({ eng }: { eng: EngineerCard }) {
               </span>
             ))}
             {eng.backup.map((b) => (
-              <span key={`b-${b.id}`} className="bld-chip backup" title={`${b.name} (backup)`}>
+              <span key={`b-${b.id}`} className="bld-chip backup" title={`${b.name} (coverage)`}>
                 {b.short_code ?? b.code}
               </span>
             ))}
