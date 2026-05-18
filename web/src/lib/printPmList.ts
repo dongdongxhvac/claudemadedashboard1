@@ -11,7 +11,8 @@ export function openPrintWindow(
   filter: 'month' | 'all',
   equipmentFilter: string | null,
 ): void {
-  const win = window.open('', '_blank', 'width=900,height=1100');
+  // No window features → browsers open a real tab instead of a popup.
+  const win = window.open('', '_blank');
   if (!win) {
     alert('Pop-up blocked. Allow pop-ups for this site and try again.');
     return;
@@ -90,5 +91,5 @@ export function openPrintWindow(
 <footer>COVE · PM Dashboard</footer>
 </body></html>`);
   win.document.close();
-  setTimeout(() => { try { win.focus(); win.print(); } catch { /* swallow */ } }, 150);
+  // Don't auto-print — user clicks the Print button in the new tab when ready.
 }
