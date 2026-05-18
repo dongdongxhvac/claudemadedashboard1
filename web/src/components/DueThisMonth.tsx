@@ -12,7 +12,6 @@ type Row = {
   total: number;
   npm: number;
   equipment: Array<{ name: string; count: number }>;
-  buildings: Array<{ code: string; count: number }>;
   pms: PmRow[]; // open + due-this-month PMs for this assignee (for print)
 };
 
@@ -41,7 +40,6 @@ export function DueThisMonth() {
       total: 0,
       npm: npmByAssignee.get(a) ?? 0,
       equipment: [],
-      buildings: [],
       pms: [],
     });
 
@@ -68,13 +66,6 @@ export function DueThisMonth() {
       const existing = g.equipment.find((e) => e.name === eq);
       if (existing) existing.count++;
       else g.equipment.push({ name: eq, count: 1 });
-
-      // Building chips (parallel to equipment) so a tech can scan the same
-      // workload by location.
-      const bld = (r.building_code ?? '').trim() || '—';
-      const existingBld = g.buildings.find((b) => b.code === bld);
-      if (existingBld) existingBld.count++;
-      else g.buildings.push({ code: bld, count: 1 });
     }
 
     // Also surface assignees who have NPMs but no due-this-month PMs, so a
@@ -86,9 +77,6 @@ export function DueThisMonth() {
 
     for (const g of groups.values()) {
       g.equipment.sort((a, b) => b.count - a.count);
-      g.buildings.sort((a, b) =>
-        a.code.localeCompare(b.code, undefined, { numeric: true }),
-      );
     }
     const rows = Array.from(groups.values()).sort(
       (a, b) => b.total - a.total || b.npm - a.npm,
@@ -120,12 +108,6 @@ export function DueThisMonth() {
     >
       <style>{`
         .eq-chip:hover { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); filter: brightness(1.04); }
-        .bld-pm-chip {
-          background: rgba(168, 85, 247, 0.08);
-          border-color: rgba(168, 85, 247, 0.35);
-          color: #6b21a8;
-        }
-        .bld-pm-chip .t-muted { color: #9d6cd2; }
       `}</style>
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500">No PMs due this month.</p>
@@ -201,28 +183,6 @@ export function DueThisMonth() {
                         );
                       })}
                     </div>
-                    {r.buildings.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {r.buildings.map((b) => {
-                          const subset = r.pms.filter(
-                            (p) => ((p.building_code ?? '').trim() || '—') === b.code,
-                          );
-                          return (
-                            <button
-                              type="button"
-                              key={b.code}
-                              onClick={() => openPrintWindow(r.name, subset, 'month', `Building ${b.code}`)}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 t-small border rounded eq-chip bld-pm-chip"
-                              style={{ cursor: 'pointer', font: 'inherit' }}
-                              title={`Click to view & print ${b.count} PM${b.count === 1 ? '' : 's'} at building ${b.code} for ${r.name}`}
-                            >
-                              {b.code}
-                              <span className="t-muted">{b.count}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </td>
                 </tr>
               ))}

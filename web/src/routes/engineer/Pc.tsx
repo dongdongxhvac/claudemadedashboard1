@@ -46,6 +46,7 @@ export default function EngineerPc() {
 
   const [filter, setFilter] = useState<'month' | 'all'>('month');
   const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null);
+  const [buildingFilter, setBuildingFilter] = useState<string | null>(null);
 
   const todayStr = localISODate(new Date());
   const tomorrow = addDays(new Date(), 1);
@@ -105,12 +106,29 @@ export default function EngineerPc() {
       .filter(([, n]) => n > 4)
       .sort((a, b) => b[1] - a[1]);
   }, [dateFiltered]);
+  const buildingChips = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of dateFiltered) {
+      const code = (r.building_code ?? '').trim() || '—';
+      map.set(code, (map.get(code) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+  }, [dateFiltered]);
   const displayedPms = useMemo(() => {
-    if (!equipmentFilter) return dateFiltered;
-    return dateFiltered.filter(
-      (r) => (r.equipment_category ?? r.equipment ?? 'Other') === equipmentFilter,
-    );
-  }, [dateFiltered, equipmentFilter]);
+    let out = dateFiltered;
+    if (equipmentFilter) {
+      out = out.filter(
+        (r) => (r.equipment_category ?? r.equipment ?? 'Other') === equipmentFilter,
+      );
+    }
+    if (buildingFilter) {
+      out = out.filter(
+        (r) => ((r.building_code ?? '').trim() || '—') === buildingFilter,
+      );
+    }
+    return out;
+  }, [dateFiltered, equipmentFilter, buildingFilter]);
 
   const myWos = useMemo(() => woRows.filter((w) => w.is_open !== false), [woRows]);
   const myNpms = useMemo(
@@ -203,6 +221,12 @@ export default function EngineerPc() {
                   · {equipmentFilter} ✕
                 </button>
               )}
+              {buildingFilter && (
+                <button onClick={() => setBuildingFilter(null)} className="ml-2 t-small"
+                  style={{ color: 'var(--color-accent)' }}>
+                  · Building {buildingFilter} ✕
+                </button>
+              )}
             </h2>
             <div className="flex gap-1">
               <ToolbarBtn label="Month" active={filter === 'month'} onClick={() => setFilter('month')} />
@@ -211,7 +235,9 @@ export default function EngineerPc() {
             <button
               onClick={() => openPrintWindow(
                 ctx.data!.cmms_assignee_name ?? 'Engineer',
-                displayedPms, filter, equipmentFilter,
+                displayedPms, filter,
+                [equipmentFilter, buildingFilter ? `Building ${buildingFilter}` : null]
+                  .filter(Boolean).join(' · ') || null,
               )}
               disabled={displayedPms.length === 0}
               className="t-small px-3 py-1 rounded border disabled:opacity-40"
@@ -226,7 +252,7 @@ export default function EngineerPc() {
           </div>
 
           {equipmentChips.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-2">
               {equipmentChips.map(([name, count]) => {
                 const active = equipmentFilter === name;
                 return (
@@ -241,6 +267,34 @@ export default function EngineerPc() {
                     }}
                   >
                     {name}<span className={active ? 'opacity-90' : 't-muted'}>{count}</span>
+                    {active && <span className="ml-1 opacity-90">✕</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {buildingChips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <span className="t-small t-muted uppercase tracking-wider self-center mr-1">By building</span>
+              {buildingChips.map(([code, count]) => {
+                const active = buildingFilter === code;
+                return (
+                  <button
+                    key={code}
+                    onClick={() => setBuildingFilter(active ? null : code)}
+                    className="inline-flex items-center gap-1 px-2 py-1 t-small border rounded transition-colors"
+                    style={{
+                      background: active ? '#7e22ce' : 'rgba(168, 85, 247, 0.08)',
+                      color: active ? '#fff' : '#6b21a8',
+                      borderColor: active ? '#7e22ce' : 'rgba(168, 85, 247, 0.35)',
+                    }}
+                    title={`Filter to ${count} PM${count === 1 ? '' : 's'} at building ${code}`}
+                  >
+                    {code}
+                    <span className={active ? 'opacity-90' : ''} style={!active ? { color: '#9d6cd2' } : undefined}>
+                      {count}
+                    </span>
                     {active && <span className="ml-1 opacity-90">✕</span>}
                   </button>
                 );
