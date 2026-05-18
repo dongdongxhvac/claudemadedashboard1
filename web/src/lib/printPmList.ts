@@ -31,11 +31,13 @@ export function openPrintWindow(
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  // Sort by building, then due date so the printed list groups by location.
+  // Sort by due date first, then building (numeric-aware tiebreak). The list
+  // reads chronologically so a tech can see what's next; buildings cluster
+  // for any rows due the same day.
   const sorted = [...pms].sort((a, b) => {
-    const ba = (a.building_code ?? '').localeCompare(b.building_code ?? '', undefined, { numeric: true });
-    if (ba !== 0) return ba;
-    return (a.due_date ?? '').localeCompare(b.due_date ?? '');
+    const da = (a.due_date ?? '').localeCompare(b.due_date ?? '');
+    if (da !== 0) return da;
+    return (a.building_code ?? '').localeCompare(b.building_code ?? '', undefined, { numeric: true });
   });
 
   const rows = sorted
