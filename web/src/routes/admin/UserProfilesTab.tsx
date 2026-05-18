@@ -6,6 +6,7 @@ import {
   type EngineerRow, type Role, type Discipline,
 } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
+import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'manager' | 'admin' | 'inactive';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -547,6 +548,8 @@ function EditDrawer({
           />
         </label>
 
+        <PasswordPanel userId={row.user_id} email={email} />
+
         <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-center justify-between">
             <div>
@@ -781,6 +784,84 @@ function AddUserDrawer({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ============================================================================
+// PasswordPanel — admin sets/changes another user's password via Edge Function.
+// Useful when corporate email filters block magic links (e.g. Mimecast).
+// ============================================================================
+function PasswordPanel({ userId, email }: { userId: string; email: string }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm]   = useState('');
+  const [status, setStatus]     = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
+  const [message, setMessage]   = useState<string | null>(null);
+
+  const submit = async () => {
+    if (password.length < 8) { setStatus('error'); setMessage('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { setStatus('error'); setMessage('Passwords do not match.'); return; }
+    if (!email.trim())        { setStatus('error'); setMessage('Set a sign-in email first (and save), then return to set a password.'); return; }
+    setStatus('saving');
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke('admin-set-password', {
+      body: { target_user_id: userId, new_password: password },
+    });
+    if (error) {
+      const ctx = (error as { context?: { error?: string } }).context;
+      setStatus('error');
+      setMessage(ctx?.error ?? error.message);
+      return;
+    }
+    const created = (data as { created_auth_user?: boolean })?.created_auth_user;
+    setStatus('ok');
+    setPassword('');
+    setConfirm('');
+    setMessage(created
+      ? 'Password set. Auth account created — user can now sign in with email + password.'
+      : 'Password updated.');
+  };
+
+  return (
+    <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+      <span className="t-small t-muted uppercase tracking-wider block">Password</span>
+      <p className="t-small t-muted mt-0.5 mb-2">
+        Set a password for this user. They can then sign in via the Password tab on /login
+        without an email round-trip — useful when corporate filters block magic links.
+      </p>
+      <div className="flex flex-col gap-2">
+        <input
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="New password (min 8 characters)"
+          className="w-full border rounded px-2 py-1 t-text"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+        />
+        <input
+          type="password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="Confirm password"
+          className="w-full border rounded px-2 py-1 t-text"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={status === 'saving' || !password || !confirm}
+            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {status === 'saving' ? 'Setting…' : 'Set password'}
+          </button>
+          {status === 'ok'    && <span className="t-small" style={{ color: 'var(--color-ok)' }}>{message}</span>}
+          {status === 'error' && <span className="t-small t-danger">{message}</span>}
+        </div>
+      </div>
     </div>
   );
 }
