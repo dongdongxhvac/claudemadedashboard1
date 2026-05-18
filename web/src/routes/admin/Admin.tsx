@@ -5,8 +5,9 @@ import { useMe } from '../../hooks/useMe';
 import { UserProfilesTab } from './UserProfilesTab';
 import { OncallTab } from './OncallTab';
 import { BuildingsTab } from './BuildingsTab';
+import { RoundsTab } from './RoundsTab';
 
-type Tab = 'users' | 'oncall' | 'buildings';
+type Tab = 'users' | 'oncall' | 'buildings' | 'rounds';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -50,12 +51,15 @@ export default function Admin() {
               <TabButton active={tab === 'buildings'} onClick={() => setTab('buildings')}>
                 Buildings
               </TabButton>
-              <TabButton disabled title="Coming next">Rounds</TabButton>
+              <TabButton active={tab === 'rounds'} onClick={() => setTab('rounds')}>
+                Rounds
+              </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
             {tab === 'users'     && <UserProfilesTab />}
             {tab === 'oncall'    && <OncallTab />}
             {tab === 'buildings' && <BuildingsTab />}
+            {tab === 'rounds'    && <RoundsTab />}
           </div>
         )}
       </main>
