@@ -33,6 +33,7 @@ export type EngineerRow = {
   xp: number;
   visible_to_self: boolean;
   notes: string | null;
+  title: string | null;
   shift_id: string | null;
   is_lead: boolean;
   updated_at: string;
@@ -50,7 +51,7 @@ export function useEngineers() {
           id, full_name, email, phone, hiring_date, auth_user_id, active, role,
           engineer_profiles!inner (
             cmms_assignee_name, discipline, level, xp,
-            visible_to_self, notes, shift_id, is_lead, updated_at
+            visible_to_self, notes, title, shift_id, is_lead, updated_at
           )
         `)
         .eq('role', 'engineer')
@@ -60,7 +61,8 @@ export function useEngineers() {
       type Profile = {
         cmms_assignee_name: string | null; discipline: Discipline | null;
         level: number; xp: number; visible_to_self: boolean;
-        notes: string | null; shift_id: string | null; is_lead: boolean;
+        notes: string | null; title: string | null;
+        shift_id: string | null; is_lead: boolean;
         updated_at: string;
       };
       type Joined = {
@@ -90,6 +92,7 @@ export function useEngineers() {
             xp: ep.xp,
             visible_to_self: ep.visible_to_self,
             notes: ep.notes,
+            title: ep.title,
             shift_id: ep.shift_id,
             is_lead: ep.is_lead,
             updated_at: ep.updated_at,
@@ -106,7 +109,7 @@ export function useUpdateEngineerProfile() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self'>>;
+      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')
@@ -127,7 +130,7 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role'>>;
+      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role' | 'active'>>;
     }) => {
       // Normalize empty strings to null so the trigger logic stays clean.
       const cleaned: Partial<EngineerRow> = { ...input.patch };

@@ -2,16 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
-import { EngineerProfilesTab } from './EngineerProfilesTab';
+import { UserProfilesTab } from './UserProfilesTab';
 import { OncallTab } from './OncallTab';
 import { BuildingsTab } from './BuildingsTab';
 
-type Tab = 'engineers' | 'oncall' | 'buildings';
+type Tab = 'users' | 'oncall' | 'buildings';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
   const me = useMe();
-  const [tab, setTab] = useState<Tab>('engineers');
+  const [tab, setTab] = useState<Tab>('users');
 
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -41,8 +41,8 @@ export default function Admin() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              <TabButton active={tab === 'engineers'} onClick={() => setTab('engineers')}>
-                Engineer Profiles
+              <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
+                User Profiles
               </TabButton>
               <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
                 On-call
@@ -53,7 +53,7 @@ export default function Admin() {
               <TabButton disabled title="Coming next">Rounds</TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
-            {tab === 'engineers' && <EngineerProfilesTab />}
+            {tab === 'users'     && <UserProfilesTab />}
             {tab === 'oncall'    && <OncallTab />}
             {tab === 'buildings' && <BuildingsTab />}
           </div>

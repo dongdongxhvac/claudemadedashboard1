@@ -5,27 +5,42 @@ import {
   DISCIPLINES, ROLES,
   type EngineerRow, type Role, type Discipline,
 } from '../../hooks/useEngineers';
+import { useShifts } from '../../hooks/useShifts';
 
-export function EngineerProfilesTab() {
+export function UserProfilesTab() {
   const q = useEngineers();
+  const shiftsQ = useShifts();
   const updateProfile = useUpdateEngineerProfile();
   const updateUser = useUpdateUser();
   const addEngineer = useAddEngineer();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
-  if (q.isLoading) return <p className="t-text t-muted">Loading engineers...</p>;
+  if (q.isLoading) return <p className="t-text t-muted">Loading users...</p>;
   if (q.isError) return <p className="t-text t-danger">Error: {(q.error as Error).message}</p>;
 
-  const rows = q.data ?? [];
+  const allRows = q.data ?? [];
+  const rows = showInactive ? allRows : allRows.filter((r) => r.active);
+  const inactiveCount = allRows.length - allRows.filter((r) => r.active).length;
+  const shifts = shiftsQ.data ?? [];
+  const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   return (
     <div className="space-y-4">
       <div className="t-card">
         <div className="flex items-baseline justify-between mb-3 gap-2">
-          <h2 className="t-section-title">Engineer profiles</h2>
+          <h2 className="t-section-title">User profiles</h2>
           <div className="flex items-center gap-3">
-            <span className="t-small t-muted">{rows.length} engineers</span>
+            <label className="t-small t-muted inline-flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Show inactive ({inactiveCount})
+            </label>
+            <span className="t-small t-muted">{rows.length} shown</span>
             <button
               onClick={() => setAdding(true)}
               className="t-small px-3 py-1 rounded border font-medium text-white"
@@ -41,91 +56,116 @@ export function EngineerProfilesTab() {
             <thead>
               <tr className="text-left t-small t-muted uppercase tracking-wider border-b" style={{ borderColor: 'var(--color-border)' }}>
                 <th className="py-2 pr-3">Name</th>
+                <th className="py-2 px-2">Title</th>
+                <th className="py-2 px-2">Shift</th>
                 <th className="py-2 px-2">Email · sign-in</th>
-                <th className="py-2 px-2">Hired</th>
                 <th className="py-2 px-2">Discipline</th>
                 <th className="py-2 px-2 text-right">Level</th>
                 <th className="py-2 px-2 text-right">XP</th>
-                <th className="py-2 px-2 text-center">Visible to self</th>
+                <th className="py-2 px-2 text-center">Visible</th>
                 <th className="py-2 pl-2"></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.user_id} className="border-b t-row-hover" style={{ borderColor: 'var(--color-border-soft)' }}>
-                  <td className="py-2 pr-3 font-medium">{r.full_name}</td>
-                  <td className="py-2 px-2">
-                    {r.email ? (
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="t-small">{r.email}</span>
-                          {r.auth_user_id ? (
-                            <span className="t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }} title="Engineer has signed in; auth.users linked to public.users">
-                              ✓ LINKED
-                            </span>
-                          ) : (
-                            <span className="t-small px-1.5 py-0.5 rounded t-muted" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }} title="Email set, awaiting first sign-in">
-                              ⌛ PENDING
-                            </span>
-                          )}
-                        </div>
-                        {r.phone && (
-                          <a href={`tel:${r.phone.replace(/[^0-9+]/g, '')}`} className="t-small t-muted t-mono hover:underline">
-                            {r.phone}
-                          </a>
+              {rows.map((r) => {
+                const shift = r.shift_id ? shiftById.get(r.shift_id) : null;
+                return (
+                  <tr
+                    key={r.user_id}
+                    className="border-b t-row-hover"
+                    style={{
+                      borderColor: 'var(--color-border-soft)',
+                      opacity: r.active ? 1 : 0.5,
+                    }}
+                  >
+                    <td className="py-2 pr-3 font-medium">
+                      <div className="flex items-center gap-1">
+                        {r.is_lead && (
+                          <span style={{ color: '#d4a017', fontSize: 14, lineHeight: 1 }} title="Lead engineer">★</span>
+                        )}
+                        <span>{r.full_name}</span>
+                        {!r.active && (
+                          <span className="t-small px-1.5 py-0.5 rounded t-muted ml-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }}>
+                            INACTIVE
+                          </span>
                         )}
                       </div>
-                    ) : (
-                      <span className="t-small t-muted italic">— not set —</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 t-mono t-small t-muted whitespace-nowrap">
-                    {r.hiring_date
-                      ? new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      : '—'}
-                  </td>
-                  <td className="py-2 px-2">{r.discipline ? labelFor(r.discipline) : <span className="t-muted">—</span>}</td>
-                  <td className="py-2 px-2 text-right t-mono">{r.level}</td>
-                  <td className="py-2 px-2 text-right t-mono">{r.xp}</td>
-                  <td className="py-2 px-2 text-center">
-                    <Toggle
-                      checked={r.visible_to_self}
-                      onChange={(v) =>
-                        updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
-                      }
-                    />
-                  </td>
-                  <td className="py-2 pl-2 whitespace-nowrap">
-                    <button
-                      onClick={() => setEditing(r)}
-                      className="t-small px-2 py-0.5 rounded border mr-1"
-                      style={{
-                        color: 'var(--color-accent)',
-                        borderColor: 'var(--color-border)',
-                        background: 'var(--color-card)',
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <Link
-                      to={`/engineer/${r.user_id}/profile`}
-                      className="t-small px-2 py-0.5 rounded border inline-block"
-                      style={{
-                        color: 'var(--color-accent)',
-                        borderColor: 'var(--color-border)',
-                        background: 'var(--color-card)',
-                      }}
-                      title="Preview the RPG profile this engineer would see (if visible_to_self is on)"
-                    >
-                      Profile →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                      {r.hiring_date && (
+                        <div className="t-small t-muted">
+                          hired {new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 t-small">
+                      {r.title ?? <span className="t-muted italic">—</span>}
+                    </td>
+                    <td className="py-2 px-2 t-small t-mono">
+                      {shift ? shift.name : <span className="t-muted">—</span>}
+                    </td>
+                    <td className="py-2 px-2">
+                      {r.email ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="t-small">{r.email}</span>
+                            {r.auth_user_id ? (
+                              <span className="t-small px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--color-ok)', fontSize: '9px' }} title="User has signed in; auth.users linked to public.users">
+                                ✓ LINKED
+                              </span>
+                            ) : (
+                              <span className="t-small px-1.5 py-0.5 rounded t-muted" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }} title="Email set, awaiting first sign-in">
+                                ⌛ PENDING
+                              </span>
+                            )}
+                          </div>
+                          {r.phone && (
+                            <a href={`tel:${r.phone.replace(/[^0-9+]/g, '')}`} className="t-small t-muted t-mono hover:underline">
+                              {r.phone}
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="t-small t-muted italic">— not set —</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2">{r.discipline ? labelFor(r.discipline) : <span className="t-muted">—</span>}</td>
+                    <td className="py-2 px-2 text-right t-mono">{r.level}</td>
+                    <td className="py-2 px-2 text-right t-mono">{r.xp}</td>
+                    <td className="py-2 px-2 text-center">
+                      <Toggle
+                        checked={r.visible_to_self}
+                        onChange={(v) =>
+                          updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
+                        }
+                      />
+                    </td>
+                    <td className="py-2 pl-2 whitespace-nowrap">
+                      <button
+                        onClick={() => setEditing(r)}
+                        className="t-small px-2 py-0.5 rounded border mr-1"
+                        style={{
+                          color: 'var(--color-accent)',
+                          borderColor: 'var(--color-border)',
+                          background: 'var(--color-card)',
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <Link
+                        to={`/engineer/${r.user_id}/profile`}
+                        className="t-small px-2 py-0.5 rounded border inline-block"
+                        style={{
+                          color: 'var(--color-accent)',
+                          borderColor: 'var(--color-border)',
+                          background: 'var(--color-card)',
+                        }}
+                        title="Preview the RPG profile this user would see (if Visible is on)"
+                      >
+                        Profile →
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -134,20 +174,20 @@ export function EngineerProfilesTab() {
       {editing && (
         <EditDrawer
           row={editing}
+          shifts={shifts}
           onClose={() => setEditing(null)}
-          onSave={async (patch) => {
-            // Split: email + phone + role -> public.users; rest -> engineer_profiles.
-            const { email, phone, role, ...profilePatch } = patch;
+          onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
-            const userPatch: { email?: string | null; phone?: string | null; role?: Role } = {};
-            if (email !== undefined && email !== editing.email) userPatch.email = email;
-            if (phone !== undefined && phone !== editing.phone) userPatch.phone = phone;
-            if (role !== undefined && role !== editing.role) userPatch.role = role;
-            if (Object.keys(userPatch).length > 0) {
-              tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: userPatch }));
+            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean } = {};
+            if (userPatch.email !== undefined && userPatch.email !== editing.email) _userPatch.email = userPatch.email;
+            if (userPatch.phone !== undefined && userPatch.phone !== editing.phone) _userPatch.phone = userPatch.phone;
+            if (userPatch.role !== undefined && userPatch.role !== editing.role)    _userPatch.role  = userPatch.role;
+            if (userPatch.active !== undefined && userPatch.active !== editing.active) _userPatch.active = userPatch.active;
+            if (Object.keys(_userPatch).length > 0) {
+              tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: _userPatch }));
             }
-            if (Object.keys(profilePatch).length > 0) {
-              tasks.push(updateProfile.mutateAsync({ user_id: editing.user_id, patch: profilePatch }));
+            if (Object.keys(patch).length > 0) {
+              tasks.push(updateProfile.mutateAsync({ user_id: editing.user_id, patch }));
             }
             await Promise.all(tasks);
             setEditing(null);
@@ -174,13 +214,14 @@ function labelFor(d: string): string {
   return DISCIPLINES.find((x) => x.value === d)?.label ?? d;
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: boolean) => void; title?: string }) {
   return (
     <button
+      type="button"
       onClick={() => onChange(!checked)}
       className="relative inline-flex items-center w-9 h-5 rounded-full transition-colors"
       style={{ background: checked ? 'var(--color-accent)' : 'var(--color-border)' }}
-      title={checked ? 'Click to hide from engineer' : 'Click to expose to engineer'}
+      title={title}
     >
       <span
         className="inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform"
@@ -190,25 +231,32 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
+type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead'>>;
+type UserPatch = { email: string | null; phone: string | null; role: Role; active: boolean };
+
 function EditDrawer({
   row,
+  shifts,
   onClose,
   onSave,
 }: {
   row: EngineerRow;
+  shifts: { id: string; name: string }[];
   onClose: () => void;
-  onSave: (patch: Partial<EngineerRow>) => Promise<void>;
+  onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
 }) {
+  const [title, setTitle] = useState<string>(row.title ?? '');
   const [email, setEmail] = useState<string>(row.email ?? '');
   const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [role, setRole] = useState<Role>(row.role);
+  const [shiftId, setShiftId] = useState<string>(row.shift_id ?? '');
+  const [isLead, setIsLead] = useState<boolean>(row.is_lead);
   const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
   const [level, setLevel] = useState<number>(row.level);
   const [notes, setNotes] = useState<string>(row.notes ?? '');
+  const [active, setActive] = useState<boolean>(row.active);
   const [saving, setSaving] = useState(false);
 
-  const emailTrimmed = email.trim();
-  const phoneTrimmed = phone.trim();
   const isLinked = !!row.auth_user_id;
   const roleWillRemove = role !== 'engineer';
 
@@ -216,14 +264,22 @@ function EditDrawer({
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({
-        email: emailTrimmed === '' ? null : emailTrimmed,
-        phone: phoneTrimmed === '' ? null : phoneTrimmed,
-        role,
-        discipline,
-        level,
-        notes: notes.trim() || null,
-      });
+      await onSave(
+        {
+          title: title.trim() || null,
+          shift_id: shiftId || null,
+          is_lead: isLead,
+          discipline,
+          level,
+          notes: notes.trim() || null,
+        },
+        {
+          email: email.trim() === '' ? null : email.trim(),
+          phone: phone.trim() === '' ? null : phone.trim(),
+          role,
+          active,
+        },
+      );
     } finally {
       setSaving(false);
     }
@@ -244,9 +300,51 @@ function EditDrawer({
         <div className="flex items-baseline justify-between mb-4">
           <div>
             <h3 className="t-section-title">{row.full_name}</h3>
-            <p className="t-small t-muted">CMMS: {row.cmms_assignee_name}</p>
+            <p className="t-small t-muted">CMMS: {row.cmms_assignee_name ?? '—'}</p>
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
+        </div>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Title</span>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Lead Engineer, Building Engineer, BMS Specialist"
+            className="w-full border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+        </label>
+
+        <div className="flex items-end gap-3 mb-3">
+          <label className="block flex-1">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Shift</span>
+            <select
+              value={shiftId}
+              onChange={(e) => setShiftId(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="">— none —</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Lead engineer</span>
+            <div className="flex items-center gap-2 h-7">
+              <Toggle
+                checked={isLead}
+                onChange={setIsLead}
+                title={isLead ? 'Click to unmark as lead' : 'Click to mark as lead'}
+              />
+              <span className="t-small" style={{ color: isLead ? '#d4a017' : 'var(--color-text-muted)' }}>
+                {isLead ? '★ Lead' : '—'}
+              </span>
+            </div>
+          </label>
         </div>
 
         <label className="block mb-3">
@@ -262,40 +360,18 @@ function EditDrawer({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="engineer@company.com"
+            placeholder="user@company.com"
             className="w-full border rounded px-2 py-1 t-text"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
           <p className="t-small t-muted mt-1">
-            Set this, then tell the engineer to sign in at <code>/login</code> with this email.
-            The link is automatic.{' '}
+            Set this, then have the user sign in at <code>/login</code> with this email.
             {isLinked && (
               <span style={{ color: 'var(--color-warn)' }}>
-                Note: changing the email on a linked user clears the auth link;
-                they'll need to sign in again with the new email.
+                {' '}Changing email on a linked user clears the auth link; they'll need to sign in again.
               </span>
             )}
           </p>
-        </label>
-
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">
-            Role
-          </span>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="border rounded px-2 py-1 t-text"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          >
-            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          {roleWillRemove && (
-            <p className="t-small mt-1" style={{ color: 'var(--color-warn)' }}>
-              Changing role to <b>{role}</b> will hide this row from the Engineer Profiles
-              list (this view only shows role = engineer).
-            </p>
-          )}
         </label>
 
         <label className="block mb-3">
@@ -308,6 +384,24 @@ function EditDrawer({
             className="w-full border rounded px-2 py-1 t-text t-mono"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Role</span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            className="border rounded px-2 py-1 t-text"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          {roleWillRemove && (
+            <p className="t-small mt-1" style={{ color: 'var(--color-warn)' }}>
+              Changing role to <b>{role}</b> will hide this user from the User Profiles list
+              (this view shows role = engineer; toggle "Show inactive" doesn't affect role filtering).
+            </p>
+          )}
         </label>
 
         <label className="block mb-3">
@@ -342,11 +436,34 @@ function EditDrawer({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            placeholder="Anything you want to remember about this engineer..."
+            placeholder="Anything you want to remember about this user..."
             className="w-full border rounded px-2 py-1 t-text"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
         </label>
+
+        <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="t-small t-muted uppercase tracking-wider block">Account status</span>
+              <p className="t-small t-muted mt-0.5">
+                Inactive users are hidden from Buildings, On-call, and other tabs by default.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActive(!active)}
+              className="t-small px-3 py-1 rounded border font-medium"
+              style={
+                active
+                  ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger)', background: 'transparent' }
+                  : { color: 'white', background: 'var(--color-ok)', borderColor: 'var(--color-ok)' }
+              }
+            >
+              {active ? 'Deactivate user' : 'Reactivate user'}
+            </button>
+          </div>
+        </div>
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="t-small px-3 py-1 rounded border" style={{ borderColor: 'var(--color-border)' }}>
@@ -426,8 +543,7 @@ function AddEngineerDrawer({
 
         <p className="t-small t-muted mb-4">
           Creates a public.users row (role = engineer) + an engineer_profiles
-          row. Level / XP start at 1 / 0; XP populates automatically as PMs
-          with this CMMS name complete in future snapshots.
+          row. Title / shift / lead can be set after creation via Edit.
         </p>
 
         <label className="block mb-3">
@@ -477,12 +593,12 @@ function AddEngineerDrawer({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="engineer@company.com"
+            placeholder="user@company.com"
             className="w-full border rounded px-2 py-1 t-text"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
           <p className="t-small t-muted mt-1">
-            Optional. Set this to let the engineer sign in via magic link.
+            Optional. Set this to let the user sign in via magic link.
           </p>
         </label>
 

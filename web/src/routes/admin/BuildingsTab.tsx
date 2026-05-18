@@ -20,7 +20,6 @@ import {
   useEndAssignment,
   useChangeRole,
   useAssignPrimary,
-  useUpdateEngineerShiftAndLead,
   type BuildingAssignment,
   type AssignmentRole,
 } from '../../hooks/useBuildingAssignments';
@@ -31,6 +30,7 @@ type EngineerCard = {
   user_id: string;
   full_name: string;
   phone: string | null;
+  title: string | null;
   is_lead: boolean;
   shift_id: string | null;
   primary: ChipDisplay[];
@@ -164,7 +164,7 @@ export function BuildingsTab() {
           <div className="mb-3 p-2 rounded border buildings-no-print"
             style={{ borderColor: 'var(--color-accent)', background: 'rgba(59, 130, 246, 0.06)' }}>
             <p className="t-small">
-              <b>Editing mode</b> · changes save immediately. Click a chip to reassign or remove · use the row controls to change shift, toggle ★ lead, or add a building · click an unassigned-tray chip to assign it.
+              <b>Editing mode</b> · changes save immediately. Click a chip to reassign or remove · click <b>+ add</b> to add a building to an engineer · click an unassigned-tray chip to assign it. Shift, ★ lead, title, and removing users are all managed in <b>User Profiles</b>.
             </p>
           </div>
         )}
@@ -303,8 +303,7 @@ function EngineerRowView(props: {
   assignments: BuildingAssignment[];
   shifts: Shift[];
 }) {
-  const { eng, editing, openMenu, setOpenMenu, engineers, buildings, assignments, shifts } = props;
-  const updateEng = useUpdateEngineerShiftAndLead();
+  const { eng, editing, openMenu, setOpenMenu, engineers, buildings, assignments } = props;
 
   const closeMenu = () => setOpenMenu(null);
   const addKey = menuKey({ kind: 'add', user_id: eng.user_id });
@@ -313,45 +312,14 @@ function EngineerRowView(props: {
     <tr className="border-b eng-row" style={{ borderColor: 'var(--color-border-soft)' }}>
       <td className="py-1 pr-1 align-top">
         <div className="flex items-center flex-wrap gap-1">
-          {editing ? (
-            <button
-              type="button"
-              onClick={() => updateEng.mutate({ user_id: eng.user_id, patch: { is_lead: !eng.is_lead } })}
-              title={eng.is_lead ? 'Remove lead status' : 'Mark as lead engineer'}
-              className="lead-star buildings-no-print"
-              style={{
-                cursor: 'pointer',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: eng.is_lead ? '#d4a017' : '#cbd5e1',
-              }}
-            >
-              ★
-            </button>
-          ) : (
-            eng.is_lead && <span className="lead-star" title="Lead engineer">★</span>
-          )}
+          {eng.is_lead && <span className="lead-star" title="Lead engineer">★</span>}
           <span className="font-medium t-text">{eng.full_name}</span>
+          {eng.title && (
+            <span className="t-small t-muted" style={{ fontSize: '11px' }}>
+              · {eng.title}
+            </span>
+          )}
         </div>
-        {editing && (
-          <div className="mt-1 buildings-no-print">
-            <label className="t-small t-muted">
-              Shift:{' '}
-              <select
-                value={eng.shift_id ?? ''}
-                onChange={(e) => updateEng.mutate({ user_id: eng.user_id, patch: { shift_id: e.target.value || null } })}
-                className="border rounded px-1 py-0.5 t-text"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: '11px' }}
-              >
-                <option value="">— none —</option>
-                {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
       </td>
       <td className="py-1 px-1 align-top">
         {eng.primary.length === 0 && eng.backup.length === 0 && !editing ? (
@@ -800,6 +768,7 @@ function buildGroups(
       user_id: e.user_id,
       full_name: e.full_name,
       phone: e.phone,
+      title: e.title,
       is_lead: e.is_lead,
       shift_id: e.shift_id,
       primary: sortChips(primaryByUser.get(e.user_id) ?? []),

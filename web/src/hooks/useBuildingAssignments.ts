@@ -166,27 +166,3 @@ export function useChangeRole() {
   });
 }
 
-/** Update shift_id or is_lead on engineer_profiles. Used by Buildings tab to
- *  move an engineer between shifts or toggle the lead-engineer flag. */
-export function useUpdateEngineerShiftAndLead() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      user_id: string;
-      patch: { shift_id?: string | null; is_lead?: boolean };
-    }) => {
-      const { error, data } = await supabase
-        .from('engineer_profiles')
-        .update({ ...input.patch, updated_at: new Date().toISOString() })
-        .eq('user_id', input.user_id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['engineers'] });
-      qc.invalidateQueries({ queryKey: KEY });
-    },
-  });
-}
