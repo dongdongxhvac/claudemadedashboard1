@@ -108,6 +108,64 @@ export function useDeleteAssignment() {
   });
 }
 
+/** Make `user_id` the new primary on `building_id`. Ends any existing open
+ *  primary on the same building (sets ends_on=today) before inserting the new
+ *  row. If `user_id` is already the open primary, this is a no-op. */
+export function useAssignPrimary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { building_id: string; user_id: string; notes?: string | null }) => {
+      const { data: existing, error: qe } = await supabase
+        .from('building_assignments')
+        .select('id, user_id')
+        .eq('building_id', input.building_id)
+        .eq('role_in_building', 'primary')
+        .is('ends_on', null);
+      if (qe) throw qe;
+
+      const today = new Date().toISOString().slice(0, 10);
+      const open = (existing ?? []) as { id: string; user_id: string }[];
+      if (open.some((r) => r.user_id === input.user_id)) return; // already primary
+
+      if (open.length > 0) {
+        const { error } = await supabase
+          .from('building_assignments')
+          .update({ ends_on: today })
+          .in('id', open.map((r) => r.id));
+        if (error) throw error;
+      }
+
+      const { error: ie } = await supabase
+        .from('building_assignments')
+        .insert({
+          building_id: input.building_id,
+          user_id: input.user_id,
+          role_in_building: 'primary',
+          notes: input.notes ?? null,
+        });
+      if (ie) throw ie;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/** Change role on an existing assignment row. If changing to 'primary', the
+ *  partial unique index will reject the update if another open primary exists
+ *  on the same building — caller should use useAssignPrimary in that case. */
+export function useChangeRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; role: AssignmentRole }) => {
+      const { error } = await supabase
+        .from('building_assignments')
+        .update({ role_in_building: input.role })
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
 /** Update shift_id or is_lead on engineer_profiles. Used by Buildings tab to
  *  move an engineer between shifts or toggle the lead-engineer flag. */
 export function useUpdateEngineerShiftAndLead() {
