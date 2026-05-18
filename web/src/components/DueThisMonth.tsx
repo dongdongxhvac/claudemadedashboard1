@@ -1,9 +1,9 @@
 // §03 — Due this month · by assignee (table with PM type breakdown).
 // Ported from cove_pm_dashboard_REAL_DATA_v5.html#renderAssigneeView (EOM window).
-// Chart.js bar chart is deferred; just the table for now.
 import { useMemo } from 'react';
-import { useCurrentPmRows } from '../hooks/useCurrentSnapshots';
+import { useCurrentPmRows, type PmRow } from '../hooks/useCurrentSnapshots';
 import { isClosed, isNpm, localISODate, TYPE_ORDER, type PmType } from '../lib/dashboard';
+import { openPrintWindow } from '../lib/printPmList';
 import { Section } from './Section';
 
 type Row = {
@@ -12,6 +12,7 @@ type Row = {
   total: number;
   npm: number;
   equipment: Array<{ name: string; count: number }>;
+  pms: PmRow[]; // open + due-this-month PMs for this assignee (for print)
 };
 
 export function DueThisMonth() {
@@ -39,6 +40,7 @@ export function DueThisMonth() {
       total: 0,
       npm: npmByAssignee.get(a) ?? 0,
       equipment: [],
+      pms: [],
     });
 
     for (const r of pmRows) {
@@ -55,6 +57,7 @@ export function DueThisMonth() {
       const t = (r.pm_type ?? 'Minor') as PmType;
       if (t in g.counts) g.counts[t]++;
       g.total++;
+      g.pms.push(r);
 
       // Group chips by equipment_category (Pump, Fan, AHU, etc.) to match V5,
       // not the granular `equipment` field (e.g. "65LS RTU-2") which produces
@@ -103,6 +106,9 @@ export function DueThisMonth() {
       title="§03 Due this month · by assignee"
       subtitle={`${totals.total} PMs · ${totals.npm} NPMs · ${rows.length} ${rows.length === 1 ? 'assignee' : 'assignees'}`}
     >
+      <style>{`
+        .eq-chip:hover { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); filter: brightness(1.04); }
+      `}</style>
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500">No PMs due this month.</p>
       ) : (
@@ -124,7 +130,22 @@ export function DueThisMonth() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.name} className="border-b border-gray-100">
-                  <td className="py-2 pr-3 font-medium">{r.name}</td>
+                  <td className="py-2 pr-3 font-medium">
+                    <div className="flex items-center gap-1">
+                      <span>{r.name}</span>
+                      {r.pms.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openPrintWindow(r.name, r.pms, 'month', null)}
+                          className="t-small px-1.5 py-0.5 rounded border"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-accent)', background: 'var(--color-card)' }}
+                          title={`Open & print all ${r.pms.length} due-this-month PMs for ${r.name}`}
+                        >
+                          ⎙
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   {TYPE_ORDER.map((t) => (
                     <td key={t} className="py-2 px-2 text-right font-mono text-xs">
                       {r.counts[t] || ''}
@@ -143,17 +164,24 @@ export function DueThisMonth() {
                           NPM<span className="t-muted">{r.npm}</span>
                         </span>
                       )}
-                      {r.equipment.map((e) => (
-                        <span
-                          key={e.name}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 t-small border rounded"
-                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-                          title={e.name}
-                        >
-                          {e.name}
-                          <span className="t-muted">{e.count}</span>
-                        </span>
-                      ))}
+                      {r.equipment.map((e) => {
+                        const subset = r.pms.filter(
+                          (p) => (p.equipment_category ?? p.equipment ?? 'Other') === e.name,
+                        );
+                        return (
+                          <button
+                            type="button"
+                            key={e.name}
+                            onClick={() => openPrintWindow(r.name, subset, 'month', e.name)}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 t-small border rounded eq-chip"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', cursor: 'pointer', font: 'inherit' }}
+                            title={`Click to view & print ${e.count} ${e.name} PM${e.count === 1 ? '' : 's'} for ${r.name}`}
+                          >
+                            {e.name}
+                            <span className="t-muted">{e.count}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </td>
                 </tr>
