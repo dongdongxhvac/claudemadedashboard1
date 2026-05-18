@@ -197,14 +197,16 @@ function ShiftBlock({ group }: { group: ShiftGroup }) {
     <>
       <tr>
         <td colSpan={3} className="shift-band">
-          <div className="flex items-baseline justify-between gap-3 flex-wrap">
-            <div className="flex items-baseline gap-3">
-              <span className="t-section-title" style={{ fontSize: 14 }}>{group.label}</span>
-              <span className="t-small t-muted">
-                · {group.engineers.length} engineer{group.engineers.length === 1 ? '' : 's'}
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="t-section-title" style={{ fontSize: 14 }}>{group.label}</span>
+            <span className="t-small t-muted">
+              · {group.engineers.length} engineer{group.engineers.length === 1 ? '' : 's'}
+            </span>
+            {group.times && (
+              <span className="t-small t-mono" style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                · {group.times}
               </span>
-            </div>
-            {group.times && <span className="t-small t-muted t-mono">{group.times}</span>}
+            )}
           </div>
         </td>
       </tr>
