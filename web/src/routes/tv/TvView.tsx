@@ -316,40 +316,53 @@ function RoundsPanel({ rounds, shifts, now }: {
   shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
   now: Date;
 }) {
-  // Pick the shift whose start_time is closest to "now" (and not yet over).
-  const activeShift = useMemo(() => {
+  // Identify the active shift (currently in progress) so we can mark it.
+  const activeShiftId = useMemo(() => {
     if (shifts.length === 0) return null;
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-    // Prefer the shift currently in progress; otherwise the next one starting.
     const inProgress = shifts.find((s) => toMin(s.start_time) <= nowMin && toMin(s.end_time) > nowMin);
-    if (inProgress) return inProgress;
-    const upcoming = shifts.filter((s) => toMin(s.start_time) > nowMin).sort((a, b) => toMin(a.start_time) - toMin(b.start_time))[0];
-    return upcoming ?? shifts[0];
+    return inProgress?.id ?? null;
   }, [shifts, now]);
 
-  const list = useMemo(() => {
-    if (!activeShift) return [];
-    return rounds
-      .filter((r) => r.shift_id === activeShift.id)
-      .sort((a, b) => a.sort_order - b.sort_order);
-  }, [rounds, activeShift]);
+  const groups = useMemo(() => {
+    return shifts
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((s) => ({
+        shift: s,
+        rounds: rounds
+          .filter((r) => r.shift_id === s.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+      }))
+      .filter((g) => g.rounds.length > 0);
+  }, [rounds, shifts]);
 
   return (
-    <Panel title={`Rounds · ${activeShift?.name ?? '—'} shift`} accent="#10b981">
-      {list.length === 0 ? (
-        <p className="tv-muted">No rounds in this shift.</p>
+    <Panel title="Rounds · all shifts" accent="#10b981">
+      {groups.length === 0 ? (
+        <p className="tv-muted">No rounds defined.</p>
       ) : (
-        <ul className="tv-rounds-list">
-          {list.map((r) => (
-            <li key={r.id}>
-              <span className="tv-round-eng">{r.current?.full_name ?? '— unassigned —'}</span>
-              <span className="tv-round-stops">
-                {r.stops.map((s) => s.short_code ?? s.code).join(' · ')}
-              </span>
-            </li>
+        <div className="tv-rounds-groups">
+          {groups.map((g) => (
+            <div key={g.shift.id} className="tv-rounds-group">
+              <div className="tv-rounds-shift">
+                {g.shift.name} shift
+                {g.shift.id === activeShiftId && <span className="tv-rounds-active"> · NOW</span>}
+              </div>
+              <ul className="tv-rounds-list">
+                {g.rounds.map((r) => (
+                  <li key={r.id}>
+                    <span className="tv-round-eng">{r.current?.full_name ?? '— unassigned —'}</span>
+                    <span className="tv-round-stops">
+                      {r.stops.map((s) => s.short_code ?? s.code).join(' · ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </Panel>
   );
@@ -438,8 +451,23 @@ function TvStyles() {
       .tv-npm-name { color: #e2e8f0; }
       .tv-npm-stat { color: #94a3b8; font-variant-numeric: tabular-nums; }
 
-      .tv-rounds-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5vw; }
-      .tv-rounds-list li { display: grid; grid-template-columns: 9vw 1fr; gap: 0.6vw; font-size: 1.15vw; align-items: baseline; }
+      .tv-rounds-groups { display: flex; flex-direction: column; gap: 0.6vw; }
+      .tv-rounds-group { }
+      .tv-rounds-shift {
+        font-size: 0.95vw;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+        margin-bottom: 0.3vw;
+      }
+      .tv-rounds-active {
+        color: #10b981;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        margin-left: 0.4em;
+      }
+      .tv-rounds-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-rounds-list li { display: grid; grid-template-columns: 9vw 1fr; gap: 0.6vw; font-size: 1.05vw; align-items: baseline; }
       .tv-round-eng   { font-weight: 600; color: #10b981; }
       .tv-round-stops { color: #e2e8f0; font-variant-numeric: tabular-nums; }
     `}</style>
