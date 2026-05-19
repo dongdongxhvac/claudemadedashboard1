@@ -1,35 +1,20 @@
-// COVE WO12 Daily Export — content script
-//
-// Identical to the PM12 content script except:
-//   - Gates on URL hash "#cove-wo-auto" (so PM12 + WO can't trip each other)
-//   - Sends "expectingWoDownload" to the background BEFORE the React click,
-//     so the WO listener can authoritatively claim the resulting blob CSV
-//     without competing with the PM12 listener.
+// PM12 content script — runs in MAIN world on every pm-tasks page. Only does
+// work when the URL hash is exactly #cove-pm-auto.
 
 (async () => {
-  if (location.hash !== "#cove-wo-auto") return;
-
-  console.log("[cove-wo-export] Auto-run triggered. Waiting for page to be ready...");
+  if (location.hash !== "#cove-pm-auto") return;
+  console.log("[cove-exports/pm] Auto-run triggered.");
 
   const btn = await waitFor('div[title="Download as CSV"] button', 30_000);
-  if (!btn) {
-    console.warn("[cove-wo-export] Download button never appeared within 30s.");
-    return;
-  }
+  if (!btn) { console.warn("[cove-exports/pm] Download button never appeared."); return; }
 
   const rowCount = await waitForTableReady(45_000);
-  if (rowCount == null) {
-    console.warn("[cove-wo-export] Table never populated within 45s. Aborting.");
-    return;
-  }
-  console.log(`[cove-wo-export] Table ready with ${rowCount} rows in DOM.`);
+  if (rowCount == null) { console.warn("[cove-exports/pm] Table never populated."); return; }
+  console.log(`[cove-exports/pm] Table ready with ${rowCount} rows.`);
 
   await sleep(1500);
-
-  // Session flag is set by background BEFORE this tab opened — no need to
-  // do it from MAIN world here (where chrome.* messaging is flaky).
   const result = triggerReactClick(btn);
-  console.log("[cove-wo-export] Triggered download via:", result.method, result.error || "");
+  console.log("[cove-exports/pm] Triggered via:", result.method, result.error || "");
 
   history.replaceState(null, "", location.pathname + location.search);
 })();
@@ -39,7 +24,6 @@ async function waitForTableReady(timeoutMs) {
   const STABLE_MS = 1500;
   let lastCount = -1;
   let stableSince = 0;
-
   while (Date.now() < deadline) {
     const count = document.querySelectorAll("[role=row]").length;
     if (count >= 2) {
@@ -58,37 +42,29 @@ async function waitForTableReady(timeoutMs) {
   return null;
 }
 
+// Invoke the React onClick prop directly. Cove's Download button uses a React
+// onClick (not a native DOM handler) and refuses synthetic clicks because of
+// the isTrusted check that gates blob downloads. Touching __reactProps requires
+// MAIN world.
 function triggerReactClick(el) {
   for (const k of Object.keys(el)) {
     if (k.startsWith("__reactProps") && el[k] && typeof el[k].onClick === "function") {
-      try {
-        el[k].onClick();
-        return { method: "react-prop" };
-      } catch (e) {
-        return { method: "react-prop-error", error: String(e) };
-      }
+      try { el[k].onClick(); return { method: "react-prop" }; }
+      catch (e) { return { method: "react-prop-error", error: String(e) }; }
     }
   }
-  let cur = el.parentElement;
-  let depth = 0;
+  let cur = el.parentElement, depth = 0;
   while (cur && depth < 5) {
     for (const k of Object.keys(cur)) {
       if (k.startsWith("__reactProps") && cur[k] && typeof cur[k].onClick === "function") {
-        try {
-          cur[k].onClick();
-          return { method: `react-prop-ancestor-${depth}` };
-        } catch (e) {}
+        try { cur[k].onClick(); return { method: `react-prop-ancestor-${depth}` }; }
+        catch (e) {}
       }
     }
-    cur = cur.parentElement;
-    depth += 1;
+    cur = cur.parentElement; depth += 1;
   }
-  try {
-    el.click();
-    return { method: "native-click" };
-  } catch (e) {
-    return { method: "native-click-error", error: String(e) };
-  }
+  try { el.click(); return { method: "native-click" }; }
+  catch (e) { return { method: "native-click-error", error: String(e) }; }
 }
 
 function waitFor(selector, timeoutMs) {
@@ -112,6 +88,4 @@ function waitFor(selector, timeoutMs) {
   });
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

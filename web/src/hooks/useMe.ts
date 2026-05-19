@@ -6,7 +6,7 @@ export type Me = {
   auth_user_id: string | null;
   email: string | null;
   full_name: string;
-  role: 'engineer' | 'manager' | 'client' | 'admin' | 'director';
+  role: 'engineer' | 'manager' | 'client' | 'admin' | 'director' | 'tv';
   access_level: number;
   hiring_date: string | null;
   avatar_url: string | null;

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>COVE Daily Exports</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 16px; width: 280px; color: #111; }
+    h1 { font-size: 14px; margin: 0 0 12px; font-weight: 600; }
+    button { width: 100%; background: #2563eb; color: white; border: 0; padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 8px; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    button.primary { background: #16a34a; padding: 12px 14px; font-size: 14px; font-weight: 600; }
+    button.primary:hover { background: #15803d; }
+    .divider { font-size: 11px; color: #9ca3af; text-align: center; margin: 6px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .note { font-size: 11px; color: #6b7280; margin-top: 6px; padding: 8px 10px; background: #f3f4f6; border-radius: 4px; line-height: 1.4; }
+    #status { margin-top: 6px; font-size: 12px; color: #555; min-height: 16px; }
+    #status.error { color: #dc2626; }
+    #status.success { color: #16a34a; }
+    .footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 12px; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>COVE Daily Exports</h1>
+  <button id="runAll" class="primary">Run PM12 + WO12</button>
+  <div class="divider">or one at a time</div>
+  <button id="runPm">Download PM12 today</button>
+  <button id="runWo">Download WO12 today</button>
+  <div class="note">Labor is now handled automatically by the hourly API poller — no button needed.</div>
+  <div id="status"></div>
+  <div class="footer">
+    <a href="#" id="opts">Settings</a>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

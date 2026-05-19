@@ -312,6 +312,7 @@ function RoleBadge({ role }: { role: Role }) {
     director: { label: 'Director', bg: 'rgba(245,158,11,0.15)', color: '#b45309' },
     admin:    { label: 'Admin',    bg: 'rgba(244,63,94,0.12)',  color: '#be123c' },
     client:   { label: 'Client',   bg: 'rgba(20,184,166,0.12)', color: '#0f766e' },
+    tv:       { label: 'TV',       bg: 'rgba(100,116,139,0.15)', color: '#475569' },
   };
   const c = cfg[role];
   return (

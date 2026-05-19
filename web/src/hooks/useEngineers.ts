@@ -10,13 +10,14 @@ export const DISCIPLINES: { value: Discipline; label: string }[] = [
   { value: 'FLS', label: 'Fire / Life Safety' },
 ];
 
-export type Role = 'engineer' | 'manager' | 'client' | 'admin' | 'director';
+export type Role = 'engineer' | 'manager' | 'client' | 'admin' | 'director' | 'tv';
 export const ROLES: { value: Role; label: string }[] = [
   { value: 'engineer', label: 'Engineer' },
   { value: 'manager',  label: 'Manager' },
   { value: 'director', label: 'Director' },
   { value: 'client',   label: 'Client' },
   { value: 'admin',    label: 'Admin' },
+  { value: 'tv',       label: 'TV (kiosk)' },
 ];
 
 export type EngineerRow = {
