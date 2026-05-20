@@ -719,8 +719,9 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
     <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
       <div className="tv-bldgs">
         <div className="tv-bldgs-headerrow">
-          <div className="tv-bldgs-colhead">Rounds</div>
-          <div className="tv-bldgs-colhead">Assignments</div>
+          <div className="tv-bldgs-colhead tv-bldgs-col-rounds">Rounds</div>
+          <div className="tv-bldgs-colhead tv-bldgs-col-name">Engineer</div>
+          <div className="tv-bldgs-colhead tv-bldgs-col-assign">Assignments</div>
         </div>
         {data.shiftGroups.length === 0 ? (
           <p className="tv-muted">No assignments.</p>
@@ -728,30 +729,19 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
           data.shiftGroups.map((g) => (
             <div key={g.shift.id} className="tv-bldgs-band">
               <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
-              <div className="tv-bldgs-cols">
-                {/* Rounds (left) */}
-                <ul className="tv-bldgs-col">
-                  {g.engineers.map((e) => (
-                    <li key={`r-${e.user_id}`}>
-                      <span className="tv-bldgs-eng">{shortName(e.name)}</span>
-                      <span className="tv-bldgs-codes">
-                        {e.round ? e.round.stops.map((s) => s.short_code ?? s.code).join(' · ') : '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {/* Assignments (right) */}
-                <ul className="tv-bldgs-col">
-                  {g.engineers.map((e) => (
-                    <li key={`a-${e.user_id}`}>
-                      <span className="tv-bldgs-eng">{shortName(e.name)}</span>
-                      <span className="tv-bldgs-codes">
-                        {e.primary.length > 0 ? fmtCodes(e.primary) : '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <ul className="tv-bldgs-rows">
+                {g.engineers.map((e) => (
+                  <li key={e.user_id} className="tv-bldgs-row">
+                    <span className="tv-bldgs-codes tv-bldgs-col-rounds">
+                      {e.round ? e.round.stops.map((s) => s.short_code ?? s.code).join(' · ') : '—'}
+                    </span>
+                    <span className="tv-bldgs-eng tv-bldgs-col-name">{shortName(e.name)}</span>
+                    <span className="tv-bldgs-codes tv-bldgs-col-assign">
+                      {e.primary.length > 0 ? fmtCodes(e.primary) : '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ))
         )}
@@ -986,33 +976,35 @@ function TvStyles() {
       .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.7vw; min-width: 2.4vw; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-today-name { color: #e2e8f0; }
 
-      /* Combined Buildings panel */
-      .tv-bldgs { display: flex; flex-direction: column; gap: 0.5vw; }
+      /* Combined Buildings panel: rounds | engineer | assignments per row */
+      .tv-bldgs { display: flex; flex-direction: column; gap: 0.4vw; }
       .tv-bldgs-headerrow {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.6vw;
-        font-size: 0.75vw;
+        grid-template-columns: 1fr 6vw 1fr;
+        gap: 0.5vw;
+        font-size: 0.7vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #64748b;
-        padding-bottom: 0.2vw;
+        padding-bottom: 0.25vw;
         border-bottom: 1px solid #1e293b;
       }
-      .tv-bldgs-colhead { padding: 0 0.2vw; }
-      .tv-bldgs-band { }
+      .tv-bldgs-col-rounds { text-align: right; }
+      .tv-bldgs-col-name   { text-align: center; }
+      .tv-bldgs-col-assign { text-align: left; }
       .tv-bldgs-band-label {
-        font-size: 0.8vw;
+        font-size: 0.75vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #94a3b8;
-        margin: 0.3vw 0 0.2vw;
+        margin: 0.25vw 0 0.15vw;
       }
-      .tv-bldgs-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6vw; }
-      .tv-bldgs-col { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
-      .tv-bldgs-col li {
-        display: flex;
-        flex-direction: column;
+      .tv-bldgs-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
+      .tv-bldgs-row {
+        display: grid;
+        grid-template-columns: 1fr 6vw 1fr;
+        gap: 0.5vw;
+        align-items: baseline;
         font-size: 0.85vw;
         line-height: 1.25;
       }
