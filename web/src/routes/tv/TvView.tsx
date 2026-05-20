@@ -7,7 +7,8 @@
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
 //   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d               │
 //   ├──────────────────┼──────────────────┼──────────────────────────────┤
-//   │ DUE TODAY        │ BUILDING ASSIGN  │ ROUNDS · ALL SHIFTS          │
+//   │ DUE TODAY        │ BUILDINGS        │ UPCOMING · NEXT 7 DAYS       │
+//   │                  │ (rounds + assign)│                              │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
@@ -68,12 +69,14 @@ export default function TvView() {
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
         {/* Bottom row: today's work */}
         <TodayPanel pmRows={pmQ.data ?? []} now={now} />
-        <BuildingAssignmentsPanel
+        <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
           assignments={assignmentsQ.data ?? []}
+          rounds={roundsQ.data ?? []}
+          shifts={shiftsQ.data ?? []}
         />
-        <RoundsPanel rounds={roundsQ.data ?? []} shifts={shiftsQ.data ?? []} now={now} />
+        <UpcomingPmsPanel pmRows={pmQ.data ?? []} now={now} />
       </main>
     </div>
   );
@@ -304,14 +307,18 @@ function TodayPanel({ pmRows, now }: {
   );
 }
 
-function BuildingAssignmentsPanel({ engineers, buildings, assignments }: {
+function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
   engineers: EngineerRow[];
   buildings: Building[];
   assignments: BuildingAssignment[];
+  rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
+  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
 }) {
   const data = useMemo(() => {
     const bldById = new Map(buildings.map((b) => [b.id, b]));
-    const primaryByUser = new Map<string, Building[]>();
+
+    // Per-user primary/coverage assignments
+    const primaryByUser  = new Map<string, Building[]>();
     const coverageByUser = new Map<string, Building[]>();
     for (const a of assignments) {
       const b = bldById.get(a.building_id);
@@ -329,107 +336,162 @@ function BuildingAssignmentsPanel({ engineers, buildings, assignments }: {
         (x.short_code ?? x.code).localeCompare(y.short_code ?? y.code, undefined, { numeric: true }),
       );
 
-    const regulars: { user_id: string; name: string; buildings: Building[] }[] = [];
-    const leads: { user_id: string; name: string; coverage: Building[] }[] = [];
-    for (const e of engineers) {
-      if (!e.active || e.role !== 'engineer') continue;
-      const p = sortBld(primaryByUser.get(e.user_id) ?? []);
-      const c = sortBld(coverageByUser.get(e.user_id) ?? []);
-      if (e.is_lead) {
-        if (c.length > 0) leads.push({ user_id: e.user_id, name: e.full_name, coverage: c });
-      } else if (p.length > 0) {
-        regulars.push({ user_id: e.user_id, name: e.full_name, buildings: p });
-      }
+    // Round currently assigned to each user (latest single open assignment).
+    const roundByUser = new Map<string, NonNullable<ReturnType<typeof useRounds>['data']>[number]>();
+    for (const r of rounds) {
+      if (r.current) roundByUser.set(r.current.user_id, r);
     }
-    regulars.sort((a, b) => b.buildings.length - a.buildings.length || a.name.localeCompare(b.name));
-    leads.sort((a, b) => a.name.localeCompare(b.name));
-    return { regulars, leads };
-  }, [engineers, buildings, assignments]);
+
+    // Group engineers (non-lead) by shift in shift sort_order.
+    const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
+    const shiftGroups = orderedShifts.map((s, idx) => ({
+      shift: s,
+      bandLabel: idx === 0 ? 'AM' : idx === 1 ? 'PM' : s.name,
+      engineers: engineers
+        .filter((e) => e.active && e.role === 'engineer' && !e.is_lead && e.shift_id === s.id)
+        .map((e) => ({
+          user_id: e.user_id,
+          name: e.full_name,
+          primary: sortBld(primaryByUser.get(e.user_id) ?? []),
+          round:   roundByUser.get(e.user_id) ?? null,
+        }))
+        .filter((e) => e.primary.length > 0 || e.round)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    })).filter((g) => g.engineers.length > 0);
+
+    // Leads: full-coverage row at the bottom.
+    const leads = engineers
+      .filter((e) => e.active && e.role === 'engineer' && e.is_lead)
+      .map((e) => ({
+        user_id: e.user_id,
+        name: e.full_name,
+        coverage: sortBld(coverageByUser.get(e.user_id) ?? []),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { shiftGroups, leads };
+  }, [engineers, buildings, assignments, rounds, shifts]);
+
+  const fmtCodes = (list: Building[]) =>
+    list.map((b) => b.short_code ?? b.code).join(' · ');
 
   return (
-    <Panel title="Building assignments" accent="#3b82f6">
-      {data.regulars.length === 0 && data.leads.length === 0 ? (
-        <p className="tv-muted">No assignments.</p>
-      ) : (
-        <ul className="tv-bld-list">
-          {data.regulars.map((r) => (
-            <li key={r.user_id}>
-              <span className="tv-bld-eng">{shortName(r.name)}</span>
-              <span className="tv-bld-codes">
-                {r.buildings.map((b) => b.short_code ?? b.code).join(' · ')}
-              </span>
-            </li>
-          ))}
-          {data.leads.map((l) => (
-            <li key={l.user_id} className="tv-bld-lead">
-              <span className="tv-bld-eng">★ {shortName(l.name)}</span>
-              <span className="tv-bld-codes">
-                {l.coverage.length} bld coverage
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
+      <div className="tv-bldgs">
+        <div className="tv-bldgs-headerrow">
+          <div className="tv-bldgs-colhead">Rounds</div>
+          <div className="tv-bldgs-colhead">Assignments</div>
+        </div>
+        {data.shiftGroups.length === 0 ? (
+          <p className="tv-muted">No assignments.</p>
+        ) : (
+          data.shiftGroups.map((g) => (
+            <div key={g.shift.id} className="tv-bldgs-band">
+              <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
+              <div className="tv-bldgs-cols">
+                {/* Rounds (left) */}
+                <ul className="tv-bldgs-col">
+                  {g.engineers.map((e) => (
+                    <li key={`r-${e.user_id}`}>
+                      <span className="tv-bldgs-eng">{shortName(e.name)}</span>
+                      <span className="tv-bldgs-codes">
+                        {e.round ? e.round.stops.map((s) => s.short_code ?? s.code).join(' · ') : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {/* Assignments (right) */}
+                <ul className="tv-bldgs-col">
+                  {g.engineers.map((e) => (
+                    <li key={`a-${e.user_id}`}>
+                      <span className="tv-bldgs-eng">{shortName(e.name)}</span>
+                      <span className="tv-bldgs-codes">
+                        {e.primary.length > 0 ? fmtCodes(e.primary) : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))
+        )}
+        {data.leads.length > 0 && (
+          <div className="tv-bldgs-leads">
+            {data.leads.map((l) => (
+              <div key={l.user_id} className="tv-bldgs-lead-row">
+                <span className="tv-bldgs-lead-name">★ {shortName(l.name)}</span>
+                <span className="tv-bldgs-lead-codes">
+                  {l.coverage.length > 0 ? fmtCodes(l.coverage) : 'no coverage set'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
 
-function RoundsPanel({ rounds, shifts, now }: {
-  rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
-  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
+function UpcomingPmsPanel({ pmRows, now }: {
+  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   now: Date;
 }) {
-  // Identify the active shift (currently in progress) so we can mark it.
-  const activeShiftId = useMemo(() => {
-    if (shifts.length === 0) return null;
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-    const inProgress = shifts.find((s) => toMin(s.start_time) <= nowMin && toMin(s.end_time) > nowMin);
-    return inProgress?.id ?? null;
-  }, [shifts, now]);
+  const data = useMemo(() => {
+    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStr = localISODate(todayD);
+    const days: { iso: string; label: string; count: number }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(todayD); d.setDate(todayD.getDate() + i);
+      const iso = localISODate(d);
+      const label =
+        i === 0 ? 'Today'
+        : i === 1 ? 'Tomorrow'
+        : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      days.push({ iso, label, count: 0 });
+    }
+    const dayMap = new Map(days.map((d) => [d.iso, d]));
 
-  const groups = useMemo(() => {
-    return shifts
-      .slice()
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((s) => ({
-        shift: s,
-        rounds: rounds
-          .filter((r) => r.shift_id === s.id)
-          .sort((a, b) => a.sort_order - b.sort_order),
-      }))
-      .filter((g) => g.rounds.length > 0);
-  }, [rounds, shifts]);
+    let total = 0;
+    const techs = new Set<string>();
+    for (const r of pmRows) {
+      if (isClosed(r.status)) continue;
+      if (!r.due_date) continue;
+      if (r.due_date < todayStr) continue;
+      const slot = dayMap.get(r.due_date);
+      if (!slot) continue;
+      slot.count++;
+      total++;
+      const a = (r.assigned_to_name ?? '').trim();
+      if (a) techs.add(a);
+    }
+    const maxCount = days.reduce((m, d) => Math.max(m, d.count), 0) || 1;
+    return { days, total, techs: techs.size, maxCount };
+  }, [pmRows, now]);
 
   return (
-    <Panel title="Rounds · all shifts" accent="#10b981">
-      {groups.length === 0 ? (
-        <p className="tv-muted">No rounds defined.</p>
-      ) : (
-        <div className="tv-rounds-groups">
-          {groups.map((g) => (
-            <div key={g.shift.id} className="tv-rounds-group">
-              <div className="tv-rounds-shift">
-                {g.shift.name} shift
-                {g.shift.id === activeShiftId && <span className="tv-rounds-active"> · NOW</span>}
-              </div>
-              <ul className="tv-rounds-list">
-                {g.rounds.map((r) => (
-                  <li key={r.id}>
-                    <span className="tv-round-eng">{r.current ? shortName(r.current.full_name) : '— unassigned —'}</span>
-                    <span className="tv-round-stops">
-                      {r.stops.map((s) => s.short_code ?? s.code).join(' · ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+    <Panel title="Upcoming · next 7 days" accent="#10b981">
+      <div className="tv-upcoming-head">
+        <span className="tv-bignum">{data.total}</span>
+        <span className="tv-sub">PMs · {data.techs} tech{data.techs === 1 ? '' : 's'}</span>
+      </div>
+      <ul className="tv-upcoming-list">
+        {data.days.map((d) => (
+          <li key={d.iso}>
+            <span className="tv-upcoming-day">{d.label}</span>
+            <div className="tv-upcoming-bar-bg">
+              <div
+                className="tv-upcoming-bar-fill"
+                style={{ width: `${(d.count / data.maxCount) * 100}%` }}
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <span className="tv-upcoming-count">{d.count}</span>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }
+
 
 // ============================================================================
 // Styles
@@ -521,39 +583,64 @@ function TvStyles() {
       .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.7vw; min-width: 2.4vw; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-today-name { color: #e2e8f0; }
 
-      .tv-bld-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35vw; }
-      .tv-bld-list li {
+      /* Combined Buildings panel */
+      .tv-bldgs { display: flex; flex-direction: column; gap: 0.5vw; }
+      .tv-bldgs-headerrow {
         display: grid;
-        grid-template-columns: 6.5vw 1fr;
-        gap: 0.5vw;
-        font-size: 1.0vw;
-        align-items: baseline;
-      }
-      .tv-bld-eng { font-weight: 600; color: #f8fafc; }
-      .tv-bld-codes { color: #e2e8f0; font-variant-numeric: tabular-nums; }
-      .tv-bld-lead { padding-top: 0.3vw; border-top: 1px dashed #1e293b; margin-top: 0.3vw; }
-      .tv-bld-lead .tv-bld-eng { color: #d4a017; }
-      .tv-bld-lead .tv-bld-codes { color: #94a3b8; font-size: 0.9vw; }
-
-      .tv-rounds-groups { display: flex; flex-direction: column; gap: 0.6vw; }
-      .tv-rounds-group { }
-      .tv-rounds-shift {
-        font-size: 0.95vw;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6vw;
+        font-size: 0.75vw;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.14em;
         color: #64748b;
-        margin-bottom: 0.3vw;
+        padding-bottom: 0.2vw;
+        border-bottom: 1px solid #1e293b;
       }
-      .tv-rounds-active {
-        color: #10b981;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        margin-left: 0.4em;
+      .tv-bldgs-colhead { padding: 0 0.2vw; }
+      .tv-bldgs-band { }
+      .tv-bldgs-band-label {
+        font-size: 0.8vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #94a3b8;
+        margin: 0.3vw 0 0.2vw;
       }
-      .tv-rounds-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
-      .tv-rounds-list li { display: grid; grid-template-columns: 7vw 1fr; gap: 0.5vw; font-size: 0.95vw; align-items: baseline; }
-      .tv-round-eng   { font-weight: 600; color: #10b981; }
-      .tv-round-stops { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+      .tv-bldgs-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6vw; }
+      .tv-bldgs-col { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
+      .tv-bldgs-col li {
+        display: flex;
+        flex-direction: column;
+        font-size: 0.85vw;
+        line-height: 1.25;
+      }
+      .tv-bldgs-eng { font-weight: 600; color: #f8fafc; }
+      .tv-bldgs-codes { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+      .tv-bldgs-leads {
+        margin-top: 0.3vw;
+        padding-top: 0.4vw;
+        border-top: 1px dashed #334155;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2vw;
+      }
+      .tv-bldgs-lead-row { display: flex; gap: 0.6vw; align-items: baseline; font-size: 0.7vw; }
+      .tv-bldgs-lead-name { color: #d4a017; font-weight: 600; flex: 0 0 auto; min-width: 5.5vw; }
+      .tv-bldgs-lead-codes { color: #94a3b8; font-variant-numeric: tabular-nums; flex: 1; }
+
+      /* Upcoming PMs panel */
+      .tv-upcoming-head { display: flex; align-items: baseline; gap: 0.6vw; margin-bottom: 0.4vw; }
+      .tv-upcoming-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-upcoming-list li {
+        display: grid;
+        grid-template-columns: 6vw 1fr 2vw;
+        gap: 0.5vw;
+        align-items: center;
+        font-size: 1.0vw;
+      }
+      .tv-upcoming-day { color: #94a3b8; }
+      .tv-upcoming-bar-bg { background: #1e293b; height: 1.1vw; border-radius: 4px; overflow: hidden; }
+      .tv-upcoming-bar-fill { background: linear-gradient(90deg, #10b981, #34d399); height: 100%; }
+      .tv-upcoming-count { color: #e2e8f0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
     `}</style>
   );
 }
