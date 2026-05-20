@@ -374,16 +374,22 @@ function WorkloadPanel({ pmRows, engineers, now }: {
         {data.upcomingRows.length === 0 ? (
           <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing scheduled.</p>
         ) : (
-          <ul className="tv-today-list tv-workload-two-metric">
+          <ul className="tv-wkl-chip-list">
             {data.upcomingRows.map((r) => (
               <li key={r.name}>
-                <span className="tv-today-count">{r.pm14}</span>
-                <span className="tv-today-name">{shortName(r.name)}</span>
-                {r.major46 > 0 && (
-                  <span className="tv-workload-major" title="Major PMs due within 46 days">
-                    ◆ {r.major46}
-                  </span>
-                )}
+                <span className="tv-wkl-chip-eng">{shortName(r.name)}</span>
+                <span className="tv-wkl-chips">
+                  {r.pm14 > 0 && (
+                    <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
+                      PM <span className="tv-wkl-chip-count">{r.pm14}</span>
+                    </span>
+                  )}
+                  {r.major46 > 0 && (
+                    <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
+                      Major <span className="tv-wkl-chip-count">{r.major46}</span>
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -669,25 +675,48 @@ function TvStyles() {
         letter-spacing: 0.14em;
         color: #64748b;
       }
-      /* Compact overrides for lists living inside Workload */
-      .tv-workload-top .tv-today-list,
-      .tv-workload-bottom .tv-today-list { gap: 0.25vw; }
-      .tv-workload-top .tv-today-list li,
-      .tv-workload-bottom .tv-today-list li { font-size: 1.1vw; }
-      .tv-workload-top .tv-today-count,
-      .tv-workload-bottom .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
+      /* Compact override for the top per-tech list living inside Workload */
+      .tv-workload-top .tv-today-list { gap: 0.25vw; }
+      .tv-workload-top .tv-today-list li { font-size: 1.1vw; }
+      .tv-workload-top .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
 
-      /* Workload bottom: two-metric per-tech list (14d PM + 46d Major) */
-      .tv-workload-two-metric li { position: relative; }
-      .tv-workload-two-metric .tv-today-name { flex: 1; }
-      .tv-workload-major {
-        color: #a78bfa;
-        font-weight: 600;
+      /* Workload bottom: per-tech chip list (§03-style chips) */
+      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-wkl-chip-list li {
+        display: flex;
+        align-items: center;
+        gap: 0.5vw;
         font-size: 1.0vw;
-        font-variant-numeric: tabular-nums;
-        margin-left: auto;
-        padding-left: 0.6vw;
       }
+      .tv-wkl-chip-eng {
+        color: #e2e8f0;
+        font-weight: 500;
+        min-width: 6.5vw;
+      }
+      .tv-wkl-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3vw; }
+      .tv-wkl-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25vw;
+        padding: 0.05vw 0.5vw;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        font-size: 0.85vw;
+        background: #1e293b;
+        color: #e2e8f0;
+        white-space: nowrap;
+      }
+      .tv-wkl-chip-count {
+        color: #94a3b8;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-wkl-chip-major {
+        border-color: rgba(124, 58, 237, 0.5);
+        background: rgba(124, 58, 237, 0.15);
+        color: #c4b5fd;
+      }
+      .tv-wkl-chip-major .tv-wkl-chip-count { color: #a78bfa; }
 
       /* Empty placeholder panel */
       .tv-panel-empty {
