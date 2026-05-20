@@ -15,19 +15,45 @@ const KEY_UPCOMING = ['oncall_upcoming'];
 const KEY_PARTICIPANTS = ['oncall_participants'];
 const KEY_SETTINGS = ['oncall_settings'];
 
-/** Current week's rotation (Friday → next Friday) joined with engineer name. */
+/** On-call handover happens at 7am local on Friday. To pick the right
+ *  rotation row, shift "now" back by 7 hours: that maps Friday 06:59 onto
+ *  the previous calendar day (so the prior week's row still wins) and
+ *  Friday 07:00 onto Friday itself (new week begins). Returns YYYY-MM-DD
+ *  in LOCAL time. */
+function effectiveOncallDate(now: Date): string {
+  const ONCALL_CUTOVER_HOURS = 7;
+  const shifted = new Date(now.getTime() - ONCALL_CUTOVER_HOURS * 60 * 60 * 1000);
+  const y = shifted.getFullYear();
+  const m = String(shifted.getMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Current rotation (Friday 7am → next Friday 7am local) joined with engineer
+ *  name. Queries oncall_rotations directly (not the current_oncall view) so
+ *  the 7am cutover logic lives in one place: effectiveOncallDate(). */
 export function useCurrentOncall() {
   return useQuery({
     queryKey: KEY_CURRENT,
     queryFn: async () => {
+      const effective = effectiveOncallDate(new Date());
       const { data, error } = await supabase
-        .from('current_oncall')
-        .select('*')
+        .from('oncall_rotations')
+        .select('id, week_start, primary_user_id, secondary_user_id, notes')
+        .lte('week_start', effective)
+        .order('week_start', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
 
-      // Resolve primary + secondary names in one extra round-trip.
+      // Only treat the anchor as current if effective date < week_start + 7d
+      // (i.e. no gap in the schedule).
+      const ws = new Date(data.week_start + 'T00:00:00');
+      const we = new Date(ws); we.setDate(ws.getDate() + 7);
+      const effD = new Date(effective + 'T00:00:00');
+      if (effD >= we) return null;
+
       const ids = [data.primary_user_id, data.secondary_user_id].filter(Boolean) as string[];
       if (ids.length === 0) return { rotation: data as OncallRotation, primary: null, secondary: null };
 
@@ -62,32 +88,32 @@ export function useUpcomingOncall(count: number) {
   return useQuery({
     queryKey: [...KEY_UPCOMING, count],
     queryFn: async (): Promise<UpcomingOncallEntry[]> => {
-      // Anchor: the latest rotation whose Fri-to-Fri window contains today.
-      // A rotation row covers [week_start, week_start + 7). If no such row
-      // exists (gap in the schedule), is_current stays false on every result.
-      const today = new Date().toISOString().slice(0, 10);
+      // Anchor: the latest rotation whose Fri-to-Fri window contains today,
+      // honoring a 7am-Friday handover (see effectiveOncallDate). If no such
+      // row exists (gap), is_current stays false on every result.
+      const effective = effectiveOncallDate(new Date());
       const { data: anchor, error: ae } = await supabase
         .from('oncall_rotations')
         .select('week_start')
-        .lte('week_start', today)
+        .lte('week_start', effective)
         .order('week_start', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (ae) throw ae;
 
-      // Only treat the anchor as "current" if today < anchor + 7 days.
+      // Only treat the anchor as "current" if effective date < anchor + 7d.
       const currentWeek = (() => {
         if (!anchor?.week_start) return null;
         const ws = new Date(anchor.week_start + 'T00:00:00');
         const we = new Date(ws); we.setDate(ws.getDate() + 7);
-        const todayD = new Date(today + 'T00:00:00');
-        return todayD < we ? anchor.week_start : null;
+        const effD = new Date(effective + 'T00:00:00');
+        return effD < we ? anchor.week_start : null;
       })();
 
       // Start the fetch window at the current week if one exists, otherwise
-      // at today (so we surface the next upcoming rotation as "next", not
-      // mislabel it as current).
-      const fetchFrom = currentWeek ?? today;
+      // at the effective date (so we surface the next upcoming rotation as
+      // "next", not mislabel it as current).
+      const fetchFrom = currentWeek ?? effective;
       const { data: rows, error } = await supabase
         .from('oncall_rotations')
         .select('week_start, primary_user_id, secondary_user_id')
