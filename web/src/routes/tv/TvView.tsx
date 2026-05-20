@@ -285,7 +285,7 @@ function OncallPanel({ participants, settings, now }: {
 
     // Column labels: PREV, CYCLE 1..N, +1 PREVIEW
     const columns: { key: string; label: string; cycleIndex: number }[] = [
-      { key: 'prev', label: 'PREV', cycleIndex: -1 },
+      { key: 'prev', label: 'CYCLE 0', cycleIndex: -1 },
     ];
     for (let c = 0; c < cycles; c++) columns.push({ key: `c${c + 1}`, label: `CYCLE ${c + 1}`, cycleIndex: c });
     columns.push({ key: 'preview', label: '+1', cycleIndex: cycles });
@@ -947,7 +947,7 @@ function TvStyles() {
         position: relative;
       }
       .tv-oncall-cell-side { color: #64748b; font-style: italic; }
-      .tv-oncall-cell-holiday { color: #f87171; }
+      .tv-oncall-cell-holiday { color: #fca5a5; }
       .tv-oncall-cell-active {
         background: rgba(34, 197, 94, 0.18);
         border: 1px solid #22c55e;
