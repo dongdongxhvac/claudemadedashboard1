@@ -69,7 +69,12 @@ export default function TvView() {
         <FocusBoardPanel items={focusQ.data ?? []} />
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
         {/* Bottom row: today's work + buildings (3rd slot intentionally empty for now) */}
-        <WorkloadPanel pmRows={pmQ.data ?? []} engineers={engineersQ.data ?? []} now={now} />
+        <WorkloadPanel
+          pmRows={pmQ.data ?? []}
+          engineers={engineersQ.data ?? []}
+          shifts={shiftsQ.data ?? []}
+          now={now}
+        />
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -123,6 +128,26 @@ function EmptyPanel() {
     <section className="tv-panel tv-panel-empty">
       <p className="tv-muted" style={{ fontSize: '1.0vw' }}>—</p>
     </section>
+  );
+}
+
+function WklRow({ row }: { row: { name: string; pm14: number; major46: number } }) {
+  return (
+    <li>
+      <span className="tv-wkl-chip-eng">{shortName(row.name)}</span>
+      <span className="tv-wkl-chips">
+        {row.pm14 > 0 && (
+          <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
+            PM <span className="tv-wkl-chip-count">{row.pm14}</span>
+          </span>
+        )}
+        {row.major46 > 0 && (
+          <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
+            Major <span className="tv-wkl-chip-count">{row.major46}</span>
+          </span>
+        )}
+      </span>
+    </li>
   );
 }
 
@@ -264,9 +289,10 @@ function CrewPanel({ pmRows, laborRows, now }: {
   );
 }
 
-function WorkloadPanel({ pmRows, engineers, now }: {
+function WorkloadPanel({ pmRows, engineers, shifts, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   engineers: EngineerRow[];
+  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
   now: Date;
 }) {
   const data = useMemo(() => {
@@ -277,11 +303,13 @@ function WorkloadPanel({ pmRows, engineers, now }: {
     const cutoff14Str = localISODate(cutoff14);
     const cutoff46Str = localISODate(cutoff46);
 
-    // CMMS-name → display-name (Eduin → Edwin, etc.).
+    // CMMS-name → display-name (Eduin → Edwin, etc.) and display-name → shift.
     const displayByCmms = new Map<string, string>();
+    const shiftByDisplay = new Map<string, string | null>();
     for (const e of engineers) {
       if (!e.active || e.role !== 'engineer') continue;
       if (e.cmms_assignee_name) displayByCmms.set(e.cmms_assignee_name, e.full_name);
+      shiftByDisplay.set(e.full_name, e.shift_id);
     }
     const displayOf = (raw: string | null): string => {
       const n = (raw ?? '').trim() || 'Unassigned';
@@ -327,6 +355,7 @@ function WorkloadPanel({ pmRows, engineers, now }: {
         name,
         pm14:    pm14.get(name) ?? 0,
         major46: major46.get(name) ?? 0,
+        shift_id: shiftByDisplay.get(name) ?? null,
       }))
       .sort((a, b) =>
         (b.pm14 + b.major46) - (a.pm14 + a.major46)
@@ -334,11 +363,22 @@ function WorkloadPanel({ pmRows, engineers, now }: {
         || a.name.localeCompare(b.name),
       );
 
+    // Split by shift: AM = first shift (sort_order 1), PM = second shift.
+    const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
+    const amShiftId = orderedShifts[0]?.id ?? null;
+    const pmShiftId = orderedShifts[1]?.id ?? null;
+    const amLabel   = orderedShifts[0]?.name ?? 'AM';
+    const pmLabel   = orderedShifts[1]?.name ?? 'PM';
+
+    const am = upcomingRows.filter((r) => r.shift_id === amShiftId);
+    const pm = upcomingRows.filter((r) => r.shift_id === pmShiftId);
+    const other = upcomingRows.filter((r) => r.shift_id !== amShiftId && r.shift_id !== pmShiftId);
+
     const pm14Total    = Array.from(pm14.values()).reduce((s, v) => s + v, 0);
     const major46Total = Array.from(major46.values()).reduce((s, v) => s + v, 0);
 
-    return { todayCards, overdue, upcomingRows, pm14Total, major46Total };
-  }, [pmRows, engineers, now]);
+    return { todayCards, overdue, am, pm, other, amLabel, pmLabel, pm14Total, major46Total };
+  }, [pmRows, engineers, shifts, now]);
 
   const todayCount = data.todayCards.reduce((s, c) => s + c.count, 0);
 
@@ -371,28 +411,31 @@ function WorkloadPanel({ pmRows, engineers, now }: {
           <span style={{ margin: '0 0.4vw', color: '#475569' }}>|</span>
           <span style={{ color: '#a78bfa' }}>◆ Major 46d · <strong>{data.major46Total}</strong></span>
         </div>
-        {data.upcomingRows.length === 0 ? (
+        {data.am.length === 0 && data.pm.length === 0 && data.other.length === 0 ? (
           <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing scheduled.</p>
         ) : (
-          <ul className="tv-wkl-chip-list">
-            {data.upcomingRows.map((r) => (
-              <li key={r.name}>
-                <span className="tv-wkl-chip-eng">{shortName(r.name)}</span>
-                <span className="tv-wkl-chips">
-                  {r.pm14 > 0 && (
-                    <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
-                      PM <span className="tv-wkl-chip-count">{r.pm14}</span>
-                    </span>
-                  )}
-                  {r.major46 > 0 && (
-                    <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
-                      Major <span className="tv-wkl-chip-count">{r.major46}</span>
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="tv-wkl-shift-grid">
+            <div className="tv-wkl-shift-col">
+              <div className="tv-wkl-shift-label">{data.amLabel} shift</div>
+              <ul className="tv-wkl-chip-list">
+                {data.am.map((r) => <WklRow key={r.name} row={r} />)}
+              </ul>
+            </div>
+            <div className="tv-wkl-shift-col">
+              <div className="tv-wkl-shift-label">{data.pmLabel} shift</div>
+              <ul className="tv-wkl-chip-list">
+                {data.pm.map((r) => <WklRow key={r.name} row={r} />)}
+              </ul>
+            </div>
+            {data.other.length > 0 && (
+              <div className="tv-wkl-shift-col tv-wkl-shift-other">
+                <div className="tv-wkl-shift-label">No shift</div>
+                <ul className="tv-wkl-chip-list">
+                  {data.other.map((r) => <WklRow key={r.name} row={r} />)}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </Panel>
@@ -680,20 +723,35 @@ function TvStyles() {
       .tv-workload-top .tv-today-list li { font-size: 1.1vw; }
       .tv-workload-top .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
 
-      /* Workload bottom: per-tech chip list (§03-style chips) */
-      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      /* Workload bottom: per-tech chip list (§03-style chips), split by shift */
+      .tv-wkl-shift-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6vw 0.8vw;
+      }
+      .tv-wkl-shift-col { min-width: 0; }
+      .tv-wkl-shift-other { grid-column: 1 / -1; }
+      .tv-wkl-shift-label {
+        font-size: 0.75vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #64748b;
+        margin-bottom: 0.25vw;
+      }
+      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25vw; }
       .tv-wkl-chip-list li {
         display: flex;
         align-items: center;
-        gap: 0.5vw;
-        font-size: 1.0vw;
+        gap: 0.4vw;
+        font-size: 0.95vw;
       }
       .tv-wkl-chip-eng {
         color: #e2e8f0;
         font-weight: 500;
-        min-width: 6.5vw;
+        min-width: 5vw;
+        flex: 0 0 auto;
       }
-      .tv-wkl-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3vw; }
+      .tv-wkl-chips { display: inline-flex; flex-wrap: wrap; gap: 0.25vw; }
       .tv-wkl-chip {
         display: inline-flex;
         align-items: center;
