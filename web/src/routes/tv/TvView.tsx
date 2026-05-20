@@ -13,7 +13,7 @@
 //   │                  │ (rounds + assign)│ (whole table)                │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
-import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
+import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, type OncallParticipant, type OncallSettings } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useCurrentPmRows, useCurrentLaborRows } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
@@ -45,6 +45,8 @@ export default function TvView() {
   useBuildingAssignmentsRealtime();
 
   const oncallQ      = useUpcomingOncall(12);
+  const participantsQ = useOncallParticipants();
+  const oncallSettingsQ = useOncallSettings();
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();
@@ -90,7 +92,11 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           shifts={shiftsQ.data ?? []}
         />
-        <OncallPanel oncall={oncallQ.data} />
+        <OncallPanel
+          participants={participantsQ.data ?? []}
+          settings={oncallSettingsQ.data ?? null}
+          now={now}
+        />
       </main>
     </div>
   );
@@ -216,14 +222,110 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   );
 }
 
-function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>['data'] }) {
-  const list = oncall ?? [];
-  const fmt = (iso: string) => {
-    const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  };
+function OncallPanel({ participants, settings, now }: {
+  participants: OncallParticipant[];
+  settings: OncallSettings | null;
+  now: Date;
+}) {
+  const grid = useMemo(() => {
+    if (!settings?.start_friday || participants.length === 0) return null;
 
-  if (list.length === 0) {
+    const N = participants.length;
+    const cycles = settings.rotations_per_engineer ?? 4;
+    const startIso = settings.start_friday;
+    const startD = new Date(startIso + 'T00:00:00');
+
+    // Effective on-call date (7am Friday cutover) → which week is "now".
+    const eff = (() => {
+      const ms = now.getTime() - 7 * 60 * 60 * 1000;
+      const d = new Date(ms);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    })();
+
+    const isoOf = (offsetDays: number): string => {
+      const d = new Date(startD);
+      d.setDate(d.getDate() + offsetDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const fmtRange = (weekStart: string): string => {
+      const d1 = new Date(weekStart + 'T00:00:00');
+      const d2 = new Date(d1); d2.setDate(d1.getDate() + 7);
+      const m1 = d1.getMonth() + 1, day1 = d1.getDate();
+      const m2 = d2.getMonth() + 1, day2 = d2.getDate();
+      return `${m1}/${day1}-${m2}/${day2}`;
+    };
+
+    // Holiday detection over the relevant year span.
+    const yearsNeeded = new Set<number>();
+    const earliestDate = new Date(startD); earliestDate.setDate(earliestDate.getDate() - N * 7);
+    const latestDate   = new Date(startD); latestDate.setDate(latestDate.getDate() + (cycles + 1) * N * 7);
+    yearsNeeded.add(earliestDate.getFullYear());
+    yearsNeeded.add(latestDate.getFullYear());
+    const holidaySet = new Set<string>();
+    for (const y of yearsNeeded) for (const h of usFederalHolidays(y)) holidaySet.add(h);
+
+    const weekHasHoliday = (weekStart: string): boolean => {
+      const d = new Date(weekStart + 'T00:00:00');
+      for (let i = 0; i < 7; i++) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        if (holidaySet.has(`${y}-${m}-${day}`)) return true;
+        d.setDate(d.getDate() + 1);
+      }
+      return false;
+    };
+
+    // Column labels: PREV, CYCLE 1..N, +1 PREVIEW
+    const columns: { key: string; label: string; cycleIndex: number }[] = [
+      { key: 'prev', label: 'PREV', cycleIndex: -1 },
+    ];
+    for (let c = 0; c < cycles; c++) columns.push({ key: `c${c + 1}`, label: `CYCLE ${c + 1}`, cycleIndex: c });
+    columns.push({ key: 'preview', label: '+1', cycleIndex: cycles });
+
+    // Build rows
+    const rows = participants.map((p) => {
+      const cells = columns.map((col) => {
+        const offsetDays = (col.cycleIndex * N + p.sort_order - 1) * 7;
+        const weekStart = isoOf(offsetDays);
+        const beforeEffective = p.effective_from && weekStart < p.effective_from;
+        const isCurrent = weekStart === eff || (
+          // window check: eff falls inside [weekStart, weekStart+7)
+          weekStart <= eff && (() => {
+            const d = new Date(weekStart + 'T00:00:00');
+            d.setDate(d.getDate() + 7);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return eff < `${y}-${m}-${day}`;
+          })()
+        );
+        return {
+          key: col.key,
+          weekStart,
+          range: beforeEffective ? '—' : fmtRange(weekStart),
+          isCurrent: !beforeEffective && isCurrent,
+          isHoliday: !beforeEffective && weekHasHoliday(weekStart),
+          isPrev: col.cycleIndex === -1,
+          isPreview: col.cycleIndex === cycles,
+          beforeEffective,
+        };
+      });
+      const rowIsCurrent = cells.some((c) => c.isCurrent);
+      return { participant: p, cells, rowIsCurrent };
+    });
+
+    return { columns, rows, cycles, N, startIso };
+  }, [participants, settings, now]);
+
+  if (!grid) {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
         <p className="tv-muted">No rotation set.</p>
@@ -233,29 +335,77 @@ function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>[
 
   return (
     <Panel title="On-call schedule" accent="#dc2626">
-      <table className="tv-oncall-table">
-        <thead>
-          <tr>
-            <th className="tv-oncall-th-week">Week of</th>
-            <th className="tv-oncall-th-name">Primary</th>
-            <th className="tv-oncall-th-backup">Backup</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((w) => (
-            <tr key={w.week_start} className={w.is_current ? 'tv-oncall-row-current' : undefined}>
-              <td className="tv-oncall-td-week">
-                {w.is_current && <span className="tv-oncall-now">NOW</span>}
-                {fmt(w.week_start)}
-              </td>
-              <td className="tv-oncall-td-name">{shortName(w.primary)}</td>
-              <td className="tv-oncall-td-backup">{w.secondary ? shortName(w.secondary) : '—'}</td>
+      <div className="tv-oncall-sub">
+        {grid.N} engineers · {grid.cycles} cycles + 1 preview
+      </div>
+      <div className="tv-oncall-scroll">
+        <table className="tv-oncall-grid">
+          <thead>
+            <tr>
+              <th className="tv-oncall-eng-th">Engineer</th>
+              {grid.columns.map((c) => (
+                <th key={c.key} className={c.key === 'preview' ? 'tv-oncall-preview-th' : c.key === 'prev' ? 'tv-oncall-prev-th' : undefined}>
+                  {c.label}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {grid.rows.map((r) => (
+              <tr key={r.participant.id} className={r.rowIsCurrent ? 'tv-oncall-row-active' : undefined}>
+                <td className="tv-oncall-eng-td">
+                  {shortName(r.participant.full_name)}
+                  {r.rowIsCurrent && <span className="tv-oncall-onbadge">ON</span>}
+                </td>
+                {r.cells.map((c) => (
+                  <td
+                    key={c.key}
+                    className={[
+                      'tv-oncall-cell',
+                      c.isPrev || c.isPreview ? 'tv-oncall-cell-side' : '',
+                      c.isHoliday ? 'tv-oncall-cell-holiday' : '',
+                      c.isCurrent ? 'tv-oncall-cell-active' : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    {c.range}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Panel>
   );
+}
+
+/** US federal holidays for a given year, returned as YYYY-MM-DD strings. */
+function usFederalHolidays(year: number): string[] {
+  const fmt = (m: number, d: number) =>
+    `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const nthWeekday = (month: number, weekday: number, n: number) => {
+    const first = new Date(year, month - 1, 1);
+    const offset = ((weekday - first.getDay() + 7) % 7) + (n - 1) * 7;
+    return fmt(month, 1 + offset);
+  };
+  const lastWeekday = (month: number, weekday: number) => {
+    const last = new Date(year, month, 0);
+    const offset = (last.getDay() - weekday + 7) % 7;
+    return fmt(month, last.getDate() - offset);
+  };
+  return [
+    fmt(1, 1),               // New Year's Day
+    nthWeekday(1, 1, 3),     // MLK Day — 3rd Monday of January
+    nthWeekday(2, 1, 3),     // Presidents Day — 3rd Monday of February
+    lastWeekday(5, 1),       // Memorial Day — last Monday of May
+    fmt(6, 19),              // Juneteenth
+    fmt(7, 4),               // Independence Day
+    nthWeekday(9, 1, 1),     // Labor Day — 1st Monday of September
+    nthWeekday(10, 1, 2),    // Columbus Day — 2nd Monday of October
+    fmt(11, 11),             // Veterans Day
+    nthWeekday(11, 4, 4),    // Thanksgiving — 4th Thursday of November
+    fmt(12, 25),             // Christmas
+  ];
 }
 
 function FocusBoardPanel({ items }: { items: ReturnType<typeof useActiveFocusItems>['data'] }) {
@@ -755,48 +905,67 @@ function TvStyles() {
       .tv-sub     { color: #94a3b8; font-size: 1.2vw; margin-left: 0.4em; }
       .tv-warn    { color: #f59e0b; font-size: 1.2vw; font-weight: 600; margin-bottom: 0.4em; }
 
-      /* On-call schedule table */
-      .tv-oncall-table {
+      /* On-call schedule — rotation grid (engineer rows × cycle columns) */
+      .tv-oncall-sub {
+        font-size: 0.7vw;
+        color: #94a3b8;
+        margin-bottom: 0.3vw;
+      }
+      .tv-oncall-scroll { overflow: hidden; }
+      .tv-oncall-grid {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.95vw;
-      }
-      .tv-oncall-table thead th {
-        font-size: 0.7vw;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: #64748b;
-        text-align: left;
-        padding: 0 0.3vw 0.3vw;
-        border-bottom: 1px solid #1e293b;
-        font-weight: 600;
-      }
-      .tv-oncall-table tbody td {
-        padding: 0.25vw 0.3vw;
-        border-bottom: 1px solid rgba(30, 41, 59, 0.5);
-      }
-      .tv-oncall-table tbody tr:last-child td { border-bottom: none; }
-      .tv-oncall-th-week, .tv-oncall-td-week { width: 6vw; }
-      .tv-oncall-th-backup, .tv-oncall-td-backup { width: 6vw; }
-      .tv-oncall-td-week {
-        color: #94a3b8;
+        font-size: 0.72vw;
         font-variant-numeric: tabular-nums;
-        position: relative;
+        table-layout: fixed;
       }
-      .tv-oncall-td-name { color: #f8fafc; font-weight: 600; }
-      .tv-oncall-td-backup { color: #94a3b8; font-size: 0.85vw; }
-      .tv-oncall-row-current { background: rgba(220, 38, 38, 0.08); }
-      .tv-oncall-row-current .tv-oncall-td-week { color: #fca5a5; }
-      .tv-oncall-row-current .tv-oncall-td-name { color: #fca5a5; }
-      .tv-oncall-now {
-        display: inline-block;
+      .tv-oncall-grid thead th {
         font-size: 0.6vw;
         font-weight: 700;
-        background: #dc2626;
-        color: #fff;
-        padding: 0.05vw 0.35vw;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+        text-align: left;
+        padding: 0 0.25vw 0.25vw;
+        border-bottom: 1px solid #1e293b;
+        white-space: nowrap;
+      }
+      .tv-oncall-grid .tv-oncall-eng-th { width: 5.5vw; color: #94a3b8; }
+      .tv-oncall-grid .tv-oncall-prev-th,
+      .tv-oncall-grid .tv-oncall-preview-th { color: #475569; font-style: italic; }
+      .tv-oncall-grid tbody td {
+        padding: 0.2vw 0.25vw;
+        border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+        color: #e2e8f0;
+        white-space: nowrap;
+      }
+      .tv-oncall-grid tbody tr:last-child td { border-bottom: none; }
+      .tv-oncall-eng-td {
+        color: #f8fafc;
+        font-weight: 600;
+        font-size: 0.85vw;
+        position: relative;
+      }
+      .tv-oncall-cell-side { color: #64748b; font-style: italic; }
+      .tv-oncall-cell-holiday { color: #f87171; }
+      .tv-oncall-cell-active {
+        background: rgba(34, 197, 94, 0.18);
+        border: 1px solid #22c55e;
         border-radius: 3px;
-        margin-right: 0.4vw;
+        color: #4ade80;
+        font-weight: 700;
+      }
+      .tv-oncall-row-active { background: rgba(34, 197, 94, 0.06); }
+      .tv-oncall-row-active .tv-oncall-eng-td { color: #4ade80; }
+      .tv-oncall-onbadge {
+        display: inline-block;
+        font-size: 0.55vw;
+        font-weight: 700;
+        background: #16a34a;
+        color: #fff;
+        padding: 0.05vw 0.3vw;
+        border-radius: 3px;
+        margin-left: 0.3vw;
         letter-spacing: 0.1em;
         vertical-align: 0.1em;
       }
