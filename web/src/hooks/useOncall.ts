@@ -62,7 +62,9 @@ export function useUpcomingOncall(count: number) {
   return useQuery({
     queryKey: [...KEY_UPCOMING, count],
     queryFn: async (): Promise<UpcomingOncallEntry[]> => {
-      // Get the current week's Friday: latest rotation whose week_start <= today.
+      // Anchor: the latest rotation whose Fri-to-Fri window contains today.
+      // A rotation row covers [week_start, week_start + 7). If no such row
+      // exists (gap in the schedule), is_current stays false on every result.
       const today = new Date().toISOString().slice(0, 10);
       const { data: anchor, error: ae } = await supabase
         .from('oncall_rotations')
@@ -72,12 +74,24 @@ export function useUpcomingOncall(count: number) {
         .limit(1)
         .maybeSingle();
       if (ae) throw ae;
-      const anchorWeek = anchor?.week_start ?? today;
 
+      // Only treat the anchor as "current" if today < anchor + 7 days.
+      const currentWeek = (() => {
+        if (!anchor?.week_start) return null;
+        const ws = new Date(anchor.week_start + 'T00:00:00');
+        const we = new Date(ws); we.setDate(ws.getDate() + 7);
+        const todayD = new Date(today + 'T00:00:00');
+        return todayD < we ? anchor.week_start : null;
+      })();
+
+      // Start the fetch window at the current week if one exists, otherwise
+      // at today (so we surface the next upcoming rotation as "next", not
+      // mislabel it as current).
+      const fetchFrom = currentWeek ?? today;
       const { data: rows, error } = await supabase
         .from('oncall_rotations')
         .select('week_start, primary_user_id, secondary_user_id')
-        .gte('week_start', anchorWeek)
+        .gte('week_start', fetchFrom)
         .order('week_start', { ascending: true })
         .limit(count);
       if (error) throw error;
@@ -103,7 +117,7 @@ export function useUpcomingOncall(count: number) {
         week_start: r.week_start,
         primary:   r.primary_user_id   ? nameById.get(r.primary_user_id)   ?? null : null,
         secondary: r.secondary_user_id ? nameById.get(r.secondary_user_id) ?? null : null,
-        is_current: r.week_start === anchorWeek,
+        is_current: r.week_start === currentWeek,
       }));
     },
     staleTime: 5 * 60_000,

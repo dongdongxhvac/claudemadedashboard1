@@ -95,28 +95,42 @@ function Panel({ title, children, accent }: { title: string; children: React.Rea
 
 function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>['data'] }) {
   const list = oncall ?? [];
-  if (list.length === 0 || !list[0].primary) {
-    return (
-      <Panel title="On-call · next 3 weeks" accent="#dc2626">
-        <p className="tv-muted">Not assigned.</p>
-      </Panel>
-    );
-  }
-  const current = list[0];
-  const upcoming = list.slice(1);
   const fmt = (iso: string) => {
     const d = new Date(iso + 'T00:00:00');
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
+
+  if (list.length === 0) {
+    return (
+      <Panel title="On-call · this week + next 2" accent="#dc2626">
+        <p className="tv-muted">No rotation set.</p>
+      </Panel>
+    );
+  }
+
+  const current = list[0].is_current ? list[0] : null;
+  const upcoming = current ? list.slice(1) : list;
+
   return (
     <Panel title="On-call · this week + next 2" accent="#dc2626">
-      <div className="tv-oncall-current">
-        <div className="tv-bigname">{current.primary}</div>
-        {current.secondary && <div className="tv-sub">backup · {current.secondary}</div>}
-        <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
-          from {fmt(current.week_start)}
+      {current ? (
+        <div className="tv-oncall-current">
+          <div className="tv-bigname">{current.primary ?? '—'}</div>
+          {current.secondary && <div className="tv-sub">backup · {current.secondary}</div>}
+          <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
+            from {fmt(current.week_start)}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="tv-oncall-current">
+          <div className="tv-sub" style={{ fontSize: '1.2vw' }}>No rotation set for this week</div>
+          {upcoming[0] && (
+            <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
+              next starts {fmt(upcoming[0].week_start)}
+            </div>
+          )}
+        </div>
+      )}
       {upcoming.length > 0 && (
         <ul className="tv-oncall-upcoming">
           {upcoming.map((w) => (
