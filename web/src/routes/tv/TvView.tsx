@@ -1,16 +1,14 @@
 // /tv — Shop-floor TV view. Static 3x2 grid, large fonts, no nav chrome.
 // Six panels visible at once for the morning huddle / glanceable read.
 //
-// Layout:
-//   ┌── header ──────────────────────────────────────────────────┐
-//   │ COVE · MEP Operations · date · time · snapshot freshness   │
-//   ├──────────────────────────┬─────────────────────────────────┤
-//   │ ON-CALL                  │ FOCUS BOARD                     │
-//   ├──────────────────────────┼─────────────────────────────────┤
-//   │ CREW · LAST 7 DAYS       │ TODAY'S PMs                     │
-//   ├──────────────────────────┼─────────────────────────────────┤
-//   │ OPEN NPMs                │ ROUNDS · CURRENT SHIFT          │
-//   └──────────────────────────┴─────────────────────────────────┘
+// Layout (3 cols × 2 rows):
+//   ┌── header ──────────────────────────────────────────────────────────┐
+//   │ COVE · MEP Operations · date · time · snapshot freshness           │
+//   ├──────────────────┬──────────────────┬──────────────────┬───────────┤
+//   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d           │
+//   ├──────────────────┼──────────────────┼──────────────────┼───────────┤
+//   │ DUE TODAY        │ OPEN NPMs        │ ROUNDS · ALL SHIFTS      │
+//   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
@@ -47,9 +45,11 @@ export default function TvView() {
       <TvStyles />
       <Header now={now} snapshotTakenAt={pmQ.data?.[0]?.snapshot_taken_at ?? null} />
       <main className="tv-grid">
+        {/* Top row: glanceable signals */}
         <OncallPanel oncall={oncallQ.data} />
         <FocusBoardPanel items={focusQ.data ?? []} />
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
+        {/* Bottom row: today's work */}
         <TodayPanel pmRows={pmQ.data ?? []} now={now} />
         <OpenNpmsPanel pmRows={pmQ.data ?? []} now={now} />
         <RoundsPanel rounds={roundsQ.data ?? []} shifts={shiftsQ.data ?? []} now={now} />
@@ -434,8 +434,8 @@ function TvStyles() {
       .tv-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
         gap: 1vw;
         min-height: 0;
       }
@@ -466,32 +466,32 @@ function TvStyles() {
       .tv-warn    { color: #f59e0b; font-size: 1.2vw; font-weight: 600; margin-bottom: 0.4em; }
 
       .tv-oncall-current { padding-bottom: 0.6vw; border-bottom: 1px solid #1e293b; margin-bottom: 0.6vw; }
-      .tv-oncall-upcoming { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35vw; }
+      .tv-oncall-upcoming { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
       .tv-oncall-upcoming li {
         display: grid;
-        grid-template-columns: 5vw 1fr auto;
-        gap: 0.6vw;
-        font-size: 1.05vw;
+        grid-template-columns: 4.5vw 1fr;
+        gap: 0.5vw;
+        font-size: 1.0vw;
         align-items: baseline;
       }
       .tv-oncall-week { color: #64748b; font-variant-numeric: tabular-nums; }
       .tv-oncall-name { color: #f8fafc; font-weight: 600; }
-      .tv-oncall-backup { color: #64748b; font-size: 0.9vw; }
+      .tv-oncall-backup { color: #64748b; font-size: 0.85vw; margin-left: 0.4em; }
 
       .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
       .tv-focus-list li { font-size: 1.25vw; line-height: 1.35; display: flex; align-items: baseline; gap: 0.5vw; }
       .tv-focus-dot { width: 0.7vw; height: 0.7vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5vw; }
-      .tv-crew-list li { display: grid; grid-template-columns: 1fr 12vw 6vw 6vw; align-items: center; gap: 0.6vw; font-size: 1.2vw; }
-      .tv-bar-bg { background: #1e293b; height: 1.6vw; border-radius: 4px; overflow: hidden; }
+      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
+      .tv-crew-list li { display: grid; grid-template-columns: 1fr 7.5vw 3.2vw 3.6vw; align-items: center; gap: 0.5vw; font-size: 1.0vw; }
+      .tv-bar-bg { background: #1e293b; height: 1.3vw; border-radius: 4px; overflow: hidden; }
       .tv-bar-fill { background: linear-gradient(90deg, #8b5cf6, #a78bfa); height: 100%; }
       .tv-crew-name { font-weight: 500; }
       .tv-crew-stat { color: #94a3b8; text-align: right; font-variant-numeric: tabular-nums; }
 
-      .tv-today-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4vw 1vw; }
-      .tv-today-list li { display: flex; align-items: baseline; gap: 0.6vw; font-size: 1.4vw; }
-      .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.8vw; min-width: 2.2vw; text-align: right; font-variant-numeric: tabular-nums; }
+      .tv-today-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
+      .tv-today-list li { display: flex; align-items: baseline; gap: 0.6vw; font-size: 1.3vw; }
+      .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.7vw; min-width: 2.4vw; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-today-name { color: #e2e8f0; }
 
       .tv-npm-head { display: flex; align-items: baseline; gap: 0.6vw; margin-bottom: 0.4em; }
@@ -516,7 +516,7 @@ function TvStyles() {
         margin-left: 0.4em;
       }
       .tv-rounds-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
-      .tv-rounds-list li { display: grid; grid-template-columns: 9vw 1fr; gap: 0.6vw; font-size: 1.05vw; align-items: baseline; }
+      .tv-rounds-list li { display: grid; grid-template-columns: 7vw 1fr; gap: 0.5vw; font-size: 0.95vw; align-items: baseline; }
       .tv-round-eng   { font-weight: 600; color: #10b981; }
       .tv-round-stops { color: #e2e8f0; font-variant-numeric: tabular-nums; }
     `}</style>
