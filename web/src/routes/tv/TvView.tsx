@@ -7,9 +7,9 @@
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
 //   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d               │
 //   ├──────────────────┼──────────────────┼──────────────────────────────┤
-//   │ WORKLOAD         │ BUILDINGS        │ MAJOR PMs · NEXT 2 MONTHS    │
-//   │  due today (top) │ (rounds + assign)│ by engineer                  │
-//   │  next 9d (btm)   │                  │                              │
+//   │ WORKLOAD         │ BUILDINGS        │ (open slot — TBD)            │
+//   │  due today (top) │ (rounds + assign)│                              │
+//   │  14d PM | ◆ 46d  │                  │                              │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
@@ -68,8 +68,8 @@ export default function TvView() {
         <OncallPanel oncall={oncallQ.data} />
         <FocusBoardPanel items={focusQ.data ?? []} />
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
-        {/* Bottom row: today's work */}
-        <WorkloadPanel pmRows={pmQ.data ?? []} now={now} />
+        {/* Bottom row: today's work + buildings (3rd slot intentionally empty for now) */}
+        <WorkloadPanel pmRows={pmQ.data ?? []} engineers={engineersQ.data ?? []} now={now} />
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -77,7 +77,7 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           shifts={shiftsQ.data ?? []}
         />
-        <MajorPmsPanel pmRows={pmQ.data ?? []} engineers={engineersQ.data ?? []} now={now} />
+        <EmptyPanel />
       </main>
     </div>
   );
@@ -114,6 +114,14 @@ function Panel({ title, children, accent }: { title: string; children: React.Rea
     <section className="tv-panel" style={accent ? { borderTopColor: accent } : undefined}>
       <h2 className="tv-panel-title">{title}</h2>
       <div className="tv-panel-body">{children}</div>
+    </section>
+  );
+}
+
+function EmptyPanel() {
+  return (
+    <section className="tv-panel tv-panel-empty">
+      <p className="tv-muted" style={{ fontSize: '1.0vw' }}>—</p>
     </section>
   );
 }
@@ -256,63 +264,86 @@ function CrewPanel({ pmRows, laborRows, now }: {
   );
 }
 
-function WorkloadPanel({ pmRows, now }: {
+function WorkloadPanel({ pmRows, engineers, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
+  engineers: EngineerRow[];
   now: Date;
 }) {
   const data = useMemo(() => {
     const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayStr = localISODate(todayD);
+    const cutoff14 = new Date(todayD); cutoff14.setDate(todayD.getDate() + 14);
+    const cutoff46 = new Date(todayD); cutoff46.setDate(todayD.getDate() + 46);
+    const cutoff14Str = localISODate(cutoff14);
+    const cutoff46Str = localISODate(cutoff46);
 
-    // Due today + overdue: per-tech count
-    const byTech = new Map<string, number>();
+    // CMMS-name → display-name (Eduin → Edwin, etc.).
+    const displayByCmms = new Map<string, string>();
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer') continue;
+      if (e.cmms_assignee_name) displayByCmms.set(e.cmms_assignee_name, e.full_name);
+    }
+    const displayOf = (raw: string | null): string => {
+      const n = (raw ?? '').trim() || 'Unassigned';
+      return displayByCmms.get(n) ?? n;
+    };
+
+    const byTechToday = new Map<string, number>();
+    const pm14 = new Map<string, number>();      // non-Major, due within 14d (incl. today)
+    const major46 = new Map<string, number>();   // Major, due within 46d (incl. today)
     let overdue = 0;
+
     for (const r of pmRows) {
       if (isClosed(r.status)) continue;
       if (!r.due_date) continue;
+      const name = displayOf(r.assigned_to_name);
+      const isMajor = r.pm_type === 'Major';
+
+      // Top section: overdue + due today, per-tech count.
       if (r.due_date < todayStr) {
         overdue++;
-        const a = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-        byTech.set(a, (byTech.get(a) ?? 0) + 1);
+        byTechToday.set(name, (byTechToday.get(name) ?? 0) + 1);
       } else if (r.due_date === todayStr) {
-        const a = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-        byTech.set(a, (byTech.get(a) ?? 0) + 1);
+        byTechToday.set(name, (byTechToday.get(name) ?? 0) + 1);
+      }
+
+      // Bottom section: forward-looking windows.
+      if (r.due_date >= todayStr && r.due_date <= cutoff14Str && !isMajor) {
+        pm14.set(name, (pm14.get(name) ?? 0) + 1);
+      }
+      if (r.due_date >= todayStr && r.due_date <= cutoff46Str && isMajor) {
+        major46.set(name, (major46.get(name) ?? 0) + 1);
       }
     }
-    const todayCards = Array.from(byTech.entries())
+
+    const todayCards = Array.from(byTechToday.entries())
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-      .slice(0, 6);
+      .slice(0, 5);
 
-    // Upcoming next 9 days, starting tomorrow (today lives in the section above).
-    const days: { iso: string; label: string; count: number }[] = [];
-    for (let i = 1; i <= 9; i++) {
-      const d = new Date(todayD); d.setDate(todayD.getDate() + i);
-      const iso = localISODate(d);
-      const label =
-        i === 1 ? 'Tomorrow'
-        : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      days.push({ iso, label, count: 0 });
-    }
-    const dayMap = new Map(days.map((d) => [d.iso, d]));
-    let upcomingTotal = 0;
-    for (const r of pmRows) {
-      if (isClosed(r.status)) continue;
-      if (!r.due_date) continue;
-      const slot = dayMap.get(r.due_date);
-      if (!slot) continue;
-      slot.count++;
-      upcomingTotal++;
-    }
-    const upcomingMax = days.reduce((m, d) => Math.max(m, d.count), 0) || 1;
+    const techs = new Set<string>([...pm14.keys(), ...major46.keys()]);
+    const upcomingRows = Array.from(techs)
+      .map((name) => ({
+        name,
+        pm14:    pm14.get(name) ?? 0,
+        major46: major46.get(name) ?? 0,
+      }))
+      .sort((a, b) =>
+        (b.pm14 + b.major46) - (a.pm14 + a.major46)
+        || b.pm14 - a.pm14
+        || a.name.localeCompare(b.name),
+      );
 
-    return { todayCards, overdue, days, upcomingTotal, upcomingMax };
-  }, [pmRows, now]);
+    const pm14Total    = Array.from(pm14.values()).reduce((s, v) => s + v, 0);
+    const major46Total = Array.from(major46.values()).reduce((s, v) => s + v, 0);
+
+    return { todayCards, overdue, upcomingRows, pm14Total, major46Total };
+  }, [pmRows, engineers, now]);
 
   const todayCount = data.todayCards.reduce((s, c) => s + c.count, 0);
 
   return (
-    <Panel title="Workload · due today + next 9 days" accent="#f59e0b">
+    <Panel title="Workload" accent="#f59e0b">
       <div className="tv-workload-top">
         <div className="tv-workload-section-label">
           Due today + overdue · <strong style={{ color: '#f8fafc' }}>{todayCount}</strong>
@@ -336,94 +367,32 @@ function WorkloadPanel({ pmRows, now }: {
       <div className="tv-workload-divider" />
       <div className="tv-workload-bottom">
         <div className="tv-workload-section-label">
-          Upcoming · next 9 days · <strong style={{ color: '#f8fafc' }}>{data.upcomingTotal}</strong>
+          Next 14d · <strong style={{ color: '#f8fafc' }}>{data.pm14Total}</strong>
+          <span style={{ margin: '0 0.4vw', color: '#475569' }}>|</span>
+          <span style={{ color: '#a78bfa' }}>◆ Major 46d · <strong>{data.major46Total}</strong></span>
         </div>
-        <ul className="tv-upcoming-list">
-          {data.days.map((d) => (
-            <li key={d.iso}>
-              <span className="tv-upcoming-day">{d.label}</span>
-              <div className="tv-upcoming-bar-bg">
-                <div
-                  className="tv-upcoming-bar-fill"
-                  style={{ width: `${(d.count / data.upcomingMax) * 100}%` }}
-                />
-              </div>
-              <span className="tv-upcoming-count">{d.count}</span>
-            </li>
-          ))}
-        </ul>
+        {data.upcomingRows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing scheduled.</p>
+        ) : (
+          <ul className="tv-today-list tv-workload-two-metric">
+            {data.upcomingRows.map((r) => (
+              <li key={r.name}>
+                <span className="tv-today-count">{r.pm14}</span>
+                <span className="tv-today-name">{shortName(r.name)}</span>
+                {r.major46 > 0 && (
+                  <span className="tv-workload-major" title="Major PMs due within 46 days">
+                    ◆ {r.major46}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </Panel>
   );
 }
 
-function MajorPmsPanel({ pmRows, engineers, now }: {
-  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
-  engineers: EngineerRow[];
-  now: Date;
-}) {
-  const data = useMemo(() => {
-    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const cutoff = new Date(todayD); cutoff.setMonth(cutoff.getMonth() + 2);
-    const todayStr = localISODate(todayD);
-    const cutoffStr = localISODate(cutoff);
-
-    // Map cmms_assignee_name → display full_name so chips show the canonical
-    // name even when CMMS uses a variant (e.g. Eduin vs Edwin).
-    const displayByCmms = new Map<string, string>();
-    for (const e of engineers) {
-      if (!e.active || e.role !== 'engineer') continue;
-      if (e.cmms_assignee_name) displayByCmms.set(e.cmms_assignee_name, e.full_name);
-    }
-
-    const byTech = new Map<string, number>();
-    let total = 0;
-    for (const r of pmRows) {
-      if (isClosed(r.status)) continue;
-      if (r.pm_type !== 'Major') continue;
-      if (!r.due_date) continue;
-      if (r.due_date < todayStr || r.due_date > cutoffStr) continue;
-      const raw = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-      const display = displayByCmms.get(raw) ?? raw;
-      byTech.set(display, (byTech.get(display) ?? 0) + 1);
-      total++;
-    }
-    const rows = Array.from(byTech.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-    const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1;
-    return { rows, total, max, cutoff };
-  }, [pmRows, engineers, now]);
-
-  return (
-    <Panel title="Major PMs · next 2 months" accent="#7c3aed">
-      <div className="tv-upcoming-head">
-        <span className="tv-bignum">{data.total}</span>
-        <span className="tv-sub">
-          through {data.cutoff.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-        </span>
-      </div>
-      {data.rows.length === 0 ? (
-        <p className="tv-muted">No Major PMs scheduled.</p>
-      ) : (
-        <ul className="tv-major-list">
-          {data.rows.map((r) => (
-            <li key={r.name}>
-              <span className="tv-major-name">{shortName(r.name)}</span>
-              <div className="tv-major-bar-bg">
-                <div
-                  className="tv-major-bar-fill"
-                  style={{ width: `${(r.count / data.max) * 100}%` }}
-                />
-              </div>
-              <span className="tv-major-count">{r.count}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
 
 function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
   engineers: EngineerRow[];
@@ -701,26 +670,34 @@ function TvStyles() {
         color: #64748b;
       }
       /* Compact overrides for lists living inside Workload */
-      .tv-workload-top .tv-today-list { gap: 0.25vw; }
-      .tv-workload-top .tv-today-list li { font-size: 1.1vw; }
-      .tv-workload-top .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
-      .tv-workload-bottom .tv-upcoming-list { gap: 0.25vw; }
-      .tv-workload-bottom .tv-upcoming-list li { font-size: 0.9vw; grid-template-columns: 5vw 1fr 1.8vw; }
-      .tv-workload-bottom .tv-upcoming-bar-bg { height: 0.95vw; }
+      .tv-workload-top .tv-today-list,
+      .tv-workload-bottom .tv-today-list { gap: 0.25vw; }
+      .tv-workload-top .tv-today-list li,
+      .tv-workload-bottom .tv-today-list li { font-size: 1.1vw; }
+      .tv-workload-top .tv-today-count,
+      .tv-workload-bottom .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
 
-      /* Major PMs panel */
-      .tv-major-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
-      .tv-major-list li {
-        display: grid;
-        grid-template-columns: 6vw 1fr 2vw;
-        gap: 0.5vw;
-        align-items: center;
+      /* Workload bottom: two-metric per-tech list (14d PM + 46d Major) */
+      .tv-workload-two-metric li { position: relative; }
+      .tv-workload-two-metric .tv-today-name { flex: 1; }
+      .tv-workload-major {
+        color: #a78bfa;
+        font-weight: 600;
         font-size: 1.0vw;
+        font-variant-numeric: tabular-nums;
+        margin-left: auto;
+        padding-left: 0.6vw;
       }
-      .tv-major-name { color: #f8fafc; font-weight: 500; }
-      .tv-major-bar-bg { background: #1e293b; height: 1.1vw; border-radius: 4px; overflow: hidden; }
-      .tv-major-bar-fill { background: linear-gradient(90deg, #7c3aed, #a78bfa); height: 100%; }
-      .tv-major-count { color: #e2e8f0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+      /* Empty placeholder panel */
+      .tv-panel-empty {
+        background: #0e1626;
+        border-style: dashed;
+        opacity: 0.4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
       /* Upcoming PMs (used inside Workload) */
       .tv-upcoming-head { display: flex; align-items: baseline; gap: 0.6vw; margin-bottom: 0.4vw; }
