@@ -3,13 +3,14 @@
 //
 // Layout (3 cols × 2 rows):
 //   ┌── header ──────────────────────────────────────────────────────────┐
-//   │ COVE · MEP Operations · date · time · snapshot freshness           │
+//   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d               │
-//   ├──────────────────┼──────────────────┼──────────────────────────────┤
-//   │ WORKLOAD         │ BUILDINGS        │ (open slot — TBD)            │
-//   │  due today (top) │ (rounds + assign)│                              │
+//   │ WORKLOAD         │ FOCUS BOARD      │ (open slot — TBD)            │
+//   │  due today (top) │                  │                              │
 //   │  14d PM | ◆ 46d  │                  │                              │
+//   ├──────────────────┼──────────────────┼──────────────────────────────┤
+//   │ CREW · LAST 7d   │ BUILDINGS        │ ON-CALL SCHEDULE             │
+//   │                  │ (rounds + assign)│ (whole table)                │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
@@ -43,7 +44,7 @@ export default function TvView() {
   useBuildingsRealtime();
   useBuildingAssignmentsRealtime();
 
-  const oncallQ      = useUpcomingOncall(3);
+  const oncallQ      = useUpcomingOncall(12);
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();
@@ -71,17 +72,17 @@ export default function TvView() {
         weather={weatherQ.data ?? null}
       />
       <main className="tv-grid">
-        {/* Top row: glanceable signals */}
-        <OncallPanel oncall={oncallQ.data} />
-        <FocusBoardPanel items={focusQ.data ?? []} />
-        <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
-        {/* Bottom row: today's work + buildings (3rd slot intentionally empty for now) */}
+        {/* Top row */}
         <WorkloadPanel
           pmRows={pmQ.data ?? []}
           engineers={engineersQ.data ?? []}
           shifts={shiftsQ.data ?? []}
           now={now}
         />
+        <FocusBoardPanel items={focusQ.data ?? []} />
+        <EmptyPanel />
+        {/* Bottom row */}
+        <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -89,7 +90,7 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           shifts={shiftsQ.data ?? []}
         />
-        <EmptyPanel />
+        <OncallPanel oncall={oncallQ.data} />
       </main>
     </div>
   );
@@ -136,22 +137,6 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
     <header className="tv-header">
       <div className="tv-h-title">UPark Operation</div>
 
-      {weather && wx && (
-        <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
-          <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
-          {weather.high != null && weather.low != null ? (
-            <span className="tv-h-wx-range">
-              <span className={`tv-h-wx-high ${isHot ? 'tv-h-wx-hot' : ''}`}>{Math.round(weather.high)}°</span>
-              <span className="tv-h-wx-slash">/</span>
-              <span className="tv-h-wx-low">{Math.round(weather.low)}°</span>
-            </span>
-          ) : (
-            <span className="tv-h-wx-temp">{Math.round(weather.temperature)}°F</span>
-          )}
-          <span className="tv-h-wx-label">{wx.label}</span>
-        </div>
-      )}
-
       <div className="tv-h-oncall">
         <div className="tv-h-oncall-block">
           <span className="tv-h-oncall-label">On-call</span>
@@ -167,9 +152,25 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
         </div>
       </div>
 
-      <div className="tv-h-datetime">{dateTimeStr}</div>
-
-      <div className="tv-h-age">data {ageStr}</div>
+      <div className="tv-h-right-cluster">
+        {weather && wx && (
+          <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
+            <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
+            {weather.high != null && weather.low != null ? (
+              <span className="tv-h-wx-range">
+                <span className={`tv-h-wx-high ${isHot ? 'tv-h-wx-hot' : ''}`}>{Math.round(weather.high)}°</span>
+                <span className="tv-h-wx-slash">/</span>
+                <span className="tv-h-wx-low">{Math.round(weather.low)}°</span>
+              </span>
+            ) : (
+              <span className="tv-h-wx-temp">{Math.round(weather.temperature)}°F</span>
+            )}
+            <span className="tv-h-wx-label">{wx.label}</span>
+          </div>
+        )}
+        <div className="tv-h-datetime">{dateTimeStr}</div>
+        <div className="tv-h-age">data {ageStr}</div>
+      </div>
     </header>
   );
 }
@@ -224,46 +225,35 @@ function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>[
 
   if (list.length === 0) {
     return (
-      <Panel title="On-call · this week + next 2" accent="#dc2626">
+      <Panel title="On-call schedule" accent="#dc2626">
         <p className="tv-muted">No rotation set.</p>
       </Panel>
     );
   }
 
-  const current = list[0].is_current ? list[0] : null;
-  const upcoming = current ? list.slice(1) : list;
-
   return (
-    <Panel title="On-call · this week + next 2" accent="#dc2626">
-      {current ? (
-        <div className="tv-oncall-current">
-          <div className="tv-bigname">{shortName(current.primary)}</div>
-          {current.secondary && <div className="tv-sub">backup · {shortName(current.secondary)}</div>}
-          <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
-            from {fmt(current.week_start)}
-          </div>
-        </div>
-      ) : (
-        <div className="tv-oncall-current">
-          <div className="tv-sub" style={{ fontSize: '1.2vw' }}>No rotation set for this week</div>
-          {upcoming[0] && (
-            <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
-              next starts {fmt(upcoming[0].week_start)}
-            </div>
-          )}
-        </div>
-      )}
-      {upcoming.length > 0 && (
-        <ul className="tv-oncall-upcoming">
-          {upcoming.map((w) => (
-            <li key={w.week_start}>
-              <span className="tv-oncall-week">{fmt(w.week_start)}</span>
-              <span className="tv-oncall-name">{shortName(w.primary)}</span>
-              {w.secondary && <span className="tv-oncall-backup">backup {shortName(w.secondary)}</span>}
-            </li>
+    <Panel title="On-call schedule" accent="#dc2626">
+      <table className="tv-oncall-table">
+        <thead>
+          <tr>
+            <th className="tv-oncall-th-week">Week of</th>
+            <th className="tv-oncall-th-name">Primary</th>
+            <th className="tv-oncall-th-backup">Backup</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((w) => (
+            <tr key={w.week_start} className={w.is_current ? 'tv-oncall-row-current' : undefined}>
+              <td className="tv-oncall-td-week">
+                {w.is_current && <span className="tv-oncall-now">NOW</span>}
+                {fmt(w.week_start)}
+              </td>
+              <td className="tv-oncall-td-name">{shortName(w.primary)}</td>
+              <td className="tv-oncall-td-backup">{w.secondary ? shortName(w.secondary) : '—'}</td>
+            </tr>
           ))}
-        </ul>
-      )}
+        </tbody>
+      </table>
     </Panel>
   );
 }
@@ -654,26 +644,46 @@ function TvStyles() {
       .tv-header {
         display: flex;
         align-items: center;
-        padding: 0.4vw 0.9vw;
+        padding: 0.3vw 0.8vw;
         border-bottom: 2px solid #1e293b;
-        gap: 1.2vw;
+        gap: 1.0vw;
         flex-wrap: nowrap;
         white-space: nowrap;
       }
       .tv-h-title {
-        font-size: 1.6vw;
+        font-size: 1.4vw;
         font-weight: 700;
         letter-spacing: 0.02em;
         color: #f8fafc;
         flex: 0 0 auto;
       }
 
-      /* Weather chip */
+      /* On-call: two side-by-side blocks within the same row */
+      .tv-h-oncall {
+        display: flex; align-items: baseline; gap: 0.85vw;
+        flex: 0 0 auto;
+      }
+      .tv-h-oncall-block { display: inline-flex; align-items: baseline; gap: 0.4vw; }
+      .tv-h-oncall-label {
+        font-size: 0.65vw; text-transform: uppercase; letter-spacing: 0.14em;
+        color: #64748b;
+      }
+      .tv-h-oncall-name { font-size: 1.1vw; font-weight: 700; color: #fca5a5; }
+      .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
+
+      /* Right-side cluster: weather → date/time → data age */
+      .tv-h-right-cluster {
+        display: flex; align-items: center; gap: 0.7vw;
+        margin-left: auto;
+        flex: 0 0 auto;
+      }
+
+      /* Weather chip (smaller than before, sits beside the date) */
       .tv-h-weather {
-        display: flex; align-items: baseline; gap: 0.4vw;
-        padding: 0.2vw 0.7vw;
+        display: flex; align-items: baseline; gap: 0.35vw;
+        padding: 0.15vw 0.55vw;
         border: 1px solid #1e293b;
-        border-radius: 6px;
+        border-radius: 5px;
         background: rgba(14, 165, 233, 0.08);
         flex: 0 0 auto;
       }
@@ -686,42 +696,28 @@ function TvStyles() {
         0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18); }
       }
-      .tv-h-wx-icon { font-size: 1.5vw; line-height: 1; }
-      .tv-h-wx-range { display: inline-flex; align-items: baseline; gap: 0.15vw; }
+      .tv-h-wx-icon { font-size: 1.25vw; line-height: 1; }
+      .tv-h-wx-range { display: inline-flex; align-items: baseline; gap: 0.12vw; }
       .tv-h-wx-high {
-        font-size: 1.5vw; font-weight: 700; color: #fbbf24;
+        font-size: 1.25vw; font-weight: 700; color: #fbbf24;
         font-variant-numeric: tabular-nums;
       }
       .tv-h-wx-hot { color: #f87171; }
-      .tv-h-wx-slash { color: #475569; font-size: 1.1vw; }
+      .tv-h-wx-slash { color: #475569; font-size: 0.95vw; }
       .tv-h-wx-low {
-        font-size: 1.1vw; font-weight: 500; color: #93c5fd;
+        font-size: 0.95vw; font-weight: 500; color: #93c5fd;
         font-variant-numeric: tabular-nums;
       }
-      .tv-h-wx-temp { font-size: 1.5vw; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
-      .tv-h-wx-label { font-size: 0.85vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
-
-      /* On-call: two side-by-side blocks within the same row */
-      .tv-h-oncall {
-        display: flex; align-items: baseline; gap: 1vw;
-        flex: 0 0 auto;
-      }
-      .tv-h-oncall-block { display: inline-flex; align-items: baseline; gap: 0.45vw; }
-      .tv-h-oncall-label {
-        font-size: 0.75vw; text-transform: uppercase; letter-spacing: 0.14em;
-        color: #64748b;
-      }
-      .tv-h-oncall-name { font-size: 1.25vw; font-weight: 700; color: #fca5a5; }
-      .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 1.1vw; font-weight: 600; }
+      .tv-h-wx-temp { font-size: 1.25vw; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+      .tv-h-wx-label { font-size: 0.72vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
 
       /* Date/time + age */
       .tv-h-datetime {
-        font-size: 1.1vw; color: #cbd5e1; font-variant-numeric: tabular-nums;
-        margin-left: auto;
+        font-size: 0.95vw; color: #cbd5e1; font-variant-numeric: tabular-nums;
         flex: 0 0 auto;
       }
       .tv-h-age {
-        font-size: 0.9vw; color: #64748b; font-variant-numeric: tabular-nums;
+        font-size: 0.8vw; color: #64748b; font-variant-numeric: tabular-nums;
         flex: 0 0 auto;
       }
 
@@ -759,18 +755,51 @@ function TvStyles() {
       .tv-sub     { color: #94a3b8; font-size: 1.2vw; margin-left: 0.4em; }
       .tv-warn    { color: #f59e0b; font-size: 1.2vw; font-weight: 600; margin-bottom: 0.4em; }
 
-      .tv-oncall-current { padding-bottom: 0.6vw; border-bottom: 1px solid #1e293b; margin-bottom: 0.6vw; }
-      .tv-oncall-upcoming { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
-      .tv-oncall-upcoming li {
-        display: grid;
-        grid-template-columns: 4.5vw 1fr;
-        gap: 0.5vw;
-        font-size: 1.0vw;
-        align-items: baseline;
+      /* On-call schedule table */
+      .tv-oncall-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95vw;
       }
-      .tv-oncall-week { color: #64748b; font-variant-numeric: tabular-nums; }
-      .tv-oncall-name { color: #f8fafc; font-weight: 600; }
-      .tv-oncall-backup { color: #64748b; font-size: 0.85vw; margin-left: 0.4em; }
+      .tv-oncall-table thead th {
+        font-size: 0.7vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #64748b;
+        text-align: left;
+        padding: 0 0.3vw 0.3vw;
+        border-bottom: 1px solid #1e293b;
+        font-weight: 600;
+      }
+      .tv-oncall-table tbody td {
+        padding: 0.25vw 0.3vw;
+        border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+      }
+      .tv-oncall-table tbody tr:last-child td { border-bottom: none; }
+      .tv-oncall-th-week, .tv-oncall-td-week { width: 6vw; }
+      .tv-oncall-th-backup, .tv-oncall-td-backup { width: 6vw; }
+      .tv-oncall-td-week {
+        color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+        position: relative;
+      }
+      .tv-oncall-td-name { color: #f8fafc; font-weight: 600; }
+      .tv-oncall-td-backup { color: #94a3b8; font-size: 0.85vw; }
+      .tv-oncall-row-current { background: rgba(220, 38, 38, 0.08); }
+      .tv-oncall-row-current .tv-oncall-td-week { color: #fca5a5; }
+      .tv-oncall-row-current .tv-oncall-td-name { color: #fca5a5; }
+      .tv-oncall-now {
+        display: inline-block;
+        font-size: 0.6vw;
+        font-weight: 700;
+        background: #dc2626;
+        color: #fff;
+        padding: 0.05vw 0.35vw;
+        border-radius: 3px;
+        margin-right: 0.4vw;
+        letter-spacing: 0.1em;
+        vertical-align: 0.1em;
+      }
 
       .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
       .tv-focus-list li { font-size: 1.25vw; line-height: 1.35; display: flex; align-items: baseline; gap: 0.5vw; }
