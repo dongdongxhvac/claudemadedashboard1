@@ -105,11 +105,12 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
   oncall: ReturnType<typeof useUpcomingOncall>['data'] extends infer T ? T : never;
   weather: ReturnType<typeof useWeather>['data'];
 }) {
-  // "Tuesday, May 20 8:42 AM"
-  const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  // "Tue, May 20, 8:42 AM"
+  const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dateTimeStr = `${dateStr}, ${timeStr}`;
 
-  // Data age in hours (or days for stale data).
+  // Data age — hours for fresh data, days for stale.
   const ageStr = (() => {
     if (!snapshotTakenAt) return '—';
     const ms = now.getTime() - new Date(snapshotTakenAt).getTime();
@@ -122,47 +123,53 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
     return hours > 0 ? `${days}d ${hours}h old` : `${days}d old`;
   })();
 
-  // On-call pulls from the same data the OncallPanel uses.
+  // On-call from the same data the panel uses.
   const list = oncall ?? [];
   const current = list[0]?.is_current ? list[0] : null;
-  const next = current ? list[1] : list[0]; // first future if no current
+  const next = current ? list[1] : list[0];
 
-  // Weather summary.
+  // Weather summary + hot-day highlight.
   const wx = weather ? weatherDescription(weather.weathercode, weather.is_day) : null;
+  const isHot = weather?.high != null && weather.high >= 90;
 
   return (
     <header className="tv-header">
-      <div className="tv-h-left">
-        <div className="tv-h-title">Operation Dashboard</div>
-        <div className="tv-h-meta">
-          <span>{dateStr} {timeStr}</span>
-          <span className="tv-h-sep">·</span>
-          <span className="tv-h-snap">data {ageStr}</span>
-        </div>
-      </div>
-      <div className="tv-h-right">
-        {weather && wx && (
-          <div className="tv-h-weather" title={wx.label}>
-            <span className="tv-h-wx-icon">{wx.icon}</span>
+      <div className="tv-h-title">UPark Operation</div>
+
+      {weather && wx && (
+        <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
+          <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
+          {weather.high != null && weather.low != null ? (
+            <span className="tv-h-wx-range">
+              <span className={`tv-h-wx-high ${isHot ? 'tv-h-wx-hot' : ''}`}>{Math.round(weather.high)}°</span>
+              <span className="tv-h-wx-slash">/</span>
+              <span className="tv-h-wx-low">{Math.round(weather.low)}°</span>
+            </span>
+          ) : (
             <span className="tv-h-wx-temp">{Math.round(weather.temperature)}°F</span>
-            <span className="tv-h-wx-label">{wx.label}</span>
-          </div>
-        )}
-        <div className="tv-h-oncall">
-          <div className="tv-h-oncall-row">
-            <span className="tv-h-oncall-label">On-call</span>
-            <span className="tv-h-oncall-name">
-              {current?.primary ? shortName(current.primary) : '—'}
-            </span>
-          </div>
-          <div className="tv-h-oncall-row tv-h-oncall-next">
-            <span className="tv-h-oncall-label">Next</span>
-            <span className="tv-h-oncall-name">
-              {next?.primary ? shortName(next.primary) : '—'}
-            </span>
-          </div>
+          )}
+          <span className="tv-h-wx-label">{wx.label}</span>
+        </div>
+      )}
+
+      <div className="tv-h-oncall">
+        <div className="tv-h-oncall-block">
+          <span className="tv-h-oncall-label">On-call</span>
+          <span className="tv-h-oncall-name">
+            {current?.primary ? shortName(current.primary) : '—'}
+          </span>
+        </div>
+        <div className="tv-h-oncall-block tv-h-oncall-next">
+          <span className="tv-h-oncall-label">Next</span>
+          <span className="tv-h-oncall-name">
+            {next?.primary ? shortName(next.primary) : '—'}
+          </span>
         </div>
       </div>
+
+      <div className="tv-h-datetime">{dateTimeStr}</div>
+
+      <div className="tv-h-age">data {ageStr}</div>
     </header>
   );
 }
@@ -645,45 +652,77 @@ function TvStyles() {
         gap: 1vw;
       }
       .tv-header {
-        display: flex; align-items: center; justify-content: space-between;
+        display: flex;
+        align-items: center;
         padding: 0.4vw 0.9vw;
         border-bottom: 2px solid #1e293b;
-        gap: 1.5vw;
+        gap: 1.2vw;
+        flex-wrap: nowrap;
+        white-space: nowrap;
       }
-      .tv-h-left { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; }
-      .tv-h-title { font-size: 1.8vw; font-weight: 700; letter-spacing: 0.02em; color: #f8fafc; }
-      .tv-h-meta {
-        display: flex; gap: 0.5vw; align-items: baseline;
-        font-size: 1.05vw; color: #94a3b8;
-        font-variant-numeric: tabular-nums;
+      .tv-h-title {
+        font-size: 1.6vw;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #f8fafc;
+        flex: 0 0 auto;
       }
-      .tv-h-sep { color: #475569; }
-      .tv-h-snap { color: #64748b; }
 
-      .tv-h-right { display: flex; align-items: center; gap: 1.5vw; }
-
+      /* Weather chip */
       .tv-h-weather {
         display: flex; align-items: baseline; gap: 0.4vw;
         padding: 0.2vw 0.7vw;
         border: 1px solid #1e293b;
         border-radius: 6px;
         background: rgba(14, 165, 233, 0.08);
+        flex: 0 0 auto;
       }
-      .tv-h-wx-icon { font-size: 1.6vw; line-height: 1; }
+      .tv-h-weather-hot {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.5);
+        animation: tv-hot-pulse 2.5s ease-in-out infinite;
+      }
+      @keyframes tv-hot-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18); }
+      }
+      .tv-h-wx-icon { font-size: 1.5vw; line-height: 1; }
+      .tv-h-wx-range { display: inline-flex; align-items: baseline; gap: 0.15vw; }
+      .tv-h-wx-high {
+        font-size: 1.5vw; font-weight: 700; color: #fbbf24;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-h-wx-hot { color: #f87171; }
+      .tv-h-wx-slash { color: #475569; font-size: 1.1vw; }
+      .tv-h-wx-low {
+        font-size: 1.1vw; font-weight: 500; color: #93c5fd;
+        font-variant-numeric: tabular-nums;
+      }
       .tv-h-wx-temp { font-size: 1.5vw; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
       .tv-h-wx-label { font-size: 0.85vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
 
-      .tv-h-oncall { display: flex; flex-direction: column; gap: 0.1vw; min-width: 9vw; }
-      .tv-h-oncall-row { display: flex; align-items: baseline; gap: 0.5vw; }
+      /* On-call: two side-by-side blocks within the same row */
+      .tv-h-oncall {
+        display: flex; align-items: baseline; gap: 1vw;
+        flex: 0 0 auto;
+      }
+      .tv-h-oncall-block { display: inline-flex; align-items: baseline; gap: 0.45vw; }
       .tv-h-oncall-label {
-        font-size: 0.7vw; text-transform: uppercase; letter-spacing: 0.14em;
-        color: #64748b; min-width: 2.6vw;
+        font-size: 0.75vw; text-transform: uppercase; letter-spacing: 0.14em;
+        color: #64748b;
       }
-      .tv-h-oncall-name {
-        font-size: 1.2vw; font-weight: 700; color: #fca5a5;
+      .tv-h-oncall-name { font-size: 1.25vw; font-weight: 700; color: #fca5a5; }
+      .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 1.1vw; font-weight: 600; }
+
+      /* Date/time + age */
+      .tv-h-datetime {
+        font-size: 1.1vw; color: #cbd5e1; font-variant-numeric: tabular-nums;
+        margin-left: auto;
+        flex: 0 0 auto;
       }
-      .tv-h-oncall-next .tv-h-oncall-name {
-        font-size: 0.95vw; font-weight: 600; color: #94a3b8;
+      .tv-h-age {
+        font-size: 0.9vw; color: #64748b; font-variant-numeric: tabular-nums;
+        flex: 0 0 auto;
       }
 
       .tv-grid {

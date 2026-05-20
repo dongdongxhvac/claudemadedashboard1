@@ -10,6 +10,8 @@ export type WeatherSnapshot = {
   windspeed:   number;     // mph
   is_day:      boolean;
   time:        string;     // ISO of observation
+  high:        number | null;  // today's forecast high, °F
+  low:         number | null;  // today's forecast low, °F
 };
 
 const DEFAULT_LAT = 42.3736;  // Cambridge, MA
@@ -23,6 +25,8 @@ export function useWeather(lat = DEFAULT_LAT, lon = DEFAULT_LON) {
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${lat}&longitude=${lon}` +
         `&current=temperature_2m,apparent_temperature,is_day,weather_code,wind_speed_10m` +
+        `&daily=temperature_2m_max,temperature_2m_min` +
+        `&forecast_days=1&timezone=auto` +
         `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
       const res = await fetch(url);
       if (!res.ok) return null;
@@ -35,6 +39,11 @@ export function useWeather(lat = DEFAULT_LAT, lon = DEFAULT_LON) {
           weather_code: number;
           wind_speed_10m: number;
         };
+        daily?: {
+          time: string[];
+          temperature_2m_max?: number[];
+          temperature_2m_min?: number[];
+        };
       };
       if (!data.current) return null;
       return {
@@ -44,6 +53,8 @@ export function useWeather(lat = DEFAULT_LAT, lon = DEFAULT_LON) {
         windspeed:   data.current.wind_speed_10m,
         is_day:      data.current.is_day === 1,
         time:        data.current.time,
+        high:        data.daily?.temperature_2m_max?.[0] ?? null,
+        low:         data.daily?.temperature_2m_min?.[0] ?? null,
       };
     },
     staleTime: 10 * 60_000,        // 10 min — weather doesn't move that fast
