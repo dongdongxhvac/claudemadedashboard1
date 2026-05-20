@@ -7,8 +7,9 @@
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
 //   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d               │
 //   ├──────────────────┼──────────────────┼──────────────────────────────┤
-//   │ DUE TODAY        │ BUILDINGS        │ UPCOMING · NEXT 7 DAYS       │
-//   │                  │ (rounds + assign)│                              │
+//   │ WORKLOAD         │ BUILDINGS        │ MAJOR PMs · NEXT 2 MONTHS    │
+//   │  due today (top) │ (rounds + assign)│ by engineer                  │
+//   │  next 9d (btm)   │                  │                              │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
@@ -68,7 +69,7 @@ export default function TvView() {
         <FocusBoardPanel items={focusQ.data ?? []} />
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
         {/* Bottom row: today's work */}
-        <TodayPanel pmRows={pmQ.data ?? []} now={now} />
+        <WorkloadPanel pmRows={pmQ.data ?? []} now={now} />
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -76,7 +77,7 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           shifts={shiftsQ.data ?? []}
         />
-        <UpcomingPmsPanel pmRows={pmQ.data ?? []} now={now} />
+        <MajorPmsPanel pmRows={pmQ.data ?? []} engineers={engineersQ.data ?? []} now={now} />
       </main>
     </div>
   );
@@ -255,12 +256,15 @@ function CrewPanel({ pmRows, laborRows, now }: {
   );
 }
 
-function TodayPanel({ pmRows, now }: {
+function WorkloadPanel({ pmRows, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   now: Date;
 }) {
   const data = useMemo(() => {
-    const todayStr = localISODate(now);
+    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStr = localISODate(todayD);
+
+    // Due today + overdue: per-tech count
     const byTech = new Map<string, number>();
     let overdue = 0;
     for (const r of pmRows) {
@@ -275,33 +279,147 @@ function TodayPanel({ pmRows, now }: {
         byTech.set(a, (byTech.get(a) ?? 0) + 1);
       }
     }
-    return {
-      cards: Array.from(byTech.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-        .slice(0, 8),
-      overdue,
-    };
+    const todayCards = Array.from(byTech.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 6);
+
+    // Upcoming next 9 days, starting tomorrow (today lives in the section above).
+    const days: { iso: string; label: string; count: number }[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const d = new Date(todayD); d.setDate(todayD.getDate() + i);
+      const iso = localISODate(d);
+      const label =
+        i === 1 ? 'Tomorrow'
+        : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      days.push({ iso, label, count: 0 });
+    }
+    const dayMap = new Map(days.map((d) => [d.iso, d]));
+    let upcomingTotal = 0;
+    for (const r of pmRows) {
+      if (isClosed(r.status)) continue;
+      if (!r.due_date) continue;
+      const slot = dayMap.get(r.due_date);
+      if (!slot) continue;
+      slot.count++;
+      upcomingTotal++;
+    }
+    const upcomingMax = days.reduce((m, d) => Math.max(m, d.count), 0) || 1;
+
+    return { todayCards, overdue, days, upcomingTotal, upcomingMax };
   }, [pmRows, now]);
 
+  const todayCount = data.todayCards.reduce((s, c) => s + c.count, 0);
+
   return (
-    <Panel title="Due today + overdue" accent="#f59e0b">
-      {data.cards.length === 0 ? (
-        <p className="tv-muted">Nothing on the board for today.</p>
-      ) : (
-        <>
+    <Panel title="Workload · due today + next 9 days" accent="#f59e0b">
+      <div className="tv-workload-top">
+        <div className="tv-workload-section-label">
+          Due today + overdue · <strong style={{ color: '#f8fafc' }}>{todayCount}</strong>
           {data.overdue > 0 && (
-            <div className="tv-warn">⚠ {data.overdue} overdue PM{data.overdue === 1 ? '' : 's'} on the team</div>
+            <span className="tv-warn" style={{ marginLeft: '0.6vw' }}>⚠ {data.overdue} overdue</span>
           )}
+        </div>
+        {data.todayCards.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing on the board.</p>
+        ) : (
           <ul className="tv-today-list">
-            {data.cards.map((c) => (
+            {data.todayCards.map((c) => (
               <li key={c.name}>
                 <span className="tv-today-count">{c.count}</span>
                 <span className="tv-today-name">{shortName(c.name)}</span>
               </li>
             ))}
           </ul>
-        </>
+        )}
+      </div>
+      <div className="tv-workload-divider" />
+      <div className="tv-workload-bottom">
+        <div className="tv-workload-section-label">
+          Upcoming · next 9 days · <strong style={{ color: '#f8fafc' }}>{data.upcomingTotal}</strong>
+        </div>
+        <ul className="tv-upcoming-list">
+          {data.days.map((d) => (
+            <li key={d.iso}>
+              <span className="tv-upcoming-day">{d.label}</span>
+              <div className="tv-upcoming-bar-bg">
+                <div
+                  className="tv-upcoming-bar-fill"
+                  style={{ width: `${(d.count / data.upcomingMax) * 100}%` }}
+                />
+              </div>
+              <span className="tv-upcoming-count">{d.count}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Panel>
+  );
+}
+
+function MajorPmsPanel({ pmRows, engineers, now }: {
+  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
+  engineers: EngineerRow[];
+  now: Date;
+}) {
+  const data = useMemo(() => {
+    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const cutoff = new Date(todayD); cutoff.setMonth(cutoff.getMonth() + 2);
+    const todayStr = localISODate(todayD);
+    const cutoffStr = localISODate(cutoff);
+
+    // Map cmms_assignee_name → display full_name so chips show the canonical
+    // name even when CMMS uses a variant (e.g. Eduin vs Edwin).
+    const displayByCmms = new Map<string, string>();
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer') continue;
+      if (e.cmms_assignee_name) displayByCmms.set(e.cmms_assignee_name, e.full_name);
+    }
+
+    const byTech = new Map<string, number>();
+    let total = 0;
+    for (const r of pmRows) {
+      if (isClosed(r.status)) continue;
+      if (r.pm_type !== 'Major') continue;
+      if (!r.due_date) continue;
+      if (r.due_date < todayStr || r.due_date > cutoffStr) continue;
+      const raw = (r.assigned_to_name ?? '').trim() || 'Unassigned';
+      const display = displayByCmms.get(raw) ?? raw;
+      byTech.set(display, (byTech.get(display) ?? 0) + 1);
+      total++;
+    }
+    const rows = Array.from(byTech.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1;
+    return { rows, total, max, cutoff };
+  }, [pmRows, engineers, now]);
+
+  return (
+    <Panel title="Major PMs · next 2 months" accent="#7c3aed">
+      <div className="tv-upcoming-head">
+        <span className="tv-bignum">{data.total}</span>
+        <span className="tv-sub">
+          through {data.cutoff.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </span>
+      </div>
+      {data.rows.length === 0 ? (
+        <p className="tv-muted">No Major PMs scheduled.</p>
+      ) : (
+        <ul className="tv-major-list">
+          {data.rows.map((r) => (
+            <li key={r.name}>
+              <span className="tv-major-name">{shortName(r.name)}</span>
+              <div className="tv-major-bar-bg">
+                <div
+                  className="tv-major-bar-fill"
+                  style={{ width: `${(r.count / data.max) * 100}%` }}
+                />
+              </div>
+              <span className="tv-major-count">{r.count}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
@@ -432,65 +550,6 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
   );
 }
 
-function UpcomingPmsPanel({ pmRows, now }: {
-  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
-  now: Date;
-}) {
-  const data = useMemo(() => {
-    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayStr = localISODate(todayD);
-    const days: { iso: string; label: string; count: number }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(todayD); d.setDate(todayD.getDate() + i);
-      const iso = localISODate(d);
-      const label =
-        i === 0 ? 'Today'
-        : i === 1 ? 'Tomorrow'
-        : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      days.push({ iso, label, count: 0 });
-    }
-    const dayMap = new Map(days.map((d) => [d.iso, d]));
-
-    let total = 0;
-    const techs = new Set<string>();
-    for (const r of pmRows) {
-      if (isClosed(r.status)) continue;
-      if (!r.due_date) continue;
-      if (r.due_date < todayStr) continue;
-      const slot = dayMap.get(r.due_date);
-      if (!slot) continue;
-      slot.count++;
-      total++;
-      const a = (r.assigned_to_name ?? '').trim();
-      if (a) techs.add(a);
-    }
-    const maxCount = days.reduce((m, d) => Math.max(m, d.count), 0) || 1;
-    return { days, total, techs: techs.size, maxCount };
-  }, [pmRows, now]);
-
-  return (
-    <Panel title="Upcoming · next 7 days" accent="#10b981">
-      <div className="tv-upcoming-head">
-        <span className="tv-bignum">{data.total}</span>
-        <span className="tv-sub">PMs · {data.techs} tech{data.techs === 1 ? '' : 's'}</span>
-      </div>
-      <ul className="tv-upcoming-list">
-        {data.days.map((d) => (
-          <li key={d.iso}>
-            <span className="tv-upcoming-day">{d.label}</span>
-            <div className="tv-upcoming-bar-bg">
-              <div
-                className="tv-upcoming-bar-fill"
-                style={{ width: `${(d.count / data.maxCount) * 100}%` }}
-              />
-            </div>
-            <span className="tv-upcoming-count">{d.count}</span>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
 
 
 // ============================================================================
@@ -627,7 +686,43 @@ function TvStyles() {
       .tv-bldgs-lead-name { color: #d4a017; font-weight: 600; flex: 0 0 auto; min-width: 5.5vw; }
       .tv-bldgs-lead-codes { color: #94a3b8; font-variant-numeric: tabular-nums; flex: 1; }
 
-      /* Upcoming PMs panel */
+      /* Workload panel (Due today on top, Upcoming 9d on bottom) */
+      .tv-workload-top { display: flex; flex-direction: column; gap: 0.25vw; }
+      .tv-workload-bottom { display: flex; flex-direction: column; gap: 0.25vw; }
+      .tv-workload-divider {
+        height: 1px;
+        background: #1e293b;
+        margin: 0.4vw 0;
+      }
+      .tv-workload-section-label {
+        font-size: 0.78vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #64748b;
+      }
+      /* Compact overrides for lists living inside Workload */
+      .tv-workload-top .tv-today-list { gap: 0.25vw; }
+      .tv-workload-top .tv-today-list li { font-size: 1.1vw; }
+      .tv-workload-top .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
+      .tv-workload-bottom .tv-upcoming-list { gap: 0.25vw; }
+      .tv-workload-bottom .tv-upcoming-list li { font-size: 0.9vw; grid-template-columns: 5vw 1fr 1.8vw; }
+      .tv-workload-bottom .tv-upcoming-bar-bg { height: 0.95vw; }
+
+      /* Major PMs panel */
+      .tv-major-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-major-list li {
+        display: grid;
+        grid-template-columns: 6vw 1fr 2vw;
+        gap: 0.5vw;
+        align-items: center;
+        font-size: 1.0vw;
+      }
+      .tv-major-name { color: #f8fafc; font-weight: 500; }
+      .tv-major-bar-bg { background: #1e293b; height: 1.1vw; border-radius: 4px; overflow: hidden; }
+      .tv-major-bar-fill { background: linear-gradient(90deg, #7c3aed, #a78bfa); height: 100%; }
+      .tv-major-count { color: #e2e8f0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+      /* Upcoming PMs (used inside Workload) */
       .tv-upcoming-head { display: flex; align-items: baseline; gap: 0.6vw; margin-bottom: 0.4vw; }
       .tv-upcoming-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
       .tv-upcoming-list li {
