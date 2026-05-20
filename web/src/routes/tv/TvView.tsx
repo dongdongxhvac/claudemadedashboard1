@@ -4,10 +4,10 @@
 // Layout (3 cols × 2 rows):
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ COVE · MEP Operations · date · time · snapshot freshness           │
-//   ├──────────────────┬──────────────────┬──────────────────┬───────────┤
-//   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d           │
-//   ├──────────────────┼──────────────────┼──────────────────┼───────────┤
-//   │ DUE TODAY        │ OPEN NPMs        │ ROUNDS · ALL SHIFTS      │
+//   ├──────────────────┬──────────────────┬──────────────────────────────┤
+//   │ ON-CALL          │ FOCUS BOARD      │ CREW · LAST 7d               │
+//   ├──────────────────┼──────────────────┼──────────────────────────────┤
+//   │ DUE TODAY        │ BUILDING ASSIGN  │ ROUNDS · ALL SHIFTS          │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
@@ -16,7 +16,19 @@ import { useCurrentPmRows, useCurrentLaborRows } from '../../hooks/useCurrentSna
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useRounds, useRoundsRealtime } from '../../hooks/useRounds';
 import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
-import { isClosed, isCompletedStatus, isNpm, addDays, localISODate } from '../../lib/dashboard';
+import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/useBuildings';
+import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
+import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
+import { isClosed, isCompletedStatus, addDays, localISODate } from '../../lib/dashboard';
+
+/** "Edwin Sepulveda" → "Edwin S." — TV-wide compact engineer name. */
+function shortName(fullName: string | null | undefined): string {
+  if (!fullName) return '—';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 0) return fullName;
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
 
 export default function TvView() {
   // Live data
@@ -25,13 +37,18 @@ export default function TvView() {
   useFocusBoardRealtime();
   useRoundsRealtime();
   useShiftsRealtime();
+  useBuildingsRealtime();
+  useBuildingAssignmentsRealtime();
 
-  const oncallQ = useUpcomingOncall(3);
-  const focusQ  = useActiveFocusItems();
-  const pmQ     = useCurrentPmRows();
-  const laborQ  = useCurrentLaborRows();
-  const roundsQ = useRounds();
-  const shiftsQ = useShifts();
+  const oncallQ      = useUpcomingOncall(3);
+  const focusQ       = useActiveFocusItems();
+  const pmQ          = useCurrentPmRows();
+  const laborQ       = useCurrentLaborRows();
+  const roundsQ      = useRounds();
+  const shiftsQ      = useShifts();
+  const buildingsQ   = useBuildings();
+  const assignmentsQ = useCurrentBuildingAssignments();
+  const engineersQ   = useEngineers();
 
   // Tick once a minute so the header clock + freshness stay live.
   const [now, setNow] = useState(() => new Date());
@@ -51,7 +68,11 @@ export default function TvView() {
         <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
         {/* Bottom row: today's work */}
         <TodayPanel pmRows={pmQ.data ?? []} now={now} />
-        <OpenNpmsPanel pmRows={pmQ.data ?? []} now={now} />
+        <BuildingAssignmentsPanel
+          engineers={engineersQ.data ?? []}
+          buildings={buildingsQ.data ?? []}
+          assignments={assignmentsQ.data ?? []}
+        />
         <RoundsPanel rounds={roundsQ.data ?? []} shifts={shiftsQ.data ?? []} now={now} />
       </main>
     </div>
@@ -115,8 +136,8 @@ function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>[
     <Panel title="On-call · this week + next 2" accent="#dc2626">
       {current ? (
         <div className="tv-oncall-current">
-          <div className="tv-bigname">{current.primary ?? '—'}</div>
-          {current.secondary && <div className="tv-sub">backup · {current.secondary}</div>}
+          <div className="tv-bigname">{shortName(current.primary)}</div>
+          {current.secondary && <div className="tv-sub">backup · {shortName(current.secondary)}</div>}
           <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
             from {fmt(current.week_start)}
           </div>
@@ -136,8 +157,8 @@ function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>[
           {upcoming.map((w) => (
             <li key={w.week_start}>
               <span className="tv-oncall-week">{fmt(w.week_start)}</span>
-              <span className="tv-oncall-name">{w.primary ?? '—'}</span>
-              {w.secondary && <span className="tv-oncall-backup">backup {w.secondary}</span>}
+              <span className="tv-oncall-name">{shortName(w.primary)}</span>
+              {w.secondary && <span className="tv-oncall-backup">backup {shortName(w.secondary)}</span>}
             </li>
           ))}
         </ul>
@@ -220,7 +241,7 @@ function CrewPanel({ pmRows, laborRows, now }: {
               <div className="tv-bar-bg">
                 <div className="tv-bar-fill" style={{ width: `${(c.hours / maxHours) * 100}%` }} />
               </div>
-              <span className="tv-crew-name">{c.name}</span>
+              <span className="tv-crew-name">{shortName(c.name)}</span>
               <span className="tv-crew-stat">{c.pms} PM</span>
               <span className="tv-crew-stat">{c.hours.toFixed(1)}h</span>
             </li>
@@ -273,7 +294,7 @@ function TodayPanel({ pmRows, now }: {
             {data.cards.map((c) => (
               <li key={c.name}>
                 <span className="tv-today-count">{c.count}</span>
-                <span className="tv-today-name">{c.name}</span>
+                <span className="tv-today-name">{shortName(c.name)}</span>
               </li>
             ))}
           </ul>
@@ -283,62 +304,68 @@ function TodayPanel({ pmRows, now }: {
   );
 }
 
-function OpenNpmsPanel({ pmRows, now }: {
-  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
-  now: Date;
+function BuildingAssignmentsPanel({ engineers, buildings, assignments }: {
+  engineers: EngineerRow[];
+  buildings: Building[];
+  assignments: BuildingAssignment[];
 }) {
   const data = useMemo(() => {
-    const todayStr = localISODate(now);
-    let count = 0;
-    let hours = 0;
-    let oldestDays = 0;
-    let oldestAssignee = '';
-    const byTech = new Map<string, { count: number; hours: number }>();
-    for (const r of pmRows) {
-      if (isClosed(r.status)) continue;
-      if (!isNpm(r)) continue;
-      count++;
-      hours += r.labor_hours ?? 0;
-      const a = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-      const cur = byTech.get(a) ?? { count: 0, hours: 0 };
-      cur.count++;
-      cur.hours += r.labor_hours ?? 0;
-      byTech.set(a, cur);
+    const bldById = new Map(buildings.map((b) => [b.id, b]));
+    const primaryByUser = new Map<string, Building[]>();
+    const coverageByUser = new Map<string, Building[]>();
+    for (const a of assignments) {
+      const b = bldById.get(a.building_id);
+      if (!b) continue;
+      const map = a.role_in_building === 'primary' ? primaryByUser
+                : a.role_in_building === 'backup'  ? coverageByUser
+                : null;
+      if (!map) continue;
+      const list = map.get(a.user_id) ?? [];
+      list.push(b);
+      map.set(a.user_id, list);
+    }
+    const sortBld = (list: Building[]) =>
+      list.sort((x, y) =>
+        (x.short_code ?? x.code).localeCompare(y.short_code ?? y.code, undefined, { numeric: true }),
+      );
 
-      if (r.due_date && r.due_date < todayStr) {
-        const ageDays = Math.floor(
-          (new Date(todayStr + 'T00:00:00').getTime() - new Date(r.due_date + 'T00:00:00').getTime()) / 86_400_000,
-        );
-        if (ageDays > oldestDays) {
-          oldestDays = ageDays;
-          oldestAssignee = a;
-        }
+    const regulars: { user_id: string; name: string; buildings: Building[] }[] = [];
+    const leads: { user_id: string; name: string; coverage: Building[] }[] = [];
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer') continue;
+      const p = sortBld(primaryByUser.get(e.user_id) ?? []);
+      const c = sortBld(coverageByUser.get(e.user_id) ?? []);
+      if (e.is_lead) {
+        if (c.length > 0) leads.push({ user_id: e.user_id, name: e.full_name, coverage: c });
+      } else if (p.length > 0) {
+        regulars.push({ user_id: e.user_id, name: e.full_name, buildings: p });
       }
     }
-    const top = Array.from(byTech.entries())
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 4)
-      .map(([name, v]) => ({ name, count: v.count, hours: v.hours }));
-    return { count, hours, oldestDays, oldestAssignee, top };
-  }, [pmRows, now]);
+    regulars.sort((a, b) => b.buildings.length - a.buildings.length || a.name.localeCompare(b.name));
+    leads.sort((a, b) => a.name.localeCompare(b.name));
+    return { regulars, leads };
+  }, [engineers, buildings, assignments]);
 
   return (
-    <Panel title="Open NPMs" accent="#64748b">
-      <div className="tv-npm-head">
-        <span className="tv-bignum">{data.count}</span>
-        <span className="tv-sub">total · {data.hours.toFixed(1)} h</span>
-      </div>
-      {data.oldestDays > 0 && (
-        <div className="tv-sub" style={{ marginBottom: '0.4em' }}>
-          oldest <strong>{data.oldestDays}d</strong>{data.oldestAssignee && ` · ${data.oldestAssignee}`}
-        </div>
-      )}
-      {data.top.length > 0 && (
-        <ul className="tv-npm-list">
-          {data.top.map((t) => (
-            <li key={t.name}>
-              <span className="tv-npm-name">{t.name}</span>
-              <span className="tv-npm-stat">{t.count} · {t.hours.toFixed(1)}h</span>
+    <Panel title="Building assignments" accent="#3b82f6">
+      {data.regulars.length === 0 && data.leads.length === 0 ? (
+        <p className="tv-muted">No assignments.</p>
+      ) : (
+        <ul className="tv-bld-list">
+          {data.regulars.map((r) => (
+            <li key={r.user_id}>
+              <span className="tv-bld-eng">{shortName(r.name)}</span>
+              <span className="tv-bld-codes">
+                {r.buildings.map((b) => b.short_code ?? b.code).join(' · ')}
+              </span>
+            </li>
+          ))}
+          {data.leads.map((l) => (
+            <li key={l.user_id} className="tv-bld-lead">
+              <span className="tv-bld-eng">★ {shortName(l.name)}</span>
+              <span className="tv-bld-codes">
+                {l.coverage.length} bld coverage
+              </span>
             </li>
           ))}
         </ul>
@@ -389,7 +416,7 @@ function RoundsPanel({ rounds, shifts, now }: {
               <ul className="tv-rounds-list">
                 {g.rounds.map((r) => (
                   <li key={r.id}>
-                    <span className="tv-round-eng">{r.current?.full_name ?? '— unassigned —'}</span>
+                    <span className="tv-round-eng">{r.current ? shortName(r.current.full_name) : '— unassigned —'}</span>
                     <span className="tv-round-stops">
                       {r.stops.map((s) => s.short_code ?? s.code).join(' · ')}
                     </span>
@@ -494,11 +521,19 @@ function TvStyles() {
       .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.7vw; min-width: 2.4vw; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-today-name { color: #e2e8f0; }
 
-      .tv-npm-head { display: flex; align-items: baseline; gap: 0.6vw; margin-bottom: 0.4em; }
-      .tv-npm-list { list-style: none; padding: 0; margin: 0.6vw 0 0; display: flex; flex-direction: column; gap: 0.3vw; }
-      .tv-npm-list li { display: flex; justify-content: space-between; font-size: 1.15vw; }
-      .tv-npm-name { color: #e2e8f0; }
-      .tv-npm-stat { color: #94a3b8; font-variant-numeric: tabular-nums; }
+      .tv-bld-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35vw; }
+      .tv-bld-list li {
+        display: grid;
+        grid-template-columns: 6.5vw 1fr;
+        gap: 0.5vw;
+        font-size: 1.0vw;
+        align-items: baseline;
+      }
+      .tv-bld-eng { font-weight: 600; color: #f8fafc; }
+      .tv-bld-codes { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+      .tv-bld-lead { padding-top: 0.3vw; border-top: 1px dashed #1e293b; margin-top: 0.3vw; }
+      .tv-bld-lead .tv-bld-eng { color: #d4a017; }
+      .tv-bld-lead .tv-bld-codes { color: #94a3b8; font-size: 0.9vw; }
 
       .tv-rounds-groups { display: flex; flex-direction: column; gap: 0.6vw; }
       .tv-rounds-group { }
