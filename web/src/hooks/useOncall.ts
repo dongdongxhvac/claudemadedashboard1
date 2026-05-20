@@ -11,6 +11,7 @@ export type OncallRotation = {
 };
 
 const KEY_CURRENT = ['oncall_current'];
+const KEY_UPCOMING = ['oncall_upcoming'];
 const KEY_PARTICIPANTS = ['oncall_participants'];
 const KEY_SETTINGS = ['oncall_settings'];
 
@@ -49,6 +50,66 @@ export function useCurrentOncall() {
   });
 }
 
+/** Current rotation + the next N weeks. Returns rotations ordered by week_start
+ *  ascending, starting from the current week (week_start <= today < +7d). */
+export type UpcomingOncallEntry = {
+  week_start: string;
+  primary: string | null;
+  secondary: string | null;
+  is_current: boolean;
+};
+export function useUpcomingOncall(count: number) {
+  return useQuery({
+    queryKey: [...KEY_UPCOMING, count],
+    queryFn: async (): Promise<UpcomingOncallEntry[]> => {
+      // Get the current week's Friday: latest rotation whose week_start <= today.
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: anchor, error: ae } = await supabase
+        .from('oncall_rotations')
+        .select('week_start')
+        .lte('week_start', today)
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ae) throw ae;
+      const anchorWeek = anchor?.week_start ?? today;
+
+      const { data: rows, error } = await supabase
+        .from('oncall_rotations')
+        .select('week_start, primary_user_id, secondary_user_id')
+        .gte('week_start', anchorWeek)
+        .order('week_start', { ascending: true })
+        .limit(count);
+      if (error) throw error;
+
+      const ids = new Set<string>();
+      (rows ?? []).forEach((r) => {
+        if (r.primary_user_id)   ids.add(r.primary_user_id);
+        if (r.secondary_user_id) ids.add(r.secondary_user_id);
+      });
+      let nameById = new Map<string, string>();
+      if (ids.size > 0) {
+        const { data: users, error: ue } = await supabase
+          .from('users')
+          .select('id, full_name')
+          .in('id', Array.from(ids));
+        if (ue) throw ue;
+        nameById = new Map((users ?? []).map((u) => [
+          (u as { id: string }).id,
+          (u as { full_name: string }).full_name,
+        ]));
+      }
+      return (rows ?? []).map((r) => ({
+        week_start: r.week_start,
+        primary:   r.primary_user_id   ? nameById.get(r.primary_user_id)   ?? null : null,
+        secondary: r.secondary_user_id ? nameById.get(r.secondary_user_id) ?? null : null,
+        is_current: r.week_start === anchorWeek,
+      }));
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 /** Realtime: any change to oncall_rotations / oncall_participants /
  *  oncall_schedule_settings invalidates the relevant query keys. */
 export function useOncallRealtime() {
@@ -56,6 +117,7 @@ export function useOncallRealtime() {
   useEffect(() => {
     const invalidate = () => {
       qc.invalidateQueries({ queryKey: KEY_CURRENT });
+      qc.invalidateQueries({ queryKey: KEY_UPCOMING });
       qc.invalidateQueries({ queryKey: KEY_PARTICIPANTS });
       qc.invalidateQueries({ queryKey: KEY_SETTINGS });
     };

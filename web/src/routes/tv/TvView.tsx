@@ -12,7 +12,7 @@
 //   │ OPEN NPMs                │ ROUNDS · CURRENT SHIFT          │
 //   └──────────────────────────┴─────────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
-import { useCurrentOncall, useOncallRealtime } from '../../hooks/useOncall';
+import { useUpcomingOncall, useOncallRealtime } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useCurrentPmRows, useCurrentLaborRows } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
@@ -28,7 +28,7 @@ export default function TvView() {
   useRoundsRealtime();
   useShiftsRealtime();
 
-  const oncallQ = useCurrentOncall();
+  const oncallQ = useUpcomingOncall(3);
   const focusQ  = useActiveFocusItems();
   const pmQ     = useCurrentPmRows();
   const laborQ  = useCurrentLaborRows();
@@ -93,18 +93,40 @@ function Panel({ title, children, accent }: { title: string; children: React.Rea
   );
 }
 
-function OncallPanel({ oncall }: { oncall: ReturnType<typeof useCurrentOncall>['data'] }) {
-  return (
-    <Panel title="On-call · this week" accent="#dc2626">
-      {!oncall || !oncall.primary ? (
+function OncallPanel({ oncall }: { oncall: ReturnType<typeof useUpcomingOncall>['data'] }) {
+  const list = oncall ?? [];
+  if (list.length === 0 || !list[0].primary) {
+    return (
+      <Panel title="On-call · next 3 weeks" accent="#dc2626">
         <p className="tv-muted">Not assigned.</p>
-      ) : (
-        <>
-          <div className="tv-bigname">{oncall.primary}</div>
-          {oncall.secondary && (
-            <div className="tv-sub">backup · {oncall.secondary}</div>
-          )}
-        </>
+      </Panel>
+    );
+  }
+  const current = list[0];
+  const upcoming = list.slice(1);
+  const fmt = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  return (
+    <Panel title="On-call · this week + next 2" accent="#dc2626">
+      <div className="tv-oncall-current">
+        <div className="tv-bigname">{current.primary}</div>
+        {current.secondary && <div className="tv-sub">backup · {current.secondary}</div>}
+        <div className="tv-sub" style={{ marginTop: '0.2vw', fontSize: '0.95vw' }}>
+          from {fmt(current.week_start)}
+        </div>
+      </div>
+      {upcoming.length > 0 && (
+        <ul className="tv-oncall-upcoming">
+          {upcoming.map((w) => (
+            <li key={w.week_start}>
+              <span className="tv-oncall-week">{fmt(w.week_start)}</span>
+              <span className="tv-oncall-name">{w.primary ?? '—'}</span>
+              {w.secondary && <span className="tv-oncall-backup">backup {w.secondary}</span>}
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
@@ -428,6 +450,19 @@ function TvStyles() {
       .tv-bignum  { font-size: 4.0vw; font-weight: 700; color: #f8fafc; line-height: 1; }
       .tv-sub     { color: #94a3b8; font-size: 1.2vw; margin-left: 0.4em; }
       .tv-warn    { color: #f59e0b; font-size: 1.2vw; font-weight: 600; margin-bottom: 0.4em; }
+
+      .tv-oncall-current { padding-bottom: 0.6vw; border-bottom: 1px solid #1e293b; margin-bottom: 0.6vw; }
+      .tv-oncall-upcoming { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35vw; }
+      .tv-oncall-upcoming li {
+        display: grid;
+        grid-template-columns: 5vw 1fr auto;
+        gap: 0.6vw;
+        font-size: 1.05vw;
+        align-items: baseline;
+      }
+      .tv-oncall-week { color: #64748b; font-variant-numeric: tabular-nums; }
+      .tv-oncall-name { color: #f8fafc; font-weight: 600; }
+      .tv-oncall-backup { color: #64748b; font-size: 0.9vw; }
 
       .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
       .tv-focus-list li { font-size: 1.25vw; line-height: 1.35; display: flex; align-items: baseline; gap: 0.5vw; }
