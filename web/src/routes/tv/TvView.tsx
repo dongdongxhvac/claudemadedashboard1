@@ -21,6 +21,7 @@ import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
 import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/useBuildings';
 import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
+import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { isClosed, isCompletedStatus, addDays, localISODate } from '../../lib/dashboard';
 
 /** "Edwin Sepulveda" → "Edwin S." — TV-wide compact engineer name. */
@@ -51,6 +52,7 @@ export default function TvView() {
   const buildingsQ   = useBuildings();
   const assignmentsQ = useCurrentBuildingAssignments();
   const engineersQ   = useEngineers();
+  const weatherQ     = useWeather();
 
   // Tick once a minute so the header clock + freshness stay live.
   const [now, setNow] = useState(() => new Date());
@@ -62,7 +64,12 @@ export default function TvView() {
   return (
     <div className="tv-root">
       <TvStyles />
-      <Header now={now} snapshotTakenAt={pmQ.data?.[0]?.snapshot_taken_at ?? null} />
+      <Header
+        now={now}
+        snapshotTakenAt={pmQ.data?.[0]?.snapshot_taken_at ?? null}
+        oncall={oncallQ.data ?? []}
+        weather={weatherQ.data ?? null}
+      />
       <main className="tv-grid">
         {/* Top row: glanceable signals */}
         <OncallPanel oncall={oncallQ.data} />
@@ -92,19 +99,69 @@ export default function TvView() {
 // Header
 // ============================================================================
 
-function Header({ now, snapshotTakenAt }: { now: Date; snapshotTakenAt: string | null }) {
+function Header({ now, snapshotTakenAt, oncall, weather }: {
+  now: Date;
+  snapshotTakenAt: string | null;
+  oncall: ReturnType<typeof useUpcomingOncall>['data'] extends infer T ? T : never;
+  weather: ReturnType<typeof useWeather>['data'];
+}) {
+  // "Tuesday, May 20 8:42 AM"
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const snapStr = snapshotTakenAt
-    ? new Date(snapshotTakenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : '—';
+  const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  // Data age in hours (or days for stale data).
+  const ageStr = (() => {
+    if (!snapshotTakenAt) return '—';
+    const ms = now.getTime() - new Date(snapshotTakenAt).getTime();
+    if (ms < 0) return 'fresh';
+    const totalHours = Math.floor(ms / 3_600_000);
+    if (totalHours < 1) return '< 1h old';
+    if (totalHours < 24) return `${totalHours}h old`;
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours > 0 ? `${days}d ${hours}h old` : `${days}d old`;
+  })();
+
+  // On-call pulls from the same data the OncallPanel uses.
+  const list = oncall ?? [];
+  const current = list[0]?.is_current ? list[0] : null;
+  const next = current ? list[1] : list[0]; // first future if no current
+
+  // Weather summary.
+  const wx = weather ? weatherDescription(weather.weathercode, weather.is_day) : null;
+
   return (
     <header className="tv-header">
-      <div className="tv-h-title">COVE · MEP Operations</div>
-      <div className="tv-h-meta">
-        <span>{dateStr}</span>
-        <span className="tv-h-time">{timeStr}</span>
-        <span className="tv-h-snap">data as of {snapStr}</span>
+      <div className="tv-h-left">
+        <div className="tv-h-title">Operation Dashboard</div>
+        <div className="tv-h-meta">
+          <span>{dateStr} {timeStr}</span>
+          <span className="tv-h-sep">·</span>
+          <span className="tv-h-snap">data {ageStr}</span>
+        </div>
+      </div>
+      <div className="tv-h-right">
+        {weather && wx && (
+          <div className="tv-h-weather" title={wx.label}>
+            <span className="tv-h-wx-icon">{wx.icon}</span>
+            <span className="tv-h-wx-temp">{Math.round(weather.temperature)}°F</span>
+            <span className="tv-h-wx-label">{wx.label}</span>
+          </div>
+        )}
+        <div className="tv-h-oncall">
+          <div className="tv-h-oncall-row">
+            <span className="tv-h-oncall-label">On-call</span>
+            <span className="tv-h-oncall-name">
+              {current?.primary ? shortName(current.primary) : '—'}
+            </span>
+          </div>
+          <div className="tv-h-oncall-row tv-h-oncall-next">
+            <span className="tv-h-oncall-label">Next</span>
+            <span className="tv-h-oncall-name">
+              {next?.primary ? shortName(next.primary) : '—'}
+            </span>
+          </div>
+        </div>
       </div>
     </header>
   );
@@ -588,14 +645,46 @@ function TvStyles() {
         gap: 1vw;
       }
       .tv-header {
-        display: flex; align-items: baseline; justify-content: space-between;
-        padding: 0.4vw 0.8vw;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.4vw 0.9vw;
         border-bottom: 2px solid #1e293b;
+        gap: 1.5vw;
       }
-      .tv-h-title { font-size: 2.0vw; font-weight: 700; letter-spacing: 0.02em; }
-      .tv-h-meta { display: flex; gap: 1.4vw; align-items: baseline; font-size: 1.2vw; color: #94a3b8; }
-      .tv-h-time { color: #f8fafc; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .tv-h-snap { font-size: 0.95vw; color: #64748b; }
+      .tv-h-left { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; }
+      .tv-h-title { font-size: 1.8vw; font-weight: 700; letter-spacing: 0.02em; color: #f8fafc; }
+      .tv-h-meta {
+        display: flex; gap: 0.5vw; align-items: baseline;
+        font-size: 1.05vw; color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-h-sep { color: #475569; }
+      .tv-h-snap { color: #64748b; }
+
+      .tv-h-right { display: flex; align-items: center; gap: 1.5vw; }
+
+      .tv-h-weather {
+        display: flex; align-items: baseline; gap: 0.4vw;
+        padding: 0.2vw 0.7vw;
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        background: rgba(14, 165, 233, 0.08);
+      }
+      .tv-h-wx-icon { font-size: 1.6vw; line-height: 1; }
+      .tv-h-wx-temp { font-size: 1.5vw; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+      .tv-h-wx-label { font-size: 0.85vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+
+      .tv-h-oncall { display: flex; flex-direction: column; gap: 0.1vw; min-width: 9vw; }
+      .tv-h-oncall-row { display: flex; align-items: baseline; gap: 0.5vw; }
+      .tv-h-oncall-label {
+        font-size: 0.7vw; text-transform: uppercase; letter-spacing: 0.14em;
+        color: #64748b; min-width: 2.6vw;
+      }
+      .tv-h-oncall-name {
+        font-size: 1.2vw; font-weight: 700; color: #fca5a5;
+      }
+      .tv-h-oncall-next .tv-h-oncall-name {
+        font-size: 0.95vw; font-weight: 600; color: #94a3b8;
+      }
 
       .tv-grid {
         flex: 1;
