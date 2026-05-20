@@ -946,9 +946,9 @@ function TvStyles() {
         font-size: 0.85vw;
         position: relative;
       }
-      .tv-oncall-cell-side { color: #64748b; font-style: italic; }
-      .tv-oncall-cell-holiday { color: #fca5a5; }
-      .tv-oncall-cell-active {
+      .tv-oncall-grid tbody td.tv-oncall-cell-side { color: #64748b; font-style: italic; }
+      .tv-oncall-grid tbody td.tv-oncall-cell-holiday { color: #fca5a5; }
+      .tv-oncall-grid tbody td.tv-oncall-cell-active {
         background: rgba(34, 197, 94, 0.18);
         border: 1px solid #22c55e;
         border-radius: 3px;
