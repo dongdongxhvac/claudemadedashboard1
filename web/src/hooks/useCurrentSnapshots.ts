@@ -56,6 +56,22 @@ export type PmCloseEvent = {
   task_name: string | null;
 };
 
+// Closed PMs where both estimated and actual labor are populated.
+// Negative variance = closed faster than estimated; positive = took longer.
+export type PmVarianceRow = {
+  task_no: string | null;
+  task_name: string | null;
+  assigned_to_name: string | null;
+  site: string | null;
+  building_code: string | null;
+  pm_type: string | null;
+  est_labor_hours: number;
+  labor_hours: number;
+  variance_hours: number;
+  variance_pct: number | null;
+  completed_on: string;
+};
+
 export function useCurrentPmRows() {
   return useQuery({
     queryKey: ['current_pm_snapshot'],
@@ -128,6 +144,26 @@ export function useLaborDaily(daysBack: number = 40) {
       return (data ?? []) as LaborDailyRow[];
     },
     staleTime: 30_000,
+  });
+}
+
+// PM closes with both estimated and actual labor hours, for actual-vs-estimate
+// analysis. Returns at most `daysBack` of history.
+export function usePmVariance(daysBack: number = 30) {
+  return useQuery({
+    queryKey: ['pm_variance_recent', daysBack],
+    queryFn: async (): Promise<PmVarianceRow[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const { data, error } = await supabase
+        .from('pm_variance_recent')
+        .select('*')
+        .gte('completed_on', since.toISOString())
+        .order('completed_on', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PmVarianceRow[];
+    },
+    staleTime: 60_000,
   });
 }
 

@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth';
 import { useCurrentPmRows, useCurrentWoRows, type PmRow } from '../../hooks/useCurrentSnapshots';
 import { isNpm } from '../../lib/dashboard';
 import { WeeklyCompletions } from '../../components/WeeklyCompletions';
+import { PmVariance } from '../../components/PmVariance';
 import { DueNowList } from '../../components/DueNowList';
 import { DueThisMonth } from '../../components/DueThisMonth';
 import { OpenPmsBreakdown } from '../../components/OpenPmsBreakdown';
@@ -173,6 +174,7 @@ export default function ManagerPc() {
           <DueThisMonth />
           <OpenPmsBreakdown />
           <WeeklyCompletions />
+          <PmVariance />
         </div>
       </main>
     </div>
