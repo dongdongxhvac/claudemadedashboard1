@@ -72,6 +72,16 @@ export type PmVarianceRow = {
   completed_on: string;
 };
 
+export type WoCloseEvent = {
+  wo_id: string | null;
+  completed_on: string;
+  assigned_to_name: string | null;
+  building_code: string | null;
+  category: string | null;
+  description: string | null;
+  billable_total: number | null;
+};
+
 export function useCurrentPmRows() {
   return useQuery({
     queryKey: ['current_pm_snapshot'],
@@ -164,6 +174,25 @@ export function usePmVariance(daysBack: number = 30) {
       return (data ?? []) as PmVarianceRow[];
     },
     staleTime: 60_000,
+  });
+}
+
+// WO close events log. Mirrors useRecentPmCloses but for work orders.
+export function useRecentWoCloses(daysBack: number = 40) {
+  return useQuery({
+    queryKey: ['wo_close_events', daysBack],
+    queryFn: async (): Promise<WoCloseEvent[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const { data, error } = await supabase
+        .from('wo_close_events')
+        .select('wo_id, completed_on, assigned_to_name, building_code, category, description, billable_total')
+        .gte('completed_on', since.toISOString())
+        .order('completed_on', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as WoCloseEvent[];
+    },
+    staleTime: 30_000,
   });
 }
 
