@@ -25,6 +25,19 @@ import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { isClosed, isCompletedStatus, addDays, localISODate } from '../../lib/dashboard';
 
+/** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
+function formatDataAge(now: Date, ts: string | null | undefined): string {
+  if (!ts) return '—';
+  const ms = now.getTime() - new Date(ts).getTime();
+  if (ms < 0) return 'fresh';
+  const totalHours = Math.floor(ms / 3_600_000);
+  if (totalHours < 1) return '< 1h';
+  if (totalHours < 24) return `${totalHours}h`;
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+}
+
 /** "Edwin Sepulveda" → "Edwin S." — TV-wide compact engineer name. */
 function shortName(fullName: string | null | undefined): string {
   if (!fullName) return '—';
@@ -117,18 +130,8 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
   const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
   const dateTimeStr = `${dateStr}, ${timeStr}`;
 
-  // Data age — hours for fresh data, days for stale.
-  const ageStr = (() => {
-    if (!snapshotTakenAt) return '—';
-    const ms = now.getTime() - new Date(snapshotTakenAt).getTime();
-    if (ms < 0) return 'fresh';
-    const totalHours = Math.floor(ms / 3_600_000);
-    if (totalHours < 1) return '< 1h old';
-    if (totalHours < 24) return `${totalHours}h old`;
-    const days = Math.floor(totalHours / 24);
-    const hours = totalHours % 24;
-    return hours > 0 ? `${days}d ${hours}h old` : `${days}d old`;
-  })();
+  const ageRaw = formatDataAge(now, snapshotTakenAt);
+  const ageStr = ageRaw === '—' || ageRaw === 'fresh' ? ageRaw : `${ageRaw} old`;
 
   // On-call from the same data the panel uses.
   const list = oncall ?? [];
@@ -185,10 +188,13 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
 // Panels
 // ============================================================================
 
-function Panel({ title, children, accent }: { title: string; children: React.ReactNode; accent?: string }) {
+function Panel({ title, children, accent, meta }: { title: string; children: React.ReactNode; accent?: string; meta?: React.ReactNode }) {
   return (
     <section className="tv-panel" style={accent ? { borderTopColor: accent } : undefined}>
-      <h2 className="tv-panel-title">{title}</h2>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">{title}</h2>
+        {meta && <div className="tv-panel-meta">{meta}</div>}
+      </div>
       <div className="tv-panel-body">{children}</div>
     </section>
   );
@@ -438,58 +444,97 @@ function CrewPanel({ pmRows, laborRows, now }: {
   now: Date;
 }) {
   const data = useMemo(() => {
-    const winEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const winStart = addDays(winEnd, -7);
+    const winEnd    = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const winStart  = addDays(winEnd, -7);
+    const priorEnd  = winStart;
+    const priorStart = addDays(priorEnd, -7);
 
-    const byTech = new Map<string, { pms: number; hours: number }>();
+    type Acc = { pms: number; hours: number; pmsPrev: number; hoursPrev: number };
+    const byTech = new Map<string, Acc>();
+    const get = (a: string): Acc => {
+      let cur = byTech.get(a);
+      if (!cur) { cur = { pms: 0, hours: 0, pmsPrev: 0, hoursPrev: 0 }; byTech.set(a, cur); }
+      return cur;
+    };
+
     for (const r of pmRows) {
       if (!isCompletedStatus(r.status)) continue;
       const ts = r.updated_at_cmms;
       if (!ts) continue;
       const d = new Date(ts);
-      if (d < winStart || d >= winEnd) continue;
       const a = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-      const cur = byTech.get(a) ?? { pms: 0, hours: 0 };
-      cur.pms++;
-      byTech.set(a, cur);
+      if (d >= winStart && d < winEnd)         get(a).pms++;
+      else if (d >= priorStart && d < priorEnd) get(a).pmsPrev++;
     }
     for (const l of laborRows) {
       if (!l.week_start) continue;
       const ws = new Date(l.week_start + 'T00:00:00');
       const we = addDays(ws, 7);
-      if (ws >= winEnd || we <= winStart) continue;
       const a = (l.assigned_to_name ?? '').trim() || 'Unassigned';
-      const cur = byTech.get(a) ?? { pms: 0, hours: 0 };
-      cur.hours += l.labor_hours ?? 0;
-      byTech.set(a, cur);
+      const hrs = l.labor_hours ?? 0;
+      if (ws < winEnd && we > winStart)            get(a).hours += hrs;
+      else if (ws < priorEnd && we > priorStart)   get(a).hoursPrev += hrs;
     }
     return Array.from(byTech.entries())
-      .map(([name, v]) => ({ name, pms: v.pms, hours: v.hours }))
+      .map(([name, v]) => ({
+        name,
+        pms: v.pms,
+        hours: v.hours,
+        pmsDelta: v.pms - v.pmsPrev,
+        hoursDelta: v.hours - v.hoursPrev,
+      }))
       .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
       .slice(0, 6);
   }, [pmRows, laborRows, now]);
 
-  const maxHours = data.reduce((m, d) => Math.max(m, d.hours), 0) || 1;
+  const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
+  const laborAge = formatDataAge(now, laborRows[0]?.snapshot_taken_at ?? null);
 
   return (
-    <Panel title="Crew · last 7 days" accent="#8b5cf6">
+    <Panel
+      title="PMs Closed · Labor · last 7 days"
+      accent="#8b5cf6"
+      meta={
+        <span className="tv-crew-meta">
+          <span>PM <b>{pmAge}</b></span>
+          <span className="tv-crew-meta-sep">·</span>
+          <span>Labor <b>{laborAge}</b></span>
+        </span>
+      }
+    >
       {data.length === 0 ? (
         <p className="tv-muted">No data.</p>
       ) : (
         <ul className="tv-crew-list">
           {data.map((c) => (
             <li key={c.name}>
-              <div className="tv-bar-bg">
-                <div className="tv-bar-fill" style={{ width: `${(c.hours / maxHours) * 100}%` }} />
-              </div>
               <span className="tv-crew-name">{shortName(c.name)}</span>
-              <span className="tv-crew-stat">{c.pms} PM</span>
-              <span className="tv-crew-stat">{c.hours.toFixed(1)}h</span>
+              <span className="tv-crew-stat">
+                {c.pms} PM{c.pms === 1 ? '' : 's'}
+                <Delta v={c.pmsDelta} />
+              </span>
+              <span className="tv-crew-stat">
+                {c.hours.toFixed(1)}h
+                <Delta v={c.hoursDelta} decimals={1} />
+              </span>
             </li>
           ))}
         </ul>
       )}
     </Panel>
+  );
+}
+
+/** "▼7" / "▲14.1" / null — prior-period delta with color. */
+function Delta({ v, decimals = 0 }: { v: number; decimals?: number }) {
+  const abs = Math.abs(v);
+  const threshold = decimals > 0 ? 0.05 : 0.5;
+  if (abs < threshold) return null;
+  const up = v > 0;
+  return (
+    <span className={`tv-crew-delta ${up ? 'up' : 'down'}`}>
+      {up ? '▲' : '▼'}{abs.toFixed(decimals)}
+    </span>
   );
 }
 
@@ -880,12 +925,26 @@ function TvStyles() {
         min-height: 0;
         overflow: hidden;
       }
+      .tv-panel-titlerow {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.8vw;
+        margin: 0 0 0.6vw;
+      }
       .tv-panel-title {
         font-size: 1.0vw;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #94a3b8;
-        margin: 0 0 0.6vw;
+        margin: 0;
+      }
+      .tv-panel-meta {
+        font-size: 0.7vw;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+        white-space: nowrap;
       }
       .tv-panel-body { flex: 1; min-height: 0; overflow: hidden; }
       .tv-muted { color: #64748b; font-size: 1.3vw; font-style: italic; }
@@ -964,12 +1023,16 @@ function TvStyles() {
       .tv-focus-list li { font-size: 1.25vw; line-height: 1.35; display: flex; align-items: baseline; gap: 0.5vw; }
       .tv-focus-dot { width: 0.7vw; height: 0.7vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
-      .tv-crew-list li { display: grid; grid-template-columns: 1fr 7.5vw 3.2vw 3.6vw; align-items: center; gap: 0.5vw; font-size: 1.0vw; }
-      .tv-bar-bg { background: #1e293b; height: 1.3vw; border-radius: 4px; overflow: hidden; }
-      .tv-bar-fill { background: linear-gradient(90deg, #8b5cf6, #a78bfa); height: 100%; }
-      .tv-crew-name { font-weight: 500; }
-      .tv-crew-stat { color: #94a3b8; text-align: right; font-variant-numeric: tabular-nums; }
+      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
+      .tv-crew-list li { display: grid; grid-template-columns: 1fr 8vw 8vw; align-items: baseline; gap: 0.8vw; font-size: 1.25vw; }
+      .tv-crew-name { font-weight: 600; color: #f1f5f9; }
+      .tv-crew-stat { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
+      .tv-crew-delta { margin-left: 0.45vw; font-size: 0.85vw; font-weight: 600; }
+      .tv-crew-delta.up   { color: #34d399; }
+      .tv-crew-delta.down { color: #f87171; }
+      .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
+      .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
+      .tv-crew-meta-sep { color: #334155; }
 
       .tv-today-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
       .tv-today-list li { display: flex; align-items: baseline; gap: 0.6vw; font-size: 1.3vw; }

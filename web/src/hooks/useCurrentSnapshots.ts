@@ -33,6 +33,7 @@ export type LaborRow = {
   assigned_to_name: string | null;
   labor_hours: number | null;
   week_start: string | null;
+  snapshot_taken_at: string | null;
 };
 
 export function useCurrentPmRows() {
