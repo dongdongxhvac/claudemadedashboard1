@@ -650,8 +650,8 @@ function CrewSection({ closes, laborDaily, now }: {
       <span className="tv-crew-name">{shortName(c.name)}</span>
       <span className="tv-crew-num">{c.pms}<span className="tv-crew-unit">PM</span></span>
       <span className="tv-crew-deltacell"><Delta v={c.pmsDelta} /></span>
-      <span className="tv-crew-num">{c.hours.toFixed(1)}<span className="tv-crew-unit">h</span></span>
-      <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={1} /></span>
+      <span className="tv-crew-num">{Math.round(c.hours)}<span className="tv-crew-unit">h</span></span>
+      <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={0} /></span>
     </li>
   );
 
@@ -670,7 +670,7 @@ function CrewSection({ closes, laborDaily, now }: {
   );
 }
 
-/** "▼7" / "▲14.1" / null — prior-period delta with color. */
+/** "+7" / "−14" — small color-coded text delta vs prior period. Null when below threshold. */
 function Delta({ v, decimals = 0 }: { v: number; decimals?: number }) {
   const abs = Math.abs(v);
   const threshold = decimals > 0 ? 0.05 : 0.5;
@@ -678,7 +678,7 @@ function Delta({ v, decimals = 0 }: { v: number; decimals?: number }) {
   const up = v > 0;
   return (
     <span className={`tv-crew-delta ${up ? 'up' : 'down'}`}>
-      {up ? '▲' : '▼'}{abs.toFixed(decimals)}
+      {up ? '+' : '−'}{abs.toFixed(decimals)}
     </span>
   );
 }
@@ -1213,14 +1213,17 @@ function TvStyles() {
       .tv-focus-list li { font-size: 1.05vw; line-height: 1.3; display: flex; align-items: baseline; gap: 0.4vw; }
       .tv-focus-dot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column */
-      .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 1.2vw; }
-      .tv-crew-col { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; }
+      /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column.
+         Right column gets a left border so the two halves read as distinct cards. */
+      .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 0; }
+      .tv-crew-col { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; padding: 0 0.9vw; }
+      .tv-crew-col:first-child  { padding-left: 0; border-right: 1px solid #1e293b; }
+      .tv-crew-col:last-child   { padding-right: 0; }
       .tv-crew-headerrow,
       .tv-crew-list li {
         display: grid;
-        grid-template-columns: 1fr 1.8vw 1.9vw 2.5vw 2.1vw;
-        gap: 0.35vw;
+        grid-template-columns: 1fr 1.8vw 1.4vw 2.0vw 1.4vw;
+        gap: 0.3vw;
         align-items: baseline;
         min-width: 0;
       }
@@ -1245,8 +1248,8 @@ function TvStyles() {
         font-weight: 600;
       }
       .tv-crew-unit { color: #64748b; font-weight: 400; font-size: 0.72vw; margin-left: 0.1vw; }
-      .tv-crew-deltacell { text-align: left; }
-      .tv-crew-delta { font-size: 0.72vw; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+      .tv-crew-deltacell { text-align: left; font-size: 0.6vw; }
+      .tv-crew-delta { font-size: 0.6vw; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; opacity: 0.85; }
       .tv-crew-delta.up   { color: #34d399; }
       .tv-crew-delta.down { color: #f87171; }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
