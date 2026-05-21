@@ -84,9 +84,9 @@ export default function TvView() {
       <TvStyles />
       <Header
         now={now}
-        snapshotTakenAt={pmQ.data?.[0]?.snapshot_taken_at ?? null}
         oncall={oncallQ.data ?? []}
         weather={weatherQ.data ?? null}
+        focusItems={focusQ.data ?? []}
       />
       <main className="tv-grid">
         {/* Left column: one tall panel spanning both rows */}
@@ -127,19 +127,16 @@ export default function TvView() {
 // Header
 // ============================================================================
 
-function Header({ now, snapshotTakenAt, oncall, weather }: {
+function Header({ now, oncall, weather, focusItems }: {
   now: Date;
-  snapshotTakenAt: string | null;
   oncall: ReturnType<typeof useUpcomingOncall>['data'] extends infer T ? T : never;
   weather: ReturnType<typeof useWeather>['data'];
+  focusItems: ReturnType<typeof useActiveFocusItems>['data'];
 }) {
   // "Tue, May 20, 8:42 AM"
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
   const dateTimeStr = `${dateStr}, ${timeStr}`;
-
-  const ageRaw = formatDataAge(now, snapshotTakenAt);
-  const ageStr = ageRaw === '—' || ageRaw === 'fresh' ? ageRaw : `${ageRaw} old`;
 
   // On-call from the same data the panel uses.
   const list = oncall ?? [];
@@ -150,43 +147,69 @@ function Header({ now, snapshotTakenAt, oncall, weather }: {
   const wx = weather ? weatherDescription(weather.weathercode, weather.is_day) : null;
   const isHot = weather?.high != null && weather.high >= 90;
 
+  // Top-2 announcements from the focus board, shown in the header center.
+  const announcements = (focusItems ?? []).slice(0, 2);
+  const annColor: Record<string, string> = {
+    info: '#0ea5e9', warn: '#f59e0b', urgent: '#dc2626', critical: '#7f1d1d',
+  };
+
   return (
     <header className="tv-header">
-      <div className="tv-h-title">UPark Operation</div>
+      <div className="tv-h-left">
+        <div className="tv-h-title">UPark</div>
+        <div className="tv-h-oncall">
+          <div className="tv-h-oncall-block">
+            <span className="tv-h-oncall-label">On-call</span>
+            <span className="tv-h-oncall-name tv-h-oncall-current">
+              {current?.primary ? shortName(current.primary) : '—'}
+            </span>
+          </div>
+          <div className="tv-h-oncall-block tv-h-oncall-next">
+            <span className="tv-h-oncall-label">Next</span>
+            <span className="tv-h-oncall-name">
+              {next?.primary ? shortName(next.primary) : '—'}
+            </span>
+          </div>
+        </div>
+      </div>
 
-      <div className="tv-h-oncall">
-        <div className="tv-h-oncall-block">
-          <span className="tv-h-oncall-label">On-call</span>
-          <span className="tv-h-oncall-name">
-            {current?.primary ? shortName(current.primary) : '—'}
-          </span>
-        </div>
-        <div className="tv-h-oncall-block tv-h-oncall-next">
-          <span className="tv-h-oncall-label">Next</span>
-          <span className="tv-h-oncall-name">
-            {next?.primary ? shortName(next.primary) : '—'}
-          </span>
-        </div>
+      <div className="tv-h-center">
+        {announcements.length > 0 && (
+          <ul className="tv-h-announcements">
+            {announcements.map((a) => (
+              <li key={a.id}>
+                <span className="tv-h-ann-dot" style={{ background: annColor[a.level] ?? '#94a3b8' }} />
+                {a.title && <strong>{a.title}: </strong>}
+                <span className="tv-h-ann-body">{a.body}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="tv-h-right-cluster">
         {weather && wx && (
           <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
             <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
-            {weather.high != null && weather.low != null ? (
-              <span className="tv-h-wx-range">
-                <span className={`tv-h-wx-high ${isHot ? 'tv-h-wx-hot' : ''}`}>{Math.round(weather.high)}°</span>
-                <span className="tv-h-wx-slash">/</span>
-                <span className="tv-h-wx-low">{Math.round(weather.low)}°</span>
-              </span>
-            ) : (
-              <span className="tv-h-wx-temp">{Math.round(weather.temperature)}°F</span>
-            )}
+            <span className="tv-h-wx-range">
+              {weather.high != null && (
+                <>
+                  <span className={`tv-h-wx-high ${isHot ? 'tv-h-wx-hot' : ''}`}>{Math.round(weather.high)}°</span>
+                  <span className="tv-h-wx-slash">/</span>
+                </>
+              )}
+              <span className="tv-h-wx-now">{Math.round(weather.temperature)}°</span>
+              {weather.low != null && (
+                <>
+                  <span className="tv-h-wx-slash">/</span>
+                  <span className="tv-h-wx-low">{Math.round(weather.low)}°</span>
+                </>
+              )}
+            </span>
             <span className="tv-h-wx-label">{wx.label}</span>
           </div>
         )}
         <div className="tv-h-datetime">{dateTimeStr}</div>
-        <div className="tv-h-age">data {ageStr}</div>
       </div>
     </header>
   );
@@ -981,6 +1004,10 @@ function TvStyles() {
         flex-wrap: nowrap;
         white-space: nowrap;
       }
+      .tv-h-left {
+        display: flex; align-items: baseline; gap: 1.0vw;
+        flex: 0 0 auto;
+      }
       .tv-h-title {
         font-size: 1.4vw;
         font-weight: 700;
@@ -1000,12 +1027,48 @@ function TvStyles() {
         color: #64748b;
       }
       .tv-h-oncall-name { font-size: 1.1vw; font-weight: 700; color: #fca5a5; }
+      .tv-h-oncall-current {
+        text-decoration: underline;
+        text-decoration-color: rgba(252, 165, 165, 0.6);
+        text-underline-offset: 0.2vw;
+        text-decoration-thickness: 0.12vw;
+      }
       .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
 
-      /* Right-side cluster: weather → date/time → data age */
+      /* Center: top-2 announcements pulled from the focus board */
+      .tv-h-center {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 0 0.5vw;
+      }
+      .tv-h-announcements {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; align-items: baseline; gap: 1.4vw;
+        max-width: 100%;
+        font-size: 0.85vw;
+        color: #cbd5e1;
+      }
+      .tv-h-announcements li {
+        display: inline-flex; align-items: baseline; gap: 0.35vw;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        min-width: 0;
+        max-width: 100%;
+      }
+      .tv-h-announcements strong { color: #f1f5f9; font-weight: 700; }
+      .tv-h-announcements .tv-h-ann-body { overflow: hidden; text-overflow: ellipsis; }
+      .tv-h-ann-dot {
+        width: 0.5vw; height: 0.5vw; border-radius: 50%;
+        flex: 0 0 auto; display: inline-block;
+        align-self: center;
+      }
+
+      /* Right-side cluster: weather → date/time */
       .tv-h-right-cluster {
         display: flex; align-items: center; gap: 0.7vw;
-        margin-left: auto;
         flex: 0 0 auto;
       }
 
@@ -1030,25 +1093,26 @@ function TvStyles() {
       .tv-h-wx-icon { font-size: 1.25vw; line-height: 1; }
       .tv-h-wx-range { display: inline-flex; align-items: baseline; gap: 0.12vw; }
       .tv-h-wx-high {
-        font-size: 1.25vw; font-weight: 700; color: #fbbf24;
+        font-size: 0.95vw; font-weight: 600; color: #fbbf24;
         font-variant-numeric: tabular-nums;
       }
       .tv-h-wx-hot { color: #f87171; }
-      .tv-h-wx-slash { color: #475569; font-size: 0.95vw; }
+      .tv-h-wx-slash { color: #475569; font-size: 0.9vw; }
       .tv-h-wx-low {
         font-size: 0.95vw; font-weight: 500; color: #93c5fd;
         font-variant-numeric: tabular-nums;
       }
-      .tv-h-wx-temp { font-size: 1.25vw; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+      /* Current temp — the dominant value in the middle of the weather chip */
+      .tv-h-wx-now {
+        font-size: 1.35vw; font-weight: 700; color: #f8fafc;
+        font-variant-numeric: tabular-nums;
+        padding: 0 0.05vw;
+      }
       .tv-h-wx-label { font-size: 0.72vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
 
-      /* Date/time + age */
+      /* Date/time */
       .tv-h-datetime {
         font-size: 0.95vw; color: #cbd5e1; font-variant-numeric: tabular-nums;
-        flex: 0 0 auto;
-      }
-      .tv-h-age {
-        font-size: 0.8vw; color: #64748b; font-variant-numeric: tabular-nums;
         flex: 0 0 auto;
       }
 
