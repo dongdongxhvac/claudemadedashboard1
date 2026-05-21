@@ -80,6 +80,7 @@ export type WoCloseEvent = {
   category: string | null;
   description: string | null;
   billable_total: number | null;
+  labor_hours: number | null;
 };
 
 export function useCurrentPmRows() {
@@ -186,7 +187,7 @@ export function useRecentWoCloses(daysBack: number = 40) {
       since.setDate(since.getDate() - daysBack);
       const { data, error } = await supabase
         .from('wo_close_events')
-        .select('wo_id, completed_on, assigned_to_name, building_code, category, description, billable_total')
+        .select('wo_id, completed_on, assigned_to_name, building_code, category, description, billable_total, labor_hours')
         .gte('completed_on', since.toISOString())
         .order('completed_on', { ascending: false });
       if (error) throw error;

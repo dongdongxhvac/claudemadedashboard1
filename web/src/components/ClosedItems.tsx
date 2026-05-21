@@ -1,17 +1,14 @@
-// §00a — PMs & WOs closed in the selected window.
-// Sub-section of §00 Crew Performance: reads the same `period` selector that
-// §00 owns, so toggling the chips up there filters this tile to match.
+// Closed PMs & WOs drill-down. Embeds inside §00 Crew Performance —
+// no Section wrapper, just the tabs + tables. Caller owns the heading.
 //
-// Activity-feed style — most recent close at top. Toggle between PMs and WOs.
+// Filters by the `period` prop the parent passes in (shared with §00).
 import { useMemo, useState } from 'react';
 import { useRecentPmCloses, useRecentWoCloses } from '../hooks/useCurrentSnapshots';
-import { PERIODS, windowFor, type Period } from '../lib/dashboard';
-import { Section } from './Section';
+import { windowFor, type Period } from '../lib/dashboard';
 
 type Tab = 'pms' | 'wos';
 
 export function ClosedItems({ period }: { period: Period }) {
-  // Fetch 40d (covers the longest period option), filter client-side by window.
   const pmsQ = useRecentPmCloses(40);
   const wosQ = useRecentWoCloses(40);
   const [tab, setTab] = useState<Tab>('pms');
@@ -24,36 +21,29 @@ export function ClosedItems({ period }: { period: Period }) {
     };
     const pms = (pmsQ.data ?? []).filter((r) => inWin(r.completed_on));
     const wos = (wosQ.data ?? []).filter((r) => inWin(r.completed_on));
-    return { win, pms, wos };
+    const pmHours = pms.reduce((s, r) => s + (r.labor_hours ?? 0), 0);
+    const woHours = wos.reduce((s, r) => s + (r.labor_hours ?? 0), 0);
+    return { pms, wos, pmHours, woHours };
   }, [pmsQ.data, wosQ.data, period]);
 
-  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? '';
-  const titleStr = `§00a Closed PMs & WOs · ${periodLabel}`;
   const loading = pmsQ.isLoading || wosQ.isLoading;
-
-  if (loading) return <Section title={titleStr} loading />;
+  if (loading) return <p className="t-text t-muted">Loading closed items…</p>;
 
   return (
-    <Section
-      title={titleStr}
-      subtitle={
-        <span>
-          Window · {data.win.label} · <b>{data.pms.length}</b> PMs · <b>{data.wos.length}</b> WOs closed
-        </span>
-      }
-    >
-      {/* Tab toggle */}
-      <div className="flex items-center gap-2 mb-3">
+    <div>
+      {/* Tab toggle + counts */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="t-small t-muted uppercase tracking-wider">Closed in window</span>
         <TabPill active={tab === 'pms'} onClick={() => setTab('pms')}>
-          PMs ({data.pms.length})
+          PMs ({data.pms.length}) · {data.pmHours.toFixed(1)}h
         </TabPill>
         <TabPill active={tab === 'wos'} onClick={() => setTab('wos')}>
-          WOs ({data.wos.length})
+          WOs ({data.wos.length}) · {data.woHours.toFixed(1)}h
         </TabPill>
       </div>
 
       {tab === 'pms' ? <PmTable rows={data.pms} /> : <WoTable rows={data.wos} />}
-    </Section>
+    </div>
   );
 }
 
@@ -84,34 +74,38 @@ function PmTable({ rows }: { rows: ReturnType<typeof useRecentPmCloses>['data'] 
     return <p className="t-text t-muted">No PMs closed in this window.</p>;
   }
   return (
-    <table className="w-full t-small">
-      <thead>
-        <tr className="t-muted text-left">
-          <th className="py-1">Task</th>
-          <th className="py-1">Name</th>
-          <th className="py-1">Tech</th>
-          <th className="py-1">Building</th>
-          <th className="py-1 text-right">Closed</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={`${r.task_no}-${r.completed_on}`}
-            className="border-t"
-            style={{ borderColor: 'var(--color-border-soft)' }}
-          >
-            <td className="py-1 pr-2 t-mono">{r.task_no ?? '—'}</td>
-            <td className="py-1 pr-2" title={r.task_name ?? ''}>
-              {truncate(r.task_name, 70)}
-            </td>
-            <td className="py-1 pr-2">{r.assigned_to_name ?? '—'}</td>
-            <td className="py-1 pr-2 t-muted">{r.building_code ?? '—'}</td>
-            <td className="py-1 text-right t-mono t-muted">{fmtRelative(r.completed_on)}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full t-small">
+        <thead>
+          <tr className="t-muted text-left">
+            <th className="py-1">Task</th>
+            <th className="py-1">Name</th>
+            <th className="py-1">Tech</th>
+            <th className="py-1">Building</th>
+            <th className="py-1 text-right">Hours</th>
+            <th className="py-1 text-right">Closed</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={`${r.task_no}-${r.completed_on}`}
+              className="border-t"
+              style={{ borderColor: 'var(--color-border-soft)' }}
+            >
+              <td className="py-1 pr-2 t-mono">{r.task_no ?? '—'}</td>
+              <td className="py-1 pr-2" title={r.task_name ?? ''}>
+                {truncate(r.task_name, 70)}
+              </td>
+              <td className="py-1 pr-2">{r.assigned_to_name ?? '—'}</td>
+              <td className="py-1 pr-2 t-muted">{r.building_code ?? '—'}</td>
+              <td className="py-1 pr-2 text-right t-mono">{fmtHours(r.labor_hours)}</td>
+              <td className="py-1 text-right t-mono t-muted">{fmtRelative(r.completed_on)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -120,35 +114,44 @@ function WoTable({ rows }: { rows: ReturnType<typeof useRecentWoCloses>['data'] 
     return <p className="t-text t-muted">No WOs closed in this window.</p>;
   }
   return (
-    <table className="w-full t-small">
-      <thead>
-        <tr className="t-muted text-left">
-          <th className="py-1">WO</th>
-          <th className="py-1">Description</th>
-          <th className="py-1">Tech</th>
-          <th className="py-1">Building</th>
-          <th className="py-1 text-right">Closed</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={`${r.wo_id}-${r.completed_on}`}
-            className="border-t"
-            style={{ borderColor: 'var(--color-border-soft)' }}
-          >
-            <td className="py-1 pr-2 t-mono">{r.wo_id ?? '—'}</td>
-            <td className="py-1 pr-2" title={r.description ?? ''}>
-              {truncate(r.description, 70)}
-            </td>
-            <td className="py-1 pr-2">{r.assigned_to_name ?? '—'}</td>
-            <td className="py-1 pr-2 t-muted">{r.building_code ?? '—'}</td>
-            <td className="py-1 text-right t-mono t-muted">{fmtRelative(r.completed_on)}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full t-small">
+        <thead>
+          <tr className="t-muted text-left">
+            <th className="py-1">WO</th>
+            <th className="py-1">Description</th>
+            <th className="py-1">Tech</th>
+            <th className="py-1">Building</th>
+            <th className="py-1 text-right">Hours</th>
+            <th className="py-1 text-right">Closed</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={`${r.wo_id}-${r.completed_on}`}
+              className="border-t"
+              style={{ borderColor: 'var(--color-border-soft)' }}
+            >
+              <td className="py-1 pr-2 t-mono">{r.wo_id ?? '—'}</td>
+              <td className="py-1 pr-2" title={r.description ?? ''}>
+                {truncate(r.description, 70)}
+              </td>
+              <td className="py-1 pr-2">{r.assigned_to_name ?? '—'}</td>
+              <td className="py-1 pr-2 t-muted">{r.building_code ?? '—'}</td>
+              <td className="py-1 pr-2 text-right t-mono">{fmtHours(r.labor_hours)}</td>
+              <td className="py-1 text-right t-mono t-muted">{fmtRelative(r.completed_on)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
+}
+
+function fmtHours(h: number | null | undefined): string {
+  if (h == null) return '—';
+  return `${h.toFixed(1)}h`;
 }
 
 function truncate(s: string | null | undefined, n: number): string {

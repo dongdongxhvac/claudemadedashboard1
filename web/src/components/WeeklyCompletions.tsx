@@ -14,6 +14,7 @@ import {
   type Period,
 } from '../lib/dashboard';
 import { Section } from './Section';
+import { ClosedItems } from './ClosedItems';
 
 type Sort = 'hours' | 'pms' | 'open_npms' | 'name';
 const SORTS: { key: Sort; label: string }[] = [
@@ -265,6 +266,14 @@ export function WeeklyCompletions({
             </div>
           );
         })}
+      </div>
+
+      {/* Closed items drill-down — was the standalone §00a tile, now part of §00 */}
+      <div
+        className="mt-5 pt-4"
+        style={{ borderTop: '1px solid var(--color-border)' }}
+      >
+        <ClosedItems period={period} />
       </div>
     </Section>
   );
