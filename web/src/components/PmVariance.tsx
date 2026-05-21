@@ -1,4 +1,5 @@
-// §01a — PM estimate accuracy over the last 30 days.
+// §00a — PM estimate accuracy over the last 30 days. Sub-section of §00
+// Crew Performance since it's a labor/performance signal.
 // Surfaces actual labor vs estimated labor per closed PM. Reads from the
 // pm_variance_recent view which already filters out closes missing either
 // number, so every row here is a usable comparison.
@@ -49,11 +50,11 @@ export function PmVariance() {
     return { total, avgPct, buckets, over, under };
   }, [q.data]);
 
-  if (q.isLoading) return <Section title="§01a PM estimate accuracy · 30d" loading />;
+  if (q.isLoading) return <Section title="§00a PM estimate accuracy · 30d" loading />;
   if (data.total === 0) {
     return (
       <Section
-        title="§01a PM estimate accuracy · 30d"
+        title="§00a PM estimate accuracy · 30d"
         subtitle="No closed PMs with both estimated and actual labor yet."
       >
         <p className="t-text t-muted">As pm12 polls capture closures, this will populate.</p>
@@ -63,7 +64,7 @@ export function PmVariance() {
 
   return (
     <Section
-      title="§01a PM estimate accuracy · 30d"
+      title="§00a PM estimate accuracy · 30d"
       subtitle={
         <span>
           {data.total} closes with both numbers · avg{' '}
