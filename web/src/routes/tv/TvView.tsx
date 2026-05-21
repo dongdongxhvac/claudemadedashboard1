@@ -1,21 +1,20 @@
-// /tv — Shop-floor TV view. Static 3x2 grid, large fonts, no nav chrome.
-// Six panels visible at once for the morning huddle / glanceable read.
+// /tv — Shop-floor TV view. Static 3-column grid, large fonts, no nav chrome.
+// Five panels for the morning huddle / glanceable read.
 //
-// Layout (3 cols × 2 rows):
+// Layout (3 cols × 2 rows; left col spans both rows):
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ WORKLOAD         │ FOCUS BOARD      │ (open slot — TBD)            │
-//   │  due today (top) │                  │                              │
-//   │  14d PM | ◆ 46d  │                  │                              │
-//   ├──────────────────┼──────────────────┼──────────────────────────────┤
-//   │ CREW · LAST 7d   │ BUILDINGS        │ ON-CALL SCHEDULE             │
-//   │                  │ (rounds + assign)│ (whole table)                │
+//   │ WORKLOAD +       │ FOCUS BOARD      │ (open slot — TBD)            │
+//   │ PERFORMANCE      │                  │                              │
+//   │  · Workload      ├──────────────────┼──────────────────────────────┤
+//   │  · Crew 7d       │ BUILDINGS        │ ON-CALL SCHEDULE             │
+//   │  · Recent closes │ (rounds + assign)│ (whole table)                │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, type OncallParticipant, type OncallSettings } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
-import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses } from '../../hooks/useCurrentSnapshots';
+import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses, type PmCloseEvent, type WoCloseEvent } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useRounds, useRoundsRealtime } from '../../hooks/useRounds';
 import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
@@ -64,6 +63,7 @@ export default function TvView() {
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
   const closesQ     = useRecentPmCloses(14);       // 7d window + 7d prior for delta arrows
+  const woClosesQ   = useRecentWoCloses(14);       // for the "recent closes" list (mixed w/ PMs)
   const laborDailyQ = useLaborDaily(14);
   const roundsQ      = useRounds();
   const shiftsQ      = useShifts();
@@ -89,23 +89,22 @@ export default function TvView() {
         weather={weatherQ.data ?? null}
       />
       <main className="tv-grid">
-        {/* Top row */}
-        <WorkloadPanel
-          pmRows={pmQ.data ?? []}
-          engineers={engineersQ.data ?? []}
-          shifts={shiftsQ.data ?? []}
-          now={now}
-        />
-        <FocusBoardPanel items={focusQ.data ?? []} />
-        <EmptyPanel />
-        {/* Bottom row */}
-        <CrewPanel
+        {/* Left column: one tall panel spanning both rows */}
+        <WorkloadPerformancePanel
           pmRows={pmQ.data ?? []}
           laborRows={laborQ.data ?? []}
+          engineers={engineersQ.data ?? []}
+          shifts={shiftsQ.data ?? []}
           closes={closesQ.data ?? []}
+          woCloses={woClosesQ.data ?? []}
           laborDaily={laborDailyQ.data ?? []}
           now={now}
         />
+        {/* Middle column */}
+        <FocusBoardPanel items={focusQ.data ?? []} />
+        {/* Right column top */}
+        <EmptyPanel />
+        {/* Middle column bottom */}
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -113,6 +112,7 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           shifts={shiftsQ.data ?? []}
         />
+        {/* Right column bottom */}
         <OncallPanel
           participants={participantsQ.data ?? []}
           settings={oncallSettingsQ.data ?? null}
@@ -214,6 +214,122 @@ function EmptyPanel() {
       <p className="tv-muted" style={{ fontSize: '1.0vw' }}>—</p>
     </section>
   );
+}
+
+/** Combined Workload + Performance panel — spans both rows in the left column.
+ *  Contains three sub-sections: Workload (top), Crew last 7d (middle),
+ *  and Top 5 recent closes (bottom). Mirrors the §00 + Workload combo from
+ *  the manager dashboard, tailored for TV-wall legibility. */
+function WorkloadPerformancePanel({
+  pmRows, laborRows, engineers, shifts, closes, woCloses, laborDaily, now,
+}: {
+  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
+  laborRows: NonNullable<ReturnType<typeof useCurrentLaborRows>['data']>;
+  engineers: EngineerRow[];
+  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
+  closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
+  woCloses: NonNullable<ReturnType<typeof useRecentWoCloses>['data']>;
+  laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
+  now: Date;
+}) {
+  const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
+  const laborLatest = laborRows.reduce<string | null>((acc, r) => {
+    const ts = r.snapshot_taken_at;
+    if (!ts) return acc;
+    return acc && acc >= ts ? acc : ts;
+  }, null);
+  const laborAge = formatDataAge(now, laborLatest);
+
+  // Top 5 most recent closes, interleaving PMs and WOs by completed_on desc.
+  const recentCloses = useMemo(() => {
+    type Row =
+      | { kind: 'PM'; ev: PmCloseEvent }
+      | { kind: 'WO'; ev: WoCloseEvent };
+    const all: Row[] = [
+      ...closes.map((ev) => ({ kind: 'PM' as const, ev })),
+      ...woCloses.map((ev) => ({ kind: 'WO' as const, ev })),
+    ];
+    all.sort((a, b) => b.ev.completed_on.localeCompare(a.ev.completed_on));
+    return all.slice(0, 5);
+  }, [closes, woCloses]);
+
+  return (
+    <section className="tv-panel tv-panel-tall" style={{ borderTopColor: '#f59e0b' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Workload + Performance</h2>
+        <div className="tv-panel-meta">
+          <span className="tv-crew-meta">
+            <span>PM <b>{pmAge}</b></span>
+            <span className="tv-crew-meta-sep">·</span>
+            <span>Labor <b>{laborAge}</b></span>
+          </span>
+        </div>
+      </div>
+      <div className="tv-panel-body tv-wp-body">
+        <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
+        <div className="tv-wp-divider" />
+        <CrewSection closes={closes} laborDaily={laborDaily} now={now} />
+        <div className="tv-wp-divider" />
+        <RecentClosesSection rows={recentCloses} now={now} />
+      </div>
+    </section>
+  );
+}
+
+/** Top 5 most recent closes — PM/WO chip, task #, short description, tech, hours, when. */
+function RecentClosesSection({ rows, now }: {
+  rows: Array<
+    | { kind: 'PM'; ev: PmCloseEvent }
+    | { kind: 'WO'; ev: WoCloseEvent }
+  >;
+  now: Date;
+}) {
+  return (
+    <div className="tv-wp-closes">
+      <div className="tv-workload-section-label">Recent closes · top 5</div>
+      {rows.length === 0 ? (
+        <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No closes yet.</p>
+      ) : (
+        <ul className="tv-closes-list">
+          {rows.map((r, i) => {
+            const id   = r.kind === 'PM' ? r.ev.task_no : r.ev.wo_id;
+            const desc = r.kind === 'PM' ? r.ev.task_name : r.ev.description;
+            const tech = r.ev.assigned_to_name;
+            const bld  = r.ev.building_code;
+            const hrs  = r.ev.labor_hours;
+            return (
+              <li key={`${r.kind}-${id ?? i}-${r.ev.completed_on}`}>
+                <span className={`tv-closes-chip tv-closes-chip-${r.kind.toLowerCase()}`}>{r.kind}</span>
+                <span className="tv-closes-id">{id ?? '—'}</span>
+                <span className="tv-closes-desc" title={desc ?? ''}>{shortDesc(desc, 48)}</span>
+                <span className="tv-closes-tech">{shortName(tech)}</span>
+                <span className="tv-closes-bld">{bld ?? '—'}</span>
+                <span className="tv-closes-hrs">{hrs == null ? '—' : `${hrs.toFixed(1)}h`}</span>
+                <span className="tv-closes-when">{relTime(r.ev.completed_on, now)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function shortDesc(s: string | null | undefined, n: number): string {
+  if (!s) return '—';
+  const one = s.replace(/\s+/g, ' ').trim();
+  return one.length > n ? one.slice(0, n - 1) + '…' : one;
+}
+
+function relTime(iso: string, now: Date): string {
+  const d = new Date(iso);
+  const mins = Math.round((now.getTime() - d.getTime()) / 60_000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.round(hrs / 24);
+  return `${days}d`;
 }
 
 function WklRow({ row }: { row: { name: string; pm14: number; major46: number } }) {
@@ -446,9 +562,7 @@ function FocusBoardPanel({ items }: { items: ReturnType<typeof useActiveFocusIte
   );
 }
 
-function CrewPanel({ pmRows, laborRows, closes, laborDaily, now }: {
-  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
-  laborRows: NonNullable<ReturnType<typeof useCurrentLaborRows>['data']>;
+function CrewSection({ closes, laborDaily, now }: {
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
   now: Date;
@@ -494,30 +608,11 @@ function CrewPanel({ pmRows, laborRows, closes, laborDaily, now }: {
       .slice(0, 6);
   }, [closes, laborDaily, now]);
 
-  const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
-  // current_labor_snapshot keeps the latest snapshot per (week_start, assignee),
-  // so older weeks freeze their taken_at. Use the max across all rows = freshest poll.
-  const laborLatest = laborRows.reduce<string | null>((acc, r) => {
-    const ts = r.snapshot_taken_at;
-    if (!ts) return acc;
-    return acc && acc >= ts ? acc : ts;
-  }, null);
-  const laborAge = formatDataAge(now, laborLatest);
-
   return (
-    <Panel
-      title="PMs Closed · Labor · last 7 days"
-      accent="#8b5cf6"
-      meta={
-        <span className="tv-crew-meta">
-          <span>PM <b>{pmAge}</b></span>
-          <span className="tv-crew-meta-sep">·</span>
-          <span>Labor <b>{laborAge}</b></span>
-        </span>
-      }
-    >
+    <div className="tv-wp-crew">
+      <div className="tv-workload-section-label">PMs closed · labor · last 7 days</div>
       {data.length === 0 ? (
-        <p className="tv-muted">No data.</p>
+        <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
         <ul className="tv-crew-list">
           {data.map((c) => (
@@ -535,7 +630,7 @@ function CrewPanel({ pmRows, laborRows, closes, laborDaily, now }: {
           ))}
         </ul>
       )}
-    </Panel>
+    </div>
   );
 }
 
@@ -552,7 +647,7 @@ function Delta({ v, decimals = 0 }: { v: number; decimals?: number }) {
   );
 }
 
-function WorkloadPanel({ pmRows, engineers, shifts, now }: {
+function WorkloadSection({ pmRows, engineers, shifts, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   engineers: EngineerRow[];
   shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
@@ -646,7 +741,7 @@ function WorkloadPanel({ pmRows, engineers, shifts, now }: {
   const todayCount = data.todayCards.reduce((s, c) => s + c.count, 0);
 
   return (
-    <Panel title="Workload" accent="#f59e0b">
+    <div className="tv-wp-workload">
       <div className="tv-workload-top">
         <div className="tv-workload-section-label">
           Due today + overdue · <strong style={{ color: '#f8fafc' }}>{todayCount}</strong>
@@ -701,7 +796,7 @@ function WorkloadPanel({ pmRows, engineers, shifts, now }: {
           </div>
         )}
       </div>
-    </Panel>
+    </div>
   );
 }
 
@@ -928,6 +1023,44 @@ function TvStyles() {
         gap: 1vw;
         min-height: 0;
       }
+      /* Left-column tall panel spanning both rows */
+      .tv-panel-tall { grid-row: 1 / span 2; }
+
+      /* Combined Workload + Performance panel body */
+      .tv-wp-body { display: flex; flex-direction: column; gap: 0.6vw; min-height: 0; overflow: hidden; }
+      .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.2vw 0; flex: 0 0 auto; }
+      .tv-wp-workload, .tv-wp-crew, .tv-wp-closes { display: flex; flex-direction: column; gap: 0.25vw; min-height: 0; }
+
+      /* Recent closes list (top 5) */
+      .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-closes-list li {
+        display: grid;
+        grid-template-columns: 1.6vw 3.5vw 1fr 5vw 2.2vw 2.4vw 2vw;
+        gap: 0.4vw;
+        align-items: baseline;
+        font-size: 0.85vw;
+        line-height: 1.25;
+      }
+      .tv-closes-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.05vw 0.3vw;
+        border-radius: 3px;
+        font-size: 0.65vw;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-align: center;
+      }
+      .tv-closes-chip-pm { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.45); }
+      .tv-closes-chip-wo { background: rgba(14, 165, 233, 0.18); color: #7dd3fc; border: 1px solid rgba(14, 165, 233, 0.45); }
+      .tv-closes-id   { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5e1; font-size: 0.78vw; }
+      .tv-closes-desc { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tv-closes-tech { color: #f1f5f9; font-weight: 600; }
+      .tv-closes-bld  { color: #94a3b8; font-variant-numeric: tabular-nums; }
+      .tv-closes-hrs  { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
+      .tv-closes-when { color: #64748b; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.75vw; }
+
       .tv-panel {
         background: #111827;
         border: 1px solid #1e293b;
