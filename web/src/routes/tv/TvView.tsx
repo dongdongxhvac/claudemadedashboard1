@@ -488,7 +488,14 @@ function CrewPanel({ pmRows, laborRows, now }: {
   }, [pmRows, laborRows, now]);
 
   const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
-  const laborAge = formatDataAge(now, laborRows[0]?.snapshot_taken_at ?? null);
+  // current_labor_snapshot keeps the latest snapshot per (week_start, assignee),
+  // so older weeks freeze their taken_at. Use the max across all rows = freshest poll.
+  const laborLatest = laborRows.reduce<string | null>((acc, r) => {
+    const ts = r.snapshot_taken_at;
+    if (!ts) return acc;
+    return acc && acc >= ts ? acc : ts;
+  }, null);
+  const laborAge = formatDataAge(now, laborLatest);
 
   return (
     <Panel
