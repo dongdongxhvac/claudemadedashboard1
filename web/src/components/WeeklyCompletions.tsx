@@ -7,8 +7,8 @@
 // Last wk / 30d. Per-card trend arrow compares against the immediately
 // preceding window. Sort selector lets the user reorder by metric.
 import { useMemo, useState } from 'react';
-import { useCurrentPmRows, useCurrentLaborRows } from '../hooks/useCurrentSnapshots';
-import { mondayOf, addDays, fmtDateShort, isCompletedStatus, isNpm, isClosed } from '../lib/dashboard';
+import { useCurrentPmRows, useLaborDaily, useRecentPmCloses } from '../hooks/useCurrentSnapshots';
+import { mondayOf, addDays, fmtDateShort, isNpm, isClosed } from '../lib/dashboard';
 import { Section } from './Section';
 
 type Period = 'today' | '7d' | 'this_wk' | 'last_wk' | '30d';
@@ -82,26 +82,30 @@ function prevWindow(current: Win): Win {
   return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
 }
 
-/** True if a labor week [week_start, +7d) overlaps the window. */
-function laborOverlaps(weekStartStr: string | null, win: Win): boolean {
-  if (!weekStartStr) return false;
-  const ws = new Date(weekStartStr + 'T00:00:00');
-  const we = addDays(ws, 7);
-  return ws < win.end && we > win.start;
+/** Local-midnight Date for a YYYY-MM-DD day string (avoids UTC shift). */
+function dayDate(ymd: string): Date {
+  return new Date(ymd + 'T00:00:00');
 }
 
 export function WeeklyCompletions() {
   const pmQ = useCurrentPmRows();
-  const laborQ = useCurrentLaborRows();
+  // Phase 5.5: completed-PM counts come from the close-event log, not pm_rows
+  // (pm_rows no longer holds Completed rows). 40d covers the 30d window plus
+  // the prior-period trend arrow comparison.
+  const closesQ = useRecentPmCloses(40);
+  // Labor hours: per-tech-per-day from labor_daily view (end-of-day deltas).
+  // Replaces the prior "sum overlapping weeks" approximation which double-counted.
+  const laborDailyQ = useLaborDaily(40);
 
   const [period, setPeriod] = useState<Period>('7d');
   const [sort,   setSort]   = useState<Sort>('hours');
 
   const data = useMemo(() => {
     const pmRows = pmQ.data ?? [];
-    const laborRows = laborQ.data ?? [];
+    const closes = closesQ.data ?? [];
+    const laborDaily = laborDailyQ.data ?? [];
 
-    // Anchor on the latest snapshot timestamp, falling back to "now".
+    // Anchor on the latest pm snapshot timestamp, falling back to "now".
     const snapshotTakenAt = pmRows[0]?.snapshot_taken_at;
     const anchor = snapshotTakenAt ? new Date(snapshotTakenAt) : new Date();
     const win  = windowFor(period, anchor);
@@ -129,32 +133,31 @@ export function WeeklyCompletions() {
         prevCount: 0, prevHours: 0,
       };
     };
-    const bump = (a: string, win: 'cur' | 'prev', count = 0, hours = 0) => {
+    const bump = (a: string, bucket: 'cur' | 'prev', count = 0, hours = 0) => {
       const card = cardByName.get(a) ?? blank(a);
-      if (win === 'cur')  { card.count    += count; card.hours    += hours; }
-      else                { card.prevCount += count; card.prevHours += hours; }
+      if (bucket === 'cur')  { card.count    += count; card.hours    += hours; }
+      else                   { card.prevCount += count; card.prevHours += hours; }
       cardByName.set(a, card);
     };
 
-    // Count PM completions whose updated_at_cmms falls inside the window.
-    for (const r of pmRows) {
-      if (!isCompletedStatus(r.status)) continue;
-      const ts = r.updated_at_cmms;
-      if (!ts) continue;
-      const d = new Date(ts);
-      const a = (r.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
-      if (d >= win.start && d < win.end)   bump(a, 'cur',  1, 0);
+    // PM completions: one row per close event from pm_close_events.
+    // assigned_to_name is captured at time of close (the tech who completed it).
+    for (const c of closes) {
+      const d = new Date(c.completed_on);
+      const a = (c.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
+      if (d >= win.start  && d < win.end)  bump(a, 'cur',  1, 0);
       if (d >= prev.start && d < prev.end) bump(a, 'prev', 1, 0);
     }
 
-    // Labor: only week-aligned. Sum labor rows whose week overlaps the window.
-    // Labor data is week-bucketed at ingest time; for rolling windows this is
-    // an approximation noted in the freshness banner tooltip.
-    for (const l of laborRows) {
+    // Labor hours: per-tech-per-day actual hours from labor_daily.
+    // Each row is already a day's hours (not a cumulative running total) so
+    // summing across the window is correct — no week-overlap fudge needed.
+    for (const l of laborDaily) {
+      const d = dayDate(l.day_et);
       const a = (l.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
-      const hrs = l.labor_hours ?? 0;
-      if (laborOverlaps(l.week_start, win))  bump(a, 'cur',  0, hrs);
-      if (laborOverlaps(l.week_start, prev)) bump(a, 'prev', 0, hrs);
+      const hrs = l.hours_that_day ?? 0;
+      if (d >= win.start  && d < win.end)  bump(a, 'cur',  0, hrs);
+      if (d >= prev.start && d < prev.end) bump(a, 'prev', 0, hrs);
     }
 
     // Ensure assignees with open NPMs but no completions/labor still appear.
@@ -179,12 +182,11 @@ export function WeeklyCompletions() {
       totalNpm, totalNpmHours, activeCount,
       snapshotTakenAt,
     };
-  }, [pmQ.data, laborQ.data, period, sort]);
+  }, [pmQ.data, closesQ.data, laborDailyQ.data, period, sort]);
 
   if (pmQ.isLoading) return <Section title="§00 Crew performance" loading />;
 
   const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? '';
-  const isWeekAligned = period === 'this_wk' || period === 'last_wk';
 
   return (
     <Section
@@ -193,14 +195,9 @@ export function WeeklyCompletions() {
         <>
           Window · {data.win.label}
           {data.snapshotTakenAt && (
-            <span title={`Last CSV import ${new Date(data.snapshotTakenAt).toLocaleString()}`}>
+            <span title={`Latest pm12 snapshot ${new Date(data.snapshotTakenAt).toLocaleString()}`}>
               {' · '}
               <span className="t-mono">snapshot {new Date(data.snapshotTakenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-            </span>
-          )}
-          {!isWeekAligned && (
-            <span title="Labor CSVs are aggregated weekly. Rolling windows include any week that overlaps the window — labor totals approximate.">
-              {' · '}labor ≈ overlapping weeks
             </span>
           )}
         </>

@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, type OncallParticipant, type OncallSettings } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
-import { useCurrentPmRows, useCurrentLaborRows } from '../../hooks/useCurrentSnapshots';
+import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useRounds, useRoundsRealtime } from '../../hooks/useRounds';
 import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
@@ -23,7 +23,7 @@ import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/u
 import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
-import { isClosed, isCompletedStatus, addDays, localISODate } from '../../lib/dashboard';
+import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
 function formatDataAge(now: Date, ts: string | null | undefined): string {
@@ -62,7 +62,9 @@ export default function TvView() {
   const oncallSettingsQ = useOncallSettings();
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
-  const laborQ       = useCurrentLaborRows();
+  const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
+  const closesQ     = useRecentPmCloses(14);       // 7d window + 7d prior for delta arrows
+  const laborDailyQ = useLaborDaily(14);
   const roundsQ      = useRounds();
   const shiftsQ      = useShifts();
   const buildingsQ   = useBuildings();
@@ -97,7 +99,13 @@ export default function TvView() {
         <FocusBoardPanel items={focusQ.data ?? []} />
         <EmptyPanel />
         {/* Bottom row */}
-        <CrewPanel pmRows={pmQ.data ?? []} laborRows={laborQ.data ?? []} now={now} />
+        <CrewPanel
+          pmRows={pmQ.data ?? []}
+          laborRows={laborQ.data ?? []}
+          closes={closesQ.data ?? []}
+          laborDaily={laborDailyQ.data ?? []}
+          now={now}
+        />
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
           buildings={buildingsQ.data ?? []}
@@ -438,9 +446,11 @@ function FocusBoardPanel({ items }: { items: ReturnType<typeof useActiveFocusIte
   );
 }
 
-function CrewPanel({ pmRows, laborRows, now }: {
+function CrewPanel({ pmRows, laborRows, closes, laborDaily, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   laborRows: NonNullable<ReturnType<typeof useCurrentLaborRows>['data']>;
+  closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
+  laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
   now: Date;
 }) {
   const data = useMemo(() => {
@@ -457,23 +467,20 @@ function CrewPanel({ pmRows, laborRows, now }: {
       return cur;
     };
 
-    for (const r of pmRows) {
-      if (!isCompletedStatus(r.status)) continue;
-      const ts = r.updated_at_cmms;
-      if (!ts) continue;
-      const d = new Date(ts);
-      const a = (r.assigned_to_name ?? '').trim() || 'Unassigned';
-      if (d >= winStart && d < winEnd)         get(a).pms++;
+    // PM closes (Phase 5.5): from explicit pm_close_events log.
+    for (const c of closes) {
+      const d = new Date(c.completed_on);
+      const a = (c.assigned_to_name ?? '').trim() || 'Unassigned';
+      if (d >= winStart && d < winEnd)          get(a).pms++;
       else if (d >= priorStart && d < priorEnd) get(a).pmsPrev++;
     }
-    for (const l of laborRows) {
-      if (!l.week_start) continue;
-      const ws = new Date(l.week_start + 'T00:00:00');
-      const we = addDays(ws, 7);
+    // Labor hours (Phase 5.5): per-tech per-day from labor_daily view.
+    for (const l of laborDaily) {
+      const d = new Date(l.day_et + 'T00:00:00');
       const a = (l.assigned_to_name ?? '').trim() || 'Unassigned';
-      const hrs = l.labor_hours ?? 0;
-      if (ws < winEnd && we > winStart)            get(a).hours += hrs;
-      else if (ws < priorEnd && we > priorStart)   get(a).hoursPrev += hrs;
+      const hrs = l.hours_that_day ?? 0;
+      if (d >= winStart && d < winEnd)          get(a).hours += hrs;
+      else if (d >= priorStart && d < priorEnd) get(a).hoursPrev += hrs;
     }
     return Array.from(byTech.entries())
       .map(([name, v]) => ({
@@ -485,7 +492,7 @@ function CrewPanel({ pmRows, laborRows, now }: {
       }))
       .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
       .slice(0, 6);
-  }, [pmRows, laborRows, now]);
+  }, [closes, laborDaily, now]);
 
   const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
   // current_labor_snapshot keeps the latest snapshot per (week_start, assignee),

@@ -11,11 +11,11 @@ import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { OncallBadge } from '../../components/OncallBadge';
 import {
-  useMyEngineerContext, useMyPmRows, useMyWoRows, useMyLaborRows,
+  useMyEngineerContext, useMyPmRows, useMyWoRows, useMyLaborRows, useMyPmCloses,
 } from '../../hooks/useMyAssignedData';
 import type { PmRow, WoRow } from '../../hooks/useCurrentSnapshots';
 import {
-  isClosed, isCompletedStatus, isNpm, localISODate, fmtMd,
+  isClosed, isNpm, localISODate, fmtMd,
   mondayOf, addDays, TYPE_COLORS, type PmType,
 } from '../../lib/dashboard';
 import { openPrintWindow } from '../../lib/printPmList';
@@ -43,6 +43,8 @@ export default function EngineerPc() {
   const pmQ = useMyPmRows(ctx.data?.cmms_assignee_name);
   const woQ = useMyWoRows(ctx.data?.cmms_assignee_name);
   const laborQ = useMyLaborRows(ctx.data?.cmms_assignee_name);
+  // Phase 5.5: PM completions live in pm_close_events now.
+  const closesQ = useMyPmCloses(ctx.data?.cmms_assignee_name, 14);
 
   const [filter, setFilter] = useState<'month' | 'all'>('month');
   const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null);
@@ -61,29 +63,34 @@ export default function EngineerPc() {
   const pmRows = pmQ.data ?? [];
   const woRows = woQ.data ?? [];
   const laborRows = laborQ.data ?? [];
+  const closes = closesQ.data ?? [];
 
   // --- stats ---
   const stats = useMemo(() => {
     const overdue: PmRow[] = [];
     const today: PmRow[] = [];
     const tomorrowPms: PmRow[] = [];
-    let doneThisWeek = 0;
     for (const r of pmRows) {
-      if (isCompletedStatus(r.status) && r.updated_at_cmms) {
-        const d = new Date(r.updated_at_cmms);
-        if (d >= weekStart && d <= addDays(weekEnd, 1)) doneThisWeek++;
-      }
       if (isClosed(r.status)) continue;
       if (!r.due_date) continue;
       if (r.due_date < todayStr) overdue.push(r);
       else if (r.due_date === todayStr) today.push(r);
       else if (r.due_date === tomorrowStr) tomorrowPms.push(r);
     }
+    // PM completions this week — from explicit close-event log.
+    const weekEndExclusive = addDays(weekEnd, 1);
+    let doneThisWeek = 0;
+    for (const c of closes) {
+      const d = new Date(c.completed_on);
+      if (d >= weekStart && d < weekEndExclusive) doneThisWeek++;
+    }
+    // Labor hours this week — week-aligned filter already correct since
+    // current_labor_snapshot returns the latest WTD per (week, tech).
     const weekHours = laborRows
       .filter((l) => l.week_start === weekStartStr)
       .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
     return { overdue, today, tomorrowPms, weekHours, doneThisWeek };
-  }, [pmRows, laborRows, todayStr, tomorrowStr, weekStart, weekEnd, weekStartStr]);
+  }, [pmRows, laborRows, closes, todayStr, tomorrowStr, weekStart, weekEnd, weekStartStr]);
 
   // --- PMs (filterable) ---
   const openPms = useMemo(

@@ -4,7 +4,7 @@
 // follow-up; current RLS is permissive (any authenticated user reads all).
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import type { PmRow, WoRow, LaborRow } from './useCurrentSnapshots';
+import type { PmRow, WoRow, LaborRow, PmCloseEvent } from './useCurrentSnapshots';
 
 export type MyContext = {
   user_id: string;
@@ -92,6 +92,28 @@ export function useMyWoRows(cmmsName: string | null | undefined) {
         .eq('assigned_to_name', cmmsName!);
       if (error) throw error;
       return (data ?? []) as WoRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** PM close events for the given assignee in the last N days. Replaces the
+ *  pre-Phase-5.5 pattern of filtering current_pm_snapshot by status='Completed'
+ *  (which no longer returns Completed rows after the schema split). */
+export function useMyPmCloses(cmmsName: string | null | undefined, daysBack: number = 14) {
+  return useQuery({
+    queryKey: ['my_pm_closes', cmmsName, daysBack],
+    enabled: !!cmmsName,
+    queryFn: async (): Promise<PmCloseEvent[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const { data, error } = await supabase
+        .from('pm_close_events')
+        .select('task_no, completed_on, assigned_to_name, site, building_code, pm_type, labor_hours, task_name')
+        .eq('assigned_to_name', cmmsName!)
+        .gte('completed_on', since.toISOString());
+      if (error) throw error;
+      return (data ?? []) as PmCloseEvent[];
     },
     staleTime: 30_000,
   });

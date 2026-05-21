@@ -36,6 +36,26 @@ export type LaborRow = {
   snapshot_taken_at: string | null;
 };
 
+// One row per (tech, ET day). Hours actually logged that day, derived from
+// labor_rows end-of-day cumulative deltas. See labor_daily view DDL.
+export type LaborDailyRow = {
+  assigned_to_name: string | null;
+  day_et: string;           // YYYY-MM-DD
+  week_start: string;       // YYYY-MM-DD
+  hours_that_day: number;
+};
+
+export type PmCloseEvent = {
+  task_no: string | null;
+  completed_on: string;     // ISO timestamp
+  assigned_to_name: string | null;
+  site: string | null;
+  building_code: string | null;
+  pm_type: string | null;
+  labor_hours: number | null;
+  task_name: string | null;
+};
+
 export function useCurrentPmRows() {
   return useQuery({
     queryKey: ['current_pm_snapshot'],
@@ -85,6 +105,46 @@ export function useCurrentLaborRows() {
         .select('*');
       if (error) throw error;
       return (data ?? []) as LaborRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+// Per-tech, per-ET-day actual labor hours. Use this (not useCurrentLaborRows)
+// for any rolling-window math — current_labor_snapshot returns cumulative WTD
+// totals which double-count when summed across overlapping weeks.
+export function useLaborDaily(daysBack: number = 40) {
+  return useQuery({
+    queryKey: ['labor_daily', daysBack],
+    queryFn: async (): Promise<LaborDailyRow[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const sinceStr = since.toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('labor_daily')
+        .select('*')
+        .gte('day_et', sinceStr);
+      if (error) throw error;
+      return (data ?? []) as LaborDailyRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+// PM close events log. Replaces "filter pm_rows by status=Completed" — that
+// table no longer holds completed rows after the Phase 5.5 schema split.
+export function useRecentPmCloses(daysBack: number = 40) {
+  return useQuery({
+    queryKey: ['pm_close_events', daysBack],
+    queryFn: async (): Promise<PmCloseEvent[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const { data, error } = await supabase
+        .from('pm_close_events')
+        .select('task_no, completed_on, assigned_to_name, site, building_code, pm_type, labor_hours, task_name')
+        .gte('completed_on', since.toISOString());
+      if (error) throw error;
+      return (data ?? []) as PmCloseEvent[];
     },
     staleTime: 30_000,
   });

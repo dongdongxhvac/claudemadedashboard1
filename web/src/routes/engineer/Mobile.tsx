@@ -12,8 +12,10 @@ import {
   useMyPmRows,
   useMyWoRows,
   useMyLaborRows,
+  useMyPmCloses,
 } from '../../hooks/useMyAssignedData';
-import { isClosed, isCompletedStatus, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
+import type { PmCloseEvent } from '../../hooks/useCurrentSnapshots';
+import { isClosed, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { OncallBadge } from '../../components/OncallBadge';
 import { openPrintWindow } from '../../lib/printPmList';
@@ -30,6 +32,7 @@ export default function EngineerMobile() {
   const pmQ = useMyPmRows(ctx.data?.cmms_assignee_name);
   const woQ = useMyWoRows(ctx.data?.cmms_assignee_name);
   const laborQ = useMyLaborRows(ctx.data?.cmms_assignee_name);
+  const closesQ = useMyPmCloses(ctx.data?.cmms_assignee_name, 14);
 
   const [tab, setTab] = useState<Tab>('now');
 
@@ -84,6 +87,7 @@ export default function EngineerMobile() {
             pmRows={pmQ.data ?? []}
             woRows={woQ.data ?? []}
             laborRows={laborQ.data ?? []}
+            closes={closesQ.data ?? []}
             loading={pmQ.isLoading || woQ.isLoading}
           />
         )}
@@ -150,11 +154,13 @@ function NowTab({
   pmRows,
   woRows,
   laborRows,
+  closes,
   loading,
 }: {
   pmRows: import('../../hooks/useCurrentSnapshots').PmRow[];
   woRows: import('../../hooks/useCurrentSnapshots').WoRow[];
   laborRows: import('../../hooks/useCurrentSnapshots').LaborRow[];
+  closes: PmCloseEvent[];
   loading: boolean;
 }) {
   const focus = useActiveFocusItems();
@@ -171,16 +177,8 @@ function NowTab({
     const overdue: typeof pmRows = [];
     const today: typeof pmRows = [];
     const tomorrowPms: typeof pmRows = [];
-    let doneThisWeek = 0;
 
     for (const r of pmRows) {
-      // Count completions falling in this week. Mirrors the §00 WeeklyCompletions
-      // logic in Manager view.
-      if (isCompletedStatus(r.status) && r.updated_at_cmms) {
-        const d = new Date(r.updated_at_cmms);
-        if (d >= weekStart && d <= addDays(weekEnd, 1)) doneThisWeek++;
-      }
-
       if (isClosed(r.status)) continue;
       if (!r.due_date) continue;
       if (r.due_date < todayStr) overdue.push(r);
@@ -191,13 +189,21 @@ function NowTab({
     today.sort((a, b) => (a.task_no ?? '').localeCompare(b.task_no ?? ''));
     tomorrowPms.sort((a, b) => (a.task_no ?? '').localeCompare(b.task_no ?? ''));
 
+    // PM completions this week — from explicit close-event log (Phase 5.5).
+    const weekEndExclusive = addDays(weekEnd, 1);
+    let doneThisWeek = 0;
+    for (const c of closes) {
+      const d = new Date(c.completed_on);
+      if (d >= weekStart && d < weekEndExclusive) doneThisWeek++;
+    }
+
     const openWos = (woRows ?? []).filter((w) => w.is_open !== false);
     const weekHours = (laborRows ?? [])
       .filter((l) => l.week_start === weekStartStr)
       .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
     const snapshotTaken = pmRows[0]?.snapshot_taken_at ?? null;
     return { overdue, today, tomorrowPms, openWos, weekHours, doneThisWeek, snapshotTaken };
-  }, [pmRows, woRows, laborRows, todayStr, tomorrowStr, weekStartStr, weekStart, weekEnd]);
+  }, [pmRows, woRows, laborRows, closes, todayStr, tomorrowStr, weekStartStr, weekStart, weekEnd]);
 
   if (loading) return <p className="t-text t-muted p-4">Loading your day...</p>;
 
