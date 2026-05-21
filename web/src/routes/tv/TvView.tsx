@@ -648,9 +648,9 @@ function CrewSection({ closes, laborDaily, now }: {
   const renderRow = (c: typeof data[number]) => (
     <li key={c.name}>
       <span className="tv-crew-name">{shortName(c.name)}</span>
-      <span className="tv-crew-num">{c.pms}<span className="tv-crew-unit">PM</span></span>
+      <span className="tv-crew-num">{c.pms}</span>
       <span className="tv-crew-deltacell"><Delta v={c.pmsDelta} /></span>
-      <span className="tv-crew-num">{Math.round(c.hours)}<span className="tv-crew-unit">h</span></span>
+      <span className="tv-crew-num">{Math.round(c.hours)}</span>
       <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={0} /></span>
     </li>
   );
@@ -1247,7 +1247,6 @@ function TvStyles() {
         font-variant-numeric: tabular-nums;
         font-weight: 600;
       }
-      .tv-crew-unit { color: #64748b; font-weight: 400; font-size: 0.72vw; margin-left: 0.1vw; }
       .tv-crew-deltacell { text-align: left; font-size: 0.6vw; }
       .tv-crew-delta { font-size: 0.6vw; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; opacity: 0.85; }
       .tv-crew-delta.up   { color: #34d399; }
