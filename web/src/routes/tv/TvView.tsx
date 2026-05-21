@@ -300,10 +300,10 @@ function RecentClosesSection({ rows, now }: {
             return (
               <li key={`${r.kind}-${id ?? i}-${r.ev.completed_on}`}>
                 <span className={`tv-closes-chip tv-closes-chip-${r.kind.toLowerCase()}`}>{r.kind}</span>
-                <span className="tv-closes-id">{id ?? '—'}</span>
-                <span className="tv-closes-desc" title={desc ?? ''}>{shortDesc(desc, 48)}</span>
+                <span className="tv-closes-id" title={id ?? ''}>{shortTaskId(id)}</span>
+                <span className="tv-closes-desc" title={desc ?? ''}>{shortDesc(desc, 60)}</span>
                 <span className="tv-closes-tech">{shortName(tech)}</span>
-                <span className="tv-closes-bld">{bld ?? '—'}</span>
+                <span className="tv-closes-bld" title={bld ?? ''}>{buildingShortCode(bld)}</span>
                 <span className="tv-closes-hrs">{hrs == null ? '—' : `${hrs.toFixed(1)}h`}</span>
                 <span className="tv-closes-when">{relTime(r.ev.completed_on, now)}</span>
               </li>
@@ -319,6 +319,20 @@ function shortDesc(s: string | null | undefined, n: number): string {
   if (!s) return '—';
   const one = s.replace(/\s+/g, ' ').trim();
   return one.length > n ? one.slice(0, n - 1) + '…' : one;
+}
+
+/** "40 Landsdowne Street" → "40", "G-80 Bldg" → "G-80". Take first whitespace-delimited token. */
+function buildingShortCode(s: string | null | undefined): string {
+  if (!s) return '—';
+  const tok = s.trim().split(/\s+/)[0];
+  return tok || '—';
+}
+
+/** "PM-UNP-19043" → "19043", "W-UNP-3820" → "3820". Strip the leading prefix segments. */
+function shortTaskId(s: string | null | undefined): string {
+  if (!s) return '—';
+  const parts = s.trim().split('-');
+  return parts[parts.length - 1] || s;
 }
 
 function relTime(iso: string, now: Date): string {
@@ -605,8 +619,25 @@ function CrewSection({ closes, laborDaily, now }: {
         hoursDelta: v.hours - v.hoursPrev,
       }))
       .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
-      .slice(0, 5);
+      .slice(0, 10);
   }, [closes, laborDaily, now]);
+
+  const leftCol  = data.slice(0, 5);
+  const rightCol = data.slice(5);
+
+  const renderRow = (c: typeof data[number]) => (
+    <li key={c.name}>
+      <span className="tv-crew-name">{shortName(c.name)}</span>
+      <span className="tv-crew-stat">
+        {c.pms} PM{c.pms === 1 ? '' : 's'}
+        <Delta v={c.pmsDelta} />
+      </span>
+      <span className="tv-crew-stat">
+        {c.hours.toFixed(1)}h
+        <Delta v={c.hoursDelta} decimals={1} />
+      </span>
+    </li>
+  );
 
   return (
     <div className="tv-wp-crew">
@@ -614,21 +645,10 @@ function CrewSection({ closes, laborDaily, now }: {
       {data.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
-        <ul className="tv-crew-list">
-          {data.map((c) => (
-            <li key={c.name}>
-              <span className="tv-crew-name">{shortName(c.name)}</span>
-              <span className="tv-crew-stat">
-                {c.pms} PM{c.pms === 1 ? '' : 's'}
-                <Delta v={c.pmsDelta} />
-              </span>
-              <span className="tv-crew-stat">
-                {c.hours.toFixed(1)}h
-                <Delta v={c.hoursDelta} decimals={1} />
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="tv-crew-2col">
+          <ul className="tv-crew-list">{leftCol.map(renderRow)}</ul>
+          <ul className="tv-crew-list">{rightCol.map(renderRow)}</ul>
+        </div>
       )}
     </div>
   );
@@ -1032,35 +1052,41 @@ function TvStyles() {
       .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
       .tv-wp-workload, .tv-wp-crew, .tv-wp-closes { display: flex; flex-direction: column; gap: 0.2vw; min-height: 0; }
 
-      /* Recent closes list (top 5) */
+      /* Recent closes list (top 5) — every cell forced to a single line */
       .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
       .tv-closes-list li {
         display: grid;
-        grid-template-columns: 1.5vw 3.2vw 1fr 4.6vw 2vw 2.2vw 1.8vw;
+        grid-template-columns: 1.4vw 2.8vw 1fr 4.4vw 2vw 1.9vw 1.6vw;
         gap: 0.35vw;
         align-items: baseline;
         font-size: 0.78vw;
         line-height: 1.2;
       }
+      .tv-closes-list li > span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
       .tv-closes-chip {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 0.05vw 0.3vw;
+        padding: 0 0.25vw;
         border-radius: 3px;
-        font-size: 0.65vw;
+        font-size: 0.6vw;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-align: center;
       }
       .tv-closes-chip-pm { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.45); }
       .tv-closes-chip-wo { background: rgba(14, 165, 233, 0.18); color: #7dd3fc; border: 1px solid rgba(14, 165, 233, 0.45); }
-      .tv-closes-id   { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5e1; font-size: 0.78vw; }
-      .tv-closes-desc { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tv-closes-id   { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5e1; font-size: 0.78vw; font-variant-numeric: tabular-nums; }
+      .tv-closes-desc { color: #e2e8f0; }
       .tv-closes-tech { color: #f1f5f9; font-weight: 600; }
       .tv-closes-bld  { color: #94a3b8; font-variant-numeric: tabular-nums; }
       .tv-closes-hrs  { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
-      .tv-closes-when { color: #64748b; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.75vw; }
+      .tv-closes-when { color: #64748b; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.72vw; }
 
       .tv-panel {
         background: #111827;
@@ -1171,8 +1197,11 @@ function TvStyles() {
       .tv-focus-list li { font-size: 1.05vw; line-height: 1.3; display: flex; align-items: baseline; gap: 0.4vw; }
       .tv-focus-dot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25vw; }
-      .tv-crew-list li { display: grid; grid-template-columns: 1fr 7vw 7vw; align-items: baseline; gap: 0.6vw; font-size: 1.0vw; }
+      /* Crew stats list — narrower when used in 2-col layout (tv-crew-2col scopes it) */
+      .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3vw 1vw; }
+      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
+      .tv-crew-list li { display: grid; grid-template-columns: 1fr 4.2vw 4.2vw; align-items: baseline; gap: 0.4vw; font-size: 0.88vw; min-width: 0; }
+      .tv-crew-list li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
       .tv-crew-name { font-weight: 600; color: #f1f5f9; }
       .tv-crew-stat { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-crew-delta { margin-left: 0.45vw; font-size: 0.85vw; font-weight: 600; }
