@@ -576,6 +576,26 @@ function FocusBoardPanel({ items }: { items: ReturnType<typeof useActiveFocusIte
   );
 }
 
+/** One crew column with a tiny header row, used twice side-by-side. */
+function CrewColumn({ rows, renderRow }: {
+  rows: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }[];
+  renderRow: (c: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }) => React.ReactNode;
+}) {
+  if (rows.length === 0) return <div />;
+  return (
+    <div className="tv-crew-col">
+      <div className="tv-crew-headerrow">
+        <span />
+        <span className="tv-crew-colhead">PMs</span>
+        <span />
+        <span className="tv-crew-colhead">Hrs</span>
+        <span />
+      </div>
+      <ul className="tv-crew-list">{rows.map(renderRow)}</ul>
+    </div>
+  );
+}
+
 function CrewSection({ closes, laborDaily, now }: {
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
@@ -628,14 +648,10 @@ function CrewSection({ closes, laborDaily, now }: {
   const renderRow = (c: typeof data[number]) => (
     <li key={c.name}>
       <span className="tv-crew-name">{shortName(c.name)}</span>
-      <span className="tv-crew-stat">
-        {c.pms} PM{c.pms === 1 ? '' : 's'}
-        <Delta v={c.pmsDelta} />
-      </span>
-      <span className="tv-crew-stat">
-        {c.hours.toFixed(1)}h
-        <Delta v={c.hoursDelta} decimals={1} />
-      </span>
+      <span className="tv-crew-num">{c.pms}<span className="tv-crew-unit">PM</span></span>
+      <span className="tv-crew-deltacell"><Delta v={c.pmsDelta} /></span>
+      <span className="tv-crew-num">{c.hours.toFixed(1)}<span className="tv-crew-unit">h</span></span>
+      <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={1} /></span>
     </li>
   );
 
@@ -646,8 +662,8 @@ function CrewSection({ closes, laborDaily, now }: {
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
         <div className="tv-crew-2col">
-          <ul className="tv-crew-list">{leftCol.map(renderRow)}</ul>
-          <ul className="tv-crew-list">{rightCol.map(renderRow)}</ul>
+          <CrewColumn rows={leftCol} renderRow={renderRow} />
+          <CrewColumn rows={rightCol} renderRow={renderRow} />
         </div>
       )}
     </div>
@@ -1197,14 +1213,40 @@ function TvStyles() {
       .tv-focus-list li { font-size: 1.05vw; line-height: 1.3; display: flex; align-items: baseline; gap: 0.4vw; }
       .tv-focus-dot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      /* Crew stats list — narrower when used in 2-col layout (tv-crew-2col scopes it) */
-      .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3vw 1vw; }
+      /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column */
+      .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 1.2vw; }
+      .tv-crew-col { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; }
+      .tv-crew-headerrow,
+      .tv-crew-list li {
+        display: grid;
+        grid-template-columns: 1fr 1.8vw 1.9vw 2.5vw 2.1vw;
+        gap: 0.35vw;
+        align-items: baseline;
+        min-width: 0;
+      }
+      .tv-crew-headerrow {
+        font-size: 0.6vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #475569;
+        padding-bottom: 0.1vw;
+        border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+        margin-bottom: 0.15vw;
+      }
+      .tv-crew-colhead { text-align: right; }
       .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
-      .tv-crew-list li { display: grid; grid-template-columns: 1fr 4.2vw 4.2vw; align-items: baseline; gap: 0.4vw; font-size: 0.88vw; min-width: 0; }
+      .tv-crew-list li { font-size: 0.92vw; line-height: 1.2; }
       .tv-crew-list li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
       .tv-crew-name { font-weight: 600; color: #f1f5f9; }
-      .tv-crew-stat { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
-      .tv-crew-delta { margin-left: 0.45vw; font-size: 0.85vw; font-weight: 600; }
+      .tv-crew-num {
+        color: #f1f5f9;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .tv-crew-unit { color: #64748b; font-weight: 400; font-size: 0.72vw; margin-left: 0.1vw; }
+      .tv-crew-deltacell { text-align: left; }
+      .tv-crew-delta { font-size: 0.72vw; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
       .tv-crew-delta.up   { color: #34d399; }
       .tv-crew-delta.down { color: #f87171; }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
