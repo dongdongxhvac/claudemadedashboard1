@@ -605,7 +605,7 @@ function CrewSection({ closes, laborDaily, now }: {
         hoursDelta: v.hours - v.hoursPrev,
       }))
       .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
-      .slice(0, 6);
+      .slice(0, 5);
   }, [closes, laborDaily, now]);
 
   return (
@@ -926,14 +926,15 @@ function TvStyles() {
   return (
     <style>{`
       .tv-root {
-        min-height: 100vh;
+        height: 100vh;
         background: #0b1220;
         color: #e2e8f0;
         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        padding: 1.2vw;
+        padding: 0.7vw;
         display: flex;
         flex-direction: column;
-        gap: 1vw;
+        gap: 0.6vw;
+        overflow: hidden;
       }
       .tv-header {
         display: flex;
@@ -1020,26 +1021,26 @@ function TvStyles() {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
         grid-template-rows: 1fr 1fr;
-        gap: 1vw;
+        gap: 0.6vw;
         min-height: 0;
       }
       /* Left-column tall panel spanning both rows */
       .tv-panel-tall { grid-row: 1 / span 2; }
 
       /* Combined Workload + Performance panel body */
-      .tv-wp-body { display: flex; flex-direction: column; gap: 0.6vw; min-height: 0; overflow: hidden; }
-      .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.2vw 0; flex: 0 0 auto; }
-      .tv-wp-workload, .tv-wp-crew, .tv-wp-closes { display: flex; flex-direction: column; gap: 0.25vw; min-height: 0; }
+      .tv-wp-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
+      .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
+      .tv-wp-workload, .tv-wp-crew, .tv-wp-closes { display: flex; flex-direction: column; gap: 0.2vw; min-height: 0; }
 
       /* Recent closes list (top 5) */
-      .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3vw; }
+      .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
       .tv-closes-list li {
         display: grid;
-        grid-template-columns: 1.6vw 3.5vw 1fr 5vw 2.2vw 2.4vw 2vw;
-        gap: 0.4vw;
+        grid-template-columns: 1.5vw 3.2vw 1fr 4.6vw 2vw 2.2vw 1.8vw;
+        gap: 0.35vw;
         align-items: baseline;
-        font-size: 0.85vw;
-        line-height: 1.25;
+        font-size: 0.78vw;
+        line-height: 1.2;
       }
       .tv-closes-chip {
         display: inline-flex;
@@ -1064,9 +1065,9 @@ function TvStyles() {
       .tv-panel {
         background: #111827;
         border: 1px solid #1e293b;
-        border-top: 4px solid #334155;
-        border-radius: 8px;
-        padding: 1vw 1.2vw;
+        border-top: 3px solid #334155;
+        border-radius: 6px;
+        padding: 0.55vw 0.8vw;
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -1077,7 +1078,7 @@ function TvStyles() {
         align-items: baseline;
         justify-content: space-between;
         gap: 0.8vw;
-        margin: 0 0 0.6vw;
+        margin: 0 0 0.35vw;
       }
       .tv-panel-title {
         font-size: 1.0vw;
@@ -1130,7 +1131,7 @@ function TvStyles() {
       .tv-oncall-grid .tv-oncall-prev-th,
       .tv-oncall-grid .tv-oncall-preview-th { color: #475569; font-style: italic; }
       .tv-oncall-grid tbody td {
-        padding: 0.2vw 0.25vw;
+        padding: 0.12vw 0.25vw;
         border-bottom: 1px solid rgba(30, 41, 59, 0.5);
         color: #e2e8f0;
         white-space: nowrap;
@@ -1139,7 +1140,7 @@ function TvStyles() {
       .tv-oncall-eng-td {
         color: #f8fafc;
         font-weight: 600;
-        font-size: 0.85vw;
+        font-size: 0.78vw;
         position: relative;
       }
       .tv-oncall-grid tbody td.tv-oncall-cell-side { color: #64748b; font-style: italic; }
@@ -1166,12 +1167,12 @@ function TvStyles() {
         vertical-align: 0.1em;
       }
 
-      .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
-      .tv-focus-list li { font-size: 1.25vw; line-height: 1.35; display: flex; align-items: baseline; gap: 0.5vw; }
-      .tv-focus-dot { width: 0.7vw; height: 0.7vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+      .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
+      .tv-focus-list li { font-size: 1.05vw; line-height: 1.3; display: flex; align-items: baseline; gap: 0.4vw; }
+      .tv-focus-dot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 
-      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6vw; }
-      .tv-crew-list li { display: grid; grid-template-columns: 1fr 8vw 8vw; align-items: baseline; gap: 0.8vw; font-size: 1.25vw; }
+      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25vw; }
+      .tv-crew-list li { display: grid; grid-template-columns: 1fr 7vw 7vw; align-items: baseline; gap: 0.6vw; font-size: 1.0vw; }
       .tv-crew-name { font-weight: 600; color: #f1f5f9; }
       .tv-crew-stat { color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-crew-delta { margin-left: 0.45vw; font-size: 0.85vw; font-weight: 600; }
@@ -1181,97 +1182,97 @@ function TvStyles() {
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
       .tv-crew-meta-sep { color: #334155; }
 
-      .tv-today-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
-      .tv-today-list li { display: flex; align-items: baseline; gap: 0.6vw; font-size: 1.3vw; }
-      .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.7vw; min-width: 2.4vw; text-align: right; font-variant-numeric: tabular-nums; }
+      .tv-today-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
+      .tv-today-list li { display: flex; align-items: baseline; gap: 0.5vw; font-size: 1.1vw; }
+      .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.4vw; min-width: 2.0vw; text-align: right; font-variant-numeric: tabular-nums; }
       .tv-today-name { color: #e2e8f0; }
 
       /* Combined Buildings panel: rounds | engineer | assignments per row */
-      .tv-bldgs { display: flex; flex-direction: column; gap: 0.4vw; }
+      .tv-bldgs { display: flex; flex-direction: column; gap: 0.25vw; }
       .tv-bldgs-headerrow {
         display: grid;
         grid-template-columns: 1fr 6vw 1fr;
-        gap: 0.5vw;
-        font-size: 0.7vw;
+        gap: 0.4vw;
+        font-size: 0.65vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #64748b;
-        padding-bottom: 0.25vw;
+        padding-bottom: 0.15vw;
         border-bottom: 1px solid #1e293b;
       }
       .tv-bldgs-col-rounds { text-align: right; }
       .tv-bldgs-col-name   { text-align: center; }
       .tv-bldgs-col-assign { text-align: left; }
       .tv-bldgs-band-label {
-        font-size: 0.75vw;
+        font-size: 0.68vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #94a3b8;
-        margin: 0.25vw 0 0.15vw;
+        margin: 0.15vw 0 0.1vw;
       }
-      .tv-bldgs-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
+      .tv-bldgs-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.12vw; }
       .tv-bldgs-row {
         display: grid;
         grid-template-columns: 1fr 6vw 1fr;
-        gap: 0.5vw;
+        gap: 0.4vw;
         align-items: baseline;
-        font-size: 0.85vw;
-        line-height: 1.25;
+        font-size: 0.78vw;
+        line-height: 1.2;
       }
       .tv-bldgs-eng { font-weight: 600; color: #f8fafc; }
       .tv-bldgs-codes { color: #e2e8f0; font-variant-numeric: tabular-nums; }
       .tv-bldgs-leads {
-        margin-top: 0.3vw;
-        padding-top: 0.4vw;
+        margin-top: 0.2vw;
+        padding-top: 0.25vw;
         border-top: 1px dashed #334155;
         display: flex;
         flex-direction: column;
-        gap: 0.2vw;
+        gap: 0.12vw;
       }
-      .tv-bldgs-lead-row { display: flex; gap: 0.6vw; align-items: baseline; font-size: 0.7vw; }
+      .tv-bldgs-lead-row { display: flex; gap: 0.5vw; align-items: baseline; font-size: 0.65vw; }
       .tv-bldgs-lead-name { color: #d4a017; font-weight: 600; flex: 0 0 auto; min-width: 5.5vw; }
       .tv-bldgs-lead-codes { color: #94a3b8; font-variant-numeric: tabular-nums; flex: 1; }
 
       /* Workload panel (Due today on top, Upcoming 9d on bottom) */
-      .tv-workload-top { display: flex; flex-direction: column; gap: 0.25vw; }
-      .tv-workload-bottom { display: flex; flex-direction: column; gap: 0.25vw; }
+      .tv-workload-top { display: flex; flex-direction: column; gap: 0.15vw; }
+      .tv-workload-bottom { display: flex; flex-direction: column; gap: 0.15vw; }
       .tv-workload-divider {
         height: 1px;
         background: #1e293b;
-        margin: 0.4vw 0;
+        margin: 0.25vw 0;
       }
       .tv-workload-section-label {
-        font-size: 0.78vw;
+        font-size: 0.72vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #64748b;
       }
       /* Compact override for the top per-tech list living inside Workload */
-      .tv-workload-top .tv-today-list { gap: 0.25vw; }
-      .tv-workload-top .tv-today-list li { font-size: 1.1vw; }
-      .tv-workload-top .tv-today-count { font-size: 1.4vw; min-width: 2.2vw; }
+      .tv-workload-top .tv-today-list { gap: 0.15vw; }
+      .tv-workload-top .tv-today-list li { font-size: 0.95vw; }
+      .tv-workload-top .tv-today-count { font-size: 1.2vw; min-width: 1.8vw; }
 
       /* Workload bottom: per-tech chip list (§03-style chips), split by shift */
       .tv-wkl-shift-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0.6vw 0.8vw;
+        gap: 0.35vw 0.6vw;
       }
       .tv-wkl-shift-col { min-width: 0; }
       .tv-wkl-shift-other { grid-column: 1 / -1; }
       .tv-wkl-shift-label {
-        font-size: 0.75vw;
+        font-size: 0.68vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #64748b;
-        margin-bottom: 0.25vw;
+        margin-bottom: 0.15vw;
       }
-      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25vw; }
+      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.15vw; }
       .tv-wkl-chip-list li {
         display: flex;
         align-items: center;
-        gap: 0.4vw;
-        font-size: 0.95vw;
+        gap: 0.35vw;
+        font-size: 0.82vw;
       }
       .tv-wkl-chip-eng {
         color: #e2e8f0;
@@ -1283,11 +1284,11 @@ function TvStyles() {
       .tv-wkl-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.25vw;
-        padding: 0.05vw 0.5vw;
+        gap: 0.2vw;
+        padding: 0 0.4vw;
         border: 1px solid #334155;
         border-radius: 4px;
-        font-size: 0.85vw;
+        font-size: 0.72vw;
         background: #1e293b;
         color: #e2e8f0;
         white-space: nowrap;
