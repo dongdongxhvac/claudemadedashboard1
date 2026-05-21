@@ -71,3 +71,62 @@ export function fmtMd(iso: string): string {
   const [, m, d] = iso.split('-').map(Number);
   return `${m}/${d}`;
 }
+
+// ---------------------------------------------------------------------------
+// Period selector — shared across the §00 Crew Performance family of tiles.
+// Hoisting these here lets multiple components stay in sync on one toggle.
+// ---------------------------------------------------------------------------
+
+export type Period = 'today' | '7d' | 'this_wk' | 'last_wk' | '30d';
+
+export const PERIODS: { key: Period; label: string }[] = [
+  { key: 'today',   label: 'Today' },
+  { key: '7d',      label: '7d' },
+  { key: 'this_wk', label: 'This wk' },
+  { key: 'last_wk', label: 'Last wk' },
+  { key: '30d',     label: '30d' },
+];
+
+export type Win = { start: Date; end: Date; label: string };
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function windowFor(period: Period, anchor: Date): Win {
+  switch (period) {
+    case 'today': {
+      const start = startOfDay(anchor);
+      const end = addDays(start, 1);
+      return { start, end, label: fmtDateShort(start) };
+    }
+    case '7d': {
+      const end = addDays(startOfDay(anchor), 1);
+      const start = addDays(end, -7);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+    }
+    case 'this_wk': {
+      const start = mondayOf(anchor);
+      const end = addDays(start, 7);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
+    }
+    case 'last_wk': {
+      const thisMon = mondayOf(anchor);
+      const start = addDays(thisMon, -7);
+      const end = thisMon;
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
+    }
+    case '30d': {
+      const end = addDays(startOfDay(anchor), 1);
+      const start = addDays(end, -30);
+      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+    }
+  }
+}
+
+export function prevWindow(current: Win): Win {
+  const spanMs = current.end.getTime() - current.start.getTime();
+  const start = new Date(current.start.getTime() - spanMs);
+  const end = current.start;
+  return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
+}

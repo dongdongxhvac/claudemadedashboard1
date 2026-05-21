@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useCurrentPmRows, useCurrentWoRows, type PmRow } from '../../hooks/useCurrentSnapshots';
-import { isNpm } from '../../lib/dashboard';
+import { isNpm, type Period } from '../../lib/dashboard';
 import { WeeklyCompletions } from '../../components/WeeklyCompletions';
 import { PmVariance } from '../../components/PmVariance';
 import { DueNowList } from '../../components/DueNowList';
@@ -100,6 +100,9 @@ export default function ManagerPc() {
   const pmQ = useCurrentPmRows();
   const woQ = useCurrentWoRows();
 
+  // Shared period selector for the §00 Crew Performance family of tiles.
+  const [period, setPeriod] = useState<Period>('7d');
+
   const pmStats = useMemo(() => computeStats(pmQ.data ?? []), [pmQ.data]);
   const woOpen = useMemo(
     () => (woQ.data ?? []).filter((w) => w.is_open !== false).length,
@@ -173,8 +176,8 @@ export default function ManagerPc() {
           <DueNowList />
           <DueThisMonth />
           <OpenPmsBreakdown />
-          <WeeklyCompletions />
-          <PmVariance />
+          <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
+          <PmVariance period={period} />
         </div>
       </main>
     </div>

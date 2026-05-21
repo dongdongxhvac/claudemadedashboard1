@@ -1,21 +1,20 @@
-// §00a — PM estimate accuracy over the last 30 days. Sub-section of §00
-// Crew Performance since it's a labor/performance signal.
-// Surfaces actual labor vs estimated labor per closed PM. Reads from the
-// pm_variance_recent view which already filters out closes missing either
-// number, so every row here is a usable comparison.
+// §00a — PM estimate accuracy. Sub-section of §00 Crew Performance.
+// Reads the same `period` selector that §00 owns, so toggling the tabs
+// up there filters this tile to the matching window.
 //
 // Three views in one card:
 //   - Summary row:   total closes compared + average variance %
 //   - By-type table: avg variance % grouped by pm_type
 //   - Outliers list: top over-estimate and under-estimate closes
 import { useMemo, useState } from 'react';
-import { usePmVariance } from '../hooks/useCurrentSnapshots';
+import { usePmVariance, type PmVarianceRow } from '../hooks/useCurrentSnapshots';
+import { PERIODS, windowFor, type Period } from '../lib/dashboard';
 import { Section } from './Section';
 
 type Bucket = { type: string; n: number; avgPct: number };
 
-function bucketByType(rows: ReturnType<typeof usePmVariance>['data'] | undefined): Bucket[] {
-  if (!rows || rows.length === 0) return [];
+function bucketByType(rows: PmVarianceRow[]): Bucket[] {
+  if (rows.length === 0) return [];
   const map = new Map<string, { sumPct: number; n: number }>();
   for (const r of rows) {
     if (r.variance_pct == null) continue;
@@ -30,44 +29,54 @@ function bucketByType(rows: ReturnType<typeof usePmVariance>['data'] | undefined
     .sort((a, b) => b.n - a.n);
 }
 
-export function PmVariance() {
+export function PmVariance({ period }: { period: Period }) {
+  // Always fetch 30d from Supabase (covers every period option). Filter in JS.
   const q = usePmVariance(30);
   const [tab, setTab] = useState<'over' | 'under'>('over');
 
   const data = useMemo(() => {
-    const rows = q.data ?? [];
+    const allRows = q.data ?? [];
+    const win = windowFor(period, new Date());
+    const rows = allRows.filter((r) => {
+      const d = new Date(r.completed_on);
+      return d >= win.start && d < win.end;
+    });
+
     const total = rows.length;
     const avgPct = total === 0
       ? null
       : rows.reduce((s, r) => s + (r.variance_pct ?? 0), 0) / total;
-    const buckets = bucketByType(q.data);
+    const buckets = bucketByType(rows);
 
     // Outliers: top 5 over (took longest vs estimate) + top 5 under (fastest)
-    const sorted = [...rows].filter((r) => r.variance_pct != null);
+    const sorted = rows.filter((r) => r.variance_pct != null);
     const over = [...sorted].sort((a, b) => (b.variance_pct ?? 0) - (a.variance_pct ?? 0)).slice(0, 5);
     const under = [...sorted].sort((a, b) => (a.variance_pct ?? 0) - (b.variance_pct ?? 0)).slice(0, 5);
 
-    return { total, avgPct, buckets, over, under };
-  }, [q.data]);
+    return { total, avgPct, buckets, over, under, win };
+  }, [q.data, period]);
 
-  if (q.isLoading) return <Section title="§00a PM estimate accuracy · 30d" loading />;
+  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? '';
+  const titleStr = `§00a PM estimate accuracy · ${periodLabel}`;
+
+  if (q.isLoading) return <Section title={titleStr} loading />;
   if (data.total === 0) {
     return (
       <Section
-        title="§00a PM estimate accuracy · 30d"
-        subtitle="No closed PMs with both estimated and actual labor yet."
+        title={titleStr}
+        subtitle={<span>Window · {data.win.label} · no closes with both numbers yet</span>}
       >
-        <p className="t-text t-muted">As pm12 polls capture closures, this will populate.</p>
+        <p className="t-text t-muted">As pm12 polls capture more closures, this window will populate.</p>
       </Section>
     );
   }
 
   return (
     <Section
-      title="§00a PM estimate accuracy · 30d"
+      title={titleStr}
       subtitle={
         <span>
-          {data.total} closes with both numbers · avg{' '}
+          Window · {data.win.label} · {data.total} closes with both numbers · avg{' '}
           <Pct v={data.avgPct ?? 0} />
         </span>
       }

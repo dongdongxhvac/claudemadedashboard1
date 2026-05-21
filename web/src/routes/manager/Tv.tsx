@@ -4,11 +4,12 @@
 //
 // data-mode="tv" on <html> bumps font/spacing tokens up for legibility at
 // distance; the active style (V5 / Linear) still applies on top.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useCurrentPmRows } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { WeeklyCompletions } from '../../components/WeeklyCompletions';
+import type { Period } from '../../lib/dashboard';
 import { DueNowList } from '../../components/DueNowList';
 import { DueThisMonth } from '../../components/DueThisMonth';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -28,6 +29,10 @@ export default function ManagerTv() {
 
   const pmQ = useCurrentPmRows();
   const snapshotTaken = pmQ.data?.[0]?.snapshot_taken_at;
+
+  // TV mode doesn't share the §00 toggle with anything else, but
+  // WeeklyCompletions still needs a controlled period prop.
+  const [period, setPeriod] = useState<Period>('7d');
   const snapshotLocal = snapshotTaken
     ? new Date(snapshotTaken).toLocaleString(undefined, {
         year: 'numeric',
@@ -70,7 +75,7 @@ export default function ManagerTv() {
             <DueNowList />
           </div>
           <div className="overflow-auto">
-            <WeeklyCompletions />
+            <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
           </div>
         </div>
         <div className="col-start-2 row-start-1 row-end-3 overflow-auto">

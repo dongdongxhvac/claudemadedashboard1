@@ -8,17 +8,12 @@
 // preceding window. Sort selector lets the user reorder by metric.
 import { useMemo, useState } from 'react';
 import { useCurrentPmRows, useLaborDaily, useRecentPmCloses } from '../hooks/useCurrentSnapshots';
-import { mondayOf, addDays, fmtDateShort, isNpm, isClosed } from '../lib/dashboard';
+import {
+  isNpm, isClosed,
+  PERIODS, windowFor, prevWindow,
+  type Period,
+} from '../lib/dashboard';
 import { Section } from './Section';
-
-type Period = 'today' | '7d' | 'this_wk' | 'last_wk' | '30d';
-const PERIODS: { key: Period; label: string }[] = [
-  { key: 'today',   label: 'Today' },
-  { key: '7d',      label: '7d' },
-  { key: 'this_wk', label: 'This wk' },
-  { key: 'last_wk', label: 'Last wk' },
-  { key: '30d',     label: '30d' },
-];
 
 type Sort = 'hours' | 'pms' | 'open_npms' | 'name';
 const SORTS: { key: Sort; label: string }[] = [
@@ -38,56 +33,18 @@ type Card = {
   prevHours: number;
 };
 
-type Win = { start: Date; end: Date; label: string };
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function windowFor(period: Period, anchor: Date): Win {
-  switch (period) {
-    case 'today': {
-      const start = startOfDay(anchor);
-      const end = addDays(start, 1);
-      return { start, end, label: fmtDateShort(start) };
-    }
-    case '7d': {
-      const end = addDays(startOfDay(anchor), 1);
-      const start = addDays(end, -7);
-      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
-    }
-    case 'this_wk': {
-      const start = mondayOf(anchor);
-      const end = addDays(start, 7);
-      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
-    }
-    case 'last_wk': {
-      const thisMon = mondayOf(anchor);
-      const start = addDays(thisMon, -7);
-      const end = thisMon;
-      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(start, 6))}` };
-    }
-    case '30d': {
-      const end = addDays(startOfDay(anchor), 1);
-      const start = addDays(end, -30);
-      return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
-    }
-  }
-}
-
-function prevWindow(current: Win): Win {
-  const spanMs = current.end.getTime() - current.start.getTime();
-  const start = new Date(current.start.getTime() - spanMs);
-  const end = current.start;
-  return { start, end, label: `${fmtDateShort(start)} → ${fmtDateShort(addDays(end, -1))}` };
-}
-
 /** Local-midnight Date for a YYYY-MM-DD day string (avoids UTC shift). */
 function dayDate(ymd: string): Date {
   return new Date(ymd + 'T00:00:00');
 }
 
-export function WeeklyCompletions() {
+export function WeeklyCompletions({
+  period,
+  onPeriodChange,
+}: {
+  period: Period;
+  onPeriodChange: (p: Period) => void;
+}) {
   const pmQ = useCurrentPmRows();
   // Phase 5.5: completed-PM counts come from the close-event log, not pm_rows
   // (pm_rows no longer holds Completed rows). 40d covers the 30d window plus
@@ -97,8 +54,7 @@ export function WeeklyCompletions() {
   // Replaces the prior "sum overlapping weeks" approximation which double-counted.
   const laborDailyQ = useLaborDaily(40);
 
-  const [period, setPeriod] = useState<Period>('7d');
-  const [sort,   setSort]   = useState<Sort>('hours');
+  const [sort, setSort] = useState<Sort>('hours');
 
   const data = useMemo(() => {
     const pmRows = pmQ.data ?? [];
@@ -211,7 +167,7 @@ export function WeeklyCompletions() {
             return (
               <button
                 key={p.key}
-                onClick={() => setPeriod(p.key)}
+                onClick={() => onPeriodChange(p.key)}
                 role="tab"
                 aria-selected={active}
                 className="t-small px-2.5 py-0.5 rounded-full border"
