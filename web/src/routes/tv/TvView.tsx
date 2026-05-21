@@ -1052,15 +1052,20 @@ function TvStyles() {
         flex: 0 0 auto;
       }
 
+      /* LOCKED LAYOUT — do not change column/row ratios or panel spans.
+         User signed off on this space distribution: ~30% tall left panel,
+         four ~15% single-cell panels, ~4% header. Content must adapt to
+         the grid, not the other way around. See memory:
+         feedback_tv_layout_locked.md for the full rule. */
       .tv-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        grid-template-rows: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;  /* LOCKED */
+        grid-template-rows: 1fr 1fr;          /* LOCKED */
         gap: 0.6vw;
         min-height: 0;
       }
-      /* Left-column tall panel spanning both rows */
+      /* LOCKED — Workload+Performance is the only row-spanning panel */
       .tv-panel-tall { grid-row: 1 / span 2; }
 
       /* Combined Workload + Performance panel body */
