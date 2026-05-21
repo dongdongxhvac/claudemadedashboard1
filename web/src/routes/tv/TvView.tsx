@@ -1047,13 +1047,15 @@ function TvStyles() {
       }
       .tv-h-announcements {
         list-style: none; padding: 0; margin: 0;
-        display: flex; align-items: baseline; gap: 1.4vw;
+        display: flex; flex-direction: column; align-items: center;
+        gap: 0.05vw;
         max-width: 100%;
-        font-size: 0.85vw;
+        font-size: 0.72vw;
+        line-height: 1.15;
         color: #cbd5e1;
       }
       .tv-h-announcements li {
-        display: inline-flex; align-items: baseline; gap: 0.35vw;
+        display: inline-flex; align-items: baseline; gap: 0.3vw;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         min-width: 0;
         max-width: 100%;
@@ -1061,7 +1063,7 @@ function TvStyles() {
       .tv-h-announcements strong { color: #f1f5f9; font-weight: 700; }
       .tv-h-announcements .tv-h-ann-body { overflow: hidden; text-overflow: ellipsis; }
       .tv-h-ann-dot {
-        width: 0.5vw; height: 0.5vw; border-radius: 50%;
+        width: 0.4vw; height: 0.4vw; border-radius: 50%;
         flex: 0 0 auto; display: inline-block;
         align-self: center;
       }
