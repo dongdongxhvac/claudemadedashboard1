@@ -5,6 +5,14 @@ credentials.json
 token.json
 .env
 **/.env
+.probe_tokens.json
+**/.probe_tokens.json
+cove_session.json
+**/cove_session.json
+.cove_main.js
+.cove_vendor.js
+**/.cove_main.js
+**/.cove_vendor.js
 __pycache__/
 .claude/
 watcher/.venv/

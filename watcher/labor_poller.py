@@ -33,8 +33,11 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 # Local import — same get_client() the watcher uses.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
+from cove_session import get_fresh_token, SessionError  # noqa: E402
 
-TOKEN = os.environ.get("COVE_AUTH_TOKEN", "").strip()
+# Populated in main() via cove_session.get_fresh_token(). The session manager
+# transparently refreshes the JWT when it's within 24h of expiry.
+TOKEN: str = ""
 COOKIE = os.environ.get("COVE_COOKIE", "").strip()
 NETWORK_ID = os.environ.get("COVE_NETWORK_ID", "OoxMP8BZJF").strip()
 GQL_URL = "https://api.cove.is/gql"
@@ -113,20 +116,11 @@ def main() -> int:
         print(f"[{now_local.isoformat()}] Sunday — skipping.")
         return 0
 
-    if not TOKEN:
-        print("ERROR: COVE_AUTH_TOKEN not set", file=sys.stderr)
-        _log_error("no-token", "COVE_AUTH_TOKEN missing from env")
-        return 1
-    if TOKEN.count(".") != 2:
-        print("ERROR: COVE_AUTH_TOKEN is not a JWT (wrong dot count)", file=sys.stderr)
-        _log_error("bad-token", "COVE_AUTH_TOKEN is not a JWT")
-        return 1
-
-    # Early bail if we can see the token's already expired — saves a network
-    # round-trip and writes a clearer ingestion_log message.
-    exp = decode_token_exp(TOKEN)
-    if exp and exp < time.time():
-        msg = f"JWT expired at exp={exp} (now={int(time.time())})"
+    global TOKEN
+    try:
+        TOKEN = get_fresh_token()
+    except SessionError as e:
+        msg = f"cove_session: {e}"
         print(f"ERROR: {msg}", file=sys.stderr)
         _log_error(synthetic_filename(now_local), msg)
         return 1
@@ -190,7 +184,7 @@ def main() -> int:
         msgs = " | ".join(e.get("message", "") for e in data["errors"])
         full = f"GraphQL errors: {msgs}"
         if "Not Authenticated" in msgs:
-            full += " — token rotated by Cove. Re-capture from DevTools and update watcher/.env."
+            full += " — auth rejected mid-run. Try `python cove_session.py refresh`; if that fails, re-bootstrap from DevTools."
         print(f"ERROR: {full}", file=sys.stderr)
         _log_error(filename, full)
         return 1
