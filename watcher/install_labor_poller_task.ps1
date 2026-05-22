@@ -44,13 +44,14 @@ $Action = New-ScheduledTaskAction `
   -Execute          $BatchPath `
   -WorkingDirectory $WatcherDir
 
-# One trigger at 7:00 AM that repeats every hour for the next 12 hours.
-# That produces firings at 7,8,9,10,11,12,13,14,15,16,17,18,19 = 13/day.
-$Trigger = New-ScheduledTaskTrigger -Daily -At 7:00AM
+# One trigger at 6:50 AM that repeats every hour for the next 11 hours.
+# That produces firings at :50 past every hour 6 -> 17 = 12/day total
+# (6:50, 7:50, 8:50, ... 17:50).
+$Trigger = New-ScheduledTaskTrigger -Daily -At 6:50AM
 $Trigger.Repetition = (New-ScheduledTaskTrigger `
-  -Once -At 7:00AM `
+  -Once -At 6:50AM `
   -RepetitionInterval (New-TimeSpan -Hours 1) `
-  -RepetitionDuration (New-TimeSpan -Hours 12)).Repetition
+  -RepetitionDuration (New-TimeSpan -Hours 11)).Repetition
 
 # Keep things tidy: stop if it overruns 10 min (it should finish in seconds),
 # allow restart on failure, run only when network is available.
@@ -78,7 +79,7 @@ if ($existing) {
 
 Register-ScheduledTask `
   -TaskName    $TaskName `
-  -Description 'Hourly Cove labor poller (7am-7pm Mon-Sat). Phase 5.1.' `
+  -Description 'Hourly Cove labor poller (6:50 AM - 5:50 PM, Mon-Sat). Phase 5.1.' `
   -Action      $Action `
   -Trigger     $Trigger `
   -Settings    $Settings `
@@ -89,7 +90,7 @@ Write-Host "Registered '$TaskName':"
 Write-Host "  Python : $PythonExe"
 Write-Host "  Script : $ScriptPath"
 Write-Host "  Log    : $LogPath"
-Write-Host "  Fires  : every hour 7:00 AM - 7:00 PM, daily (script skips Sundays)"
+Write-Host "  Fires  : every hour at :50 from 6:50 AM - 5:50 PM (12 fires/day, script skips Sundays)"
 Write-Host ''
 Write-Host "Verify:"
 Write-Host "  Get-ScheduledTask -TaskName '$TaskName'"
