@@ -59,6 +59,35 @@ export function usePlantlogUserMap() {
   });
 }
 
+export type PlantlogUserDailySpan = {
+  user_name: string;
+  et_day: string;
+  first_entry_utc: string;
+  last_entry_utc: string;
+  entries: number;
+  span_seconds: number;
+};
+
+/** Per-user × per-day round efficiency: first/last entry, count, span.
+ *  Excludes water treatment so spans reflect daily-round effort only. */
+export function usePlantlogUserDailySpan(daysBack: number = 14) {
+  return useQuery({
+    queryKey: ['plantlog_user_daily_span', daysBack],
+    queryFn: async (): Promise<PlantlogUserDailySpan[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const sinceStr = since.toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('v_plantlog_user_daily_span')
+        .select('*')
+        .gte('et_day', sinceStr);
+      if (error) throw error;
+      return (data ?? []) as PlantlogUserDailySpan[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** Per-user × per-building × per-day drill-down. */
 export function usePlantlogUserBuildingDaily(daysBack: number = 14) {
   return useQuery({

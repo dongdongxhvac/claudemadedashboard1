@@ -10,7 +10,13 @@
 // (unambiguous) and some are "inferred" (nearest unambiguous in time). Both
 // surface here as concrete building counts.
 import { useMemo, useState } from 'react';
-import { usePlantlogBuildingDaily, usePlantlogUserBuildingDaily, usePlantlogUserMap } from '../hooks/usePlantlog';
+import {
+  usePlantlogBuildingDaily,
+  usePlantlogUserBuildingDaily,
+  usePlantlogUserDailySpan,
+  usePlantlogUserMap,
+  type PlantlogUserDailySpan,
+} from '../hooks/usePlantlog';
 import { Section } from './Section';
 
 type Period = '4d' | '7d' | '14d';
@@ -34,11 +40,30 @@ function fmtDow(ymd: string): string {
   return dayDate(ymd).toLocaleDateString(undefined, { weekday: 'short' });
 }
 
+/** UTC ISO timestamp -> HH:MM in America/New_York (matches plantlog's wall-clock). */
+function fmtTime(utcIso: string): string {
+  return new Date(utcIso).toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+/** Seconds -> "Xh Ym" (or "Ym" if under an hour). */
+function fmtSpan(seconds: number): string {
+  if (!seconds) return '0';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function PlantlogRoundsPanel() {
   const [period, setPeriod] = useState<Period>('4d');
   const days = PERIODS.find((p) => p.key === period)!.days;
   const bdQ = usePlantlogBuildingDaily(days);
   const ubdQ = usePlantlogUserBuildingDaily(days);
+  const spanQ = usePlantlogUserDailySpan(days);
   const userMapQ = usePlantlogUserMap();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
@@ -105,8 +130,29 @@ export function PlantlogRoundsPanel() {
     return users;
   }, [ubdQ.data, days]);
 
-  const loading = bdQ.isLoading || ubdQ.isLoading;
-  const err = bdQ.error || ubdQ.error;
+  // Daily round efficiency: group by day, list engineers with first/last/span.
+  const dailySpan = useMemo(() => {
+    const rows = spanQ.data ?? [];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const byDay = new Map<string, PlantlogUserDailySpan[]>();
+    for (const r of rows) {
+      if (r.et_day < cutoffStr) continue;
+      const list = byDay.get(r.et_day) ?? [];
+      list.push(r);
+      byDay.set(r.et_day, list);
+    }
+    // Sort each day's engineers by entries desc, then days desc
+    const sortedDays = [...byDay.keys()].sort((a, b) => (a < b ? 1 : -1));
+    return sortedDays.map((day) => ({
+      day,
+      engineers: (byDay.get(day) ?? []).sort((a, b) => b.entries - a.entries),
+    }));
+  }, [spanQ.data, days]);
+
+  const loading = bdQ.isLoading || ubdQ.isLoading || spanQ.isLoading;
+  const err = bdQ.error || ubdQ.error || spanQ.error;
 
   const subtitle = (
     <div className="flex items-center gap-2">
@@ -184,10 +230,57 @@ export function PlantlogRoundsPanel() {
             </table>
           </div>
 
+          {/* Daily round efficiency — start / end / entries / span per engineer */}
+          <div className="mb-6">
+            <div className="t-small t-muted uppercase tracking-wider mb-2">
+              Daily round efficiency · excludes water treatment
+            </div>
+            <div className="space-y-3">
+              {dailySpan.map(({ day, engineers }) => (
+                <div key={day}>
+                  <div className="t-small font-semibold mb-1">
+                    {dayDate(day).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </div>
+                  <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr className="t-muted">
+                        <th className="text-left pb-1">Engineer</th>
+                        <th className="text-right pb-1 px-2">Start</th>
+                        <th className="text-right pb-1 px-2">End</th>
+                        <th className="text-right pb-1 px-2">Entries</th>
+                        <th className="text-right pb-1 px-2">Span</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {engineers.map((e) => {
+                        const mapped = userMapQ.data?.get(e.user_name);
+                        const display = mapped?.full_name ?? e.user_name;
+                        return (
+                          <tr key={e.user_name} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
+                            <td className="py-1 pr-2">
+                              <span>{display}</span>
+                              {mapped && (
+                                <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>@{e.user_name}</span>
+                              )}
+                            </td>
+                            <td className="text-right px-2 py-1">{fmtTime(e.first_entry_utc)}</td>
+                            <td className="text-right px-2 py-1">{fmtTime(e.last_entry_utc)}</td>
+                            <td className="text-right px-2 py-1">{e.entries}</td>
+                            <td className="text-right px-2 py-1">{fmtSpan(e.span_seconds)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Per-engineer daily breakdown */}
           <div className="space-y-2">
             <div className="t-small t-muted uppercase tracking-wider mb-1">
-              Per-engineer daily breakdown · click to expand
+              Per-engineer building breakdown · click to expand
             </div>
             {perUser.map((u) => {
               const open = expandedUser === u.user;
