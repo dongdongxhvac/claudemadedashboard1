@@ -34,6 +34,7 @@ load_dotenv(HERE / ".env")
 sys.path.insert(0, str(HERE))
 from supabase_client import get_client  # noqa: E402
 from plantlog_session import login, SessionError  # noqa: E402
+from plantlog_building_attribution import attribute_and_persist  # noqa: E402
 
 BASE_URL = os.environ.get("PLANTLOG_BASE_URL", "https://cwservices-bmrupark.plantlog.com").rstrip("/")
 GQL_PATH = "/plantlog/api"
@@ -386,6 +387,16 @@ def main() -> int:
         print(f"ERROR: {msg}", file=sys.stderr)
         write_ingestion_log(client, filename=fn8, kind="plantlog_latest",
                             status="error", rows=0, error_msg=msg)
+
+    # Phase 6.7 — refresh building_inferred on the most-recent rows so the
+    # dashboard sees attributed data. 14d covers the per-engineer breakdown
+    # plus enough trail for the period-toggle UI. Failure here is non-fatal
+    # — pollers already ingested; attribution can be re-run manually.
+    try:
+        diag = attribute_and_persist(days=14, client=client)
+        print(f"[ok] building attribution: {diag}")
+    except Exception as e:
+        print(f"WARN: building attribution failed: {e}", file=sys.stderr)
 
     return 0 if overall_ok else 1
 

@@ -6,6 +6,7 @@ import { WeeklyCompletions } from '../../components/WeeklyCompletions';
 import { DueNowList } from '../../components/DueNowList';
 import { DueThisMonth } from '../../components/DueThisMonth';
 import { OpenPmsBreakdown } from '../../components/OpenPmsBreakdown';
+import { PlantlogRoundsPanel } from '../../components/PlantlogRoundsPanel';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -176,6 +177,7 @@ export default function ManagerPc() {
           <DueThisMonth />
           <OpenPmsBreakdown />
           <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
+          <PlantlogRoundsPanel />
         </div>
       </main>
     </div>
