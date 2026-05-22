@@ -1326,9 +1326,27 @@ function TvStyles() {
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
       .tv-crew-meta-sep { color: #334155; }
 
-      .tv-today-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
-      .tv-today-list li { display: flex; align-items: baseline; gap: 0.5vw; font-size: 1.1vw; }
-      .tv-today-count { font-weight: 700; color: #f59e0b; font-size: 1.4vw; min-width: 2.0vw; text-align: right; font-variant-numeric: tabular-nums; }
+      /* Due-today list — horizontal chip row (one line if it fits, wraps otherwise) */
+      .tv-today-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: row; flex-wrap: wrap;
+        gap: 0.35vw;
+        align-items: center;
+      }
+      .tv-today-list li {
+        display: inline-flex; align-items: baseline; gap: 0.3vw;
+        padding: 0.1vw 0.5vw;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        background: #1e293b;
+        font-size: 0.85vw;
+        white-space: nowrap;
+      }
+      .tv-today-count {
+        font-weight: 700; color: #f59e0b;
+        font-size: 1.0vw;
+        font-variant-numeric: tabular-nums;
+      }
       .tv-today-name { color: #e2e8f0; }
 
       /* Combined Buildings panel: rounds | engineer | assignments per row */
@@ -1391,10 +1409,7 @@ function TvStyles() {
         letter-spacing: 0.14em;
         color: #64748b;
       }
-      /* Compact override for the top per-tech list living inside Workload */
-      .tv-workload-top .tv-today-list { gap: 0.15vw; }
-      .tv-workload-top .tv-today-list li { font-size: 0.95vw; }
-      .tv-workload-top .tv-today-count { font-size: 1.2vw; min-width: 1.8vw; }
+      /* (no .tv-workload-top overrides needed — base .tv-today-list is already chip-shaped) */
 
       /* Workload bottom: per-tech chip list (§03-style chips), split by shift */
       .tv-wkl-shift-grid {
