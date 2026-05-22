@@ -23,8 +23,8 @@ function fmtDoneAt(utcIso: string): string {
 }
 
 function ageColor(daysAgo: number): string {
-  if (daysAgo >= 7) return 'var(--color-danger)';
-  if (daysAgo === 6) return 'var(--color-warning, #d97706)';
+  if (daysAgo > 7)  return 'var(--color-danger)';
+  if (daysAgo >= 6) return 'var(--color-warning, #d97706)';
   return 'var(--color-text)';
 }
 
@@ -71,7 +71,7 @@ function TestTable({
                 <td className="text-right px-2 py-1">{fmtDoneAt(r.last_done_utc)}</td>
                 <td className="text-right pl-3 py-1 font-semibold" style={{ color: c }}>
                   {r.days_ago}
-                  {r.days_ago >= 7 ? ' ⚠' : r.days_ago === 6 ? ' •' : ''}
+                  {r.days_ago > 7 ? ' ⚠' : r.days_ago >= 6 ? ' •' : ''}
                 </td>
               </tr>
             );
@@ -90,7 +90,7 @@ export function PlantlogWeeklyTestsPanel() {
     const all = testsQ.data ?? [];
     const gens = all.filter((r) => r.test_type === 'generator').sort((a, b) => b.days_ago - a.days_ago);
     const wat = all.filter((r) => r.test_type === 'water').sort((a, b) => b.days_ago - a.days_ago);
-    const overdue = all.filter((r) => r.days_ago >= 7).length;
+    const overdue = all.filter((r) => r.days_ago > 7).length;
     return { generators: gens, waters: wat, overdueCount: overdue };
   }, [testsQ.data]);
 
@@ -119,8 +119,8 @@ export function PlantlogWeeklyTestsPanel() {
           <TestTable title="Weekly Water Test"      rows={waters}      userMap={userMapQ.data} />
           <p className="t-small t-muted">
             Color: <span style={{ color: ageColor(0) }}>0-5 days fresh</span> ·{' '}
-            <span style={{ color: ageColor(6) }}>6 days approaching</span> ·{' '}
-            <span style={{ color: ageColor(7) }}>≥7 days overdue</span>
+            <span style={{ color: ageColor(6) }}>6-7 days approaching</span> ·{' '}
+            <span style={{ color: ageColor(8) }}>&gt;7 days overdue</span>
           </p>
         </>
       )}
