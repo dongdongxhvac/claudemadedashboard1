@@ -86,16 +86,22 @@ export function PlantlogWeeklyTestsPanel() {
   const testsQ = usePlantlogWeeklyTests();
   const userMapQ = usePlantlogUserMap();
 
-  const { generators, waters } = useMemo(() => {
+  const { generators, waters, overdueCount } = useMemo(() => {
     const all = testsQ.data ?? [];
     const gens = all.filter((r) => r.test_type === 'generator').sort((a, b) => b.days_ago - a.days_ago);
     const wat = all.filter((r) => r.test_type === 'water').sort((a, b) => b.days_ago - a.days_ago);
-    return { generators: gens, waters: wat };
+    const overdue = all.filter((r) => r.days_ago > 7).length;
+    return { generators: gens, waters: wat, overdueCount: overdue };
   }, [testsQ.data]);
 
   const subtitle = (
     <span className="t-small t-muted">
       {generators.length} generators · {waters.length} water tests
+      {overdueCount > 0 && (
+        <span className="ml-2 font-semibold" style={{ color: 'var(--color-danger)' }}>
+          · {overdueCount} ⚠ overdue
+        </span>
+      )}
     </span>
   );
 
