@@ -30,6 +30,7 @@ export type EngineerRow = {
   active: boolean;
   role: Role;
   cmms_assignee_name: string | null;
+  plantlog_username: string | null;
   discipline: Discipline | null;
   level: number;
   xp: number;
@@ -50,7 +51,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
     .select(`
       id, full_name, email, phone, hiring_date, auth_user_id, active, role,
       engineer_profiles!inner (
-        cmms_assignee_name, discipline, level, xp,
+        cmms_assignee_name, plantlog_username, discipline, level, xp,
         visible_to_self, notes, title, shift_id, is_lead, updated_at
       )
     `);
@@ -58,7 +59,9 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
   const { data, error } = await q.order('full_name');
   if (error) throw error;
   type Profile = {
-    cmms_assignee_name: string | null; discipline: Discipline | null;
+    cmms_assignee_name: string | null;
+    plantlog_username: string | null;
+    discipline: Discipline | null;
     level: number; xp: number; visible_to_self: boolean;
     notes: string | null; title: string | null;
     shift_id: string | null; is_lead: boolean;
@@ -86,6 +89,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
         active: r.active,
         role: r.role,
         cmms_assignee_name: ep.cmms_assignee_name,
+        plantlog_username: ep.plantlog_username,
         discipline: ep.discipline,
         level: ep.level,
         xp: ep.xp,
@@ -129,7 +133,7 @@ export function useUpdateEngineerProfile() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name'>>;
+      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')

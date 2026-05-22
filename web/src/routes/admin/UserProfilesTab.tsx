@@ -339,7 +339,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
   );
 }
 
-type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name'>>;
+type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
 type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean };
 
 function EditDrawer({
@@ -358,6 +358,7 @@ function EditDrawer({
   const [fullName, setFullName] = useState<string>(row.full_name);
   const [title, setTitle] = useState<string>(row.title ?? '');
   const [cmmsName, setCmmsName] = useState<string>(row.cmms_assignee_name ?? '');
+  const [plantlogUsername, setPlantlogUsername] = useState<string>(row.plantlog_username ?? '');
   const [email, setEmail] = useState<string>(row.email ?? '');
   const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [role, setRole] = useState<Role>(row.role);
@@ -379,6 +380,7 @@ function EditDrawer({
         {
           title: title.trim() || null,
           cmms_assignee_name: cmmsName.trim() || null,
+          plantlog_username: plantlogUsername.trim() || null,
           shift_id: shiftId || null,
           is_lead: isLead,
           discipline,
@@ -543,6 +545,21 @@ function EditDrawer({
           />
           <p className="t-small t-muted mt-1">
             Must match the <code>Assigned To</code> column in PM CSV exports exactly. Only relevant for engineers; XP won't accumulate if this doesn't match.
+          </p>
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">Plantlog username</span>
+          <input
+            type="text"
+            value={plantlogUsername}
+            onChange={(e) => setPlantlogUsername(e.target.value)}
+            placeholder='exact username from plantlog (e.g. "Bgonzalez", "Mdonovan")'
+            className="w-full border rounded px-2 py-1 t-text t-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+          <p className="t-small t-muted mt-1">
+            Maps plantlog activity (rounds, readings) to this profile so the §06 panel can show full names. Engineers only.
           </p>
         </label>
 

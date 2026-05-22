@@ -10,7 +10,7 @@
 // (unambiguous) and some are "inferred" (nearest unambiguous in time). Both
 // surface here as concrete building counts.
 import { useMemo, useState } from 'react';
-import { usePlantlogBuildingDaily, usePlantlogUserBuildingDaily } from '../hooks/usePlantlog';
+import { usePlantlogBuildingDaily, usePlantlogUserBuildingDaily, usePlantlogUserMap } from '../hooks/usePlantlog';
 import { Section } from './Section';
 
 type Period = '4d' | '7d' | '14d';
@@ -39,6 +39,7 @@ export function PlantlogRoundsPanel() {
   const days = PERIODS.find((p) => p.key === period)!.days;
   const bdQ = usePlantlogBuildingDaily(days);
   const ubdQ = usePlantlogUserBuildingDaily(days);
+  const userMapQ = usePlantlogUserMap();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   const matrix = useMemo(() => {
@@ -197,8 +198,23 @@ export function PlantlogRoundsPanel() {
                     className="w-full text-left flex justify-between items-baseline px-3 py-2"
                   >
                     <span className="t-text">
-                      <span className="font-semibold">{u.user}</span>
-                      <span className="t-small t-muted ml-2">{u.daysActive}d active</span>
+                      {(() => {
+                        const mapped = userMapQ.data?.get(u.user);
+                        return mapped ? (
+                          <>
+                            <span className="font-semibold">{mapped.full_name}</span>
+                            <span className="t-small t-muted ml-2 t-mono">@{u.user}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-semibold t-mono">{u.user}</span>
+                            <span className="t-small t-muted ml-2" title="Set this plantlog username on a User Profile to show the real name">
+                              (unmapped)
+                            </span>
+                          </>
+                        );
+                      })()}
+                      <span className="t-small t-muted ml-2">· {u.daysActive}d active</span>
                     </span>
                     <span className="t-mono">{u.total.toLocaleString()}</span>
                   </button>

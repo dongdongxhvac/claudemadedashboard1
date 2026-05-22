@@ -34,6 +34,31 @@ export function usePlantlogBuildingDaily(daysBack: number = 14) {
   });
 }
 
+/** plantlog_username -> { full_name, user_id } for the engineers who've
+ *  been mapped via the User Profiles admin tab. Lets the §06 panel show
+ *  "Bjorn Gonzalez (Bgonzalez)" instead of just the plantlog handle. */
+export function usePlantlogUserMap() {
+  return useQuery({
+    queryKey: ['plantlog_user_map'],
+    queryFn: async (): Promise<Map<string, { full_name: string; user_id: string }>> => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, engineer_profiles!inner(plantlog_username)')
+        .not('engineer_profiles.plantlog_username', 'is', null);
+      if (error) throw error;
+      type Row = { id: string; full_name: string; engineer_profiles: { plantlog_username: string | null } | { plantlog_username: string | null }[] };
+      const map = new Map<string, { full_name: string; user_id: string }>();
+      for (const r of (data ?? []) as Row[]) {
+        const ep = Array.isArray(r.engineer_profiles) ? r.engineer_profiles[0] : r.engineer_profiles;
+        const u = ep?.plantlog_username;
+        if (u) map.set(u, { full_name: r.full_name, user_id: r.id });
+      }
+      return map;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 /** Per-user × per-building × per-day drill-down. */
 export function usePlantlogUserBuildingDaily(daysBack: number = 14) {
   return useQuery({
