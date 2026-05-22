@@ -59,6 +59,31 @@ export function usePlantlogUserMap() {
   });
 }
 
+export type PlantlogWeeklyTest = {
+  test_type: 'generator' | 'water';
+  log_name: string;
+  activity_name: string | null;
+  last_done_utc: string;
+  days_ago: number;
+  last_by_user: string | null;
+  building: string | null;
+};
+
+/** Latest completion per weekly compliance test (generator + water). */
+export function usePlantlogWeeklyTests() {
+  return useQuery({
+    queryKey: ['plantlog_weekly_tests'],
+    queryFn: async (): Promise<PlantlogWeeklyTest[]> => {
+      const { data, error } = await supabase
+        .from('v_plantlog_weekly_tests_status')
+        .select('*');
+      if (error) throw error;
+      return (data ?? []) as PlantlogWeeklyTest[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 export type PlantlogUserDailySpan = {
   user_name: string;
   et_day: string;
