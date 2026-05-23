@@ -11,6 +11,8 @@ token.json
 **/.plantlog_*
 cove_session.json
 **/cove_session.json
+.delta_session*
+**/.delta_session*
 .cove_main.js
 .cove_vendor.js
 **/.cove_main.js
