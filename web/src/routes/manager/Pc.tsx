@@ -9,6 +9,7 @@ import { OpenPmsBreakdown } from '../../components/OpenPmsBreakdown';
 import { PlantlogRoundsPanel } from '../../components/PlantlogRoundsPanel';
 import { PlantlogWeeklyTestsPanel } from '../../components/PlantlogWeeklyTestsPanel';
 import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
+import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -182,6 +183,7 @@ export default function ManagerPc() {
           <PlantlogRoundsPanel />
           <PlantlogWeeklyTestsPanel />
           <DeltaAlarmsPanel />
+          <EmailAlarmsPanel />
         </div>
       </main>
     </div>
