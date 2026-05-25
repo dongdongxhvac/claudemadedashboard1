@@ -828,7 +828,12 @@ def main() -> int:
     def _drain_with_reconnect(M, label, process_fn):
         """Drain one label. If the session wedges on a bad UID, reconnect
         and return whatever we got (partial) — the bad UID gets retried on
-        the next 5-min cycle and will hit the same timeout, then skip again."""
+        the next 5-min cycle and will hit the same timeout, then skip again.
+
+        Also tolerates a missing label (RuntimeError from failed SELECT) —
+        useful when an env var points at a label that hasn't been created
+        in Gmail yet; we treat as 0 messages and continue to the next label
+        instead of crashing the whole run."""
         try:
             return M, _drain_label(M, label, process_fn)
         except IMAPSessionWedged:
@@ -836,6 +841,9 @@ def main() -> int:
             except Exception: pass
             print(f"  reconnecting after wedge on label {label!r}…")
             return _connect(), (0, [])
+        except RuntimeError as e:
+            print(f"  WARN: skipping label {label!r}: {e}", file=sys.stderr)
+            return M, (0, [])
 
     try:
         M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=60)
