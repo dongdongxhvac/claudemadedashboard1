@@ -302,6 +302,7 @@ export function OncallTab() {
             (acc, e) => { acc[e.user_id] = { full_name: e.full_name, cmms_assignee_name: e.cmms_assignee_name }; return acc; },
             {},
           )}
+          live={{ rows: liveRows, settings: liveSettings }}
           todayIso={todayIso}
           onPublish={async () => {
             setActionError(null);
@@ -431,7 +432,7 @@ function LiveHeader({
 // ============================================================================
 function DraftPreview({
   pending, isManager, isProposer, publishing, rejecting, withdrawing,
-  engineersById, todayIso, onPublish, onReject, onWithdraw,
+  engineersById, live, todayIso, onPublish, onReject, onWithdraw,
 }: {
   pending: { id: string; payload: OncallProposalPayload; note: string | null;
              proposed_by_name: string; proposed_at: string };
@@ -441,6 +442,7 @@ function DraftPreview({
   rejecting: boolean;
   withdrawing: boolean;
   engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>;
+  live: { rows: Row[]; settings: DisplaySettings };
   todayIso: string;
   onPublish: () => void;
   onReject: (note: string | null) => void;
@@ -468,6 +470,44 @@ function DraftPreview({
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
+  // ---- Diff between draft and live ----
+  const liveIds = new Set(live.rows.map((r) => r.user_id));
+  const draftIds = new Set(rows.map((r) => r.user_id));
+  const rowAdded = new Set<string>([...draftIds].filter((id) => !liveIds.has(id)));
+  const removedRows: Row[] = live.rows.filter((r) => !draftIds.has(r.user_id));
+  const livePositionByUser = new Map<string, number>();
+  live.rows.forEach((r, i) => livePositionByUser.set(r.user_id, i + 1));
+
+  // Pre-compute (engineer, cycle) → week_start (or null = pre-effective / no start)
+  // across both tables for the SAME cycle window the draft will render.
+  const draftVisibleCycles = settings.rotations_per_engineer + 1;
+  const cycleRange = [-1, ...Array.from({ length: draftVisibleCycles }, (_, i) => i)];
+  const buildMap = (src: Row[], srcSettings: DisplaySettings): Map<string, string | null> => {
+    const m = new Map<string, string | null>();
+    const start = srcSettings.start_friday;
+    if (!start) return m;
+    const N = src.length;
+    src.forEach((p, idx) => {
+      for (const c of cycleRange) {
+        const weekStart = addDaysIso(start, (c * N + idx) * 7);
+        m.set(`${p.user_id}:${c}`,
+          p.effective_from && p.effective_from > weekStart ? null : weekStart);
+      }
+    });
+    return m;
+  };
+  const liveMap = buildMap(live.rows, live.settings);
+  const draftMap = buildMap(rows, settings);
+  const cellChanged = (userId: string, cycle: number) => {
+    if (rowAdded.has(userId)) return false; // whole row marked separately
+    return liveMap.get(`${userId}:${cycle}`) !== draftMap.get(`${userId}:${cycle}`);
+  };
+
+  const startFridayChanged = live.settings.start_friday !== settings.start_friday;
+  const rotationsChanged = live.settings.rotations_per_engineer !== settings.rotations_per_engineer;
+  const anyDiff = startFridayChanged || rotationsChanged || rowAdded.size > 0 || removedRows.length > 0
+    || rows.some((p, _i) => cycleRange.some((c) => cellChanged(p.user_id, c)));
+
   return (
     <div className="t-card oncall-draft-section" style={{
       padding: '0.75rem 1rem',
@@ -488,7 +528,7 @@ function DraftPreview({
             Proposed by <span className="font-medium" style={{ color: 'var(--color-text)' }}>{pending.proposed_by_name}</span> · {proposedWhen}
           </p>
           {pending.note && (
-            <p className="t-small mt-1" style={{ color: 'var(--color-text)', fontStyle: 'italic' }}>
+            <p className="t-small mt-1" style={{ color: 'var(--color-danger)', fontStyle: 'italic', fontWeight: 500 }}>
               "{pending.note}"
             </p>
           )}
@@ -566,11 +606,50 @@ function DraftPreview({
         </div>
       )}
 
+      {anyDiff && (
+        <div className="mb-3 p-2 rounded border" style={{
+          borderColor: '#d4a017', background: 'rgba(212,160,23,0.10)',
+        }}>
+          <p className="t-small font-semibold mb-1" style={{ color: '#a16207', letterSpacing: '0.3px' }}>
+            CHANGES vs LIVE
+          </p>
+          <ul className="t-small" style={{ color: '#7c5800', listStyle: 'disc', paddingLeft: '1.25rem' }}>
+            {startFridayChanged && (
+              <li>
+                Start Friday: <span className="t-mono font-medium">{settings.start_friday ?? '—'}</span>
+                {' '}<span className="t-muted">(was <span className="t-mono">{live.settings.start_friday ?? '—'}</span>)</span>
+              </li>
+            )}
+            {rotationsChanged && (
+              <li>
+                Cycles per engineer: <span className="font-medium">{settings.rotations_per_engineer}</span>
+                {' '}<span className="t-muted">(was {live.settings.rotations_per_engineer})</span>
+              </li>
+            )}
+            {rowAdded.size > 0 && (
+              <li>
+                Adding to rotation: <span className="font-medium">
+                  {rows.filter((r) => rowAdded.has(r.user_id)).map((r) => r.full_name).join(', ')}
+                </span>
+              </li>
+            )}
+            {removedRows.length > 0 && (
+              <li style={{ color: 'var(--color-danger)' }}>
+                Removing from rotation: <span className="font-medium" style={{ textDecoration: 'line-through' }}>
+                  {removedRows.map((r) => r.full_name).join(', ')}
+                </span>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       <RotationTable
         rows={rows}
         settings={settings}
         todayIso={todayIso}
         editing={false}
+        diff={{ rowAdded, cellChanged, livePositionByUser }}
       />
     </div>
   );
@@ -582,6 +661,7 @@ function DraftPreview({
 function RotationTable({
   rows, settings, todayIso, editing,
   onMoveUp, onMoveDown, onRemove, onSetEffectiveFrom,
+  diff,
 }: {
   rows: Row[];
   settings: DisplaySettings;
@@ -591,6 +671,11 @@ function RotationTable({
   onMoveDown?: (idx: number) => void;
   onRemove?: (idx: number) => void;
   onSetEffectiveFrom?: (idx: number, value: string) => void;
+  diff?: {
+    rowAdded: Set<string>;
+    cellChanged: (userId: string, cycle: number) => boolean;
+    livePositionByUser: Map<string, number>;
+  };
 }) {
   const visibleCycles = settings.rotations_per_engineer + 1; // +1 preview
   const columnIndices = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
@@ -641,14 +726,19 @@ function RotationTable({
           ) : (
             rows.map((p, idx) => {
               const anyActive = columnIndices.some((c) => cellInfo(p, idx, c).active);
+              const isAdded = diff?.rowAdded.has(p.user_id) ?? false;
               return (
                 <tr
                   key={p.user_id}
                   className={`border-b t-row-hover ${anyActive ? 'oncall-row' : ''}`}
                   style={{
                     borderColor: 'var(--color-border-soft)',
-                    background: anyActive ? 'rgba(34,197,94,0.16)' : undefined,
-                    borderLeft: anyActive ? '4px solid var(--color-ok)' : '4px solid transparent',
+                    background: anyActive
+                      ? 'rgba(34,197,94,0.16)'
+                      : isAdded ? 'rgba(34,197,94,0.06)' : undefined,
+                    borderLeft: anyActive
+                      ? '4px solid var(--color-ok)'
+                      : isAdded ? '4px solid #15803d' : '4px solid transparent',
                   }}
                 >
                   {editing && (
@@ -661,7 +751,7 @@ function RotationTable({
                     </td>
                   )}
                   <td className="py-1 pr-2 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium t-text">{p.full_name}</span>
                       {anyActive && (
                         <span
@@ -671,6 +761,29 @@ function RotationTable({
                           ON CALL
                         </span>
                       )}
+                      {diff && diff.rowAdded.has(p.user_id) && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-white font-semibold"
+                          style={{ background: '#15803d', fontSize: '10px', letterSpacing: '0.5px' }}
+                        >
+                          + NEW
+                        </span>
+                      )}
+                      {diff && !diff.rowAdded.has(p.user_id) && (() => {
+                        const livePos = diff.livePositionByUser.get(p.user_id);
+                        const draftPos = idx + 1;
+                        if (livePos === undefined || livePos === draftPos) return null;
+                        const movedUp = draftPos < livePos;
+                        return (
+                          <span
+                            className="t-small"
+                            style={{ color: '#a16207', fontSize: '10px', fontWeight: 600 }}
+                            title={`Moved from position #${livePos} to #${draftPos}`}
+                          >
+                            {movedUp ? '↑' : '↓'} was #{livePos}
+                          </span>
+                        );
+                      })()}
                     </div>
                     {editing ? (
                       <div className="mt-0.5 t-small t-muted">
@@ -696,18 +809,25 @@ function RotationTable({
                     const isPreview = c === visibleCycles - 1;
                     const isPrev = c === -1;
                     const dim = isPreview || isPrev;
+                    const changed = !info.active && (diff?.cellChanged(p.user_id, c) ?? false);
                     return (
                       <td
                         key={c}
                         className={`py-1 px-1.5 text-center t-mono whitespace-nowrap ${info.active ? 'oncall-cell' : ''}`}
-                        title={info.holiday ? `${info.holiday.name} · ${info.holiday.date}` : undefined}
+                        title={
+                          info.holiday ? `${info.holiday.name} · ${info.holiday.date}`
+                          : changed ? 'Changed from live schedule'
+                          : undefined
+                        }
                         style={{
-                          background: info.active ? 'rgba(34,197,94,0.28)' : undefined,
-                          fontWeight: info.active ? 700 : undefined,
+                          background: info.active ? 'rgba(34,197,94,0.28)'
+                            : changed ? 'rgba(212,160,23,0.25)' : undefined,
+                          fontWeight: info.active ? 700 : changed ? 600 : undefined,
                           color: info.holiday ? 'var(--color-danger)' : info.preEffective ? 'var(--color-text-muted)' : undefined,
                           opacity: dim ? 0.7 : 1,
                           fontStyle: dim ? 'italic' : undefined,
-                          border: info.active ? '1px solid var(--color-ok)' : undefined,
+                          border: info.active ? '1px solid var(--color-ok)'
+                            : changed ? '1px solid #d4a017' : undefined,
                         }}
                       >
                         {info.display}
