@@ -13,6 +13,7 @@ export type Me = {
   active: boolean;
   preferences: Record<string, unknown>;
   is_lead: boolean;
+  is_manager: boolean;
 };
 
 /** Fetch the current authenticated user's row in public.users. Null when not linked. */
@@ -41,6 +42,10 @@ export function useMe() {
 
 export function useIsAdmin(): boolean {
   return useMe().data?.role === 'admin';
+}
+
+export function useIsManager(): boolean {
+  return useMe().data?.is_manager === true;
 }
 
 /** Admin OR a lead engineer — the audience for the Admin panel (read/write
