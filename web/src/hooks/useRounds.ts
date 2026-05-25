@@ -262,3 +262,57 @@ export function useUnassignRoundEngineer() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+// ============================================================================
+// rounds_notes — 2-slot header notes (writes routed through proposal RPC)
+// ============================================================================
+
+export type RoundsNote = {
+  slot: 1 | 2;
+  body: string;
+  updated_at: string;
+  updated_by_user_id: string | null;
+  updated_by_name: string | null;
+};
+
+const KEY_NOTES = ['rounds_notes'];
+
+export function useRoundsNotes() {
+  return useQuery({
+    queryKey: KEY_NOTES,
+    queryFn: async (): Promise<RoundsNote[]> => {
+      const { data, error } = await supabase
+        .from('rounds_notes')
+        .select(`slot, body, updated_at, updated_by_user_id,
+                 users:updated_by_user_id(full_name)`)
+        .order('slot', { ascending: true });
+      if (error) throw error;
+      type Joined = {
+        slot: 1 | 2; body: string; updated_at: string;
+        updated_by_user_id: string | null;
+        users: { full_name: string } | { full_name: string }[] | null;
+      };
+      return (data as unknown as Joined[]).map((r) => {
+        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        return {
+          slot: r.slot, body: r.body, updated_at: r.updated_at,
+          updated_by_user_id: r.updated_by_user_id,
+          updated_by_name: u?.full_name ?? null,
+        };
+      });
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useRoundsNotesRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel('rounds-notes-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds_notes' },
+        () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
+}

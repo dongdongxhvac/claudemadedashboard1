@@ -53,6 +53,31 @@ export type BuildingsProposalPayload = {
   notes?: BuildingsProposalNote[];
 };
 
+// Rounds ======================================================================
+
+export type RoundsProposalStop = {
+  building_id: string;
+};
+
+export type RoundsProposalRound = {
+  /** null when adding a brand-new round; the existing UUID otherwise. */
+  id: string | null;
+  name: string;
+  shift_id: string | null;
+  sort_order: number;
+  estimated_minutes: number | null;
+  stops: RoundsProposalStop[];
+  /** null = unassigned. */
+  assigned_user_id: string | null;
+};
+
+export type RoundsProposalNote = { slot: number; body: string };
+
+export type RoundsProposalPayload = {
+  rounds: RoundsProposalRound[];
+  notes?: RoundsProposalNote[];
+};
+
 export type PendingProposal<TPayload = unknown> = {
   id: string;
   tab: ProposalTab;
@@ -263,6 +288,55 @@ export function useProposeBuildings() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PENDING('buildings') }),
+  });
+}
+
+/** Submit a rounds proposal. Fails if one is already pending. */
+export function useProposeRounds() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { payload: RoundsProposalPayload; note?: string | null }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error('Not signed in');
+      const { data: me, error: meErr } = await supabase
+        .from('users').select('id').eq('auth_user_id', auth.user.id).maybeSingle();
+      if (meErr) throw meErr;
+      if (!me) throw new Error('Your account is not linked to a users row');
+
+      const { error } = await supabase.from('admin_proposals').insert({
+        tab: 'rounds',
+        payload: input.payload,
+        note: input.note ?? null,
+        proposed_by_user_id: (me as { id: string }).id,
+        status: 'pending',
+      });
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Another draft for Rounds is already pending review.');
+        }
+        throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PENDING('rounds') }),
+  });
+}
+
+/** Manager-only: publish a rounds proposal. */
+export function usePublishRoundsProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (proposalId: string) => {
+      const { error } = await supabase.rpc('publish_rounds_proposal', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY_PENDING('rounds') });
+      qc.invalidateQueries({ queryKey: ['rounds'] });
+      qc.invalidateQueries({ queryKey: ['rounds_notes'] });
+      qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'rounds'] });
+    },
   });
 }
 
