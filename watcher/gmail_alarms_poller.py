@@ -462,6 +462,41 @@ def _fetch_msg(M: imaplib.IMAP4_SSL, uid: bytes) -> dict | None:
     }
 
 
+def _process_pa_heartbeat(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
+    """Fetch one Power Automate heartbeat email — these arrive every 15 min
+    from the dedicated PA Recurrence flow. Label IS the classifier; vendor
+    is always 'power_automate'. The PA heartbeat is the upstream-pipeline
+    canary: if it stops, Power Automate itself is dead and the 4 BMS
+    heartbeat / alarm feeds are about to go stale too."""
+    fetched = _fetch_msg(M, uid)
+    if not fetched or not fetched["gmail_msg_id"]:
+        return None
+    msg = email.message_from_bytes(fetched["raw_rfc822"])
+    subject_raw = _decode_header_str(msg.get("Subject"))
+    received_at = _internaldate_to_utc(fetched["internaldate"])
+    # No body parse, no vendor classifier — the label is the signal. We use
+    # Gmail's INTERNALDATE as the event timestamp since the PA flow's own
+    # send-time is what we actually want to monitor for staleness.
+    return {
+        "gmail_msg_id":        fetched["gmail_msg_id"],
+        "vendor":              "power_automate",
+        "vendor_label":        "Power Automate",
+        "building":            "Email Pipeline",
+        "point_name":          "PA Heartbeat",
+        "state":               "Active",
+        "event_timestamp_utc": received_at.isoformat(),
+        "received_at_utc":     received_at.isoformat(),
+        "original_sender":     None,
+        "subject_raw":         subject_raw,
+        "body_text":           None,
+        "parsed_fields": {
+            "subject_raw":  subject_raw,
+            "label":        label,
+            "kind":         "pa_heartbeat",
+        },
+    }
+
+
 def _process_heartbeat(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
     """Fetch one heartbeat email and return a row ready for upsert into
     bms_heartbeats, or None if vendor classification fails."""
@@ -762,6 +797,7 @@ def main() -> int:
         ) if l
     ]
     hb_label = os.environ.get("GMAIL_HEARTBEAT_LABEL", "").strip()
+    pa_label = os.environ.get("GMAIL_PA_HEARTBEAT_LABEL", "").strip()
     if not (user and pw and alarm_labels):
         print("ERROR: GMAIL_USER / GMAIL_APP_PASSWORD / at least one alarm label must be set in watcher/.env",
               file=sys.stderr)
@@ -772,14 +808,17 @@ def main() -> int:
     for l in alarm_labels:
         print(f"  alarm label:     {l!r}")
     print(f"  heartbeat label: {hb_label!r}" if hb_label else "  heartbeat label: (unset — skipping)")
+    print(f"  PA heartbeat:    {pa_label!r}" if pa_label else "  PA heartbeat:    (unset — skipping)")
     print("  step: connecting Supabase…")
     client = get_client()
     print("  step: connecting IMAP…")
 
     alarm_seen = alarm_added = 0
     hb_seen = hb_added = 0
+    pa_seen = pa_added = 0
     alarm_rows: list[dict] = []
     hb_rows: list[dict] = []
+    pa_rows: list[dict] = []
 
     def _connect():
         m = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=60)
@@ -811,6 +850,9 @@ def main() -> int:
         if hb_label:
             M, (hb_seen, hb_rows) = _drain_with_reconnect(M, hb_label, _process_heartbeat)
             print(f"  [{hb_label}] {hb_seen} msgs, {len(hb_rows)} classified")
+        if pa_label:
+            M, (pa_seen, pa_rows) = _drain_with_reconnect(M, pa_label, _process_pa_heartbeat)
+            print(f"  [{pa_label}] {pa_seen} msgs, {len(pa_rows)} processed")
         try:
             M.close()
         except Exception:
@@ -845,23 +887,36 @@ def main() -> int:
                     ignore_duplicates=True,
                 ).execute()
                 hb_added += len(resp.data) if resp.data else 0
+        # PA heartbeat rows also land in bms_heartbeats — same table, vendor
+        # discriminates. v_bms_heartbeat_latest will surface them automatically.
+        if pa_rows:
+            CHUNK = 100
+            for i in range(0, len(pa_rows), CHUNK):
+                resp = client.table("bms_heartbeats").upsert(
+                    pa_rows[i:i + CHUNK],
+                    on_conflict="gmail_msg_id",
+                    ignore_duplicates=True,
+                ).execute()
+                pa_added += len(resp.data) if resp.data else 0
     except Exception as e:
         print(f"ERROR (db write): {e}", file=sys.stderr)
         _update_state(
             status="error",
             err=str(e)[:1000],
-            seen=alarm_seen + hb_seen,
-            added=alarm_added + hb_added,
+            seen=alarm_seen + hb_seen + pa_seen,
+            added=alarm_added + hb_added + pa_added,
         )
         return 1
 
     _update_state(
         status="ok",
-        seen=alarm_seen + hb_seen,
-        added=alarm_added + hb_added,
+        seen=alarm_seen + hb_seen + pa_seen,
+        added=alarm_added + hb_added + pa_added,
         err=None,
     )
-    print(f"[ok] alarms: seen={alarm_seen} new={alarm_added}  heartbeats: seen={hb_seen} new={hb_added}")
+    print(f"[ok] alarms: seen={alarm_seen} new={alarm_added}  "
+          f"heartbeats: seen={hb_seen} new={hb_added}  "
+          f"pa_heartbeats: seen={pa_seen} new={pa_added}")
     return 0
 
 

@@ -19,12 +19,17 @@ import {
 } from '../hooks/useEmailAlarms';
 import { Section } from './Section';
 
-// Weekday-aware staleness rule. Heartbeats fire Mon-Fri, one per day per
-// BMS. So:
-//   - On a weekday past noon ET, expect today's HB (else >28h is stale)
-//   - On Mon before noon ET, last expected HB was Friday (allow up to ~76h)
-//   - On weekend, last expected HB was Friday
-function isHeartbeatStale(hoursSince: number): boolean {
+// Per-vendor staleness rule.
+//
+// BMS heartbeats fire Mon-Fri, one per day per system — weekday-aware:
+//   - Weekday past noon ET, expect today's HB (else >28h is stale)
+//   - Mon before noon ET, last expected HB was Friday (allow up to ~80h)
+//   - Sat/Sun, last expected HB was Friday
+//
+// Power Automate heartbeat fires every 15 min, 24/7. Independent cadence,
+// no weekday logic. >1h is stale (covers 4 missed cycles).
+function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
+  if (vendor === 'power_automate') return hoursSince > 1;
   const now = new Date();
   const etNow = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
@@ -85,7 +90,7 @@ function HeartbeatTable({ rows }: { rows: BmsHeartbeat[] }) {
       </thead>
       <tbody>
         {rows.map((r) => {
-          const stale = isHeartbeatStale(r.hours_since);
+          const stale = isHeartbeatStale(r.vendor, r.hours_since);
           return (
             <tr key={r.vendor} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
               <td className="py-1 pr-3">{r.vendor_label ?? r.vendor}</td>
@@ -113,7 +118,7 @@ export function EmailAlarmsPanel() {
   const hbRows = hbQ.data ?? [];
   const totalSystems = hbRows.length;
   const staleCount = useMemo(
-    () => hbRows.filter((r) => isHeartbeatStale(r.hours_since)).length,
+    () => hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length,
     [hbRows],
   );
   const liveCount = totalSystems - staleCount;
