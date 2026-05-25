@@ -1,22 +1,42 @@
-// §09 — Email-forwarded BMS alarms (Phase 8.0).
+// §09 — BMS heartbeats from 4 systems (Phase 8.1, refactored Phase 8.2).
 //
-// Mirrors §08 (Delta) shape: 2-pane grid + subtitle health indicator. No
-// raw transition feed (those flip Active/Quiet repeatedly and just add
-// noise). Instead, the Active pane groups by point_ref and shows how many
-// times each point has fired in the last 24h.
+// Scope: ONLY the daily-test heartbeat emails from the 4 BMS systems
+// (Delta @ Takeda, Delta @ 10 Green, Northeast Tech 730/750, Siemens).
+// Actual alarm content lives in §10 (multi-vendor) and §08 (Delta direct).
 //
-// Backed by v_email_alarms_open, v_email_alarms_by_building,
-// v_email_alarms_recent (only used to compute the per-point flip counts),
-// email_poll_state.
+// This panel is the pipeline-health canary — it answers "is each BMS
+// still emailing us?" with weekday-aware staleness. A stale row means
+// the BMS itself, its SMTP path, Outlook, Power Automate, Gmail, or
+// the poller has broken somewhere; the alarm panels can't tell you
+// that on their own.
+//
+// Backed by v_bms_heartbeat_latest + email_poll_state.
 import { useMemo } from 'react';
 import {
-  useEmailAlarmsOpen,
-  useEmailAlarmsByBuilding,
-  useEmailAlarmsRecent,
+  useBmsHeartbeats,
   useEmailPollState,
-  type EmailAlarmOpen,
+  type BmsHeartbeat,
 } from '../hooks/useEmailAlarms';
 import { Section } from './Section';
+
+// Weekday-aware staleness rule. Heartbeats fire Mon-Fri, one per day per
+// BMS. So:
+//   - On a weekday past noon ET, expect today's HB (else >28h is stale)
+//   - On Mon before noon ET, last expected HB was Friday (allow up to ~76h)
+//   - On weekend, last expected HB was Friday
+function isHeartbeatStale(hoursSince: number): boolean {
+  const now = new Date();
+  const etNow = new Date(
+    now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
+  );
+  const dow = etNow.getDay();    // 0=Sun, 1=Mon, ..., 6=Sat
+  const hour = etNow.getHours();
+
+  if (dow === 0) return hoursSince > 76;                   // Sunday
+  if (dow === 6) return hoursSince > 52;                   // Saturday
+  if (dow === 1 && hour < 12) return hoursSince > 80;      // Mon morning
+  return hoursSince > 28;                                  // weekday after expected time
+}
 
 function minutesAgo(utcIso: string | null): number | null {
   if (!utcIso) return null;
@@ -44,114 +64,39 @@ function fmtTime(utcIso: string | null): string {
   });
 }
 
-function classColor(eventClass: string | null): string {
-  switch (eventClass) {
-    case 'Fault':
-    case 'Out of Service':
-      return 'var(--color-danger)';
-    case 'High Limit':
-    case 'Low Limit':
-      return 'var(--color-warning, #d97706)';
-    default:
-      return 'var(--color-text)';
-  }
-}
-
-function BuildingTable({
-  rows,
-}: {
-  rows: { building: string; open_count: number; off_normal_count: number; limit_count: number; fault_count: number }[];
-}) {
+function HeartbeatTable({ rows }: { rows: BmsHeartbeat[] }) {
   if (rows.length === 0) {
-    return <p className="t-text t-muted">No active alarms — building counts will populate once one fires.</p>;
+    return (
+      <p className="t-text t-muted">
+        No BMS heartbeats received yet — pipeline health unknown.
+      </p>
+    );
   }
   return (
     <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
       <thead>
         <tr className="t-muted">
+          <th className="text-left pb-1 pr-3">BMS</th>
           <th className="text-left pb-1 pr-3">Building</th>
-          <th className="text-right pb-1 px-2">Active</th>
-          <th className="text-right pb-1 px-2">Off-Norm</th>
-          <th className="text-right pb-1 px-2">Limit</th>
-          <th className="text-right pb-1 pl-2">Fault</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.building} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
-            <td className="py-1 pr-3">{r.building}</td>
-            <td className="text-right px-2 py-1 font-semibold">{r.open_count.toLocaleString()}</td>
-            <td className="text-right px-2 py-1">{r.off_normal_count.toLocaleString()}</td>
-            <td
-              className="text-right px-2 py-1"
-              style={{ color: r.limit_count > 0 ? 'var(--color-warning, #d97706)' : undefined }}
-            >
-              {r.limit_count.toLocaleString()}
-            </td>
-            <td
-              className="text-right pl-2 py-1"
-              style={{ color: r.fault_count > 0 ? 'var(--color-danger)' : undefined }}
-            >
-              {r.fault_count.toLocaleString()}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function ActiveTable({
-  rows,
-  transitionCounts,
-}: {
-  rows: EmailAlarmOpen[];
-  transitionCounts: Map<string, number>;
-}) {
-  if (rows.length === 0) {
-    return <p className="t-text t-muted">No active email alarms right now.</p>;
-  }
-  return (
-    <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
-      <thead>
-        <tr className="t-muted">
-          <th className="text-left pb-1 pr-3">Point</th>
-          <th className="text-left pb-1 pr-3">Class / Value</th>
-          <th className="text-left pb-1 pr-3">Latest</th>
-          <th className="text-right pb-1 pl-2" title="Number of transitions in the last 24h">Flips 24h</th>
+          <th className="text-left pb-1 pr-3">Last heartbeat (ET)</th>
+          <th className="text-left pb-1 pr-3">Age</th>
+          <th className="text-left pb-1 pl-2">Pipeline</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => {
-          const flips = r.point_ref ? (transitionCounts.get(r.point_ref) ?? 1) : 1;
+          const stale = isHeartbeatStale(r.hours_since);
           return (
-            <tr key={r.gmail_msg_id} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
-              <td className="py-1 pr-3" style={{ maxWidth: '24rem' }}>
-                <div>{r.point_name ?? r.point_ref ?? '—'}</div>
-                <div className="t-muted" style={{ fontSize: '0.7rem' }}>
-                  {r.building ?? '—'}
-                  {r.point_ref && r.point_name && r.point_ref !== r.point_name ? ` · ${r.point_ref}` : ''}
-                </div>
-              </td>
-              <td className="py-1 pr-3" style={{ color: classColor(r.event_class) }}>
-                <div className="font-semibold">{r.event_class ?? '—'}</div>
-                {r.event_value && (
-                  <div className="t-muted" style={{ fontSize: '0.7rem' }}>
-                    {r.event_value}
-                  </div>
-                )}
-              </td>
-              <td className="py-1 pr-3">
-                <div>{fmtTime(r.alarm_time_utc ?? r.received_at_utc)}</div>
-                <div className="t-muted" style={{ fontSize: '0.7rem' }}>
-                  {fmtRelative(r.alarm_time_utc ?? r.received_at_utc)}
-                </div>
-              </td>
+            <tr key={r.vendor} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
+              <td className="py-1 pr-3">{r.vendor_label ?? r.vendor}</td>
+              <td className="py-1 pr-3 t-muted">{r.building ?? '—'}</td>
+              <td className="py-1 pr-3">{fmtTime(r.last_seen_utc)}</td>
+              <td className="py-1 pr-3 t-muted">{fmtRelative(r.last_seen_utc)}</td>
               <td
-                className="text-right pl-2 py-1 font-semibold"
-                style={{ color: flips > 3 ? 'var(--color-warning, #d97706)' : undefined }}
+                className="py-1 pl-2 font-semibold"
+                style={{ color: stale ? 'var(--color-danger)' : 'var(--color-ok, #10b981)' }}
               >
-                {flips}
+                {stale ? '⚠ STALE' : '✓ live'}
               </td>
             </tr>
           );
@@ -162,68 +107,63 @@ function ActiveTable({
 }
 
 export function EmailAlarmsPanel() {
-  const openQ = useEmailAlarmsOpen();
-  const byBldgQ = useEmailAlarmsByBuilding();
-  // Recent feed is fetched purely to compute the "flips 24h" column. Not
-  // rendered as a list — that was noisy and got dropped per Rule 1+2.
-  const recentQ = useEmailAlarmsRecent(200);
+  const hbQ = useBmsHeartbeats();
   const stateQ = useEmailPollState();
 
-  // Group recent transitions by point_ref to derive flip counts.
-  const transitionCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of recentQ.data ?? []) {
-      if (!r.point_ref) continue;
-      m.set(r.point_ref, (m.get(r.point_ref) ?? 0) + 1);
-    }
-    return m;
-  }, [recentQ.data]);
-
-  const activeCount = openQ.data?.length ?? 0;
+  const hbRows = hbQ.data ?? [];
+  const totalSystems = hbRows.length;
+  const staleCount = useMemo(
+    () => hbRows.filter((r) => isHeartbeatStale(r.hours_since)).length,
+    [hbRows],
+  );
+  const liveCount = totalSystems - staleCount;
 
   const lastRun = stateQ.data?.last_run_at ?? null;
   const lastRunMin = minutesAgo(lastRun);
-  // Feed is stale if poller hasn't run in >15 min (3× the 5min cadence) or
-  // last run errored.
-  const feedStale =
+  // Feed (poller) is stale if it hasn't run in >15 min or it errored last run.
+  // This is independent of per-BMS staleness.
+  const pollerStale =
     !stateQ.data ||
     stateQ.data.last_run_status !== 'ok' ||
     (lastRunMin !== null && lastRunMin > 15);
 
   const subtitle = (
     <span className="t-small t-muted">
-      <span className="font-semibold" style={{ color: activeCount > 0 ? 'var(--color-danger)' : 'var(--color-text)' }}>
-        {activeCount.toLocaleString()} active
-      </span>
+      {totalSystems > 0 && (
+        <>
+          <span
+            className="font-semibold"
+            style={{ color: liveCount === totalSystems ? 'var(--color-ok, #10b981)' : 'var(--color-text)' }}
+          >
+            {liveCount}/{totalSystems} live
+          </span>
+          {staleCount > 0 && (
+            <span className="ml-2 font-semibold" style={{ color: 'var(--color-danger)' }}>
+              · {staleCount} stale
+            </span>
+          )}
+        </>
+      )}
       <span className="ml-2">
-        · feed{' '}
-        <span style={{ color: feedStale ? 'var(--color-danger)' : 'var(--color-text)' }}>
-          {feedStale ? 'STALE' : 'live'}
+        · poller{' '}
+        <span style={{ color: pollerStale ? 'var(--color-danger)' : 'var(--color-text)' }}>
+          {pollerStale ? 'STALE' : 'live'}
         </span>
-        {lastRun && <span className="t-muted"> · last poll {fmtRelative(lastRun)}</span>}
+        {lastRun && <span className="t-muted"> · last run {fmtRelative(lastRun)}</span>}
       </span>
     </span>
   );
 
   return (
     <Section
-      title="§09 BMS alarms via email (Siemens / UPark)"
+      title="§09 BMS heartbeats (4 systems via email)"
       subtitle={subtitle}
-      loading={openQ.isLoading || byBldgQ.isLoading}
+      loading={hbQ.isLoading}
     >
-      {openQ.error ? (
-        <p className="t-text t-danger">Error: {(openQ.error as Error).message}</p>
+      {hbQ.error ? (
+        <p className="t-text t-danger">Error: {(hbQ.error as Error).message}</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <div className="t-small t-muted uppercase tracking-wider mb-2">By building</div>
-            <BuildingTable rows={byBldgQ.data ?? []} />
-          </div>
-          <div>
-            <div className="t-small t-muted uppercase tracking-wider mb-2">Currently active</div>
-            <ActiveTable rows={openQ.data ?? []} transitionCounts={transitionCounts} />
-          </div>
-        </div>
+        <HeartbeatTable rows={hbRows} />
       )}
     </Section>
   );

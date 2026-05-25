@@ -1,23 +1,28 @@
-r"""Phase 8.0 — Gmail-forwarded BMS alarms poller.
+r"""Phase 8.0 + 8.1 — Gmail-forwarded BMS alarms + heartbeats poller.
 
-Power Automate forwards alarm emails from Siemens Desigo CC (and possibly
-other vendors over time) into bmrupark55@gmail.com under the label
-"UPark Siemens Alarms from Power Automate". This poller reads that label
-via IMAP every 5 minutes, parses the structured subject + body, and lands
-rows into email_alarm_events.
+Reads two Gmail labels every 5 minutes:
+
+  GMAIL_ALARM_LABEL     — Siemens Desigo CC alarms from The Point. Each
+                          email = one alarm transition. Lands in
+                          email_alarm_events.
+  GMAIL_HEARTBEAT_LABEL — Daily-test alarms from all 4 BMS systems (Mon-Fri).
+                          Per-vendor "I'm alive" signal. Lands in
+                          bms_heartbeats, powers the §09 pipeline-staleness
+                          indicator.
 
 Why IMAP not Gmail API: app-password IMAP is one .env entry, no OAuth
 client, no token refresh, no Google Cloud project. The cost is needing
-2-Step Verification on the gmail account, which the user has.
+2-Step Verification on the gmail account.
 
 Identity / dedupe: Gmail's X-GM-MSGID is globally unique and immutable
 across the whole gmail service. We upsert on it with ON CONFLICT DO NOTHING
-so reruns are idempotent and cheap.
+so reruns are idempotent and cheap. Both labels share PK semantics.
 
-Schedule (install_gmail_alarms_poller_task.ps1):
-  Every 5 minutes, 24/7. <20 emails/day expected, so this is overkill but
-  consistent with the BMS alarm cadence and Task Scheduler's 1-minute
-  minimum makes 5min a comfortable floor.
+Heartbeat vendor classifier (primary signal = inner From address):
+  takedabms@albireoenergy.com       -> delta_takeda
+  noreply@siemens.com               -> siemens_thepoint
+  jll750mainbms@northeast-tech.com  -> northeasttech_730_750
+  deltabms@albireoenergy.com        -> delta_10green
 
 Run manually:
     .\.venv\Scripts\python.exe gmail_alarms_poller.py
@@ -97,6 +102,140 @@ _BODY_FROM_RE = re.compile(
     r"From:\s*(?P<from>.+?)$",
     re.IGNORECASE | re.MULTILINE,
 )
+
+
+# ---------- heartbeat vendor classifier + per-vendor parsers ----------
+
+# Mapping: inner From address (lowercased) -> vendor slug.
+HB_SENDER_TO_VENDOR: dict[str, str] = {
+    "takedabms@albireoenergy.com":      "delta_takeda",
+    "noreply@siemens.com":              "siemens_thepoint",
+    "jll750mainbms@northeast-tech.com": "northeasttech_730_750",
+    "deltabms@albireoenergy.com":       "delta_10green",
+}
+
+HB_VENDOR_META: dict[str, tuple[str, str]] = {
+    # vendor_slug: (vendor_label_for_ui, building)
+    "delta_takeda":          ("Delta @ Takeda",           "Takeda"),
+    "siemens_thepoint":      ("Siemens @ The Point",      "The Point"),
+    "northeasttech_730_750": ("Northeast Tech @ 730/750", "730/750 Main"),
+    "delta_10green":         ("Delta @ 10 Green Street",  "10 Green Street"),
+}
+
+# Delta enteliWEB heartbeat body has a "Time of Transition: YYYY-MM-DD HH:MM:SS"
+# line; Northeast Tech has "Timestamp: YYYY-MM-DD HH:MM:SS -4H, DST". Both are
+# ET-local with no parseable offset, so we attach SITE_TZ.
+_HB_TIME_OF_TRANSITION_RE = re.compile(
+    r"Time\s+of\s+Transition:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
+    re.IGNORECASE,
+)
+_HB_TIMESTAMP_LINE_RE = re.compile(
+    r"Timestamp:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
+    re.IGNORECASE,
+)
+# Forwarded-body "Sent: <RFC2822-ish date>" — last-ditch fallback.
+_HB_SENT_LINE_RE = re.compile(r"^Sent:\s*(.+?)$", re.IGNORECASE | re.MULTILINE)
+
+# Delta subjects end with "(Alarm)" or "(Normal)"; the leading words before
+# " - " are the building / alarm-group context, and the part between " - "
+# and " (" is the point name.
+_HB_DELTA_SUBJECT_RE = re.compile(
+    r"-\s+(?P<point>.+?)\s+\((?P<state>Alarm|Normal)\)\s*$",
+    re.IGNORECASE,
+)
+# Northeast Tech body has "Alarm text: <free-form>".
+_HB_NORTHEAST_ALARMTEXT_RE = re.compile(r"^Alarm text:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def _classify_hb_vendor(original_sender: str | None, body_text: str) -> str | None:
+    """Identify which BMS sent the heartbeat. Inner From is the primary
+    signal; fall back to body scan if the From line was stripped."""
+    if original_sender:
+        v = HB_SENDER_TO_VENDOR.get(original_sender.lower().strip())
+        if v:
+            return v
+    btxt = body_text.lower()
+    for sender, vendor in HB_SENDER_TO_VENDOR.items():
+        if sender in btxt:
+            return vendor
+    return None
+
+
+def _parse_hb_event_time(
+    vendor: str | None,
+    body_text: str,
+    subject_clean: str,
+    received_at: datetime,
+) -> datetime:
+    """Extract the original BMS-side timestamp from the email body. We must
+    NOT use Gmail's INTERNALDATE — backfills land everything at "now" but
+    the actual heartbeat could be days old."""
+    # Pattern: Delta enteliWEB body has "Time of Transition: YYYY-MM-DD HH:MM:SS"
+    if vendor in ("delta_takeda", "delta_10green"):
+        m = _HB_TIME_OF_TRANSITION_RE.search(body_text)
+        if m:
+            try:
+                return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=SITE_TZ).astimezone(UTC)
+            except ValueError:
+                pass
+    # Northeast Tech body has "Timestamp: YYYY-MM-DD HH:MM:SS -4H, DST"
+    if vendor == "northeasttech_730_750":
+        m = _HB_TIMESTAMP_LINE_RE.search(body_text)
+        if m:
+            try:
+                return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=SITE_TZ).astimezone(UTC)
+            except ValueError:
+                pass
+    # Siemens heartbeat uses same subject pattern as Siemens alarms; reuse parser.
+    if vendor == "siemens_thepoint":
+        sf = _parse_subject(subject_clean)
+        dt = _parse_alarm_time_utc(sf.get("alarm_time_local"), received_at)
+        if dt:
+            return dt
+    # Last resort: the forwarded "Sent:" line in the body.
+    m = _HB_SENT_LINE_RE.search(body_text)
+    if m:
+        try:
+            dt = parsedate_to_datetime(m.group(1).strip())
+            if dt is not None:
+                return dt.astimezone(UTC) if dt.tzinfo else dt.replace(tzinfo=SITE_TZ).astimezone(UTC)
+        except (TypeError, ValueError):
+            pass
+    return received_at
+
+
+def _parse_hb_state(vendor: str | None, subject_clean: str, body_text: str) -> str | None:
+    """Return the state token: Alarm | Normal (Delta), Active | Quiet
+    (Siemens), or a snippet of "Alarm text" (Northeast Tech)."""
+    if vendor in ("delta_takeda", "delta_10green"):
+        m = _HB_DELTA_SUBJECT_RE.search(subject_clean)
+        if m:
+            return m.group("state")
+    if vendor == "siemens_thepoint":
+        sf = _parse_subject(subject_clean)
+        return sf.get("alarm_state")
+    if vendor == "northeasttech_730_750":
+        m = _HB_NORTHEAST_ALARMTEXT_RE.search(body_text)
+        if m:
+            return m.group(1).strip()[:120]
+    return None
+
+
+def _parse_hb_point(vendor: str | None, subject_clean: str) -> str | None:
+    if vendor in ("delta_takeda", "delta_10green"):
+        m = _HB_DELTA_SUBJECT_RE.search(subject_clean)
+        if m:
+            return m.group("point").strip()
+    if vendor == "siemens_thepoint":
+        sf = _parse_subject(subject_clean)
+        nm = sf.get("point_name")
+        rf = sf.get("point_ref")
+        if nm and rf:
+            return f"{nm} [{rf}]"
+        return nm or rf
+    if vendor == "northeasttech_730_750":
+        return "Daily Test Alarm"
+    return None
 
 
 # ---------- header helpers ----------
@@ -308,9 +447,147 @@ def _fetch_msg(M: imaplib.IMAP4_SSL, uid: bytes) -> dict | None:
     }
 
 
+def _process_heartbeat(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
+    """Fetch one heartbeat email and return a row ready for upsert into
+    bms_heartbeats, or None if vendor classification fails."""
+    fetched = _fetch_msg(M, uid)
+    if not fetched or not fetched["gmail_msg_id"]:
+        return None
+    msg = email.message_from_bytes(fetched["raw_rfc822"])
+    subject_raw = _decode_header_str(msg.get("Subject"))
+    subject_clean = _strip_fw_prefix(subject_raw)
+    received_at = _internaldate_to_utc(fetched["internaldate"])
+    body_text, _body_html = _extract_bodies(msg)
+    original_sender = _extract_original_sender(body_text)
+    vendor = _classify_hb_vendor(original_sender, body_text)
+    if not vendor:
+        # Don't insert mystery emails — the staleness logic depends on
+        # accurate vendor labels and a wrong row would lie.
+        return None
+    vlabel, building = HB_VENDOR_META.get(vendor, (vendor, None))
+    event_ts = _parse_hb_event_time(vendor, body_text, subject_clean, received_at)
+    state = _parse_hb_state(vendor, subject_clean, body_text)
+    point = _parse_hb_point(vendor, subject_clean)
+    return {
+        "gmail_msg_id":        fetched["gmail_msg_id"],
+        "vendor":              vendor,
+        "vendor_label":        vlabel,
+        "building":            building,
+        "point_name":          point,
+        "state":               state,
+        "event_timestamp_utc": event_ts.isoformat(),
+        "received_at_utc":     received_at.isoformat(),
+        "original_sender":     original_sender,
+        "subject_raw":         subject_raw,
+        "body_text":           body_text[:50_000] if body_text else None,
+        "parsed_fields": {
+            "subject_clean": subject_clean,
+            "label":         label,
+            "state":         state,
+            "point":         point,
+        },
+    }
+
+
+# ---------- Delta enteliWEB alarm-body parsers ----------
+#
+# Delta alarms (both Takeda direct and 10 Green Street remote) come from
+# enteliWEB with this body structure:
+#   [enteliWEB]
+#   <site>
+#   <device tag>
+#   Monitored Object
+#   <point name>
+#   ...
+#   Alarm State
+#   <from> -> <to>
+#   ...
+#   Message
+#   <free-form alarm text>
+#   Time of Transition
+#   YYYY-MM-DD HH:MM:SS
+#   ...
+# We extract: point_name (from "Monitored Object" block + first non-blank
+# line below), alarm_state transition (from "Alarm State" block), message
+# text (from "Message" block), and timestamp (from "Time of Transition").
+# Subject pattern: "<group> : <site> - <point> (Alarm|Normal)"
+
+_DELTA_SUBJECT_RE = re.compile(
+    r"^(?:[\w\s]+:\s*)?(?P<site>[^-]+?)\s+-\s+(?P<point>.+?)\s+\((?P<state>Alarm|Normal)\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _parse_delta_block(body_text: str, header: str) -> str | None:
+    """Extract the value that follows a single-line header in a Delta
+    enteliWEB email body. e.g. 'Time of Transition\\n2026-05-24 19:24:11'."""
+    pattern = re.compile(
+        rf"^{re.escape(header)}\s*$\s*(?P<val>.+?)\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    m = pattern.search(body_text)
+    return m.group("val").strip() if m else None
+
+
+def _process_delta_alarm(
+    subject_clean: str,
+    body_text: str,
+    received_at: datetime,
+) -> dict:
+    """Extract Delta-specific fields from a Delta enteliWEB alarm email."""
+    subj = _DELTA_SUBJECT_RE.match(subject_clean) or _DELTA_SUBJECT_RE.match(subject_clean.replace("FW:", "").strip())
+    site = subj["site"].strip() if subj else None
+    point_from_subject = subj["point"].strip() if subj else None
+    state_from_subject = subj["state"].strip() if subj else None
+
+    # Body fields
+    time_str = _parse_delta_block(body_text, "Time of Transition")
+    alarm_state_str = _parse_delta_block(body_text, "Alarm State")
+    message_str = _parse_delta_block(body_text, "Message")
+
+    alarm_time_utc = None
+    if time_str:
+        try:
+            alarm_time_utc = (
+                datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=SITE_TZ)
+                .astimezone(UTC)
+            )
+        except ValueError:
+            pass
+
+    # Interpret state — subject's (Alarm)/(Normal) is the most reliable.
+    # Map to the canonical Active/Quiet vocabulary used by Siemens-side rows
+    # so v_email_alarms_open's "WHERE state='Active'" works across vendors.
+    state_canonical = None
+    if state_from_subject:
+        state_canonical = "Active" if state_from_subject.lower() == "alarm" else "Quiet"
+
+    return {
+        "building":         site,
+        "point_name":       point_from_subject,
+        "point_ref":        point_from_subject,  # Delta uses point name as ref in subjects
+        "alarm_state":      state_canonical,
+        "event_class":      "Off Normal" if state_from_subject and state_from_subject.lower() == "alarm" else "Normal",
+        "event_value":      message_str,
+        "alarm_time_local": time_str,
+        "alarm_time_utc":   alarm_time_utc.isoformat() if alarm_time_utc else None,
+        "parsed_fields": {
+            "subject_clean":     subject_clean,
+            "site":              site,
+            "point":             point_from_subject,
+            "state":             state_from_subject,
+            "alarm_state_block": alarm_state_str,
+            "message":           message_str,
+            "time_of_transition": time_str,
+        },
+    }
+
+
 def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
-    """Fetch one message and return a row ready for upsert, or None on
-    parse failure."""
+    """Fetch one message and return a row ready for upsert into
+    email_alarm_events, or None on parse failure. Dispatches to a
+    vendor-specific parser based on the inferred From-line."""
     fetched = _fetch_msg(M, uid)
     if not fetched or not fetched["gmail_msg_id"]:
         return None
@@ -320,14 +597,35 @@ def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
     from_addr = parseaddr(_decode_header_str(msg.get("From")))[1] or None
     received_at = _internaldate_to_utc(fetched["internaldate"])
     body_text, body_html = _extract_bodies(msg)
-
-    subj_fields = _parse_subject(subject_clean)
-    event_class, event_value = _parse_event_class(body_text)
     original_sender = _extract_original_sender(body_text)
     vendor = _infer_vendor(original_sender, body_text)
-    alarm_time_utc = _parse_alarm_time_utc(subj_fields.get("alarm_time_local"), received_at)
 
-    parsed = {**subj_fields, "event_class": event_class, "event_value": event_value}
+    # Per-vendor structured extraction. Falls back to the original Siemens
+    # parser on unknown senders so we still capture something useful.
+    if vendor == "delta":
+        v_fields = _process_delta_alarm(subject_clean, body_text, received_at)
+        # Vendor field can be more granular: distinguish Takeda vs 10 Green by sender
+        if original_sender == "deltabms@albireoenergy.com":
+            vendor = "delta_10green"
+        elif original_sender == "takedabms@albireoenergy.com":
+            vendor = "delta_takeda"
+    else:
+        # Default = Siemens-shaped parser
+        subj_fields = _parse_subject(subject_clean)
+        ec, ev = _parse_event_class(body_text)
+        atu = _parse_alarm_time_utc(subj_fields.get("alarm_time_local"), received_at)
+        v_fields = {
+            "building":         subj_fields.get("building"),
+            "point_name":       subj_fields.get("point_name"),
+            "point_ref":        subj_fields.get("point_ref"),
+            "alarm_state":      subj_fields.get("alarm_state"),
+            "event_class":      ec,
+            "event_value":      ev,
+            "alarm_time_local": subj_fields.get("alarm_time_local"),
+            "alarm_time_utc":   atu.isoformat() if atu else None,
+            "parsed_fields":    {**subj_fields, "event_class": ec, "event_value": ev},
+        }
+    parsed = v_fields["parsed_fields"]
 
     return {
         "gmail_msg_id":     fetched["gmail_msg_id"],
@@ -340,14 +638,14 @@ def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
         "subject_raw":      subject_raw,
         "subject_clean":    subject_clean,
         "received_at_utc":  received_at.isoformat(),
-        "building":         subj_fields.get("building"),
-        "point_name":       subj_fields.get("point_name"),
-        "point_ref":        subj_fields.get("point_ref"),
-        "alarm_state":      subj_fields.get("alarm_state"),
-        "event_class":      event_class,
-        "event_value":      event_value,
-        "alarm_time_local": subj_fields.get("alarm_time_local"),
-        "alarm_time_utc":   alarm_time_utc.isoformat() if alarm_time_utc else None,
+        "building":         v_fields.get("building"),
+        "point_name":       v_fields.get("point_name"),
+        "point_ref":        v_fields.get("point_ref"),
+        "alarm_state":      v_fields.get("alarm_state"),
+        "event_class":      v_fields.get("event_class"),
+        "event_value":      v_fields.get("event_value"),
+        "alarm_time_local": v_fields.get("alarm_time_local"),
+        "alarm_time_utc":   v_fields.get("alarm_time_utc"),
         "body_text":        body_text[:50_000] if body_text else None,
         "body_html":        body_html[:200_000] if body_html else None,
         "parsed_fields":    parsed,
@@ -356,43 +654,74 @@ def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
 
 # ---------- main ----------
 
+def _drain_label(
+    M: imaplib.IMAP4_SSL,
+    label: str,
+    process_fn,
+) -> tuple[int, list[dict]]:
+    """SELECT + SEARCH SINCE + fetch every match, returning the rows produced
+    by process_fn(M, uid, label). Returns (uids_seen, rows)."""
+    typ, _ = M.select(f'"{label}"', readonly=True)
+    if typ != "OK":
+        raise RuntimeError(f"SELECT label {label!r} failed (typ={typ})")
+    since = (datetime.now(UTC) - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%b-%Y")
+    typ, ids = M.search(None, f'(SINCE "{since}")')
+    if typ != "OK":
+        raise RuntimeError(f"SEARCH on {label!r} failed (typ={typ})")
+    uids = ids[0].split() if ids and ids[0] else []
+    rows: list[dict] = []
+    for uid in uids:
+        try:
+            row = process_fn(M, uid, label)
+        except Exception as e:
+            print(f"  parse error on uid={uid!r} in {label!r}: {e}", file=sys.stderr)
+            continue
+        if row:
+            rows.append(row)
+    return len(uids), rows
+
+
 def main() -> int:
     user = os.environ.get("GMAIL_USER", "").strip()
     pw = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
-    label = os.environ.get("GMAIL_ALARM_LABEL", "").strip()
-    if not (user and pw and label):
-        print("ERROR: GMAIL_USER / GMAIL_APP_PASSWORD / GMAIL_ALARM_LABEL must all be set in watcher/.env",
+    # All alarm labels read into the same email_alarm_events table — the
+    # per-row `vendor` column distinguishes them.
+    alarm_labels = [
+        l for l in (
+            os.environ.get("GMAIL_ALARM_LABEL", "").strip(),         # Siemens (legacy var name, original)
+            os.environ.get("GMAIL_DELTA_ALARM_LABEL", "").strip(),   # Delta @ Takeda (overlaps §08 direct-API)
+            os.environ.get("GMAIL_730750_ALARM_LABEL", "").strip(),  # Northeast Tech (currently empty)
+        ) if l
+    ]
+    hb_label = os.environ.get("GMAIL_HEARTBEAT_LABEL", "").strip()
+    if not (user and pw and alarm_labels):
+        print("ERROR: GMAIL_USER / GMAIL_APP_PASSWORD / at least one alarm label must be set in watcher/.env",
               file=sys.stderr)
         _update_state(status="error", err="missing env vars")
         return 1
 
-    print(f"[{datetime.now(UTC).isoformat()}] gmail_alarms_poller starting; label={label!r}")
+    print(f"[{datetime.now(UTC).isoformat()}] gmail_alarms_poller starting")
+    for l in alarm_labels:
+        print(f"  alarm label:     {l!r}")
+    print(f"  heartbeat label: {hb_label!r}" if hb_label else "  heartbeat label: (unset — skipping)")
     client = get_client()
-    seen = 0
-    added = 0
-    rows: list[dict] = []
+
+    alarm_seen = alarm_added = 0
+    hb_seen = hb_added = 0
+    alarm_rows: list[dict] = []
+    hb_rows: list[dict] = []
 
     try:
         M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
         M.login(user, pw)
-        typ, _ = M.select(f'"{label}"', readonly=True)
-        if typ != "OK":
-            raise RuntimeError(f"SELECT label {label!r} failed (typ={typ})")
-        since = (datetime.now(UTC) - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%b-%Y")
-        typ, ids = M.search(None, f'(SINCE "{since}")')
-        if typ != "OK":
-            raise RuntimeError(f"SEARCH failed (typ={typ})")
-        uids = ids[0].split() if ids and ids[0] else []
-        seen = len(uids)
-        print(f"  {seen} messages in last {LOOKBACK_DAYS}d")
-        for uid in uids:
-            try:
-                row = _process(M, uid, label)
-            except Exception as e:
-                print(f"  parse error on uid={uid!r}: {e}", file=sys.stderr)
-                continue
-            if row:
-                rows.append(row)
+        for label in alarm_labels:
+            seen, rows = _drain_label(M, label, _process)
+            alarm_seen += seen
+            alarm_rows.extend(rows)
+            print(f"  [{label}] {seen} msgs, {len(rows)} parsed")
+        if hb_label:
+            hb_seen, hb_rows = _drain_label(M, hb_label, _process_heartbeat)
+            print(f"  [{hb_label}] {hb_seen} msgs, {len(hb_rows)} classified")
         try:
             M.close()
         except Exception:
@@ -400,27 +729,47 @@ def main() -> int:
         M.logout()
     except Exception as e:
         print(f"ERROR (imap stage): {e}", file=sys.stderr)
-        _update_state(status="error", err=str(e)[:1000], seen=seen)
+        _update_state(status="error", err=str(e)[:1000], seen=alarm_seen + hb_seen)
         return 1
 
-    if rows:
-        # ON CONFLICT DO NOTHING on PK keeps reruns idempotent.
-        try:
+    # Write each batch under its own try so a Supabase blip on one doesn't
+    # eat the other's data.
+    try:
+        if alarm_rows:
             CHUNK = 100
-            for i in range(0, len(rows), CHUNK):
+            for i in range(0, len(alarm_rows), CHUNK):
                 resp = client.table("email_alarm_events").upsert(
-                    rows[i:i + CHUNK],
+                    alarm_rows[i:i + CHUNK],
                     on_conflict="gmail_msg_id",
                     ignore_duplicates=True,
                 ).execute()
-                added += len(resp.data) if resp.data else 0
-        except Exception as e:
-            print(f"ERROR (db write): {e}", file=sys.stderr)
-            _update_state(status="error", err=str(e)[:1000], seen=seen, added=added)
-            return 1
+                alarm_added += len(resp.data) if resp.data else 0
+        if hb_rows:
+            CHUNK = 100
+            for i in range(0, len(hb_rows), CHUNK):
+                resp = client.table("bms_heartbeats").upsert(
+                    hb_rows[i:i + CHUNK],
+                    on_conflict="gmail_msg_id",
+                    ignore_duplicates=True,
+                ).execute()
+                hb_added += len(resp.data) if resp.data else 0
+    except Exception as e:
+        print(f"ERROR (db write): {e}", file=sys.stderr)
+        _update_state(
+            status="error",
+            err=str(e)[:1000],
+            seen=alarm_seen + hb_seen,
+            added=alarm_added + hb_added,
+        )
+        return 1
 
-    _update_state(status="ok", seen=seen, added=added, err=None)
-    print(f"[ok] seen={seen} new={added}")
+    _update_state(
+        status="ok",
+        seen=alarm_seen + hb_seen,
+        added=alarm_added + hb_added,
+        err=None,
+    )
+    print(f"[ok] alarms: seen={alarm_seen} new={alarm_added}  heartbeats: seen={hb_seen} new={hb_added}")
     return 0
 
 

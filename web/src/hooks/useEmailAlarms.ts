@@ -45,17 +45,21 @@ export type EmailPollState = {
   updated_at: string;
 };
 
-/** All currently-active alarms (latest row per point_ref where state = Active). */
-export function useEmailAlarmsOpen() {
+/** All currently-active alarms (latest row per point_ref where state = Active).
+ *  Pass {vendor: 'siemens'} (or any vendor slug) to scope §09 to one BMS;
+ *  omit for the §10 multi-vendor view. */
+export function useEmailAlarmsOpen(opts?: { vendor?: string }) {
+  const vendor = opts?.vendor;
   return useQuery({
-    queryKey: ['email_alarms_open'],
+    queryKey: ['email_alarms_open', vendor ?? '_all_'],
     queryFn: async (): Promise<EmailAlarmOpen[]> => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('v_email_alarms_open')
         .select(
           'gmail_msg_id, vendor, building, point_name, point_ref, alarm_state, event_class, event_value, alarm_time_local, alarm_time_utc, received_at_utc, subject_clean',
-        )
-        .order('received_at_utc', { ascending: false });
+        );
+      if (vendor) q = q.eq('vendor', vendor);
+      const { data, error } = await q.order('received_at_utc', { ascending: false });
       if (error) throw error;
       return (data ?? []) as EmailAlarmOpen[];
     },
@@ -81,19 +85,52 @@ export function useEmailAlarmsByBuilding() {
   });
 }
 
-/** Recent (last 24h) event stream — both Active and Quiet, newest first. */
-export function useEmailAlarmsRecent(limit: number = 20) {
+/** Recent (last 24h) event stream — both Active and Quiet, newest first.
+ *  Pass {vendor: 'siemens'} to scope the flip-count to one BMS. */
+export function useEmailAlarmsRecent(limit: number = 20, opts?: { vendor?: string }) {
+  const vendor = opts?.vendor;
   return useQuery({
-    queryKey: ['email_alarms_recent', limit],
+    queryKey: ['email_alarms_recent', limit, vendor ?? '_all_'],
     queryFn: async (): Promise<EmailAlarmRecent[]> => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('v_email_alarms_recent')
         .select(
           'gmail_msg_id, vendor, building, point_name, point_ref, alarm_state, event_class, event_value, alarm_time_local, alarm_time_utc, received_at_utc, subject_clean, original_sender',
-        )
-        .limit(limit);
+        );
+      if (vendor) q = q.eq('vendor', vendor);
+      const { data, error } = await q.limit(limit);
       if (error) throw error;
       return (data ?? []) as EmailAlarmRecent[];
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export type BmsHeartbeat = {
+  vendor: string;
+  vendor_label: string | null;
+  building: string | null;
+  point_name: string | null;
+  state: string | null;
+  last_seen_utc: string;
+  received_at_utc: string;
+  hours_since: number;
+};
+
+/** Latest heartbeat per BMS vendor — drives the per-vendor pipeline health
+ *  strip in §09. Vendor list and weekday-aware staleness rules are computed
+ *  client-side. */
+export function useBmsHeartbeats() {
+  return useQuery({
+    queryKey: ['bms_heartbeat_latest'],
+    queryFn: async (): Promise<BmsHeartbeat[]> => {
+      const { data, error } = await supabase
+        .from('v_bms_heartbeat_latest')
+        .select('*')
+        .order('vendor');
+      if (error) throw error;
+      return (data ?? []) as BmsHeartbeat[];
     },
     staleTime: 60_000,
     refetchInterval: 60_000,

@@ -10,6 +10,7 @@ import { PlantlogRoundsPanel } from '../../components/PlantlogRoundsPanel';
 import { PlantlogWeeklyTestsPanel } from '../../components/PlantlogWeeklyTestsPanel';
 import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
 import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
+import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -184,6 +185,7 @@ export default function ManagerPc() {
           <PlantlogWeeklyTestsPanel />
           <DeltaAlarmsPanel />
           <EmailAlarmsPanel />
+          <BmsEmailAlarmsPanel />
         </div>
       </main>
     </div>
