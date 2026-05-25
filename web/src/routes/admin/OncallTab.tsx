@@ -505,8 +505,11 @@ function DraftPreview({
 
   const startFridayChanged = live.settings.start_friday !== settings.start_friday;
   const rotationsChanged = live.settings.rotations_per_engineer !== settings.rotations_per_engineer;
-  const anyDiff = startFridayChanged || rotationsChanged || rowAdded.size > 0 || removedRows.length > 0
-    || rows.some((p, _i) => cycleRange.some((c) => cellChanged(p.user_id, c)));
+  // Banner only lists structural changes (settings / add / remove). Position
+  // swaps and cell shifts are visible inline (yellow cells + "was #N"), so
+  // there's nothing to add as a bullet for those.
+  const hasBannerContent = startFridayChanged || rotationsChanged
+    || rowAdded.size > 0 || removedRows.length > 0;
 
   return (
     <div className="t-card oncall-draft-section" style={{
@@ -606,7 +609,7 @@ function DraftPreview({
         </div>
       )}
 
-      {anyDiff && (
+      {hasBannerContent && (
         <div className="mb-3 p-2 rounded border" style={{
           borderColor: '#d4a017', background: 'rgba(212,160,23,0.10)',
         }}>
