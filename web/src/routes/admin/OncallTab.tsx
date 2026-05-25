@@ -18,8 +18,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useOncallParticipants, useOncallSettings,
   useOncallRealtime, addDaysIso, fmtMd,
-  useOncallNotes, useUpdateOncallNote, useOncallNotesRealtime,
-  type OncallParticipant, type OncallNote,
+  useOncallNotes, useOncallNotesRealtime,
+  type OncallParticipant,
 } from '../../hooks/useOncall';
 import {
   usePendingProposal, useProposeOncall, usePublishOncallProposal,
@@ -156,6 +156,8 @@ export function OncallTab() {
   const engineersQ = useEngineers();
   const pendingQ = usePendingProposal<OncallProposalPayload>('oncall');
   const historyQ = usePublishedProposalHistory<OncallProposalPayload>('oncall', 20);
+  const notesQ = useOncallNotes();
+  useOncallNotesRealtime();
   const me = useMe();
 
   const propose = useProposeOncall();
@@ -167,6 +169,9 @@ export function OncallTab() {
   const [draft, setDraft] = useState<Row[]>([]);
   const [startFriday, setStartFriday] = useState<string>('');
   const [rotations, setRotations] = useState<number>(4);
+  const [draftNotes, setDraftNotes] = useState<{ slot: number; body: string }[]>([
+    { slot: 1, body: '' }, { slot: 2, body: '' },
+  ]);
   const [proposerNote, setProposerNote] = useState<string>('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -185,7 +190,19 @@ export function OncallTab() {
     setStartFriday(settingsQ.data.start_friday ?? nextFridayIso());
     setRotations(settingsQ.data.rotations_per_engineer ?? 4);
     setProposerNote('');
-  }, [editing, participantsQ.data, settingsQ.data]);
+    const liveNotesArr = (notesQ.data ?? []).filter((n) => n.slot === 1 || n.slot === 2);
+    setDraftNotes([1, 2].map((slot) => ({
+      slot,
+      body: liveNotesArr.find((n) => n.slot === slot)?.body ?? '',
+    })));
+  }, [editing, participantsQ.data, settingsQ.data, notesQ.data]);
+
+  const liveNotes = useMemo(() => {
+    return [1, 2].map((slot) => ({
+      slot,
+      body: (notesQ.data ?? []).find((n) => n.slot === slot)?.body ?? '',
+    }));
+  }, [notesQ.data]);
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -267,6 +284,7 @@ export function OncallTab() {
         payload: {
           settings: { start_friday: startFriday, rotations_per_engineer: rotations },
           participants: draft.map((p) => ({ user_id: p.user_id, effective_from: p.effective_from })),
+          notes: draftNotes.map((n) => ({ slot: n.slot, body: n.body })),
         },
         note: proposerNote.trim() || null,
       });
@@ -325,6 +343,11 @@ export function OncallTab() {
           onSubmit={onSubmit}
           submitting={propose.isPending}
           onViewHistory={() => setHistoryOpen(true)}
+          notes={editing ? draftNotes : liveNotes}
+          notesMode={editing ? 'compose' : 'live'}
+          onChangeNote={(slot, body) => setDraftNotes((cur) =>
+            cur.map((n) => n.slot === slot ? { ...n, body } : n)
+          )}
         />
 
         {editing && (
@@ -407,7 +430,7 @@ export function OncallTab() {
           rejecting={reject.isPending}
           withdrawing={withdraw.isPending}
           engineersById={engineersById}
-          live={{ rows: liveRows, settings: liveSettings }}
+          live={{ rows: liveRows, settings: liveSettings, notes: liveNotes }}
           todayIso={todayIso}
           onPublish={async () => {
             setActionError(null);
@@ -448,6 +471,7 @@ export function OncallTab() {
 function LiveHeader({
   editing, canPropose, hasPending, settings, participantCount,
   updatedAt, onStartEdit, onCancel, onSubmit, submitting, onViewHistory,
+  notes, notesMode, onChangeNote,
 }: {
   editing: boolean;
   canPropose: boolean;
@@ -460,6 +484,9 @@ function LiveHeader({
   onSubmit: () => void;
   submitting: boolean;
   onViewHistory: () => void;
+  notes: { slot: number; body: string }[];
+  notesMode: 'live' | 'compose';
+  onChangeNote: (slot: number, body: string) => void;
 }) {
   const startDate = settings.start_friday;
   const updatedAtLocal = updatedAt
@@ -559,8 +586,10 @@ function LiveHeader({
         </div>
       </div>
 
-      {/* FULL-WIDTH notes strip below the title row */}
-      <OncallNotesCard canEdit={canPropose} />
+      {/* FULL-WIDTH notes strip below the title row.
+          In live mode: read-only display. In compose mode: editable inputs
+          bound to draftNotes (note edits flow through the proposal). */}
+      <NotesBar mode={notesMode} notes={notes} onChange={onChangeNote} />
     </>
   );
 }
@@ -568,11 +597,23 @@ function LiveHeader({
 // ============================================================================
 // OncallNotesCard — 3 fixed-slot editable sticky notes in the header middle
 // ============================================================================
-function OncallNotesCard({ canEdit }: { canEdit: boolean }) {
-  useOncallNotesRealtime();
-  const notesQ = useOncallNotes();
-  const update = useUpdateOncallNote();
-  const notes: OncallNote[] = notesQ.data ?? [];
+// ============================================================================
+// NotesBar — full-width 2-line note strip.
+//   - mode='live':    read-only display of current oncall_notes
+//   - mode='compose': editable inputs bound to draftNotes (the proposal payload)
+//   - mode='preview': read-only display of a pending proposal's notes, with
+//                     yellow highlight on any row that differs from live notes
+// All persistence flows through the proposal workflow (publish_oncall_proposal
+// RPC); migration 0034 removed the direct write path to oncall_notes.
+// ============================================================================
+function NotesBar({
+  mode, notes, liveNotes, onChange,
+}: {
+  mode: 'live' | 'compose' | 'preview';
+  notes: { slot: number; body: string }[];
+  liveNotes?: { slot: number; body: string }[];
+  onChange?: (slot: number, body: string) => void;
+}) {
   return (
     <div
       className="w-full mb-2"
@@ -584,70 +625,56 @@ function OncallNotesCard({ canEdit }: { canEdit: boolean }) {
       }}
     >
       {[1, 2].map((slot) => {
-        const n = notes.find((x) => x.slot === slot);
+        const body = notes.find((n) => n.slot === slot)?.body ?? '';
+        const liveBody = liveNotes?.find((n) => n.slot === slot)?.body ?? '';
+        const changed = mode === 'preview' && body !== liveBody;
+        if (mode === 'compose') {
+          return (
+            <input
+              key={slot}
+              type="text"
+              value={body}
+              onChange={(e) => onChange?.(slot, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              placeholder={`note ${slot}`}
+              className="w-full t-text"
+              style={{
+                fontSize: 12, lineHeight: 1.25,
+                border: 'none', background: 'transparent',
+                padding: '0 2px', outline: 'none',
+                borderBottom: '1px dashed var(--color-border-soft)',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--color-accent)'; }}
+              onBlur={(e) => { e.currentTarget.style.borderBottomColor = 'var(--color-border-soft)'; }}
+            />
+          );
+        }
+        // 'live' or 'preview' — static display
         return (
-          <NoteRow
+          <div
             key={slot}
-            slot={slot as 1 | 2}
-            initialBody={n?.body ?? ''}
-            updatedByName={n?.updated_by_name ?? null}
-            updatedAt={n?.updated_at ?? null}
-            canEdit={canEdit}
-            onSave={async (body) => {
-              if (body === (n?.body ?? '')) return;
-              await update.mutateAsync({ slot: slot as 1 | 2 | 3, body });
+            className="t-text"
+            title={changed ? `Was: "${liveBody || '(empty)'}"` : undefined}
+            style={{
+              fontSize: 12, lineHeight: 1.25,
+              padding: '0 2px',
+              borderBottom: '1px dashed var(--color-border-soft)',
+              background: changed ? 'rgba(212,160,23,0.20)' : undefined,
+              color: body ? (changed ? '#7c5800' : undefined) : 'var(--color-text-muted)',
+              fontStyle: body ? 'normal' : 'italic',
+              fontWeight: changed ? 600 : undefined,
+              minHeight: '1.25em',
             }}
-          />
+          >
+            {body || `(note ${slot} empty)`}
+          </div>
         );
       })}
     </div>
-  );
-}
-
-function NoteRow({
-  slot, initialBody, updatedByName, updatedAt, canEdit, onSave,
-}: {
-  slot: 1 | 2;
-  initialBody: string;
-  updatedByName: string | null;
-  updatedAt: string | null;
-  canEdit: boolean;
-  onSave: (body: string) => Promise<void>;
-}) {
-  const [value, setValue] = useState(initialBody);
-  useEffect(() => { setValue(initialBody); }, [initialBody]);
-  const tooltip = updatedAt
-    ? `last edited ${new Date(updatedAt).toLocaleString()}${updatedByName ? ' by ' + updatedByName : ''}`
-    : 'never edited';
-  return (
-    <input
-      type="text"
-      value={value}
-      readOnly={!canEdit}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={(e) => {
-        e.currentTarget.style.borderBottomColor = 'var(--color-border-soft)';
-        void onSave(value);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
-        if (e.key === 'Escape') { setValue(initialBody); (e.target as HTMLInputElement).blur(); }
-      }}
-      onFocus={(e) => { if (canEdit) e.currentTarget.style.borderBottomColor = 'var(--color-accent)'; }}
-      placeholder={canEdit ? `note ${slot}` : ''}
-      title={tooltip}
-      className="w-full t-text"
-      style={{
-        fontSize: 12,
-        lineHeight: 1.25,
-        border: 'none',
-        background: 'transparent',
-        padding: '0 2px',
-        outline: 'none',
-        borderBottom: '1px dashed var(--color-border-soft)',
-        cursor: canEdit ? 'text' : 'default',
-      }}
-    />
   );
 }
 
@@ -666,7 +693,7 @@ function DraftPreview({
   rejecting: boolean;
   withdrawing: boolean;
   engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>;
-  live: { rows: Row[]; settings: DisplaySettings };
+  live: { rows: Row[]; settings: DisplaySettings; notes: { slot: number; body: string }[] };
   todayIso: string;
   onPublish: () => void;
   onReject: (note: string | null) => void;
@@ -687,6 +714,15 @@ function DraftPreview({
     rowAdded, removedRows, cellChanged, livePositionByUser,
     startFridayChanged, rotationsChanged, hasBannerContent,
   } = computeOncallDiff(live, { rows, settings });
+
+  // Proposed notes (may be absent on Phase 9.0 proposals — default to live).
+  const proposalNotes = pending.payload.notes
+    ?? live.notes;
+  const notesChanged = [1, 2].some((slot) => {
+    const p = proposalNotes.find((n) => n.slot === slot)?.body ?? '';
+    const l = live.notes.find((n) => n.slot === slot)?.body ?? '';
+    return p !== l;
+  });
 
   return (
     <div className="t-card oncall-draft-section" style={{
@@ -786,7 +822,10 @@ function DraftPreview({
         </div>
       )}
 
-      {hasBannerContent && (
+      {/* Proposed notes (with yellow highlight if changed vs live) */}
+      <NotesBar mode="preview" notes={proposalNotes} liveNotes={live.notes} />
+
+      {(hasBannerContent || notesChanged) && (
         <div className="mb-3 p-2 rounded border" style={{
           borderColor: '#d4a017', background: 'rgba(212,160,23,0.10)',
         }}>
@@ -819,6 +858,9 @@ function DraftPreview({
                   {removedRows.map((r) => r.full_name).join(', ')}
                 </span>
               </li>
+            )}
+            {notesChanged && (
+              <li>Notes updated (yellow rows above show what changed)</li>
             )}
           </ul>
         </div>

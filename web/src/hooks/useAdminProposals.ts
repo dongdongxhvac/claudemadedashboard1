@@ -23,12 +23,19 @@ export type OncallProposalParticipant = {
   effective_from: string | null;
 };
 
+export type OncallProposalNote = {
+  slot: number;
+  body: string;
+};
+
 export type OncallProposalPayload = {
   settings: {
     start_friday: string;
     rotations_per_engineer: number;
   };
   participants: OncallProposalParticipant[];
+  /** Optional — proposals from Phase 9.0 won't include this field. */
+  notes?: OncallProposalNote[];
 };
 
 export type PendingProposal<TPayload = unknown> = {
