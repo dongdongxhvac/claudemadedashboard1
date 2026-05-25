@@ -173,21 +173,17 @@ export function BuildingsTab() {
     editing ? draftAssignments : null, liveAssignments);
   const topTotals = countTotals(topGroups);
 
-  // Unassigned tray sourced from the same data view.
-  const unassignedBuildings: Building[] = useMemo(() => {
-    const covered = new Set(
-      topAssignments
-        .filter((a) => a.role_in_building === 'primary')
-        .map((a) => a.building_id),
-    );
-    return buildings.filter((b) => !covered.has(b.id));
-  }, [buildings, topAssignments]);
+  // Unassigned tray sourced from the same data view. Plain const (not
+  // useMemo) because we're past the early-return loading/error guards —
+  // putting hooks here would violate rules of hooks.
+  const unassignedBuildingsCovered = new Set(
+    topAssignments
+      .filter((a) => a.role_in_building === 'primary')
+      .map((a) => a.building_id),
+  );
+  const unassignedBuildings: Building[] = buildings.filter((b) => !unassignedBuildingsCovered.has(b.id));
 
-  // Notes most recent updated_at for the header chip
-  const lastPublishedAt = useMemo(() => {
-    const latest = (historyQ.data ?? [])[0];
-    return latest?.reviewed_at ?? null;
-  }, [historyQ.data]);
+  const lastPublishedAt = (historyQ.data ?? [])[0]?.reviewed_at ?? null;
 
   // ---- Local draft mutators (called from ChipMenu in compose mode) ----
   const addAssignmentLocal = (input: { building_id: string; user_id: string; role_in_building: 'primary' | 'backup' }) => {
