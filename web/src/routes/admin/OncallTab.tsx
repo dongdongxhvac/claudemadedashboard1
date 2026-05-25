@@ -330,7 +330,7 @@ export function OncallTab() {
       `}</style>
 
       {/* ─────────────── LIVE / EDIT card ─────────────── */}
-      <div className="t-card oncall-card oncall-print-target" style={{ padding: '0.75rem 1rem' }}>
+      <div className="t-card oncall-card oncall-print-target" style={{ padding: '0.5rem 1rem' }}>
         <LiveHeader
           editing={editing}
           canPropose={canPropose}
@@ -504,7 +504,7 @@ function LiveHeader({
 
   return (
     <>
-      <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">
+      <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
         {/* LEFT: title + summary */}
         <div className="flex-1 min-w-[200px]">
           <h2 className="t-section-title">
@@ -524,7 +524,7 @@ function LiveHeader({
         </div>
 
         {/* RIGHT: version control summary + action buttons */}
-        <div className="flex flex-col items-end gap-2" style={{ minWidth: 220 }}>
+        <div className="flex flex-col items-end gap-1" style={{ minWidth: 220 }}>
           <p className="t-small text-right" style={{ color: 'var(--color-text-muted)' }}>
             {updatedAtLocal ? (
               <>Last published <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{updatedAtLocal}</span></>
@@ -616,12 +616,12 @@ function NotesBar({
 }) {
   return (
     <div
-      className="w-full mb-2"
+      className="w-full mb-1"
       style={{
         border: '1px solid var(--color-border)',
         borderRadius: 4,
         background: 'var(--color-bg)',
-        padding: '4px 8px',
+        padding: '2px 8px',
       }}
     >
       {[1, 2].map((slot) => {
@@ -643,7 +643,7 @@ function NotesBar({
               placeholder={`note ${slot}`}
               className="w-full t-text"
               style={{
-                fontSize: 12, lineHeight: 1.25,
+                fontSize: 12, lineHeight: 1.2, textAlign: 'center',
                 border: 'none', background: 'transparent',
                 padding: '0 2px', outline: 'none',
                 borderBottom: '1px dashed var(--color-border-soft)',
@@ -660,14 +660,14 @@ function NotesBar({
             className="t-text"
             title={changed ? `Was: "${liveBody || '(empty)'}"` : undefined}
             style={{
-              fontSize: 12, lineHeight: 1.25,
+              fontSize: 12, lineHeight: 1.2, textAlign: 'center',
               padding: '0 2px',
               borderBottom: '1px dashed var(--color-border-soft)',
               background: changed ? 'rgba(212,160,23,0.20)' : undefined,
               color: body ? (changed ? '#7c5800' : undefined) : 'var(--color-text-muted)',
               fontStyle: body ? 'normal' : 'italic',
               fontWeight: changed ? 600 : undefined,
-              minHeight: '1.25em',
+              minHeight: '1.2em',
             }}
           >
             {body || `(note ${slot} empty)`}
