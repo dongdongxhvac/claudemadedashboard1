@@ -33,6 +33,7 @@ import email
 import imaplib
 import os
 import re
+import socket
 import sys
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
@@ -41,6 +42,19 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+
+# Hard timeouts on every blocking I/O call. Without this, an unresponsive
+# IMAP server or stalled Supabase HTTP call will hang the script indefinitely,
+# Task Scheduler keeps re-firing every 5 min, hung processes accumulate, and
+# the dashboard goes stale until someone notices and UAC-kills the orphans.
+# Seen in the wild on 2026-05-25: 13h of cascading log-lock failures.
+socket.setdefaulttimeout(60)
+
+# Line-buffer stdout/stderr so the log file shows progress in real time —
+# the default block-buffering hid the exact line where the script hung,
+# making the post-mortem much harder.
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
@@ -661,16 +675,38 @@ def _drain_label(
 ) -> tuple[int, list[dict]]:
     """SELECT + SEARCH SINCE + fetch every match, returning the rows produced
     by process_fn(M, uid, label). Returns (uids_seen, rows)."""
+    import time as _time
+    t0 = _time.monotonic()
+    print(f"    drain[{label}]: SELECT…")
     typ, _ = M.select(f'"{label}"', readonly=True)
     if typ != "OK":
         raise RuntimeError(f"SELECT label {label!r} failed (typ={typ})")
+    print(f"    drain[{label}]: SELECT done in {_time.monotonic()-t0:.1f}s")
     since = (datetime.now(UTC) - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%b-%Y")
+    t1 = _time.monotonic()
+    print(f"    drain[{label}]: SEARCH SINCE {since}…")
     typ, ids = M.search(None, f'(SINCE "{since}")')
     if typ != "OK":
         raise RuntimeError(f"SEARCH on {label!r} failed (typ={typ})")
+    print(f"    drain[{label}]: SEARCH done in {_time.monotonic()-t1:.1f}s")
     uids = ids[0].split() if ids and ids[0] else []
+    print(f"    drain[{label}]: {len(uids)} uids, fetching…")
     rows: list[dict] = []
-    for uid in uids:
+    # Per-label time budget. Without this, a single 5-min Task Scheduler
+    # cycle can be locked up indefinitely when Gmail is slow / throttling.
+    # On 2026-05-25 we observed 5.8 s/msg — at 458 heartbeats that's 44min.
+    # Skip the rest and let LOOKBACK_DAYS=2 catch them on a healthier run.
+    PER_LABEL_BUDGET_S = 45
+    # Process newest first by reversing UIDs — IMAP's natural order is
+    # ascending (oldest first). On time-budget cutoff we'd rather lose the
+    # tail (oldest) than the head (newest).
+    uids = list(reversed(uids))
+    t_start = _time.monotonic()
+    for i, uid in enumerate(uids):
+        if _time.monotonic() - t_start > PER_LABEL_BUDGET_S:
+            print(f"    drain[{label}]: time budget exhausted at {i}/{len(uids)} — "
+                  f"remaining {len(uids)-i} uids will be retried next run", file=sys.stderr)
+            break
         try:
             row = process_fn(M, uid, label)
         except Exception as e:
@@ -678,6 +714,8 @@ def _drain_label(
             continue
         if row:
             rows.append(row)
+        if (i + 1) % 50 == 0:
+            print(f"    drain[{label}]: fetched {i+1}/{len(uids)} in {_time.monotonic()-t_start:.0f}s")
     return len(uids), rows
 
 
@@ -704,7 +742,9 @@ def main() -> int:
     for l in alarm_labels:
         print(f"  alarm label:     {l!r}")
     print(f"  heartbeat label: {hb_label!r}" if hb_label else "  heartbeat label: (unset — skipping)")
+    print("  step: connecting Supabase…")
     client = get_client()
+    print("  step: connecting IMAP…")
 
     alarm_seen = alarm_added = 0
     hb_seen = hb_added = 0
@@ -712,8 +752,10 @@ def main() -> int:
     hb_rows: list[dict] = []
 
     try:
-        M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=60)
+        print("  step: IMAP connected, logging in…")
         M.login(user, pw)
+        print("  step: IMAP login OK")
         for label in alarm_labels:
             seen, rows = _drain_label(M, label, _process)
             alarm_seen += seen
