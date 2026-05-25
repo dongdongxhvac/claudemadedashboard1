@@ -23,7 +23,8 @@ import {
 import {
   usePendingProposal, useProposeOncall, usePublishOncallProposal,
   useRejectProposal, useWithdrawProposal, useAdminProposalsRealtime,
-  type OncallProposalPayload,
+  usePublishedProposalHistory,
+  type OncallProposalPayload, type PublishedProposal,
 } from '../../hooks/useAdminProposals';
 import { useEngineers } from '../../hooks/useEngineers';
 import { useMe } from '../../hooks/useMe';
@@ -57,6 +58,95 @@ function isActiveWeek(weekStart: string, todayIso: string): boolean {
   return weekStart <= todayIso && todayIso < end;
 }
 
+/** Convert a proposal's payload into ({rows, settings}) shaped for rendering.
+ *  Engineer full_name is looked up from engineersById; falls back to a
+ *  placeholder if the engineer was deactivated since the snapshot. */
+function payloadToRows(
+  payload: OncallProposalPayload,
+  engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>,
+): { rows: Row[]; settings: DisplaySettings } {
+  return {
+    rows: (payload.participants ?? []).map((p) => {
+      const e = engineersById[p.user_id];
+      return {
+        user_id: p.user_id,
+        full_name: e?.full_name ?? '(unknown engineer)',
+        cmms_assignee_name: e?.cmms_assignee_name ?? null,
+        effective_from: p.effective_from,
+      };
+    }),
+    settings: {
+      start_friday: payload.settings.start_friday,
+      rotations_per_engineer: payload.settings.rotations_per_engineer,
+    },
+  };
+}
+
+/** Compute the diff between a "previous" snapshot and a "current" snapshot
+ *  for the on-call schedule. Used by both DraftPreview (current=draft,
+ *  previous=live) and HistoryEntry (current=published[i], previous=published[i+1]).
+ *  prev=null means "no prior snapshot to compare against" → empty diff. */
+function computeOncallDiff(
+  prev: { rows: Row[]; settings: DisplaySettings } | null,
+  curr: { rows: Row[]; settings: DisplaySettings },
+): {
+  rowAdded: Set<string>;
+  removedRows: Row[];
+  cellChanged: (userId: string, cycle: number) => boolean;
+  livePositionByUser: Map<string, number>;
+  startFridayChanged: boolean;
+  rotationsChanged: boolean;
+  hasBannerContent: boolean;
+} {
+  if (!prev) {
+    return {
+      rowAdded: new Set(),
+      removedRows: [],
+      cellChanged: () => false,
+      livePositionByUser: new Map(),
+      startFridayChanged: false,
+      rotationsChanged: false,
+      hasBannerContent: false,
+    };
+  }
+  const prevIds = new Set(prev.rows.map((r) => r.user_id));
+  const currIds = new Set(curr.rows.map((r) => r.user_id));
+  const rowAdded = new Set<string>([...currIds].filter((id) => !prevIds.has(id)));
+  const removedRows = prev.rows.filter((r) => !currIds.has(r.user_id));
+  const livePositionByUser = new Map<string, number>();
+  prev.rows.forEach((r, i) => livePositionByUser.set(r.user_id, i + 1));
+
+  const visibleCycles = curr.settings.rotations_per_engineer + 1;
+  const cycleRange = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
+  const buildMap = (src: Row[], srcSettings: DisplaySettings): Map<string, string | null> => {
+    const m = new Map<string, string | null>();
+    const start = srcSettings.start_friday;
+    if (!start) return m;
+    const N = src.length;
+    src.forEach((p, idx) => {
+      for (const c of cycleRange) {
+        const weekStart = addDaysIso(start, (c * N + idx) * 7);
+        m.set(`${p.user_id}:${c}`,
+          p.effective_from && p.effective_from > weekStart ? null : weekStart);
+      }
+    });
+    return m;
+  };
+  const prevMap = buildMap(prev.rows, prev.settings);
+  const currMap = buildMap(curr.rows, curr.settings);
+  const cellChanged = (userId: string, cycle: number) => {
+    if (rowAdded.has(userId)) return false;
+    return prevMap.get(`${userId}:${cycle}`) !== currMap.get(`${userId}:${cycle}`);
+  };
+
+  const startFridayChanged = prev.settings.start_friday !== curr.settings.start_friday;
+  const rotationsChanged = prev.settings.rotations_per_engineer !== curr.settings.rotations_per_engineer;
+  const hasBannerContent = startFridayChanged || rotationsChanged
+    || rowAdded.size > 0 || removedRows.length > 0;
+  return { rowAdded, removedRows, cellChanged, livePositionByUser,
+           startFridayChanged, rotationsChanged, hasBannerContent };
+}
+
 export function OncallTab() {
   useOncallRealtime();
   useAdminProposalsRealtime();
@@ -64,6 +154,7 @@ export function OncallTab() {
   const settingsQ = useOncallSettings();
   const engineersQ = useEngineers();
   const pendingQ = usePendingProposal<OncallProposalPayload>('oncall');
+  const historyQ = usePublishedProposalHistory<OncallProposalPayload>('oncall', 20);
   const me = useMe();
 
   const propose = useProposeOncall();
@@ -114,6 +205,14 @@ export function OncallTab() {
       .filter((e) => e.active && !topParticipantIds.has(e.user_id))
       .sort((a, b) => a.full_name.localeCompare(b.full_name));
   }, [engineersQ.data, topParticipantIds]);
+
+  // Engineer lookup map shared by DraftPreview + HistorySection.
+  const engineersById = useMemo(() => {
+    return (engineersQ.data ?? []).reduce<Record<string, { full_name: string; cmms_assignee_name: string | null }>>(
+      (acc, e) => { acc[e.user_id] = { full_name: e.full_name, cmms_assignee_name: e.cmms_assignee_name }; return acc; },
+      {},
+    );
+  }, [engineersQ.data]);
 
   // ----- Action handlers (edit mode only)
   const moveUp   = (idx: number) => idx > 0 && setDraft((d) => swap(d, idx, idx - 1));
@@ -298,10 +397,7 @@ export function OncallTab() {
           publishing={publish.isPending}
           rejecting={reject.isPending}
           withdrawing={withdraw.isPending}
-          engineersById={(engineersQ.data ?? []).reduce<Record<string, { full_name: string; cmms_assignee_name: string | null }>>(
-            (acc, e) => { acc[e.user_id] = { full_name: e.full_name, cmms_assignee_name: e.cmms_assignee_name }; return acc; },
-            {},
-          )}
+          engineersById={engineersById}
           live={{ rows: liveRows, settings: liveSettings }}
           todayIso={todayIso}
           onPublish={async () => {
@@ -321,6 +417,14 @@ export function OncallTab() {
           }}
         />
       )}
+
+      {/* ─────────────── HISTORY (published proposals, newest first) ─────────────── */}
+      <HistorySection
+        history={historyQ.data ?? []}
+        loading={historyQ.isLoading}
+        engineersById={engineersById}
+        todayIso={todayIso}
+      />
     </div>
   );
 }
@@ -452,64 +556,17 @@ function DraftPreview({
   const [showRejectBox, setShowRejectBox] = useState(false);
   const busy = publishing || rejecting || withdrawing;
 
-  const rows: Row[] = (pending.payload.participants ?? []).map((p) => {
-    const e = engineersById[p.user_id];
-    return {
-      user_id: p.user_id,
-      full_name: e?.full_name ?? '(unknown engineer)',
-      cmms_assignee_name: e?.cmms_assignee_name ?? null,
-      effective_from: p.effective_from,
-    };
-  });
-  const settings: DisplaySettings = {
-    start_friday: pending.payload.settings.start_friday,
-    rotations_per_engineer: pending.payload.settings.rotations_per_engineer,
-  };
-
+  const { rows, settings } = payloadToRows(pending.payload, engineersById);
   const proposedWhen = new Date(pending.proposed_at).toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
-  // ---- Diff between draft and live ----
-  const liveIds = new Set(live.rows.map((r) => r.user_id));
-  const draftIds = new Set(rows.map((r) => r.user_id));
-  const rowAdded = new Set<string>([...draftIds].filter((id) => !liveIds.has(id)));
-  const removedRows: Row[] = live.rows.filter((r) => !draftIds.has(r.user_id));
-  const livePositionByUser = new Map<string, number>();
-  live.rows.forEach((r, i) => livePositionByUser.set(r.user_id, i + 1));
-
-  // Pre-compute (engineer, cycle) → week_start (or null = pre-effective / no start)
-  // across both tables for the SAME cycle window the draft will render.
-  const draftVisibleCycles = settings.rotations_per_engineer + 1;
-  const cycleRange = [-1, ...Array.from({ length: draftVisibleCycles }, (_, i) => i)];
-  const buildMap = (src: Row[], srcSettings: DisplaySettings): Map<string, string | null> => {
-    const m = new Map<string, string | null>();
-    const start = srcSettings.start_friday;
-    if (!start) return m;
-    const N = src.length;
-    src.forEach((p, idx) => {
-      for (const c of cycleRange) {
-        const weekStart = addDaysIso(start, (c * N + idx) * 7);
-        m.set(`${p.user_id}:${c}`,
-          p.effective_from && p.effective_from > weekStart ? null : weekStart);
-      }
-    });
-    return m;
-  };
-  const liveMap = buildMap(live.rows, live.settings);
-  const draftMap = buildMap(rows, settings);
-  const cellChanged = (userId: string, cycle: number) => {
-    if (rowAdded.has(userId)) return false; // whole row marked separately
-    return liveMap.get(`${userId}:${cycle}`) !== draftMap.get(`${userId}:${cycle}`);
-  };
-
-  const startFridayChanged = live.settings.start_friday !== settings.start_friday;
-  const rotationsChanged = live.settings.rotations_per_engineer !== settings.rotations_per_engineer;
   // Banner only lists structural changes (settings / add / remove). Position
-  // swaps and cell shifts are visible inline (yellow cells + "was #N"), so
-  // there's nothing to add as a bullet for those.
-  const hasBannerContent = startFridayChanged || rotationsChanged
-    || rowAdded.size > 0 || removedRows.length > 0;
+  // swaps and cell shifts are visible inline (yellow cells + "was #N").
+  const {
+    rowAdded, removedRows, cellChanged, livePositionByUser,
+    startFridayChanged, rotationsChanged, hasBannerContent,
+  } = computeOncallDiff(live, { rows, settings });
 
   return (
     <div className="t-card oncall-draft-section" style={{
@@ -654,6 +711,184 @@ function DraftPreview({
         editing={false}
         diff={{ rowAdded, cellChanged, livePositionByUser }}
       />
+    </div>
+  );
+}
+
+// ============================================================================
+// HistorySection — collapsible list of published proposals (newest first).
+// Each entry can be expanded to show the snapshot with diff vs the previous
+// published proposal. Lightweight "version control" for the schedule.
+// ============================================================================
+function HistorySection({
+  history, loading, engineersById, todayIso,
+}: {
+  history: PublishedProposal<OncallProposalPayload>[];
+  loading: boolean;
+  engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>;
+  todayIso: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (loading) return null;
+  if (history.length === 0) {
+    return (
+      <div className="t-card oncall-no-print" style={{ padding: '0.5rem 1rem', opacity: 0.6 }}>
+        <p className="t-small t-muted italic">No schedule changes published yet.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="t-card oncall-no-print" style={{ padding: '0.5rem 1rem' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between"
+        style={{ textAlign: 'left' }}
+      >
+        <div>
+          <span className="t-section-title">Schedule history</span>
+          <span className="t-small t-muted ml-2">
+            {history.length} published change{history.length === 1 ? '' : 's'} · newest first
+          </span>
+        </div>
+        <span className="t-text" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {history.map((entry, i) => {
+            const prev = history[i + 1] ?? null; // older one
+            return (
+              <HistoryEntry
+                key={entry.id}
+                entry={entry}
+                previousEntry={prev}
+                engineersById={engineersById}
+                todayIso={todayIso}
+                isLatest={i === 0}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistoryEntry({
+  entry, previousEntry, engineersById, todayIso, isLatest,
+}: {
+  entry: PublishedProposal<OncallProposalPayload>;
+  previousEntry: PublishedProposal<OncallProposalPayload> | null;
+  engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>;
+  todayIso: string;
+  isLatest: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const reviewedAt = entry.reviewed_at
+    ? new Date(entry.reviewed_at).toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : '(unknown time)';
+
+  const currSnapshot = payloadToRows(entry.payload, engineersById);
+  const prevSnapshot = previousEntry ? payloadToRows(previousEntry.payload, engineersById) : null;
+  const diff = computeOncallDiff(prevSnapshot, currSnapshot);
+
+  // Build a tight one-line summary of what changed (or "initial publish")
+  const summaryParts: string[] = [];
+  if (!previousEntry) {
+    summaryParts.push('initial publish');
+  } else {
+    if (diff.startFridayChanged) summaryParts.push(`start ${currSnapshot.settings.start_friday}`);
+    if (diff.rotationsChanged) summaryParts.push(`${currSnapshot.settings.rotations_per_engineer} cycles`);
+    if (diff.rowAdded.size > 0) summaryParts.push(`+${diff.rowAdded.size}`);
+    if (diff.removedRows.length > 0) summaryParts.push(`−${diff.removedRows.length}`);
+    // Position swaps / cell changes (no add/remove/settings change)
+    if (summaryParts.length === 0) {
+      const movedCount = currSnapshot.rows.filter((p, idx) => {
+        const livePos = diff.livePositionByUser.get(p.user_id);
+        return livePos !== undefined && livePos !== idx + 1;
+      }).length;
+      if (movedCount > 0) summaryParts.push(`${movedCount} reorder${movedCount === 1 ? '' : 's'}`);
+      else summaryParts.push('weeks shifted');
+    }
+  }
+
+  return (
+    <div className="border rounded" style={{
+      borderColor: 'var(--color-border)',
+      borderLeft: isLatest ? '3px solid var(--color-ok)' : '3px solid var(--color-border)',
+    }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full p-2"
+        style={{ textAlign: 'left' }}
+      >
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="t-text font-medium">{reviewedAt}</span>
+            {isLatest && (
+              <span className="px-1.5 py-0.5 rounded text-white font-semibold"
+                style={{ background: 'var(--color-ok)', fontSize: '10px', letterSpacing: '0.5px' }}>
+                CURRENT
+              </span>
+            )}
+            <span className="t-small t-muted">
+              by <span style={{ color: 'var(--color-text)' }}>{entry.reviewed_by_name ?? '(unknown)'}</span>
+              {entry.proposed_by_user_id !== entry.reviewed_by_user_id && (
+                <> · proposed by <span style={{ color: 'var(--color-text)' }}>{entry.proposed_by_name}</span></>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="t-small t-mono" style={{ color: '#a16207' }}>
+              {summaryParts.join(' · ')}
+            </span>
+            <span className="t-small" style={{ color: 'var(--color-text-muted)' }}>
+              {open ? '▾' : '▸'}
+            </span>
+          </div>
+        </div>
+        {entry.note && (
+          <p className="t-small mt-1" style={{ color: 'var(--color-danger)', fontStyle: 'italic' }}>
+            "{entry.note}"
+          </p>
+        )}
+      </button>
+      {open && (
+        <div className="px-2 pb-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <RotationTable
+            rows={currSnapshot.rows}
+            settings={currSnapshot.settings}
+            todayIso={todayIso}
+            editing={false}
+            diff={{
+              rowAdded: diff.rowAdded,
+              cellChanged: diff.cellChanged,
+              livePositionByUser: diff.livePositionByUser,
+            }}
+          />
+          {(diff.removedRows.length > 0 || diff.hasBannerContent) && (
+            <p className="t-small mt-2" style={{ color: '#a16207' }}>
+              {diff.startFridayChanged && previousEntry && (
+                <>Start Friday changed from <span className="t-mono">{previousEntry.payload.settings.start_friday}</span> to <span className="t-mono">{entry.payload.settings.start_friday}</span>. </>
+              )}
+              {diff.rotationsChanged && previousEntry && (
+                <>Cycles changed from {previousEntry.payload.settings.rotations_per_engineer} to {entry.payload.settings.rotations_per_engineer}. </>
+              )}
+              {diff.removedRows.length > 0 && (
+                <span style={{ color: 'var(--color-danger)' }}>
+                  Removed: <span style={{ textDecoration: 'line-through' }}>
+                    {diff.removedRows.map((r) => r.full_name).join(', ')}
+                  </span>.
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

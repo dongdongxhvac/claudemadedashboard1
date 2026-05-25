@@ -43,6 +43,20 @@ export type PendingProposal<TPayload = unknown> = {
 };
 
 const KEY_PENDING = (tab: ProposalTab) => ['admin_proposal_pending', tab];
+const KEY_HISTORY = (tab: ProposalTab, limit: number) => ['admin_proposal_history', tab, limit];
+
+export type PublishedProposal<TPayload = unknown> = {
+  id: string;
+  tab: ProposalTab;
+  payload: TPayload;
+  note: string | null;
+  proposed_by_user_id: string;
+  proposed_by_name: string;
+  proposed_at: string;
+  reviewed_by_user_id: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+};
 
 /** Fetch the single pending proposal for a tab (or null), with proposer name joined. */
 export function usePendingProposal<TPayload = unknown>(tab: ProposalTab) {
@@ -99,12 +113,72 @@ export function useAdminProposalsRealtime() {
         qc.invalidateQueries({ queryKey: ['admin_proposal_pending', 'oncall'] });
         qc.invalidateQueries({ queryKey: ['admin_proposal_pending', 'buildings'] });
         qc.invalidateQueries({ queryKey: ['admin_proposal_pending', 'rounds'] });
+        qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'oncall'] });
+        qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'buildings'] });
+        qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'rounds'] });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [qc]);
+}
+
+/** Fetch published proposals for a tab, newest first. Used for the
+ *  "Schedule history" section so the team can see who changed what when. */
+export function usePublishedProposalHistory<TPayload = unknown>(
+  tab: ProposalTab,
+  limit: number = 20,
+) {
+  return useQuery({
+    queryKey: KEY_HISTORY(tab, limit),
+    queryFn: async (): Promise<PublishedProposal<TPayload>[]> => {
+      const { data, error } = await supabase
+        .from('admin_proposals')
+        .select(`
+          id, tab, payload, note,
+          proposed_by_user_id, proposed_at,
+          reviewed_by_user_id, reviewed_at,
+          proposer:users!admin_proposals_proposed_by_user_id_fkey(full_name),
+          reviewer:users!admin_proposals_reviewed_by_user_id_fkey(full_name)
+        `)
+        .eq('tab', tab)
+        .eq('status', 'published')
+        .order('reviewed_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+
+      type Joined = {
+        id: string;
+        tab: ProposalTab;
+        payload: TPayload;
+        note: string | null;
+        proposed_by_user_id: string;
+        proposed_at: string;
+        reviewed_by_user_id: string | null;
+        reviewed_at: string | null;
+        proposer: { full_name: string } | { full_name: string }[] | null;
+        reviewer: { full_name: string } | { full_name: string }[] | null;
+      };
+      return (data as unknown as Joined[]).map((r) => {
+        const p = Array.isArray(r.proposer) ? r.proposer[0] : r.proposer;
+        const v = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer;
+        return {
+          id: r.id,
+          tab: r.tab,
+          payload: r.payload,
+          note: r.note,
+          proposed_by_user_id: r.proposed_by_user_id,
+          proposed_by_name: p?.full_name ?? 'Unknown',
+          proposed_at: r.proposed_at,
+          reviewed_by_user_id: r.reviewed_by_user_id,
+          reviewed_by_name: v?.full_name ?? null,
+          reviewed_at: r.reviewed_at,
+        };
+      });
+    },
+    staleTime: 60_000,
+  });
 }
 
 /** Submit an on-call proposal. Fails if one is already pending (partial unique idx). */
