@@ -62,7 +62,7 @@ export default function Admin() {
                 On-call
               </TabButton>
               <TabButton active={tab === 'buildings'} onClick={() => setTab('buildings')}>
-                Buildings
+                Bldg Assign
               </TabButton>
               <TabButton active={tab === 'rounds'} onClick={() => setTab('rounds')}>
                 Rounds
