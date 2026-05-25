@@ -35,6 +35,7 @@ import os
 import re
 import socket
 import sys
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
@@ -668,13 +669,23 @@ def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
 
 # ---------- main ----------
 
+class IMAPSessionWedged(Exception):
+    """Raised when a single fetch exceeded its per-UID timeout. The IMAP
+    connection is now in an unknown state (a hung command may still be
+    streaming responses to the abandoned thread) and the caller MUST close
+    it and reconnect before issuing more commands."""
+
+
 def _drain_label(
     M: imaplib.IMAP4_SSL,
     label: str,
     process_fn,
 ) -> tuple[int, list[dict]]:
     """SELECT + SEARCH SINCE + fetch every match, returning the rows produced
-    by process_fn(M, uid, label). Returns (uids_seen, rows)."""
+    by process_fn(M, uid, label). Returns (uids_seen, rows).
+
+    Raises IMAPSessionWedged if a single fetch exceeds PER_UID_TIMEOUT_S —
+    the caller must reconnect before draining the next label."""
     import time as _time
     t0 = _time.monotonic()
     print(f"    drain[{label}]: SELECT…")
@@ -692,30 +703,49 @@ def _drain_label(
     uids = ids[0].split() if ids and ids[0] else []
     print(f"    drain[{label}]: {len(uids)} uids, fetching…")
     rows: list[dict] = []
-    # Per-label time budget. Without this, a single 5-min Task Scheduler
-    # cycle can be locked up indefinitely when Gmail is slow / throttling.
-    # On 2026-05-25 we observed 5.8 s/msg — at 458 heartbeats that's 44min.
-    # Skip the rest and let LOOKBACK_DAYS=2 catch them on a healthier run.
+    # Per-label time budget. Once a label is taking too long collectively,
+    # bail and try again next 5-min cycle. LOOKBACK_DAYS=2 catches us up.
     PER_LABEL_BUDGET_S = 45
+    # Per-UID timeout. imaplib's socket-level timeout has been observed not
+    # to fire mid-fetch (multi-chunk reads keep resetting it), so we wrap
+    # each process_fn call in a ThreadPool future. On timeout the session
+    # is considered wedged — caller reconnects before the next label.
+    PER_UID_TIMEOUT_S = 15
     # Process newest first by reversing UIDs — IMAP's natural order is
     # ascending (oldest first). On time-budget cutoff we'd rather lose the
     # tail (oldest) than the head (newest).
     uids = list(reversed(uids))
     t_start = _time.monotonic()
-    for i, uid in enumerate(uids):
-        if _time.monotonic() - t_start > PER_LABEL_BUDGET_S:
-            print(f"    drain[{label}]: time budget exhausted at {i}/{len(uids)} — "
-                  f"remaining {len(uids)-i} uids will be retried next run", file=sys.stderr)
-            break
-        try:
-            row = process_fn(M, uid, label)
-        except Exception as e:
-            print(f"  parse error on uid={uid!r} in {label!r}: {e}", file=sys.stderr)
-            continue
-        if row:
-            rows.append(row)
-        if (i + 1) % 50 == 0:
-            print(f"    drain[{label}]: fetched {i+1}/{len(uids)} in {_time.monotonic()-t_start:.0f}s")
+    # One executor per label is fine — daemon threads die with the process.
+    # We deliberately do NOT shut down the pool on the hung-fetch path; the
+    # rogue thread keeps running with the wedged IMAP socket but the main
+    # thread reconnects on a fresh socket and continues.
+    ex = ThreadPoolExecutor(max_workers=1)
+    try:
+        for i, uid in enumerate(uids):
+            if _time.monotonic() - t_start > PER_LABEL_BUDGET_S:
+                print(f"    drain[{label}]: time budget exhausted at {i}/{len(uids)} — "
+                      f"remaining {len(uids)-i} uids will be retried next run", file=sys.stderr)
+                break
+            future = ex.submit(process_fn, M, uid, label)
+            try:
+                row = future.result(timeout=PER_UID_TIMEOUT_S)
+            except FuturesTimeout:
+                print(f"    drain[{label}]: uid={uid.decode(errors='replace')} "
+                      f"fetch exceeded {PER_UID_TIMEOUT_S}s — abandoning label, "
+                      f"reconnecting after", file=sys.stderr)
+                raise IMAPSessionWedged(label)
+            except Exception as e:
+                print(f"  parse error on uid={uid!r} in {label!r}: {e}", file=sys.stderr)
+                continue
+            if row:
+                rows.append(row)
+            if (i + 1) % 50 == 0:
+                print(f"    drain[{label}]: fetched {i+1}/{len(uids)} in {_time.monotonic()-t_start:.0f}s")
+    finally:
+        # Don't block on shutdown — the hung worker (if any) is a leak we
+        # accept because the process exits in <3 min anyway.
+        ex.shutdown(wait=False)
     return len(uids), rows
 
 
@@ -751,24 +781,44 @@ def main() -> int:
     alarm_rows: list[dict] = []
     hb_rows: list[dict] = []
 
+    def _connect():
+        m = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=60)
+        m.login(user, pw)
+        return m
+
+    def _drain_with_reconnect(M, label, process_fn):
+        """Drain one label. If the session wedges on a bad UID, reconnect
+        and return whatever we got (partial) — the bad UID gets retried on
+        the next 5-min cycle and will hit the same timeout, then skip again."""
+        try:
+            return M, _drain_label(M, label, process_fn)
+        except IMAPSessionWedged:
+            try: M.logout()
+            except Exception: pass
+            print(f"  reconnecting after wedge on label {label!r}…")
+            return _connect(), (0, [])
+
     try:
         M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=60)
         print("  step: IMAP connected, logging in…")
         M.login(user, pw)
         print("  step: IMAP login OK")
         for label in alarm_labels:
-            seen, rows = _drain_label(M, label, _process)
+            M, (seen, rows) = _drain_with_reconnect(M, label, _process)
             alarm_seen += seen
             alarm_rows.extend(rows)
             print(f"  [{label}] {seen} msgs, {len(rows)} parsed")
         if hb_label:
-            hb_seen, hb_rows = _drain_label(M, hb_label, _process_heartbeat)
+            M, (hb_seen, hb_rows) = _drain_with_reconnect(M, hb_label, _process_heartbeat)
             print(f"  [{hb_label}] {hb_seen} msgs, {len(hb_rows)} classified")
         try:
             M.close()
         except Exception:
             pass
-        M.logout()
+        try:
+            M.logout()
+        except Exception:
+            pass
     except Exception as e:
         print(f"ERROR (imap stage): {e}", file=sys.stderr)
         _update_state(status="error", err=str(e)[:1000], seen=alarm_seen + hb_seen)
