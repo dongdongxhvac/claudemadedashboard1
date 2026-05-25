@@ -14,7 +14,7 @@
 // start_friday + (cycle*N + i)*7. effective_from filters pre-effective cells.
 // Preview cycle: R+1 columns rendered; only first R cycles get persisted.
 // Holiday weeks rendered in red (US federal calendar; weekContainsHoliday).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useOncallParticipants, useOncallSettings,
   useOncallRealtime, addDaysIso, fmtMd,
@@ -175,12 +175,6 @@ export function OncallTab() {
   const [proposerNote, setProposerNote] = useState<string>('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const historyRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (historyOpen && historyRef.current) {
-      historyRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [historyOpen]);
 
   // Snapshot server state into local on entering edit mode (or first load).
   useEffect(() => {
@@ -342,7 +336,6 @@ export function OncallTab() {
           onCancel={onCancel}
           onSubmit={onSubmit}
           submitting={propose.isPending}
-          onViewHistory={() => setHistoryOpen(true)}
           notes={editing ? draftNotes : liveNotes}
           notesMode={editing ? 'compose' : 'live'}
           onChangeNote={(slot, body) => setDraftNotes((cur) =>
@@ -451,16 +444,14 @@ export function OncallTab() {
       )}
 
       {/* ─────────────── HISTORY (published proposals, newest first) ─────────────── */}
-      <div ref={historyRef}>
-        <HistorySection
-          history={historyQ.data ?? []}
-          loading={historyQ.isLoading}
-          engineersById={engineersById}
-          todayIso={todayIso}
-          open={historyOpen}
-          onOpenChange={setHistoryOpen}
-        />
-      </div>
+      <HistorySection
+        history={historyQ.data ?? []}
+        loading={historyQ.isLoading}
+        engineersById={engineersById}
+        todayIso={todayIso}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </div>
   );
 }
@@ -469,8 +460,8 @@ export function OncallTab() {
 // LiveHeader — title + buttons for the top card
 // ============================================================================
 function LiveHeader({
-  editing, canPropose, hasPending, settings, participantCount,
-  updatedAt, onStartEdit, onCancel, onSubmit, submitting, onViewHistory,
+  editing, canPropose, hasPending, participantCount,
+  updatedAt, onStartEdit, onCancel, onSubmit, submitting,
   notes, notesMode, onChangeNote,
 }: {
   editing: boolean;
@@ -483,114 +474,105 @@ function LiveHeader({
   onCancel: () => void;
   onSubmit: () => void;
   submitting: boolean;
-  onViewHistory: () => void;
   notes: { slot: number; body: string }[];
   notesMode: 'live' | 'compose';
   onChangeNote: (slot: number, body: string) => void;
 }) {
-  const startDate = settings.start_friday;
   const updatedAtLocal = updatedAt
     ? new Date(updatedAt).toLocaleString(undefined, {
         month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
     : null;
-  const summary = `${participantCount} engineer${participantCount === 1 ? '' : 's'} · ${settings.rotations_per_engineer} cycles + 1 preview · ${startDate ? 'starts ' + formatStartLong(startDate) : 'no start date set'}`;
+  const summary = `${participantCount} engineer${participantCount === 1 ? '' : 's'}`;
   const proposeDisabledReason = !canPropose
     ? 'You need admin, lead, or manager permission to propose changes.'
     : hasPending
     ? 'A draft is already pending review.'
     : null;
 
+  // 3 columns, single row. The middle and right columns are sized so they
+  // stack into 2 visual lines that match the left column's title+summary
+  // height. Left = title (line 1) + count (line 2). Middle = note1 +
+  // note2. Right = last-published (line 1) + buttons (line 2).
   return (
-    <>
-      <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
-        {/* LEFT: title + summary */}
-        <div className="flex-1 min-w-[200px]">
-          <h2 className="t-section-title">
-            On-call schedule
-            {!editing && (
-              <span className="ml-2 px-2 py-0.5 rounded-full t-small" style={{ background: 'rgba(34,197,94,0.18)', color: '#15803d', fontSize: 11, fontWeight: 600, letterSpacing: '0.5px' }}>
-                LIVE
-              </span>
-            )}
-            {editing && (
-              <span className="ml-2 px-2 py-0.5 rounded-full t-small" style={{ background: 'rgba(212,160,23,0.18)', color: '#a16207', fontSize: 11, fontWeight: 600, letterSpacing: '0.5px' }}>
-                COMPOSING DRAFT
-              </span>
-            )}
-          </h2>
-          <p className="t-small t-muted">{summary}</p>
-        </div>
-
-        {/* RIGHT: version control summary + action buttons */}
-        <div className="flex flex-col items-end gap-1" style={{ minWidth: 220 }}>
-          <p className="t-small text-right" style={{ color: 'var(--color-text-muted)' }}>
-            {updatedAtLocal ? (
-              <>Last published <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{updatedAtLocal}</span></>
-            ) : (
-              <span style={{ fontStyle: 'italic' }}>Never published</span>
-            )}
-            <br className="oncall-no-print" />
-            <button
-              onClick={onViewHistory}
-              className="oncall-no-print t-accent"
-              style={{ textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
-              title="Open the Schedule history section below"
-            >
-              View history ↓
-            </button>
-          </p>
-          <div className="flex items-center gap-2 oncall-no-print">
-            {!editing ? (
-              <>
-                <button
-                  onClick={() => window.print()}
-                  className="t-small px-3 py-1 rounded border"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-                  title="Print this schedule (includes notes + last published)"
-                >
-                  ⎙ Print
-                </button>
-                <button
-                  onClick={onStartEdit}
-                  disabled={proposeDisabledReason !== null}
-                  title={proposeDisabledReason ?? undefined}
-                  className="t-small px-3 py-1 rounded border font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
-                >
-                  Propose changes
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={onCancel}
-                  disabled={submitting}
-                  className="t-small px-3 py-1 rounded border"
-                  style={{ borderColor: 'var(--color-border)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={onSubmit}
-                  disabled={submitting}
-                  className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
-                  style={{ background: 'var(--color-accent)' }}
-                >
-                  {submitting ? 'Submitting…' : 'Submit for review'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+    <div className="flex items-stretch gap-4 mb-2 flex-wrap">
+      {/* LEFT */}
+      <div className="flex flex-col justify-center" style={{ minWidth: 180 }}>
+        <h2 className="t-section-title" style={{ lineHeight: 1.2 }}>
+          On-call schedule
+          {!editing && (
+            <span className="ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.18)', color: '#15803d', fontSize: 11, fontWeight: 600, letterSpacing: '0.5px' }}>
+              LIVE
+            </span>
+          )}
+          {editing && (
+            <span className="ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.18)', color: '#a16207', fontSize: 11, fontWeight: 600, letterSpacing: '0.5px' }}>
+              COMPOSING DRAFT
+            </span>
+          )}
+        </h2>
+        <p className="t-small t-muted">{summary}</p>
       </div>
 
-      {/* FULL-WIDTH notes strip below the title row.
-          In live mode: read-only display. In compose mode: editable inputs
-          bound to draftNotes (note edits flow through the proposal). */}
-      <NotesBar mode={notesMode} notes={notes} onChange={onChangeNote} />
-    </>
+      {/* MIDDLE: notes (stretches to fill) */}
+      <div className="flex-1 min-w-[200px]">
+        <NotesBar mode={notesMode} notes={notes} onChange={onChangeNote} />
+      </div>
+
+      {/* RIGHT */}
+      <div className="flex flex-col items-end justify-center gap-1" style={{ minWidth: 220 }}>
+        <p className="t-small text-right" style={{ color: 'var(--color-text-muted)' }}>
+          {updatedAtLocal ? (
+            <>Last published <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{updatedAtLocal}</span></>
+          ) : (
+            <span style={{ fontStyle: 'italic' }}>Never published</span>
+          )}
+        </p>
+        <div className="flex items-center gap-2 oncall-no-print">
+          {!editing ? (
+            <>
+              <button
+                onClick={() => window.print()}
+                className="t-small px-3 py-1 rounded border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                title="Print this schedule (includes notes + last published)"
+              >
+                ⎙ Print
+              </button>
+              <button
+                onClick={onStartEdit}
+                disabled={proposeDisabledReason !== null}
+                title={proposeDisabledReason ?? undefined}
+                className="t-small px-3 py-1 rounded border font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
+              >
+                Propose changes
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={onCancel}
+                disabled={submitting}
+                className="t-small px-3 py-1 rounded border"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSubmit}
+                disabled={submitting}
+                className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+                style={{ background: 'var(--color-accent)' }}
+              >
+                {submitting ? 'Submitting…' : 'Submit for review'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -616,12 +598,12 @@ function NotesBar({
 }) {
   return (
     <div
-      className="w-full mb-1"
       style={{
         border: '1px solid var(--color-border)',
         borderRadius: 4,
         background: 'var(--color-bg)',
         padding: '2px 8px',
+        height: '100%',
       }}
     >
       {[1, 2].map((slot) => {
@@ -1272,11 +1254,6 @@ function dayName(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' });
 }
 
-function formatStartLong(iso: string): string {
-  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-  });
-}
 
 function AddPicker({
   options,
