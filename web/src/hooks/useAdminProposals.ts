@@ -237,6 +237,8 @@ export function usePublishOncallProposal() {
       qc.invalidateQueries({ queryKey: ['oncall_upcoming'] });
       qc.invalidateQueries({ queryKey: ['oncall_participants'] });
       qc.invalidateQueries({ queryKey: ['oncall_settings'] });
+      qc.invalidateQueries({ queryKey: ['oncall_notes'] });
+      qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'oncall'] });
     },
   });
 }
