@@ -12,7 +12,7 @@
 //   │  · Recent closes │ (rounds + assign)│ (whole table)                │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 import { useEffect, useMemo, useState } from 'react';
-import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, type OncallParticipant, type OncallSettings } from '../../hooks/useOncall';
+import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses, type PmCloseEvent, type WoCloseEvent } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
@@ -50,6 +50,7 @@ export default function TvView() {
   // Live data
   useSnapshotRealtime();
   useOncallRealtime();
+  useOncallNotesRealtime();
   useFocusBoardRealtime();
   useRoundsRealtime();
   useShiftsRealtime();
@@ -59,6 +60,7 @@ export default function TvView() {
   const oncallQ      = useUpcomingOncall(12);
   const participantsQ = useOncallParticipants();
   const oncallSettingsQ = useOncallSettings();
+  const oncallNotesQ = useOncallNotes();
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
@@ -116,6 +118,7 @@ export default function TvView() {
         <OncallPanel
           participants={participantsQ.data ?? []}
           settings={oncallSettingsQ.data ?? null}
+          notes={oncallNotesQ.data ?? []}
           now={now}
         />
       </main>
@@ -389,11 +392,14 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   );
 }
 
-function OncallPanel({ participants, settings, now }: {
+function OncallPanel({ participants, settings, notes, now }: {
   participants: OncallParticipant[];
   settings: OncallSettings | null;
+  notes: OncallNote[];
   now: Date;
 }) {
+  // Skip empty slots so the area collapses when nobody's written anything.
+  const visibleNotes = notes.filter((n) => n.body.trim().length > 0);
   const grid = useMemo(() => {
     if (!settings?.start_friday || participants.length === 0) return null;
 
@@ -495,6 +501,7 @@ function OncallPanel({ participants, settings, now }: {
   if (!grid) {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
+        {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
         <p className="tv-muted">No rotation set.</p>
       </Panel>
     );
@@ -505,6 +512,7 @@ function OncallPanel({ participants, settings, now }: {
       <div className="tv-oncall-sub">
         {grid.N} engineers · {grid.cycles} cycles + 1 preview
       </div>
+      {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
       <div className="tv-oncall-scroll">
         <table className="tv-oncall-grid">
           <thead>
@@ -543,6 +551,22 @@ function OncallPanel({ participants, settings, now }: {
         </table>
       </div>
     </Panel>
+  );
+}
+
+/** Read-only display of the sticky-notes set on the Admin → On-call tab.
+ *  Renders one line per non-empty slot, with subtle "note 1:" / "note 2:"
+ *  prefixes that won't compete with the table data for the eye. */
+function OncallNotesStrip({ notes }: { notes: OncallNote[] }) {
+  return (
+    <div className="tv-oncall-notes">
+      {notes.map((n) => (
+        <div key={n.slot} className="tv-oncall-note">
+          <span className="tv-oncall-note-tag">{n.slot}</span>
+          <span className="tv-oncall-note-body">{n.body}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1220,6 +1244,41 @@ function TvStyles() {
         font-size: 0.7vw;
         color: #94a3b8;
         margin-bottom: 0.3vw;
+      }
+      /* Sticky notes from Admin → On-call tab (full-width strip above table) */
+      .tv-oncall-notes {
+        margin-bottom: 0.4vw;
+        padding: 0.25vw 0.4vw;
+        background: rgba(217, 119, 6, 0.10);
+        border-left: 2px solid #d97706;
+        border-radius: 2px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15vw;
+      }
+      .tv-oncall-note {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4vw;
+        font-size: 0.72vw;
+        line-height: 1.25;
+        color: #fde68a;
+      }
+      .tv-oncall-note-tag {
+        font-size: 0.55vw;
+        font-weight: 700;
+        color: #d97706;
+        background: rgba(217, 119, 6, 0.25);
+        padding: 0 0.25vw;
+        border-radius: 2px;
+        flex-shrink: 0;
+      }
+      .tv-oncall-note-body {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .tv-oncall-scroll { overflow: hidden; }
       .tv-oncall-grid {
