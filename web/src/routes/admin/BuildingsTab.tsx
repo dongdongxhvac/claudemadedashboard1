@@ -460,8 +460,12 @@ function NotesBar({
         border: '1px solid var(--color-border)',
         borderRadius: 4,
         background: 'var(--color-bg)',
-        padding: '2px 8px',
+        padding: '4px 8px',
         height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: '6px',
       }}
     >
       {[1, 2].map((slot) => {
@@ -483,7 +487,7 @@ function NotesBar({
               placeholder={`note ${slot}`}
               className="w-full t-text"
               style={{
-                fontSize: 12, lineHeight: 1.25,
+                fontSize: 12, lineHeight: 1.2, textAlign: 'center',
                 border: 'none', background: 'transparent',
                 padding: '0 2px', outline: 'none',
                 borderBottom: '1px dashed var(--color-border-soft)',
@@ -499,14 +503,14 @@ function NotesBar({
             className="t-text"
             title={changed ? `Was: "${liveBody || '(empty)'}"` : undefined}
             style={{
-              fontSize: 12, lineHeight: 1.25,
+              fontSize: 12, lineHeight: 1.2, textAlign: 'center',
               padding: '0 2px',
               borderBottom: '1px dashed var(--color-border-soft)',
               background: changed ? 'rgba(212,160,23,0.20)' : undefined,
               color: body ? (changed ? '#7c5800' : undefined) : 'var(--color-text-muted)',
               fontStyle: body ? 'normal' : 'italic',
               fontWeight: changed ? 600 : undefined,
-              minHeight: '1.25em',
+              minHeight: '1.2em',
             }}
           >
             {body || `(note ${slot} empty)`}

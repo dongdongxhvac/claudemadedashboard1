@@ -602,8 +602,12 @@ function NotesBar({
         border: '1px solid var(--color-border)',
         borderRadius: 4,
         background: 'var(--color-bg)',
-        padding: '2px 8px',
+        padding: '4px 8px',
         height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: '6px',
       }}
     >
       {[1, 2].map((slot) => {
