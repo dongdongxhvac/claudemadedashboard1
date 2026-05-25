@@ -571,37 +571,35 @@ function OncallNotesCard({ canEdit }: { canEdit: boolean }) {
   const notes: OncallNote[] = notesQ.data ?? [];
   return (
     <div
-      className="oncall-no-print"
+      className="oncall-no-print flex-1 min-w-[200px]"
       style={{
-        width: 320, flexShrink: 0,
         border: '1px solid var(--color-border)',
         borderRadius: 4,
         background: 'var(--color-bg)',
-        padding: '0.25rem 0.5rem',
+        padding: '2px 6px',
+        alignSelf: 'stretch',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
       }}
     >
-      <p className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: 10, letterSpacing: '0.7px' }}>
-        Notes
-      </p>
-      <div className="space-y-1">
-        {[1, 2, 3].map((slot) => {
-          const n = notes.find((x) => x.slot === slot);
-          return (
-            <NoteRow
-              key={slot}
-              slot={slot as 1 | 2 | 3}
-              initialBody={n?.body ?? ''}
-              updatedByName={n?.updated_by_name ?? null}
-              updatedAt={n?.updated_at ?? null}
-              canEdit={canEdit}
-              onSave={async (body) => {
-                if (body === (n?.body ?? '')) return;
-                await update.mutateAsync({ slot: slot as 1 | 2 | 3, body });
-              }}
-            />
-          );
-        })}
-      </div>
+      {[1, 2, 3].map((slot) => {
+        const n = notes.find((x) => x.slot === slot);
+        return (
+          <NoteRow
+            key={slot}
+            slot={slot as 1 | 2 | 3}
+            initialBody={n?.body ?? ''}
+            updatedByName={n?.updated_by_name ?? null}
+            updatedAt={n?.updated_at ?? null}
+            canEdit={canEdit}
+            onSave={async (body) => {
+              if (body === (n?.body ?? '')) return;
+              await update.mutateAsync({ slot: slot as 1 | 2 | 3, body });
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -617,41 +615,39 @@ function NoteRow({
   onSave: (body: string) => Promise<void>;
 }) {
   const [value, setValue] = useState(initialBody);
-  // Resync when server value changes (e.g. another user edited via realtime)
   useEffect(() => { setValue(initialBody); }, [initialBody]);
   const tooltip = updatedAt
-    ? `Slot ${slot} · last edited ${new Date(updatedAt).toLocaleString()}${updatedByName ? ' by ' + updatedByName : ''}`
-    : `Slot ${slot} · never edited`;
+    ? `last edited ${new Date(updatedAt).toLocaleString()}${updatedByName ? ' by ' + updatedByName : ''}`
+    : 'never edited';
   return (
-    <div className="flex items-center gap-1" title={tooltip}>
-      <span className="t-mono" style={{ fontSize: 10, color: 'var(--color-text-muted)', width: 12, flexShrink: 0 }}>
-        {slot}.
-      </span>
-      <input
-        type="text"
-        value={value}
-        readOnly={!canEdit}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => { void onSave(value); }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
-          if (e.key === 'Escape') { setValue(initialBody); (e.target as HTMLInputElement).blur(); }
-        }}
-        placeholder={canEdit ? `(empty)` : ''}
-        className="flex-1 t-text"
-        style={{
-          fontSize: 12,
-          border: 'none',
-          background: canEdit ? 'transparent' : 'transparent',
-          padding: '2px 4px',
-          outline: 'none',
-          borderBottom: '1px dashed transparent',
-          cursor: canEdit ? 'text' : 'default',
-        }}
-        onFocus={(e) => { if (canEdit) e.currentTarget.style.borderBottomColor = 'var(--color-accent)'; }}
-        onBlurCapture={(e) => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
-      />
-    </div>
+    <input
+      type="text"
+      value={value}
+      readOnly={!canEdit}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={(e) => {
+        e.currentTarget.style.borderBottomColor = 'var(--color-border-soft)';
+        void onSave(value);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+        if (e.key === 'Escape') { setValue(initialBody); (e.target as HTMLInputElement).blur(); }
+      }}
+      onFocus={(e) => { if (canEdit) e.currentTarget.style.borderBottomColor = 'var(--color-accent)'; }}
+      placeholder={canEdit ? `note ${slot}` : ''}
+      title={tooltip}
+      className="w-full t-text"
+      style={{
+        fontSize: 12,
+        lineHeight: 1.25,
+        border: 'none',
+        background: 'transparent',
+        padding: '0 2px',
+        outline: 'none',
+        borderBottom: '1px dashed var(--color-border-soft)',
+        cursor: canEdit ? 'text' : 'default',
+      }}
+    />
   );
 }
 
