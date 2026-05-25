@@ -38,6 +38,21 @@ export type OncallProposalPayload = {
   notes?: OncallProposalNote[];
 };
 
+// Buildings ===================================================================
+
+export type BuildingsProposalAssignment = {
+  building_id: string;
+  user_id: string;
+  role_in_building: 'primary' | 'backup';
+};
+
+export type BuildingsProposalNote = { slot: number; body: string };
+
+export type BuildingsProposalPayload = {
+  assignments: BuildingsProposalAssignment[];
+  notes?: BuildingsProposalNote[];
+};
+
 export type PendingProposal<TPayload = unknown> = {
   id: string;
   tab: ProposalTab;
@@ -218,6 +233,55 @@ export function useProposeOncall() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PENDING('oncall') }),
+  });
+}
+
+/** Submit a buildings proposal. Fails if one is already pending. */
+export function useProposeBuildings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { payload: BuildingsProposalPayload; note?: string | null }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error('Not signed in');
+      const { data: me, error: meErr } = await supabase
+        .from('users').select('id').eq('auth_user_id', auth.user.id).maybeSingle();
+      if (meErr) throw meErr;
+      if (!me) throw new Error('Your account is not linked to a users row');
+
+      const { error } = await supabase.from('admin_proposals').insert({
+        tab: 'buildings',
+        payload: input.payload,
+        note: input.note ?? null,
+        proposed_by_user_id: (me as { id: string }).id,
+        status: 'pending',
+      });
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Another draft for Buildings is already pending review.');
+        }
+        throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PENDING('buildings') }),
+  });
+}
+
+/** Manager-only: publish a buildings proposal. */
+export function usePublishBuildingsProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (proposalId: string) => {
+      const { error } = await supabase.rpc('publish_buildings_proposal', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY_PENDING('buildings') });
+      qc.invalidateQueries({ queryKey: ['building_assignments'] });
+      qc.invalidateQueries({ queryKey: ['buildings_notes'] });
+      qc.invalidateQueries({ queryKey: ['admin_proposal_history', 'buildings'] });
+    },
   });
 }
 

@@ -2,6 +2,60 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
+// ============================================================================
+// buildings_notes (2 fixed slots, edited via proposal workflow)
+// ============================================================================
+
+export type BuildingsNote = {
+  slot: 1 | 2;
+  body: string;
+  updated_at: string;
+  updated_by_user_id: string | null;
+  updated_by_name: string | null;
+};
+
+const KEY_NOTES = ['buildings_notes'];
+
+export function useBuildingsNotes() {
+  return useQuery({
+    queryKey: KEY_NOTES,
+    queryFn: async (): Promise<BuildingsNote[]> => {
+      const { data, error } = await supabase
+        .from('buildings_notes')
+        .select(`slot, body, updated_at, updated_by_user_id,
+                 users:updated_by_user_id(full_name)`)
+        .order('slot', { ascending: true });
+      if (error) throw error;
+      type Joined = {
+        slot: 1 | 2; body: string; updated_at: string;
+        updated_by_user_id: string | null;
+        users: { full_name: string } | { full_name: string }[] | null;
+      };
+      return (data as unknown as Joined[]).map((r) => {
+        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        return {
+          slot: r.slot, body: r.body, updated_at: r.updated_at,
+          updated_by_user_id: r.updated_by_user_id,
+          updated_by_name: u?.full_name ?? null,
+        };
+      });
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useBuildingsNotesRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel('buildings-notes-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'buildings_notes' },
+        () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
+}
+
 export type AssignmentRole = 'primary' | 'backup' | 'manager';
 
 export type BuildingAssignment = {
