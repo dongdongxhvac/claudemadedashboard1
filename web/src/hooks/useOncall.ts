@@ -374,6 +374,82 @@ export function useSaveOncallSchedule() {
   });
 }
 
+// ============================================================================
+// Oncall sticky notes (3 fixed slots, header scratch area)
+// ============================================================================
+
+export type OncallNote = {
+  slot: 1 | 2 | 3;
+  body: string;
+  updated_at: string;
+  updated_by_user_id: string | null;
+  updated_by_name: string | null;
+};
+
+const KEY_NOTES = ['oncall_notes'];
+
+export function useOncallNotes() {
+  return useQuery({
+    queryKey: KEY_NOTES,
+    queryFn: async (): Promise<OncallNote[]> => {
+      const { data, error } = await supabase
+        .from('oncall_notes')
+        .select(`slot, body, updated_at, updated_by_user_id,
+                 users:updated_by_user_id(full_name)`)
+        .order('slot', { ascending: true });
+      if (error) throw error;
+      type Joined = {
+        slot: 1 | 2 | 3; body: string; updated_at: string;
+        updated_by_user_id: string | null;
+        users: { full_name: string } | { full_name: string }[] | null;
+      };
+      return (data as unknown as Joined[]).map((r) => {
+        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        return {
+          slot: r.slot, body: r.body, updated_at: r.updated_at,
+          updated_by_user_id: r.updated_by_user_id,
+          updated_by_name: u?.full_name ?? null,
+        };
+      });
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateOncallNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { slot: 1 | 2 | 3; body: string }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error('Not signed in');
+      const { data: me } = await supabase
+        .from('users').select('id').eq('auth_user_id', auth.user.id).maybeSingle();
+      const { error } = await supabase
+        .from('oncall_notes')
+        .update({
+          body: input.body,
+          updated_at: new Date().toISOString(),
+          updated_by_user_id: (me as { id: string } | null)?.id ?? null,
+        })
+        .eq('slot', input.slot);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY_NOTES }),
+  });
+}
+
+export function useOncallNotesRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel('oncall-notes-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oncall_notes' },
+        () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
+}
+
 /** Parse "MM/DD - MM/DD" → start iso (Friday). Accepts just "MM/DD" too. */
 export function parseRotationCell(input: string): string | null {
   const m = input.trim().match(/^(.+?)(?:\s*-\s*.+)?$/);

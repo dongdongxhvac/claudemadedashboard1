@@ -14,11 +14,12 @@
 // start_friday + (cycle*N + i)*7. effective_from filters pre-effective cells.
 // Preview cycle: R+1 columns rendered; only first R cycles get persisted.
 // Holiday weeks rendered in red (US federal calendar; weekContainsHoliday).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useOncallParticipants, useOncallSettings,
   useOncallRealtime, addDaysIso, fmtMd,
-  type OncallParticipant,
+  useOncallNotes, useUpdateOncallNote, useOncallNotesRealtime,
+  type OncallParticipant, type OncallNote,
 } from '../../hooks/useOncall';
 import {
   usePendingProposal, useProposeOncall, usePublishOncallProposal,
@@ -168,6 +169,13 @@ export function OncallTab() {
   const [rotations, setRotations] = useState<number>(4);
   const [proposerNote, setProposerNote] = useState<string>('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (historyOpen && historyRef.current) {
+      historyRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [historyOpen]);
 
   // Snapshot server state into local on entering edit mode (or first load).
   useEffect(() => {
@@ -316,6 +324,7 @@ export function OncallTab() {
           onCancel={onCancel}
           onSubmit={onSubmit}
           submitting={propose.isPending}
+          onViewHistory={() => setHistoryOpen(true)}
         />
 
         {editing && (
@@ -419,12 +428,16 @@ export function OncallTab() {
       )}
 
       {/* ─────────────── HISTORY (published proposals, newest first) ─────────────── */}
-      <HistorySection
-        history={historyQ.data ?? []}
-        loading={historyQ.isLoading}
-        engineersById={engineersById}
-        todayIso={todayIso}
-      />
+      <div ref={historyRef}>
+        <HistorySection
+          history={historyQ.data ?? []}
+          loading={historyQ.isLoading}
+          engineersById={engineersById}
+          todayIso={todayIso}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+        />
+      </div>
     </div>
   );
 }
@@ -434,7 +447,7 @@ export function OncallTab() {
 // ============================================================================
 function LiveHeader({
   editing, canPropose, hasPending, settings, participantCount,
-  updatedAt, onStartEdit, onCancel, onSubmit, submitting,
+  updatedAt, onStartEdit, onCancel, onSubmit, submitting, onViewHistory,
 }: {
   editing: boolean;
   canPropose: boolean;
@@ -446,11 +459,12 @@ function LiveHeader({
   onCancel: () => void;
   onSubmit: () => void;
   submitting: boolean;
+  onViewHistory: () => void;
 }) {
   const startDate = settings.start_friday;
   const updatedAtLocal = updatedAt
     ? new Date(updatedAt).toLocaleString(undefined, {
-        year: 'numeric', month: 'short', day: 'numeric',
+        month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
     : null;
@@ -462,8 +476,9 @@ function LiveHeader({
     : null;
 
   return (
-    <div className="flex items-start justify-between mb-2 gap-4 flex-wrap">
-      <div>
+    <div className="flex items-start gap-4 mb-2 flex-wrap">
+      {/* LEFT: title + summary */}
+      <div className="flex-1 min-w-[200px]">
         <h2 className="t-section-title">
           On-call schedule
           {!editing && (
@@ -479,11 +494,26 @@ function LiveHeader({
         </h2>
         <p className="t-small t-muted">{summary}</p>
       </div>
-      <div className="flex flex-col items-end gap-2">
-        <p className="t-small t-muted text-right" style={{ maxWidth: '560px' }}>
-          {updatedAtLocal && <>Last published {updatedAtLocal} · </>}
-          Holiday weeks in red. <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.28)' }}>green</span> = active rotation. — = before effective date.
-        </p>
+
+      {/* MIDDLE: sticky notes (fixed width) */}
+      <OncallNotesCard canEdit={canPropose} />
+
+      {/* RIGHT: version control summary + action buttons */}
+      <div className="flex flex-col items-end gap-2" style={{ minWidth: 220 }}>
+        <button
+          onClick={onViewHistory}
+          className="t-small text-right oncall-no-print"
+          style={{ color: 'var(--color-text-muted)', cursor: 'pointer' }}
+          title="Open the Schedule history section below"
+        >
+          {updatedAtLocal ? (
+            <>Last published <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{updatedAtLocal}</span></>
+          ) : (
+            <span style={{ fontStyle: 'italic' }}>Never published</span>
+          )}
+          <br />
+          <span className="t-accent" style={{ textDecoration: 'underline' }}>View history ↓</span>
+        </button>
         <div className="flex items-center gap-2 oncall-no-print">
           {!editing ? (
             <>
@@ -527,6 +557,100 @@ function LiveHeader({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// OncallNotesCard — 3 fixed-slot editable sticky notes in the header middle
+// ============================================================================
+function OncallNotesCard({ canEdit }: { canEdit: boolean }) {
+  useOncallNotesRealtime();
+  const notesQ = useOncallNotes();
+  const update = useUpdateOncallNote();
+  const notes: OncallNote[] = notesQ.data ?? [];
+  return (
+    <div
+      className="oncall-no-print"
+      style={{
+        width: 320, flexShrink: 0,
+        border: '1px solid var(--color-border)',
+        borderRadius: 4,
+        background: 'var(--color-bg)',
+        padding: '0.25rem 0.5rem',
+      }}
+    >
+      <p className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: 10, letterSpacing: '0.7px' }}>
+        Notes
+      </p>
+      <div className="space-y-1">
+        {[1, 2, 3].map((slot) => {
+          const n = notes.find((x) => x.slot === slot);
+          return (
+            <NoteRow
+              key={slot}
+              slot={slot as 1 | 2 | 3}
+              initialBody={n?.body ?? ''}
+              updatedByName={n?.updated_by_name ?? null}
+              updatedAt={n?.updated_at ?? null}
+              canEdit={canEdit}
+              onSave={async (body) => {
+                if (body === (n?.body ?? '')) return;
+                await update.mutateAsync({ slot: slot as 1 | 2 | 3, body });
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NoteRow({
+  slot, initialBody, updatedByName, updatedAt, canEdit, onSave,
+}: {
+  slot: 1 | 2 | 3;
+  initialBody: string;
+  updatedByName: string | null;
+  updatedAt: string | null;
+  canEdit: boolean;
+  onSave: (body: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initialBody);
+  // Resync when server value changes (e.g. another user edited via realtime)
+  useEffect(() => { setValue(initialBody); }, [initialBody]);
+  const tooltip = updatedAt
+    ? `Slot ${slot} · last edited ${new Date(updatedAt).toLocaleString()}${updatedByName ? ' by ' + updatedByName : ''}`
+    : `Slot ${slot} · never edited`;
+  return (
+    <div className="flex items-center gap-1" title={tooltip}>
+      <span className="t-mono" style={{ fontSize: 10, color: 'var(--color-text-muted)', width: 12, flexShrink: 0 }}>
+        {slot}.
+      </span>
+      <input
+        type="text"
+        value={value}
+        readOnly={!canEdit}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => { void onSave(value); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+          if (e.key === 'Escape') { setValue(initialBody); (e.target as HTMLInputElement).blur(); }
+        }}
+        placeholder={canEdit ? `(empty)` : ''}
+        className="flex-1 t-text"
+        style={{
+          fontSize: 12,
+          border: 'none',
+          background: canEdit ? 'transparent' : 'transparent',
+          padding: '2px 4px',
+          outline: 'none',
+          borderBottom: '1px dashed transparent',
+          cursor: canEdit ? 'text' : 'default',
+        }}
+        onFocus={(e) => { if (canEdit) e.currentTarget.style.borderBottomColor = 'var(--color-accent)'; }}
+        onBlurCapture={(e) => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
+      />
     </div>
   );
 }
@@ -721,14 +845,15 @@ function DraftPreview({
 // published proposal. Lightweight "version control" for the schedule.
 // ============================================================================
 function HistorySection({
-  history, loading, engineersById, todayIso,
+  history, loading, engineersById, todayIso, open, onOpenChange,
 }: {
   history: PublishedProposal<OncallProposalPayload>[];
   loading: boolean;
   engineersById: Record<string, { full_name: string; cmms_assignee_name: string | null }>;
   todayIso: string;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   if (loading) return null;
   if (history.length === 0) {
     return (
@@ -740,7 +865,7 @@ function HistorySection({
   return (
     <div className="t-card oncall-no-print" style={{ padding: '0.5rem 1rem' }}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => onOpenChange(!open)}
         className="w-full flex items-center justify-between"
         style={{ textAlign: 'left' }}
       >
