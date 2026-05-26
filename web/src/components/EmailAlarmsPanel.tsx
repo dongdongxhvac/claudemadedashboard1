@@ -134,7 +134,7 @@ export function EmailAlarmsPanel() {
     (lastRunMin !== null && lastRunMin > 15);
 
   const subtitle = (
-    <span className="t-small t-muted">
+    <span className="t-small t-muted text-right block">
       {totalSystems > 0 && (
         <>
           <span
@@ -157,12 +157,16 @@ export function EmailAlarmsPanel() {
         </span>
         {lastRun && <span className="t-muted"> · last run {fmtRelative(lastRun)}</span>}
       </span>
+      <br />
+      <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>
+        stale rule: BMS HB &gt; 28h (Mon–Fri, weekday-aware) · PA HB &gt; 2.5h (30-min cadence)
+      </span>
     </span>
   );
 
   return (
     <Section
-      title="§09 BMS heartbeats (4 systems via email)"
+      title="§09 BMS heartbeats (4 BMS + Power Automate)"
       subtitle={subtitle}
       loading={hbQ.isLoading}
     >
