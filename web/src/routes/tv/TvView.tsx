@@ -1218,18 +1218,23 @@ const TV_CATEGORY_DOT: Record<OvertimeCategory, string> = {
 
 function fmtOvertimeWhen(starts: string, ends: string | null): string {
   const s = new Date(starts);
-  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
-  const sT = s.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
-              .replace(/\s/g, '').toLowerCase();
-  if (!ends) return `${dStr} ${sT}`;
+  // "Sat 6/6" — drop the locale comma so it fits the narrow TV column.
+  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' })
+                 .replace(/,\s*/g, ' ');
+  // "7a" / "7:30a" — single-letter am/pm, minutes only when non-zero.
+  const compactTime = (d: Date) => {
+    const h12  = d.getHours() % 12 || 12;
+    const min  = d.getMinutes();
+    const ampm = d.getHours() < 12 ? 'a' : 'p';
+    return min === 0 ? `${h12}${ampm}` : `${h12}:${String(min).padStart(2, '0')}${ampm}`;
+  };
+  if (!ends) return `${dStr} ${compactTime(s)}`;
   const e = new Date(ends);
-  const eT = e.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
-              .replace(/\s/g, '').toLowerCase();
   const sameDay =
     s.getFullYear() === e.getFullYear() &&
     s.getMonth() === e.getMonth() &&
     s.getDate() === e.getDate();
-  return sameDay ? `${dStr} ${sT}–${eT}` : `${dStr} ${sT}+`;
+  return sameDay ? `${dStr} ${compactTime(s)}–${compactTime(e)}` : `${dStr} ${compactTime(s)}+`;
 }
 
 function tvBuildingLabel(p: OvertimePost): string {
@@ -1988,7 +1993,7 @@ function TvStyles() {
       }
       .tv-ot-row {
         display: grid;
-        grid-template-columns: 0.6vw 5.2vw 2vw 1fr 6vw 1.5vw;
+        grid-template-columns: 0.6vw 6.8vw 2vw 1fr 5vw 1.5vw;
         gap: 0.35vw;
         align-items: baseline;
         font-size: 0.78vw;
