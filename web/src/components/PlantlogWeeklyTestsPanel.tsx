@@ -1,9 +1,18 @@
 // §07 — Weekly compliance tests (Phase 6.7 follow-up).
 //
 // Two sections in one panel: Generator Weekly Tests and Weekly Water Test.
-// Each lists every piece of equipment with its last-completed timestamp and
-// days-since. Color thresholds: <6 green, 6 amber, >=7 red — these mark
-// "approaching due" and "overdue" relative to the weekly cadence.
+//
+// Compliance rule is CALENDAR-WEEK based, not rolling-7-days, because the
+// real-world question is "did each item get done once this week (Mon-Sun)?"
+// — not "is the gap between completions <=7 days":
+//   - Fresh    ✓  — completed within the current week (Mon-Sun, ET)
+//   - Pending  —   last week was completed, this week's window is open
+//   - Overdue  ⚠   last week's window closed without a completion
+//
+// Example: today Mon May 25. An item last completed Mon May 18 covered
+// "last week" (May 18-24) so it's NOT overdue, even though days_ago=8 —
+// the new week (May 25-31) has only just begun. Old rolling rule wrongly
+// flagged it red.
 //
 // Backed by v_plantlog_weekly_tests_status — latest completion per
 // (test_type, log_name).
@@ -22,10 +31,45 @@ function fmtDoneAt(utcIso: string): string {
   });
 }
 
-function ageColor(daysAgo: number): string {
-  if (daysAgo > 7)  return 'var(--color-danger)';
-  if (daysAgo >= 6) return 'var(--color-warning, #d97706)';
-  return 'var(--color-text)';
+/** Monday 00:00 ET of the week containing `d` (treats Sunday as the END of
+ *  the previous week). */
+function startOfWeekMondayET(d: Date): Date {
+  // Convert to ET first so the week boundary is local (not UTC).
+  const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay(); // 0=Sun..6=Sat
+  const offset = day === 0 ? 6 : day - 1;
+  const monday = new Date(et);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - offset);
+  return monday;
+}
+
+type ComplianceStatus = 'fresh' | 'pending' | 'overdue';
+
+function complianceStatus(lastDoneUtc: string): ComplianceStatus {
+  const lastDone = new Date(lastDoneUtc);
+  const thisWeekStart = startOfWeekMondayET(new Date());
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  if (lastDone >= thisWeekStart) return 'fresh';    // done this week
+  if (lastDone >= lastWeekStart) return 'pending';  // done last week, this week open
+  return 'overdue';                                 // missed last week
+}
+
+function statusColor(s: ComplianceStatus): string {
+  switch (s) {
+    case 'fresh':   return 'var(--color-ok, #10b981)';
+    case 'pending': return 'var(--color-text)';
+    case 'overdue': return 'var(--color-danger)';
+  }
+}
+
+function statusBadge(s: ComplianceStatus): string {
+  switch (s) {
+    case 'fresh':   return ' ✓';
+    case 'pending': return '';
+    case 'overdue': return ' ⚠';
+  }
 }
 
 function TestTable({
@@ -54,7 +98,9 @@ function TestTable({
         </thead>
         <tbody>
           {rows.map((r) => {
-            const c = ageColor(r.days_ago);
+            const s = complianceStatus(r.last_done_utc);
+            const c = statusColor(s);
+            const badge = statusBadge(s);
             const mapped = r.last_by_user ? userMap?.get(r.last_by_user) : null;
             return (
               <tr key={r.log_name} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
@@ -70,8 +116,7 @@ function TestTable({
                 </td>
                 <td className="text-right px-2 py-1">{fmtDoneAt(r.last_done_utc)}</td>
                 <td className="text-right pl-3 py-1 font-semibold" style={{ color: c }}>
-                  {r.days_ago}
-                  {r.days_ago > 7 ? ' ⚠' : r.days_ago >= 6 ? ' •' : ''}
+                  {r.days_ago}{badge}
                 </td>
               </tr>
             );
@@ -86,22 +131,28 @@ export function PlantlogWeeklyTestsPanel() {
   const testsQ = usePlantlogWeeklyTests();
   const userMapQ = usePlantlogUserMap();
 
-  const { generators, waters, overdueCount } = useMemo(() => {
+  const { generators, waters, freshCount, overdueCount } = useMemo(() => {
     const all = testsQ.data ?? [];
     const gens = all.filter((r) => r.test_type === 'generator').sort((a, b) => b.days_ago - a.days_ago);
     const wat = all.filter((r) => r.test_type === 'water').sort((a, b) => b.days_ago - a.days_ago);
-    const overdue = all.filter((r) => r.days_ago > 7).length;
-    return { generators: gens, waters: wat, overdueCount: overdue };
+    const fresh = all.filter((r) => complianceStatus(r.last_done_utc) === 'fresh').length;
+    const overdue = all.filter((r) => complianceStatus(r.last_done_utc) === 'overdue').length;
+    return { generators: gens, waters: wat, freshCount: fresh, overdueCount: overdue };
   }, [testsQ.data]);
 
   const subtitle = (
-    <span className="t-small t-muted">
-      {generators.length} generators · {waters.length} water tests
+    <span className="t-small t-muted text-right block">
+      <span style={{ color: 'var(--color-ok, #10b981)', fontWeight: 600 }}>{freshCount} ✓ this week</span>
+      <span className="ml-2">· {generators.length} generators · {waters.length} water tests</span>
       {overdueCount > 0 && (
         <span className="ml-2 font-semibold" style={{ color: 'var(--color-danger)' }}>
           · {overdueCount} ⚠ overdue
         </span>
       )}
+      <br />
+      <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>
+        rule: ✓ done this calendar week (Mon-Sun ET) · ⚠ overdue = missed last week's window
+      </span>
     </span>
   );
 
@@ -118,9 +169,9 @@ export function PlantlogWeeklyTestsPanel() {
           <TestTable title="Generator Weekly Tests" rows={generators} userMap={userMapQ.data} />
           <TestTable title="Weekly Water Test"      rows={waters}      userMap={userMapQ.data} />
           <p className="t-small t-muted">
-            Color: <span style={{ color: ageColor(0) }}>0-5 days fresh</span> ·{' '}
-            <span style={{ color: ageColor(6) }}>6-7 days approaching</span> ·{' '}
-            <span style={{ color: ageColor(8) }}>&gt;7 days overdue</span>
+            Status: <span style={{ color: statusColor('fresh') }}>✓ done this week</span> ·{' '}
+            <span style={{ color: statusColor('pending') }}>last week only (this week pending)</span> ·{' '}
+            <span style={{ color: statusColor('overdue') }}>⚠ overdue (missed last week)</span>
           </p>
         </>
       )}
