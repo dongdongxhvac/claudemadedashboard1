@@ -268,12 +268,13 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
           onClose={() => setEditing(null)}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
-            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string } = {};
+            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string; is_manager?: boolean } = {};
             if (userPatch.full_name !== undefined && userPatch.full_name !== editing.full_name) _userPatch.full_name = userPatch.full_name;
             if (userPatch.email !== undefined && userPatch.email !== editing.email) _userPatch.email = userPatch.email;
             if (userPatch.phone !== undefined && userPatch.phone !== editing.phone) _userPatch.phone = userPatch.phone;
             if (userPatch.role !== undefined && userPatch.role !== editing.role)    _userPatch.role  = userPatch.role;
             if (userPatch.active !== undefined && userPatch.active !== editing.active) _userPatch.active = userPatch.active;
+            if (userPatch.is_manager !== undefined && userPatch.is_manager !== editing.is_manager) _userPatch.is_manager = userPatch.is_manager;
             if (Object.keys(_userPatch).length > 0) {
               tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: _userPatch }));
             }
@@ -340,7 +341,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
 }
 
 type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
-type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean };
+type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean; is_manager: boolean };
 
 function EditDrawer({
   row,
@@ -364,6 +365,7 @@ function EditDrawer({
   const [role, setRole] = useState<Role>(row.role);
   const [shiftId, setShiftId] = useState<string>(row.shift_id ?? '');
   const [isLead, setIsLead] = useState<boolean>(row.is_lead);
+  const [isManager, setIsManager] = useState<boolean>(row.is_manager);
   const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
   const [level, setLevel] = useState<number>(row.level);
   const [notes, setNotes] = useState<string>(row.notes ?? '');
@@ -393,6 +395,7 @@ function EditDrawer({
           phone: phone.trim() === '' ? null : phone.trim(),
           role,
           active,
+          is_manager: isManager,
         },
       );
     } finally {
@@ -492,7 +495,25 @@ function EditDrawer({
               </span>
             </div>
           </label>
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Manager</span>
+            <div className="flex items-center gap-2 h-7">
+              <Toggle
+                checked={isManager}
+                onChange={setIsManager}
+                title={isManager ? 'Click to remove manager rights' : 'Click to grant manager rights (publish drafts)'}
+              />
+              <span className="t-small" style={{ color: isManager ? '#7e22ce' : 'var(--color-text-muted)' }}>
+                {isManager ? '✓ Manager' : '—'}
+              </span>
+            </div>
+          </label>
         </div>
+
+        <p className="t-small t-muted -mt-2 mb-3" style={{ paddingLeft: 2 }}>
+          <strong>Lead</strong> can propose changes to On-call / Bldg Assign / Rounds.{' '}
+          <strong>Manager</strong> can also publish or reject drafts. Both are independent of Role.
+        </p>
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">
