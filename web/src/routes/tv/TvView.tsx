@@ -5,12 +5,15 @@
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ WORKLOAD +       │ FOCUS BOARD      │ (open slot — TBD)            │
-//   │ PERFORMANCE      │                  │                              │
+//   │ WORKLOAD +       │ BMS HEALTH       │ (open slot — TBD)            │
+//   │ PERFORMANCE      │ §08 + §09 + §10  │                              │
 //   │  · Workload      ├──────────────────┼──────────────────────────────┤
 //   │  · Crew 7d       │ BUILDINGS        │ ON-CALL SCHEDULE             │
 //   │  · Recent closes │ (rounds + assign)│ (whole table)                │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
+//
+// Focus-board announcements still surface via the header strip (top-2);
+// the standalone panel got displaced when BMS health moved in.
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
@@ -22,6 +25,8 @@ import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/u
 import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
+import { useDeltaAlarmsCurrent, useDeltaPollState } from '../../hooks/useDeltaAlarms';
+import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -102,8 +107,8 @@ export default function TvView() {
           laborDaily={laborDailyQ.data ?? []}
           now={now}
         />
-        {/* Middle column */}
-        <FocusBoardPanel items={focusQ.data ?? []} />
+        {/* Middle column — top: consolidated BMS health (§08 + §09 + §10) */}
+        <BmsHealthPanel />
         {/* Right column top */}
         <EmptyPanel />
         {/* Middle column bottom */}
@@ -599,27 +604,223 @@ function usFederalHolidays(year: number): string[] {
   ];
 }
 
-function FocusBoardPanel({ items }: { items: ReturnType<typeof useActiveFocusItems>['data'] }) {
-  const list = (items ?? []).slice(0, 5);
-  const levelColor: Record<string, string> = {
-    info: '#0ea5e9', warn: '#f59e0b', urgent: '#dc2626', critical: '#7f1d1d',
-  };
+// ============================================================================
+// BMS health panel — tri-stripe stack consolidating §08 + §09 + §10
+// ============================================================================
+//
+// Three horizontal bands inside one TV cell:
+//   §08 Delta direct  — active count · unacked · feed live/STALE
+//   §09 Heartbeats    — per-vendor dot row (Siemens · Delta · 730/750 · PA …)
+//   §10 Email alarms  — active count · per-vendor breakdown
+//
+// All three feeds also drive the manager dashboard panels with the same names.
+// Heartbeat staleness rule (weekday-aware) is copied from EmailAlarmsPanel —
+// keep them in sync if the rule changes.
+
+/** Returns true when the given vendor's last heartbeat is older than its
+ *  vendor-specific tolerance. Copy of the rule in EmailAlarmsPanel.tsx —
+ *  duplicated rather than imported to keep the TV view standalone. */
+function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
+  if (vendor === 'power_automate') return hoursSince > 2.5;
+  const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const dow = etNow.getDay();
+  const hour = etNow.getHours();
+  if (dow === 0) return hoursSince > 76;
+  if (dow === 6) return hoursSince > 52;
+  if (dow === 1 && hour < 12) return hoursSince > 80;
+  return hoursSince > 28;
+}
+
+/** Compact vendor labels for the tight stripe row.
+ *  Pretty names ("Delta @ Takeda") are too long when 5 fit on one line. */
+const BMS_VENDOR_SHORT: Record<string, string> = {
+  siemens:               'Siemens',
+  delta_takeda:          'Delta·Tkd',
+  delta_10green:         'Delta·10G',
+  delta:                 'Delta',
+  northeasttech_730_750: '730/750',
+  northeast:             'NE Tech',
+  power_automate:        'PA',
+};
+function shortVendor(slug: string | null | undefined): string {
+  if (!slug) return '—';
+  return BMS_VENDOR_SHORT[slug] ?? slug;
+}
+
+/** Hours-since float → "0.4h" / "12h" / "1.2d" — compact, tabular-nums-friendly. */
+function fmtAge(hours: number): string {
+  if (hours < 1) return `${(Math.round(hours * 10) / 10).toFixed(1)}h`;
+  if (hours < 24) return `${Math.round(hours)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
+function tvMinutesAgo(utcIso: string | null): number | null {
+  if (!utcIso) return null;
+  return Math.floor((Date.now() - new Date(utcIso).getTime()) / 60_000);
+}
+
+function BmsHealthPanel() {
+  const deltaCurrentQ = useDeltaAlarmsCurrent();
+  const deltaStateQ   = useDeltaPollState();
+  const hbQ           = useBmsHeartbeats();
+  const emailOpenQ    = useEmailAlarmsOpen();
+  const emailStateQ   = useEmailPollState();
+
+  // §08 — Delta direct
+  const delta = useMemo(() => {
+    const all = deltaCurrentQ.data ?? [];
+    const active = all.filter((r) => r.to_state && r.to_state.toLowerCase() !== 'normal');
+    const unacked = all.filter((r) => r.latest_acked === false).length;
+    return { active: active.length, total: all.length, unacked };
+  }, [deltaCurrentQ.data]);
+  const deltaSyncMin = tvMinutesAgo(deltaStateQ.data?.last_full_sync_at ?? null);
+  const deltaFeedStale =
+    !deltaStateQ.data ||
+    deltaStateQ.data.session_status !== 'ok' ||
+    (deltaSyncMin !== null && deltaSyncMin > 15);
+
+  // §09 — Heartbeats
+  const hbRows = hbQ.data ?? [];
+  const hbAggr = useMemo(() => {
+    const total = hbRows.length;
+    const stale = hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length;
+    return { total, stale, live: total - stale };
+  }, [hbRows]);
+
+  // §10 — Email alarms
+  const emailRows = emailOpenQ.data ?? [];
+  const emailByVendor = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of emailRows) {
+      const v = r.vendor ?? 'unknown';
+      m.set(v, (m.get(v) ?? 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [emailRows]);
+  const emailSyncMin = tvMinutesAgo(emailStateQ.data?.last_run_at ?? null);
+  const emailFeedStale =
+    !emailStateQ.data ||
+    emailStateQ.data.last_run_status !== 'ok' ||
+    (emailSyncMin !== null && emailSyncMin > 15);
+
   return (
-    <Panel title="Focus board" accent="#0ea5e9">
-      {list.length === 0 ? (
-        <p className="tv-muted">No announcements.</p>
-      ) : (
-        <ul className="tv-focus-list">
-          {list.map((it) => (
-            <li key={it.id}>
-              <span className="tv-focus-dot" style={{ background: levelColor[it.level] ?? '#94a3b8' }} />
-              {it.title && <strong>{it.title} · </strong>}
-              {it.body}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
+    <section className="tv-panel tv-bms-panel" style={{ borderTopColor: '#dc2626' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">BMS · alarms + heartbeats</h2>
+        <div className="tv-panel-meta">
+          <span className={deltaFeedStale ? 'tv-bms-feed-stale' : 'tv-bms-feed-live'}>
+            Delta {deltaFeedStale ? 'STALE' : 'live'}
+          </span>
+          <span className="tv-crew-meta-sep" style={{ margin: '0 0.3vw' }}>·</span>
+          <span className={emailFeedStale ? 'tv-bms-feed-stale' : 'tv-bms-feed-live'}>
+            Email {emailFeedStale ? 'STALE' : 'live'}
+          </span>
+        </div>
+      </div>
+      <div className="tv-panel-body tv-bms-body">
+        {/* Stripe 1: §08 Delta direct */}
+        <div className="tv-bms-stripe">
+          <div className="tv-bms-stripe-head">
+            <span className="tv-bms-stripe-tag">§08</span>
+            <span className="tv-bms-stripe-label">Delta direct</span>
+          </div>
+          <div className="tv-bms-stripe-row">
+            <span
+              className="tv-bms-bignum"
+              style={{ color: delta.active > 0 ? '#fca5a5' : '#94a3b8' }}
+            >
+              {delta.active}
+            </span>
+            <span className="tv-bms-bignum-label">active</span>
+            {delta.unacked > 0 && (
+              <span className="tv-bms-secondary">
+                <span className="tv-bms-num" style={{ color: '#fbbf24' }}>{delta.unacked}</span>
+                {' '}unacked
+              </span>
+            )}
+            <span className="tv-bms-secondary tv-bms-secondary-end">
+              {delta.total} open total
+            </span>
+          </div>
+        </div>
+
+        <div className="tv-bms-divider" />
+
+        {/* Stripe 2: §09 Heartbeats */}
+        <div className="tv-bms-stripe">
+          <div className="tv-bms-stripe-head">
+            <span className="tv-bms-stripe-tag">§09</span>
+            <span className="tv-bms-stripe-label">Heartbeats</span>
+            <span className="tv-bms-stripe-meta">
+              {hbAggr.total > 0 ? (
+                <>
+                  <span style={{ color: hbAggr.stale === 0 ? '#34d399' : '#f8fafc', fontWeight: 700 }}>
+                    {hbAggr.live}/{hbAggr.total}
+                  </span> live
+                  {hbAggr.stale > 0 && (
+                    <span style={{ color: '#fca5a5', marginLeft: '0.4vw' }}>· {hbAggr.stale} stale</span>
+                  )}
+                </>
+              ) : '—'}
+            </span>
+          </div>
+          {hbRows.length === 0 ? (
+            <p className="tv-muted" style={{ fontSize: '0.78vw' }}>No heartbeats yet.</p>
+          ) : (
+            <ul className="tv-bms-hb-list">
+              {hbRows.map((r) => {
+                const stale = isHeartbeatStale(r.vendor, r.hours_since);
+                return (
+                  <li key={r.vendor}>
+                    <span className={`tv-bms-hb-dot ${stale ? 'stale' : 'live'}`} />
+                    <span className="tv-bms-hb-name">{shortVendor(r.vendor)}</span>
+                    <span
+                      className="tv-bms-hb-age"
+                      style={{ color: stale ? '#fca5a5' : '#94a3b8' }}
+                    >
+                      {fmtAge(r.hours_since)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="tv-bms-divider" />
+
+        {/* Stripe 3: §10 Email alarms */}
+        <div className="tv-bms-stripe">
+          <div className="tv-bms-stripe-head">
+            <span className="tv-bms-stripe-tag">§10</span>
+            <span className="tv-bms-stripe-label">Email alarms</span>
+            <span className="tv-bms-stripe-meta">
+              {emailByVendor.length} vendor{emailByVendor.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="tv-bms-stripe-row">
+            <span
+              className="tv-bms-bignum"
+              style={{ color: emailRows.length > 0 ? '#fca5a5' : '#94a3b8' }}
+            >
+              {emailRows.length}
+            </span>
+            <span className="tv-bms-bignum-label">active</span>
+          </div>
+          {emailByVendor.length > 0 && (
+            <div className="tv-bms-vendor-line">
+              {emailByVendor.map(([v, n], i) => (
+                <span key={v} className="tv-bms-vendor-item">
+                  {i > 0 && <span className="tv-bms-vendor-sep">·</span>}
+                  <span className="tv-bms-vendor-name">{shortVendor(v)}</span>
+                  <span className="tv-bms-vendor-count">{n}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1339,9 +1540,123 @@ function TvStyles() {
         vertical-align: 0.1em;
       }
 
-      .tv-focus-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4vw; }
-      .tv-focus-list li { font-size: 1.05vw; line-height: 1.3; display: flex; align-items: baseline; gap: 0.4vw; }
-      .tv-focus-dot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+      /* BMS health panel — tri-stripe stack (§08 + §09 + §10).
+         Each stripe has a head row (tag · label · meta) followed by content.
+         Sizes tuned to fit a single TV cell without scrolling. */
+      .tv-bms-panel .tv-panel-meta {
+        font-size: 0.62vw;
+        letter-spacing: 0.10em;
+      }
+      .tv-bms-feed-live  { color: #34d399; font-weight: 700; }
+      .tv-bms-feed-stale { color: #f87171; font-weight: 700; }
+      .tv-bms-body {
+        display: flex; flex-direction: column;
+        gap: 0.25vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-bms-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
+      .tv-bms-stripe {
+        display: flex; flex-direction: column; gap: 0.18vw;
+        min-width: 0;
+      }
+      .tv-bms-stripe-head {
+        display: flex; align-items: baseline; gap: 0.45vw;
+        min-width: 0;
+      }
+      .tv-bms-stripe-tag {
+        font-size: 0.6vw;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
+        flex: 0 0 auto;
+      }
+      .tv-bms-stripe-label {
+        font-size: 0.78vw;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #cbd5e1;
+        font-weight: 600;
+        flex: 0 0 auto;
+      }
+      .tv-bms-stripe-meta {
+        font-size: 0.68vw;
+        color: #94a3b8;
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .tv-bms-stripe-row {
+        display: flex; align-items: baseline; gap: 0.55vw;
+        min-width: 0;
+      }
+      .tv-bms-bignum {
+        font-size: 1.6vw;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .tv-bms-bignum-label {
+        font-size: 0.7vw;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #64748b;
+      }
+      .tv-bms-secondary {
+        font-size: 0.78vw;
+        color: #cbd5e1;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-bms-secondary-end { margin-left: auto; color: #64748b; }
+      .tv-bms-num {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Heartbeat dot row — 5 vendors fit comfortably on one line; wraps if tight. */
+      .tv-bms-hb-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-wrap: wrap;
+        gap: 0.2vw 0.7vw;
+      }
+      .tv-bms-hb-list li {
+        display: inline-flex; align-items: center;
+        gap: 0.3vw;
+        font-size: 0.78vw;
+        line-height: 1.15;
+      }
+      .tv-bms-hb-dot {
+        width: 0.55vw; height: 0.55vw;
+        border-radius: 50%;
+        display: inline-block;
+        flex: 0 0 auto;
+      }
+      .tv-bms-hb-dot.live  { background: #10b981; box-shadow: 0 0 0.3vw rgba(16, 185, 129, 0.5); }
+      .tv-bms-hb-dot.stale { background: #ef4444; box-shadow: 0 0 0.3vw rgba(239, 68, 68, 0.6); }
+      .tv-bms-hb-name {
+        color: #e2e8f0;
+        font-weight: 500;
+      }
+      .tv-bms-hb-age {
+        font-size: 0.7vw;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* §10 vendor breakdown — single-line "Siemens 14 · Delta 9 · 730 3" */
+      .tv-bms-vendor-line {
+        display: flex; flex-wrap: wrap;
+        gap: 0.1vw 0.45vw;
+        font-size: 0.78vw;
+        line-height: 1.2;
+      }
+      .tv-bms-vendor-item { display: inline-flex; align-items: baseline; gap: 0.25vw; }
+      .tv-bms-vendor-sep  { color: #334155; }
+      .tv-bms-vendor-name { color: #cbd5e1; }
+      .tv-bms-vendor-count {
+        color: #f1f5f9;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
 
       /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column.
          Right column gets a left border so the two halves read as distinct cards. */
