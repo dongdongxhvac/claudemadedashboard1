@@ -93,6 +93,91 @@ function nextFridayIso(): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Days between two YYYY-MM-DD dates (b - a, can be negative). */
+function daysBetween(aIso: string, bIso: string): number {
+  return Math.round((new Date(bIso + 'T00:00:00').getTime() - new Date(aIso + 'T00:00:00').getTime()) / 86_400_000);
+}
+
+/** The Friday that started the rotation week containing todayIso, given the
+ *  rotation's start_friday. Returns null if today is before start_friday. */
+function activeWeekStart(startFriday: string, todayIso: string): string | null {
+  const diff = daysBetween(startFriday, todayIso);
+  if (diff < 0) return null;
+  const weeksSince = Math.floor(diff / 7);
+  return addDaysIso(startFriday, weeksSince * 7);
+}
+
+/** Who's actually on call right now, accounting for any active overrides.
+ *  Returns null if rotation isn't configured or today is pre-start. */
+type EffectiveOncall = {
+  scheduled: { user_id: string; full_name: string };
+  effective: { user_id: string; full_name: string };
+  source: 'base' | 'week' | 'day';
+  swapUntil: string | null;
+  reason: string | null;
+};
+function computeEffectiveOncall(
+  participants: OncallParticipant[],
+  startFriday: string,
+  todayIso: string,
+  overrides: CoverageOverride[],
+  engById: Map<string, EngineerRow>,
+): EffectiveOncall | null {
+  if (participants.length === 0) return null;
+  const ws = activeWeekStart(startFriday, todayIso);
+  if (!ws) return null;
+  const N = participants.length;
+  const diff = daysBetween(startFriday, ws);
+  const idx = (Math.floor(diff / 7)) % N;
+  const scheduled = participants[idx];
+  if (!scheduled) return null;
+  const sched = { user_id: scheduled.user_id, full_name: scheduled.full_name };
+
+  // Day override beats week override beats base.
+  const todayDay = overrides.find(
+    (o) => o.kind === 'day'
+        && o.original_user_id === scheduled.user_id
+        && o.starts_on <= todayIso && o.ends_on >= todayIso,
+  );
+  if (todayDay) {
+    const c = engById.get(todayDay.cover_user_id);
+    return {
+      scheduled: sched,
+      effective: { user_id: todayDay.cover_user_id, full_name: c?.full_name ?? '?' },
+      source: 'day',
+      swapUntil: todayDay.ends_on,
+      reason: todayDay.reason,
+    };
+  }
+  const weekOv = overrides.find(
+    (o) => o.kind === 'week'
+        && o.original_user_id === scheduled.user_id
+        && o.starts_on === ws,
+  );
+  if (weekOv) {
+    const c = engById.get(weekOv.cover_user_id);
+    return {
+      scheduled: sched,
+      effective: { user_id: weekOv.cover_user_id, full_name: c?.full_name ?? '?' },
+      source: 'week',
+      swapUntil: weekOv.ends_on,
+      reason: weekOv.reason,
+    };
+  }
+  return {
+    scheduled: sched,
+    effective: sched,
+    source: 'base',
+    swapUntil: null,
+    reason: null,
+  };
+}
+
+/** True if this override is "past" — ends more than 7 days ago. */
+function isPastOverride(o: CoverageOverride, todayIso: string): boolean {
+  return daysBetween(o.ends_on, todayIso) > 7;
+}
+
 // ============================================================================
 // Tab
 // ============================================================================
@@ -111,6 +196,9 @@ export function OncallExperimentTab() {
   const canWrite = !!(me && (me.role === 'admin' || me.is_lead || me.is_manager));
 
   const [showAdd, setShowAdd] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+  // Preset filled when the user clicks a grid cell to add coverage there.
+  const [addPreset, setAddPreset] = useState<{ originalId: string; weekStart: string } | null>(null);
   const del = useDeleteCoverageOverride();
 
   const participants: OncallParticipant[] = useMemo(
@@ -128,6 +216,32 @@ export function OncallExperimentTab() {
     for (const e of engineers) m.set(e.user_id, e);
     return m;
   }, [engineers]);
+
+  // Active vs. past overrides (past = ends_on > 7 days ago).
+  const { activeOverrides, pastOverrides } = useMemo(() => {
+    const active: CoverageOverride[] = [];
+    const past:   CoverageOverride[] = [];
+    for (const o of overrides) {
+      if (isPastOverride(o, todayIso)) past.push(o);
+      else                              active.push(o);
+    }
+    return { activeOverrides: active, pastOverrides: past };
+  }, [overrides, todayIso]);
+
+  // Right-now effective coverage (banner #2).
+  const effective = useMemo(
+    () => startFriday ? computeEffectiveOncall(participants, startFriday, todayIso, overrides, engById) : null,
+    [participants, startFriday, todayIso, overrides, engById],
+  );
+
+  const openAddFromCell = (originalId: string, weekStart: string) => {
+    setAddPreset({ originalId, weekStart });
+    setShowAdd(true);
+  };
+  const closeAdd = () => {
+    setShowAdd(false);
+    setAddPreset(null);
+  };
 
   if (participantsQ.isLoading || settingsQ.isLoading) {
     return <p className="t-text t-muted">Loading rotation…</p>;
@@ -164,11 +278,17 @@ export function OncallExperimentTab() {
         </div>
       </div>
 
+      {/* "Right now" effective coverage */}
+      {effective && <EffectiveNowBanner data={effective} />}
+
       {/* Rotation grid with override overlays */}
       <div className="t-card" style={{ padding: '0.5rem 1rem' }}>
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="t-section-title" style={{ fontSize: '1rem' }}>Rotation (live, read-only) · with overrides</h3>
-          <p className="t-small t-muted">* = week swap · D = day swap</p>
+          <p className="t-small t-muted">
+            * = week swap · D = day swap
+            {canWrite && <span style={{ marginLeft: 8, color: '#7e22ce' }}>· click any cell to add coverage</span>}
+          </p>
         </div>
         <OverrideGrid
           participants={participants}
@@ -177,6 +297,7 @@ export function OncallExperimentTab() {
           todayIso={todayIso}
           overrides={overrides}
           engById={engById}
+          onCellClick={canWrite ? openAddFromCell : undefined}
         />
       </div>
 
@@ -185,11 +306,13 @@ export function OncallExperimentTab() {
         <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
           <h3 className="t-section-title" style={{ fontSize: '1rem' }}>
             Coverage overrides
-            <span className="ml-2 t-small t-muted">({overrides.length})</span>
+            <span className="ml-2 t-small t-muted">
+              ({activeOverrides.length} active{pastOverrides.length > 0 && ` · ${pastOverrides.length} past`})
+            </span>
           </h3>
           {canWrite && (
             <button
-              onClick={() => setShowAdd(true)}
+              onClick={() => { setAddPreset(null); setShowAdd(true); }}
               className="t-small px-3 py-1 rounded border font-medium text-white"
               style={{ background: '#7e22ce', borderColor: '#7e22ce' }}
             >
@@ -197,7 +320,7 @@ export function OncallExperimentTab() {
             </button>
           )}
         </div>
-        {overrides.length === 0 ? (
+        {activeOverrides.length === 0 && pastOverrides.length === 0 ? (
           <p className="t-text t-muted italic">No overrides yet.</p>
         ) : (
           <table className="min-w-full t-text border-collapse">
@@ -211,10 +334,14 @@ export function OncallExperimentTab() {
               </tr>
             </thead>
             <tbody>
-              {overrides
+              {([
+                ...activeOverrides,
+                ...(showPast ? pastOverrides : []),
+              ])
                 .slice()
                 .sort((a, b) => a.starts_on.localeCompare(b.starts_on))
                 .map((o) => {
+                  const past = isPastOverride(o, todayIso);
                   const orig = engById.get(o.original_user_id);
                   const cov  = engById.get(o.cover_user_id);
                   const whenStr = o.kind === 'week'
@@ -223,7 +350,14 @@ export function OncallExperimentTab() {
                       ? `${dayName(o.starts_on)} ${fmtMd(o.starts_on)}`
                       : `${dayName(o.starts_on)} ${fmtMd(o.starts_on)} – ${dayName(o.ends_on)} ${fmtMd(o.ends_on)}`;
                   return (
-                    <tr key={o.id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
+                    <tr
+                      key={o.id}
+                      className="border-b"
+                      style={{
+                        borderColor: 'var(--color-border-soft)',
+                        opacity: past ? 0.5 : 1,
+                      }}
+                    >
                       <td className="py-1 pr-2">
                         <span
                           className="t-small px-1.5 py-0.5 rounded"
@@ -258,6 +392,14 @@ export function OncallExperimentTab() {
             </tbody>
           </table>
         )}
+        {pastOverrides.length > 0 && (
+          <button
+            onClick={() => setShowPast((v) => !v)}
+            className="t-small t-muted hover:underline mt-2"
+          >
+            {showPast ? '▴ Hide past overrides' : `▾ Show ${pastOverrides.length} past`}
+          </button>
+        )}
       </div>
 
       {showAdd && (
@@ -266,9 +408,58 @@ export function OncallExperimentTab() {
           engById={engById}
           startFriday={startFriday}
           rotations={rotations}
-          onClose={() => setShowAdd(false)}
+          overrides={overrides}
+          preset={addPreset}
+          onClose={closeAdd}
         />
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// "Right now" banner
+// ============================================================================
+
+function EffectiveNowBanner({ data }: { data: EffectiveOncall }) {
+  const covered = data.source !== 'base';
+  const bg     = covered ? 'rgba(20,184,166,0.10)' : 'rgba(34,197,94,0.10)';
+  const border = covered ? '#14b8a6' : '#10b981';
+  const tag    = covered ? (data.source === 'week' ? 'WEEK SWAP' : 'DAY SWAP') : 'BASE ROTATION';
+  const tagBg  = covered
+    ? (data.source === 'week' ? 'rgba(168,85,247,0.18)' : 'rgba(20,184,166,0.18)')
+    : 'rgba(34,197,94,0.18)';
+  const tagFg  = covered
+    ? (data.source === 'week' ? '#7e22ce' : '#0f766e')
+    : '#15803d';
+  return (
+    <div
+      className="t-card"
+      style={{ padding: '0.6rem 1rem', background: bg, borderLeft: `4px solid ${border}` }}
+    >
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="t-small t-muted uppercase tracking-wider">Right now</span>
+          <span className="t-section-title" style={{ display: 'inline-block', fontSize: '1.05rem' }}>
+            {data.effective.full_name}
+          </span>
+          {covered && (
+            <span className="t-small t-muted">
+              covering for <strong style={{ color: 'var(--color-text)' }}>{data.scheduled.full_name}</strong>
+              {data.swapUntil && (
+                <> until <span className="t-mono">{data.swapUntil}</span></>
+              )}
+              {data.reason && <> · {data.reason}</>}
+            </span>
+          )}
+        </div>
+        <span
+          className="t-small px-2 py-0.5 rounded"
+          style={{ background: tagBg, color: tagFg, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}
+        >
+          {tag}
+        </span>
+      </div>
     </div>
   );
 }
@@ -278,7 +469,7 @@ export function OncallExperimentTab() {
 // ============================================================================
 
 function OverrideGrid({
-  participants, startFriday, rotations, todayIso, overrides, engById,
+  participants, startFriday, rotations, todayIso, overrides, engById, onCellClick,
 }: {
   participants: OncallParticipant[];
   startFriday: string;
@@ -286,6 +477,7 @@ function OverrideGrid({
   todayIso: string;
   overrides: CoverageOverride[];
   engById: Map<string, EngineerRow>;
+  onCellClick?: (originalId: string, weekStart: string) => void;
 }) {
   const visibleCycles = rotations + 1;
   const columnIndices = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
@@ -359,6 +551,10 @@ function OverrideGrid({
                   const dim       = isPreview || isPrev;
                   const hasWeek = !!info.weekOverride;
                   const hasDay  = info.dayOverrides.length > 0;
+                  // Cells are clickable only when add-mode is available AND
+                  // the cell isn't a past cycle (no point assigning coverage
+                  // for a week that's already over).
+                  const clickable = !!onCellClick && !isPrev && !info.preEffective;
                   const coverName = info.weekOverride
                     ? shortName(engById.get(info.weekOverride.cover_user_id)?.full_name)
                     : null;
@@ -377,8 +573,10 @@ function OverrideGrid({
                     <td
                       key={c}
                       className="py-1 px-1.5 text-center t-mono whitespace-nowrap"
-                      title={tooltip || undefined}
+                      title={clickable ? (tooltip ? `${tooltip}\n\nClick to add coverage` : 'Click to add coverage') : (tooltip || undefined)}
+                      onClick={clickable ? () => onCellClick!(p.user_id, info.weekStart) : undefined}
                       style={{
+                        cursor: clickable ? 'pointer' : undefined,
                         background: hasWeek
                           ? 'rgba(168,85,247,0.18)'
                           : hasDay
@@ -427,25 +625,37 @@ function OverrideGrid({
 // Add-coverage modal
 // ============================================================================
 
+/** UI mode for the modal — adds 'swap' on top of the DB-level kinds. */
+type ModalMode = 'week' | 'day' | 'swap';
+
 function AddCoverageModal({
-  participants, engById, startFriday, rotations, onClose,
+  participants, engById, startFriday, rotations, overrides, preset, onClose,
 }: {
   participants: OncallParticipant[];
   engById: Map<string, EngineerRow>;
   startFriday: string;
   rotations: number;
+  overrides: CoverageOverride[];
+  preset: { originalId: string; weekStart: string } | null;
   onClose: () => void;
 }) {
   const create = useCreateCoverageOverride();
-  const [kind, setKind]                 = useState<OverrideKind>('week');
-  const [originalId, setOriginalId]     = useState<string>('');
+  const del    = useDeleteCoverageOverride();
+  const [mode, setMode]                 = useState<ModalMode>('week');
+  const [originalId, setOriginalId]     = useState<string>(preset?.originalId ?? '');
   const [coverId, setCoverId]           = useState<string>('');
-  const [weekStart, setWeekStart]       = useState<string>(nextFridayIso());
+  const [weekStart, setWeekStart]       = useState<string>(preset?.weekStart ?? nextFridayIso());
   const todayStr = new Date().toISOString().slice(0, 10);
   const [dayStart, setDayStart]         = useState<string>(todayStr);
   const [dayEnd, setDayEnd]             = useState<string>('');  // empty = single day = dayStart
+  // Swap-mode state: two engineers and two weeks. Engineer A defaults to the
+  // preset engineer (the row whose cell was clicked).
+  const [swapAId, setSwapAId]           = useState<string>(preset?.originalId ?? '');
+  const [swapBId, setSwapBId]           = useState<string>('');
+  const [swapAWeek, setSwapAWeek]       = useState<string>(preset?.weekStart ?? nextFridayIso());
+  const [swapBWeek, setSwapBWeek]       = useState<string>(nextFridayIso());
   const [reason, setReason]             = useState('');
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr]                   = useState<string | null>(null);
 
   // Engineer options for "Cover with": all active engineers minus the chosen original.
   const coverOptions = useMemo(() => {
@@ -467,21 +677,142 @@ function AddCoverageModal({
       .sort((a, b) => a.full_name.localeCompare(b.full_name));
   }, [participants, engById]);
 
+  /** Return a conflict-error string for a candidate override, or null if OK.
+   *  Examples:
+   *   - Duplicate week override on same engineer+week
+   *   - Day-range overlapping an existing day-range on same engineer
+   *   - (For week kind) Already-existing day overrides inside that week are
+   *     allowed but produce a confirm() warning, not a hard reject. */
+  function findConflict(
+    candKind: OverrideKind, candOriginalId: string,
+    candStartsOn: string, candEndsOn: string,
+  ): { hard: string | null; soft: string | null } {
+    if (candKind === 'week') {
+      const dup = overrides.find(
+        (o) => o.kind === 'week' && o.original_user_id === candOriginalId && o.starts_on === candStartsOn,
+      );
+      if (dup) {
+        const c = engById.get(dup.cover_user_id)?.full_name ?? '?';
+        return { hard: `A week swap already exists for this engineer & week (covered by ${c}). Remove that first.`, soft: null };
+      }
+      // Soft warn if existing day swaps fall inside this week.
+      const dayInside = overrides.filter(
+        (o) => o.kind === 'day'
+            && o.original_user_id === candOriginalId
+            && o.starts_on <= candEndsOn && o.ends_on >= candStartsOn,
+      );
+      if (dayInside.length > 0) {
+        return {
+          hard: null,
+          soft: `This engineer already has ${dayInside.length} day swap${dayInside.length === 1 ? '' : 's'} inside the same week. The week swap will visually take precedence in the grid.`,
+        };
+      }
+    } else {
+      // day kind: reject any overlapping day-range on same engineer.
+      const overlap = overrides.find(
+        (o) => o.kind === 'day'
+            && o.original_user_id === candOriginalId
+            && o.starts_on <= candEndsOn && o.ends_on >= candStartsOn,
+      );
+      if (overlap) {
+        const c = engById.get(overlap.cover_user_id)?.full_name ?? '?';
+        const whenStr = overlap.starts_on === overlap.ends_on
+          ? overlap.starts_on
+          : `${overlap.starts_on}–${overlap.ends_on}`;
+        return { hard: `Overlapping day swap already exists (${whenStr} → ${c}). Remove that first.`, soft: null };
+      }
+      // Soft warn if an existing week swap covers any of these days.
+      const weekCovers = overrides.find(
+        (o) => o.kind === 'week'
+            && o.original_user_id === candOriginalId
+            && o.starts_on <= candEndsOn && o.ends_on >= candStartsOn,
+      );
+      if (weekCovers) {
+        const c = engById.get(weekCovers.cover_user_id)?.full_name ?? '?';
+        return {
+          hard: null,
+          soft: `A week swap (covered by ${c}) is already active across these days. This day swap will be visually shadowed by the week swap.`,
+        };
+      }
+    }
+    return { hard: null, soft: null };
+  }
+
   const submit = async () => {
     setErr(null);
+
+    if (mode === 'swap') {
+      // ── Bidirectional week trade: 2 overrides as one logical operation.
+      if (!swapAId || !swapBId)             { setErr('Pick both engineers.'); return; }
+      if (swapAId === swapBId)              { setErr('Pick two different engineers.'); return; }
+      if (!isFriday(swapAWeek))             { setErr('Engineer A’s week must start on a Friday.'); return; }
+      if (!isFriday(swapBWeek))             { setErr('Engineer B’s week must start on a Friday.'); return; }
+      if (swapAWeek === swapBWeek)          { setErr('Pick two different weeks to swap.'); return; }
+
+      // Each direction = original (engineer being covered) + cover (covering engineer).
+      // A wants B's week → original=B, cover=A, week=B's
+      // B wants A's week → original=A, cover=B, week=A's
+      const dir1 = { original: swapBId, cover: swapAId, week: swapBWeek };
+      const dir2 = { original: swapAId, cover: swapBId, week: swapAWeek };
+
+      const c1 = findConflict('week', dir1.original, dir1.week, addDaysIso(dir1.week, 6));
+      const c2 = findConflict('week', dir2.original, dir2.week, addDaysIso(dir2.week, 6));
+      if (c1.hard) { setErr(`Direction 1: ${c1.hard}`); return; }
+      if (c2.hard) { setErr(`Direction 2: ${c2.hard}`); return; }
+      const softs = [c1.soft, c2.soft].filter(Boolean);
+      if (softs.length > 0 && !confirm(`${softs.join('\n\n')}\n\nContinue?`)) return;
+
+      let firstRowId: string | null = null;
+      try {
+        const firstRow = await create.mutateAsync({
+          original_user_id: dir1.original,
+          cover_user_id:    dir1.cover,
+          kind: 'week',
+          starts_on:        dir1.week,
+          ends_on:          addDaysIso(dir1.week, 6),
+          reason:           reason.trim() ? `${reason.trim()} (swap)` : 'swap',
+        }) as { id: string };
+        firstRowId = firstRow?.id ?? null;
+        await create.mutateAsync({
+          original_user_id: dir2.original,
+          cover_user_id:    dir2.cover,
+          kind: 'week',
+          starts_on:        dir2.week,
+          ends_on:          addDaysIso(dir2.week, 6),
+          reason:           reason.trim() ? `${reason.trim()} (swap)` : 'swap',
+        });
+        onClose();
+      } catch (e) {
+        // Second insert failed — roll back first to avoid orphan half-swap.
+        if (firstRowId) {
+          try { await del.mutateAsync(firstRowId); } catch { /* best-effort */ }
+        }
+        setErr(`Swap failed: ${(e as Error).message}`);
+      }
+      return;
+    }
+
+    // ── Single coverage (week or day)
     if (!originalId) { setErr('Pick the engineer being covered.'); return; }
     if (!coverId)    { setErr('Pick the engineer covering.');     return; }
+    if (originalId === coverId) {
+      setErr('Engineer covering must be different from engineer being covered.');
+      return;
+    }
 
+    let kind: OverrideKind;
     let startsOn: string;
     let endsOn:   string;
-    if (kind === 'week') {
+    if (mode === 'week') {
+      kind = 'week';
       if (!weekStart || !isFriday(weekStart)) {
         setErr('Week swaps must start on a Friday (matches the rotation cutover).');
         return;
       }
       startsOn = weekStart;
-      endsOn   = addDaysIso(weekStart, 6); // inclusive end = Thursday
+      endsOn   = addDaysIso(weekStart, 6);
     } else {
+      kind = 'day';
       if (!dayStart) { setErr('Pick a start date.'); return; }
       const effectiveEnd = dayEnd || dayStart;
       if (effectiveEnd < dayStart) {
@@ -491,6 +822,10 @@ function AddCoverageModal({
       startsOn = dayStart;
       endsOn   = effectiveEnd;
     }
+
+    const conflict = findConflict(kind, originalId, startsOn, endsOn);
+    if (conflict.hard) { setErr(conflict.hard); return; }
+    if (conflict.soft && !confirm(`${conflict.soft}\n\nContinue?`)) return;
 
     try {
       await create.mutateAsync({
@@ -547,26 +882,129 @@ function AddCoverageModal({
 
         <div className="flex items-center gap-2 mb-3">
           <button
-            onClick={() => setKind('week')}
+            onClick={() => setMode('week')}
             className="t-small px-3 py-1 rounded border font-medium"
             style={
-              kind === 'week'
+              mode === 'week'
                 ? { background: '#a855f7', borderColor: '#a855f7', color: 'white' }
                 : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
             }
           >Full week</button>
           <button
-            onClick={() => setKind('day')}
+            onClick={() => setMode('day')}
             className="t-small px-3 py-1 rounded border font-medium"
             style={
-              kind === 'day'
+              mode === 'day'
                 ? { background: '#14b8a6', borderColor: '#14b8a6', color: 'white' }
                 : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
             }
           >Day(s)</button>
+          <button
+            onClick={() => setMode('swap')}
+            className="t-small px-3 py-1 rounded border font-medium"
+            style={
+              mode === 'swap'
+                ? { background: '#ea580c', borderColor: '#ea580c', color: 'white' }
+                : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+            }
+            title="Bidirectional week trade: A covers B's week AND B covers A's week"
+          >Swap ⇄</button>
         </div>
 
+        {mode === 'swap' && (
+          <p className="t-small t-muted mb-3" style={{ paddingLeft: 2 }}>
+            <strong>Swap mode</strong> trades two engineers' weeks. Creates 2 override rows in one click — A covers B's week, B covers A's week.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
+          {mode === 'swap' ? (
+            <>
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer A</span>
+                <select
+                  value={swapAId}
+                  onChange={(e) => setSwapAId(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                >
+                  <option value="">— pick —</option>
+                  {originalOptions.map((e) => (
+                    <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer B</span>
+                <select
+                  value={swapBId}
+                  onChange={(e) => setSwapBId(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                >
+                  <option value="">— pick —</option>
+                  {originalOptions
+                    .filter((e) => e.user_id !== swapAId)
+                    .map((e) => (
+                      <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">A's week (Friday)</span>
+                <input
+                  type="date"
+                  value={swapAWeek}
+                  onChange={(e) => setSwapAWeek(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text t-mono"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                />
+                {swapAWeek && !isFriday(swapAWeek) && (
+                  <p className="t-small mt-1" style={{ color: 'var(--color-warn)' }}>Pick a Friday.</p>
+                )}
+              </label>
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">B's week (Friday)</span>
+                <input
+                  type="date"
+                  value={swapBWeek}
+                  onChange={(e) => setSwapBWeek(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text t-mono"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                />
+                {swapBWeek && !isFriday(swapBWeek) && (
+                  <p className="t-small mt-1" style={{ color: 'var(--color-warn)' }}>Pick a Friday.</p>
+                )}
+              </label>
+
+              {upcomingFridays.length > 0 && (
+                <div className="col-span-2 t-small t-muted">
+                  Quick pick (click then choose A or B):{' '}
+                  {upcomingFridays.slice(0, 10).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => {
+                        // Tap-cycle: empty A first, then empty B, otherwise overwrite A.
+                        if (!swapAWeek || swapAWeek === nextFridayIso()) setSwapAWeek(d);
+                        else if (!swapBWeek || swapBWeek === nextFridayIso()) setSwapBWeek(d);
+                        else setSwapAWeek(d);
+                      }}
+                      className="t-small px-1.5 py-0.5 rounded border ml-1"
+                      style={
+                        swapAWeek === d
+                          ? { background: '#ea580c', borderColor: '#ea580c', color: 'white' }
+                          : swapBWeek === d
+                            ? { background: '#fb923c', borderColor: '#fb923c', color: 'white' }
+                            : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+                      }
+                    >{fmtMd(d)}</button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+          <>
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer being covered</span>
             <select
@@ -597,7 +1035,7 @@ function AddCoverageModal({
             </select>
           </label>
 
-          {kind === 'week' ? (
+          {mode === 'week' ? (
             <label className="block col-span-2">
               <span className="t-small t-muted uppercase tracking-wider block mb-1">
                 Week start (Friday) <span className="t-muted">— covers Fri–Thu</span>
@@ -670,6 +1108,8 @@ function AddCoverageModal({
               </label>
             </>
           )}
+          </>
+          )}
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Reason (optional)</span>
@@ -696,9 +1136,15 @@ function AddCoverageModal({
             onClick={submit}
             disabled={create.isPending}
             className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
-            style={{ background: kind === 'week' ? '#7e22ce' : '#0f766e' }}
+            style={{
+              background: mode === 'swap' ? '#ea580c'
+                        : mode === 'week' ? '#7e22ce'
+                        : '#0f766e',
+            }}
           >
-            {create.isPending ? 'Adding…' : 'Add coverage'}
+            {create.isPending
+              ? (mode === 'swap' ? 'Creating swap…' : 'Adding…')
+              : (mode === 'swap' ? 'Create swap (2 rows)' : 'Add coverage')}
           </button>
         </div>
       </div>
