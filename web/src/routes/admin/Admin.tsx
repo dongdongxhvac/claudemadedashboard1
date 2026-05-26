@@ -4,10 +4,11 @@ import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { UserProfilesTab } from './UserProfilesTab';
 import { OncallTab } from './OncallTab';
+import { OncallExperimentTab } from './OncallExperimentTab';
 import { BuildingsTab } from './BuildingsTab';
 import { RoundsTab } from './RoundsTab';
 
-type Tab = 'users' | 'oncall' | 'buildings' | 'rounds';
+type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -61,6 +62,9 @@ export default function Admin() {
               <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
                 On-call
               </TabButton>
+              <TabButton active={tab === 'oncall_experiment'} onClick={() => setTab('oncall_experiment')}>
+                Temp Coverage <span className="t-small ml-1 px-1 rounded" style={{ background: 'rgba(168,85,247,0.18)', color: '#7e22ce', fontSize: 9, fontWeight: 600, letterSpacing: '0.5px' }}>EXP</span>
+              </TabButton>
               <TabButton active={tab === 'buildings'} onClick={() => setTab('buildings')}>
                 Bldg Assign
               </TabButton>
@@ -69,10 +73,11 @@ export default function Admin() {
               </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
-            {tab === 'users'     && <UserProfilesTab canManageUsers={isAdmin} />}
-            {tab === 'oncall'    && <OncallTab />}
-            {tab === 'buildings' && <BuildingsTab />}
-            {tab === 'rounds'    && <RoundsTab />}
+            {tab === 'users'             && <UserProfilesTab canManageUsers={isAdmin} />}
+            {tab === 'oncall'            && <OncallTab />}
+            {tab === 'oncall_experiment' && <OncallExperimentTab />}
+            {tab === 'buildings'         && <BuildingsTab />}
+            {tab === 'rounds'            && <RoundsTab />}
           </div>
         )}
       </main>
