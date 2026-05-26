@@ -190,7 +190,7 @@ export function BmsEmailAlarmsPanel() {
     () => (hbQ.data ?? []).find((r) => r.vendor === 'power_automate') ?? null,
     [hbQ.data],
   );
-  const paStale = paHb ? paHb.hours_since > 1 : null; // null = not configured yet
+  const paStale = paHb ? paHb.hours_since > 2.5 : null; // null = not configured yet; 30-min cadence with 2.5h tolerance
   const paLastSeen = paHb?.last_seen_utc ?? null;
 
   const subtitle = (

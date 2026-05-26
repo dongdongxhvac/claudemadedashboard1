@@ -26,10 +26,11 @@ import { Section } from './Section';
 //   - Mon before noon ET, last expected HB was Friday (allow up to ~80h)
 //   - Sat/Sun, last expected HB was Friday
 //
-// Power Automate heartbeat fires every 15 min, 24/7. Independent cadence,
-// no weekday logic. >1h is stale (covers 4 missed cycles).
+// Power Automate heartbeat fires every 30 min, 24/7. Independent cadence,
+// no weekday logic. >2.5h is stale (covers 4-5 missed cycles — tolerates
+// transient PA delays but catches a real outage within ~2-3 h).
 function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
-  if (vendor === 'power_automate') return hoursSince > 1;
+  if (vendor === 'power_automate') return hoursSince > 2.5;
   const now = new Date();
   const etNow = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
