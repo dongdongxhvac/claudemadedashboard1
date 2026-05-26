@@ -50,10 +50,38 @@ function dayName(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
 }
 
-/** Date is inside [weekStart, weekStart+7). All YYYY-MM-DD strings. */
-function dateInWeek(date: string, weekStart: string): boolean {
-  const end = addDaysIso(weekStart, 7);
-  return weekStart <= date && date < end;
+/** True if any day in [startsOn, endsOn] (inclusive) falls inside the
+ *  Fri–Thu window starting at weekStart. */
+function rangeOverlapsWeek(startsOn: string, endsOn: string, weekStart: string): boolean {
+  const weekEnd = addDaysIso(weekStart, 7); // exclusive Friday-of-next-week
+  // overlap iff startsOn < weekEnd AND endsOn >= weekStart
+  return startsOn < weekEnd && endsOn >= weekStart;
+}
+
+/** Enumerate the YYYY-MM-DD dates of [startsOn, endsOn] that fall inside
+ *  the given week. Used to render which specific days inside a cell are
+ *  covered by a multi-day swap that straddles week boundaries. */
+function datesInRangeAndWeek(startsOn: string, endsOn: string, weekStart: string): string[] {
+  const out: string[] = [];
+  const weekEnd = addDaysIso(weekStart, 7);
+  let cur = startsOn > weekStart ? startsOn : weekStart;
+  while (cur <= endsOn && cur < weekEnd) {
+    out.push(cur);
+    cur = addDaysIso(cur, 1);
+  }
+  return out;
+}
+
+/** "Mon" / "Mon–Wed" / "Mon 5/26–Wed 5/28" — compact summary of a date list. */
+function compactDays(dates: string[]): string {
+  if (dates.length === 0) return '—';
+  if (dates.length === 1) return dayName(dates[0]);
+  // Are they consecutive?
+  const allConsecutive = dates.every((d, i) => i === 0 || d === addDaysIso(dates[i - 1], 1));
+  if (allConsecutive) {
+    return `${dayName(dates[0])}–${dayName(dates[dates.length - 1])}`;
+  }
+  return dates.map(dayName).join(', ');
 }
 
 /** Next upcoming Friday from today (today if today is Friday). */
@@ -191,7 +219,9 @@ export function OncallExperimentTab() {
                   const cov  = engById.get(o.cover_user_id);
                   const whenStr = o.kind === 'week'
                     ? `Week of ${fmtMd(o.starts_on)}`
-                    : `${dayName(o.starts_on)} ${fmtMd(o.starts_on)}`;
+                    : o.starts_on === o.ends_on
+                      ? `${dayName(o.starts_on)} ${fmtMd(o.starts_on)}`
+                      : `${dayName(o.starts_on)} ${fmtMd(o.starts_on)} – ${dayName(o.ends_on)} ${fmtMd(o.ends_on)}`;
                   return (
                     <tr key={o.id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
                       <td className="py-1 pr-2">
@@ -273,11 +303,12 @@ function OverrideGrid({
           && o.original_user_id === p.user_id
           && o.starts_on === weekStart,
     );
-    // Find any day overrides whose date falls inside this week for this engineer.
+    // Find any day-kind overrides whose date range overlaps this week.
+    // (Multi-day swaps that straddle week boundaries appear in each affected week.)
     const dayOverrides = overrides.filter(
       (o) => o.kind === 'day'
           && o.original_user_id === p.user_id
-          && dateInWeek(o.starts_on, weekStart),
+          && rangeOverlapsWeek(o.starts_on, o.ends_on, weekStart),
     );
 
     return {
@@ -331,11 +362,16 @@ function OverrideGrid({
                   const coverName = info.weekOverride
                     ? shortName(engById.get(info.weekOverride.cover_user_id)?.full_name)
                     : null;
+                  // Build a tooltip line per override, including multi-day spans.
                   const tooltip = [
                     info.weekOverride && `WEEK swap → ${engById.get(info.weekOverride.cover_user_id)?.full_name ?? '?'}`,
-                    ...info.dayOverrides.map((o) =>
-                      `DAY ${dayName(o.starts_on)} ${o.starts_on} → ${engById.get(o.cover_user_id)?.full_name ?? '?'}`,
-                    ),
+                    ...info.dayOverrides.map((o) => {
+                      const cov = engById.get(o.cover_user_id)?.full_name ?? '?';
+                      if (o.starts_on === o.ends_on) {
+                        return `DAY ${dayName(o.starts_on)} ${o.starts_on} → ${cov}`;
+                      }
+                      return `DAYS ${o.starts_on} → ${o.ends_on} → ${cov}`;
+                    }),
                   ].filter(Boolean).join('\n');
                   return (
                     <td
@@ -367,7 +403,11 @@ function OverrideGrid({
                       {hasDay && !hasWeek && (
                         <div className="t-small" style={{ color: '#0f766e', fontWeight: 600 }}>
                           {info.dayOverrides.length === 1
-                            ? `${dayName(info.dayOverrides[0].starts_on)} → ${shortName(engById.get(info.dayOverrides[0].cover_user_id)?.full_name)}`
+                            ? `${compactDays(datesInRangeAndWeek(
+                                info.dayOverrides[0].starts_on,
+                                info.dayOverrides[0].ends_on,
+                                info.weekStart,
+                              ))} → ${shortName(engById.get(info.dayOverrides[0].cover_user_id)?.full_name)}`
                             : `${info.dayOverrides.length} day swaps`}
                         </div>
                       )}
@@ -401,7 +441,9 @@ function AddCoverageModal({
   const [originalId, setOriginalId]     = useState<string>('');
   const [coverId, setCoverId]           = useState<string>('');
   const [weekStart, setWeekStart]       = useState<string>(nextFridayIso());
-  const [dayDate, setDayDate]           = useState<string>(new Date().toISOString().slice(0, 10));
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [dayStart, setDayStart]         = useState<string>(todayStr);
+  const [dayEnd, setDayEnd]             = useState<string>('');  // empty = single day = dayStart
   const [reason, setReason]             = useState('');
   const [err, setErr] = useState<string | null>(null);
 
@@ -440,9 +482,14 @@ function AddCoverageModal({
       startsOn = weekStart;
       endsOn   = addDaysIso(weekStart, 6); // inclusive end = Thursday
     } else {
-      if (!dayDate) { setErr('Pick a date.'); return; }
-      startsOn = dayDate;
-      endsOn   = dayDate;
+      if (!dayStart) { setErr('Pick a start date.'); return; }
+      const effectiveEnd = dayEnd || dayStart;
+      if (effectiveEnd < dayStart) {
+        setErr('End date can’t be before start date.');
+        return;
+      }
+      startsOn = dayStart;
+      endsOn   = effectiveEnd;
     }
 
     try {
@@ -516,7 +563,7 @@ function AddCoverageModal({
                 ? { background: '#14b8a6', borderColor: '#14b8a6', color: 'white' }
                 : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
             }
-          >One day</button>
+          >Day(s)</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -586,19 +633,42 @@ function AddCoverageModal({
               )}
             </label>
           ) : (
-            <label className="block col-span-2">
-              <span className="t-small t-muted uppercase tracking-wider block mb-1">Day</span>
-              <input
-                type="date"
-                value={dayDate}
-                onChange={(e) => setDayDate(e.target.value)}
-                className="border rounded px-2 py-1 t-text t-mono"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-              />
-              {dayDate && (
-                <p className="t-small t-muted mt-1">{dayName(dayDate)} {fmtMd(dayDate)}</p>
-              )}
-            </label>
+            <>
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">Start date</span>
+                <input
+                  type="date"
+                  value={dayStart}
+                  onChange={(e) => setDayStart(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text t-mono"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                />
+                {dayStart && (
+                  <p className="t-small t-muted mt-1">{dayName(dayStart)} {fmtMd(dayStart)}</p>
+                )}
+              </label>
+              <label className="block">
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">
+                  End date <span className="t-muted">(blank = single day)</span>
+                </span>
+                <input
+                  type="date"
+                  value={dayEnd}
+                  min={dayStart || undefined}
+                  onChange={(e) => setDayEnd(e.target.value)}
+                  className="w-full border rounded px-2 py-1 t-text t-mono"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                />
+                {dayEnd && dayStart && dayEnd >= dayStart && (
+                  <p className="t-small t-muted mt-1">
+                    {dayName(dayEnd)} {fmtMd(dayEnd)}{' · '}
+                    {dayEnd === dayStart
+                      ? '1 day'
+                      : `${Math.round((new Date(dayEnd).getTime() - new Date(dayStart).getTime()) / 86_400_000) + 1} days`}
+                  </p>
+                )}
+              </label>
+            </>
           )}
 
           <label className="block col-span-2">
