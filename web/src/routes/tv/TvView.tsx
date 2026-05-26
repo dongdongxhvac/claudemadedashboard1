@@ -5,8 +5,8 @@
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ WORKLOAD +       │ BMS HEALTH       │ (open slot — TBD)            │
-//   │ PERFORMANCE      │ §08 + §09 + §10  │                              │
+//   │ WORKLOAD +       │ BMS HEALTH       │ §11 OVERTIME                 │
+//   │ PERFORMANCE      │ §08 + §09 + §10  │  (open posts, read-only)     │
 //   │  · Workload      ├──────────────────┼──────────────────────────────┤
 //   │  · Crew 7d       │ BUILDINGS        │ ON-CALL SCHEDULE             │
 //   │  · Recent closes │ (rounds + assign)│ (whole table)                │
@@ -27,6 +27,14 @@ import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useDeltaAlarmsCurrent, useDeltaPollState } from '../../hooks/useDeltaAlarms';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
+import {
+  useOvertimePosts,
+  useOvertimeRealtime,
+  OVERTIME_CATEGORY_LABELS,
+  OVERTIME_CATEGORY_ORDER,
+  type OvertimeCategory,
+  type OvertimePost,
+} from '../../hooks/useOvertime';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -109,8 +117,8 @@ export default function TvView() {
         />
         {/* Middle column — top: consolidated BMS health (§08 + §09 + §10) */}
         <BmsHealthPanel />
-        {/* Right column top */}
-        <EmptyPanel />
+        {/* Right column top — §11 Upcoming overtime (read-only) */}
+        <OvertimeTvPanel />
         {/* Middle column bottom */}
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
@@ -235,14 +243,6 @@ function Panel({ title, children, accent, meta }: { title: string; children: Rea
         {meta && <div className="tv-panel-meta">{meta}</div>}
       </div>
       <div className="tv-panel-body">{children}</div>
-    </section>
-  );
-}
-
-function EmptyPanel() {
-  return (
-    <section className="tv-panel tv-panel-empty">
-      <p className="tv-muted" style={{ fontSize: '1.0vw' }}>—</p>
     </section>
   );
 }
@@ -1201,6 +1201,127 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
 }
 
 
+// ============================================================================
+// §11 Overtime — read-only TV variant
+// ============================================================================
+//
+// Compact list of OPEN overtime posts. One line per post: when · building ·
+// short scope · category dot · X/Y filled with name chips. Up to 8 visible —
+// the rest fold into a "+N more" line so the panel never scrolls.
+
+const TV_CATEGORY_DOT: Record<OvertimeCategory, string> = {
+  cold_weather:      '#60a5fa',
+  major_off_hour_pm: '#a78bfa',
+  off_hour_repair:   '#fb923c',
+  vendor_escort:     '#f472b6',
+};
+
+function fmtOvertimeWhen(starts: string, ends: string | null): string {
+  const s = new Date(starts);
+  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
+  const sT = s.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+              .replace(/\s/g, '').toLowerCase();
+  if (!ends) return `${dStr} ${sT}`;
+  const e = new Date(ends);
+  const eT = e.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+              .replace(/\s/g, '').toLowerCase();
+  const sameDay =
+    s.getFullYear() === e.getFullYear() &&
+    s.getMonth() === e.getMonth() &&
+    s.getDate() === e.getDate();
+  return sameDay ? `${dStr} ${sT}–${eT}` : `${dStr} ${sT}+`;
+}
+
+function tvBuildingLabel(p: OvertimePost): string {
+  return p.building_short_code ?? p.building_code ?? p.building_label ?? '—';
+}
+
+function OvertimeTvPanel() {
+  useOvertimeRealtime();
+  const postsQ = useOvertimePosts();
+  const open = (postsQ.data ?? []).filter((p) => p.status === 'open');
+  const visible = open.slice(0, 8);
+  const overflow = open.length - visible.length;
+
+  // Count open slots per category, used in the title-row meta.
+  const catTotals = useMemo(() => {
+    const map: Record<OvertimeCategory, number> = {
+      cold_weather: 0, major_off_hour_pm: 0, off_hour_repair: 0, vendor_escort: 0,
+    };
+    for (const p of open) {
+      map[p.category] += Math.max(0, p.slots_needed - p.slots_filled);
+    }
+    return map;
+  }, [open]);
+
+  const totalOpenSlots = Object.values(catTotals).reduce((s, n) => s + n, 0);
+
+  return (
+    <section className="tv-panel" style={{ borderTopColor: '#fbbf24' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">§11 Upcoming overtime</h2>
+        <div className="tv-panel-meta">
+          {open.length === 0 ? 'no posts' : (
+            <>
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> open slot{totalOpenSlots === 1 ? '' : 's'}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="tv-panel-body tv-ot-body">
+        {open.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing posted.</p>
+        ) : (
+          <>
+            <div className="tv-ot-catbar">
+              {OVERTIME_CATEGORY_ORDER.map((c) => (
+                <span key={c} className="tv-ot-catbar-item">
+                  <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[c] }} />
+                  <span className="tv-ot-catbar-label">{OVERTIME_CATEGORY_LABELS[c]}</span>
+                  <span className="tv-ot-catbar-count">{catTotals[c]}</span>
+                </span>
+              ))}
+            </div>
+            <ul className="tv-ot-list">
+              {visible.map((p) => {
+                const isFull = p.slots_filled >= p.slots_needed;
+                return (
+                  <li key={p.id} className={isFull ? 'tv-ot-row tv-ot-row-full' : 'tv-ot-row'}>
+                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
+                    <span className="tv-ot-when">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
+                    <span className="tv-ot-bld">{tvBuildingLabel(p)}</span>
+                    <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
+                    <span className="tv-ot-slots">
+                      {p.signups.length > 0 ? (
+                        p.signups.map((s, i) => (
+                          <span key={s.id}>
+                            {i > 0 && <span className="tv-ot-sep">·</span>}
+                            <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="tv-ot-empty">—</span>
+                      )}
+                    </span>
+                    <span className="tv-ot-filled">
+                      <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
+                        {p.slots_filled}/{p.slots_needed}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+              {overflow > 0 && (
+                <li className="tv-ot-overflow">+{overflow} more on the manager dashboard</li>
+              )}
+            </ul>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 
 // ============================================================================
 // Styles
@@ -1838,14 +1959,75 @@ function TvStyles() {
       }
       .tv-wkl-chip-major .tv-wkl-chip-count { color: #a78bfa; }
 
-      /* Empty placeholder panel */
-      .tv-panel-empty {
-        background: #0e1626;
-        border-style: dashed;
-        opacity: 0.4;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      /* §11 Overtime — TV variant. Compact one-line rows with a small
+         category bar at the top showing open-slot counts. */
+      .tv-ot-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; }
+      .tv-ot-catbar {
+        display: flex; flex-wrap: wrap;
+        gap: 0.1vw 0.6vw;
+        padding-bottom: 0.25vw;
+        border-bottom: 1px solid #1e293b;
+        font-size: 0.68vw;
+        line-height: 1.2;
+      }
+      .tv-ot-catbar-item { display: inline-flex; align-items: center; gap: 0.25vw; }
+      .tv-ot-catbar-label { color: #94a3b8; }
+      .tv-ot-catbar-count {
+        color: #f1f5f9; font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-ot-dot {
+        width: 0.5vw; height: 0.5vw; border-radius: 50%;
+        display: inline-block; flex: 0 0 auto;
+      }
+
+      .tv-ot-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.18vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-ot-row {
+        display: grid;
+        grid-template-columns: 0.6vw 5.2vw 2vw 1fr 6vw 1.5vw;
+        gap: 0.35vw;
+        align-items: baseline;
+        font-size: 0.78vw;
+        line-height: 1.2;
+      }
+      .tv-ot-row > span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .tv-ot-row-full { opacity: 0.55; }
+      .tv-ot-when {
+        color: #cbd5e1;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-ot-bld {
+        color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-ot-scope { color: #f1f5f9; }
+      .tv-ot-slots {
+        color: #cbd5e1;
+        font-size: 0.72vw;
+        text-align: right;
+      }
+      .tv-ot-name { color: #e2e8f0; }
+      .tv-ot-empty { color: #475569; font-style: italic; }
+      .tv-ot-sep { color: #334155; margin: 0 0.18vw; }
+      .tv-ot-filled {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-ot-overflow {
+        margin-top: 0.2vw;
+        color: #64748b;
+        font-size: 0.68vw;
+        font-style: italic;
+        text-align: center;
       }
 
       /* Upcoming PMs (used inside Workload) */

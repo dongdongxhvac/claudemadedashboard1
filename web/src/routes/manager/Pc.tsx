@@ -11,6 +11,7 @@ import { PlantlogWeeklyTestsPanel } from '../../components/PlantlogWeeklyTestsPa
 import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
 import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
+import { OvertimePanel } from '../../components/OvertimePanel';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -186,6 +187,7 @@ export default function ManagerPc() {
           <DeltaAlarmsPanel />
           <EmailAlarmsPanel />
           <BmsEmailAlarmsPanel />
+          <OvertimePanel />
         </div>
       </main>
     </div>
