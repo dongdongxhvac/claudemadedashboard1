@@ -15,6 +15,13 @@ import {
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
 } from '../hooks/usePto';
 import { useEngineers } from '../hooks/useEngineers';
+import {
+  useOncallParticipants, useOncallSettings,
+  addDaysIso, fmtMd as fmtMdOnc,
+} from '../hooks/useOncall';
+import { useOvertimePosts, type OvertimePost } from '../hooks/useOvertime';
+import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks/useBuildingAssignments';
+import { useBuildings, type Building } from '../hooks/useBuildings';
 import { Section } from './Section';
 
 // ───────────────────────────── helpers
@@ -38,14 +45,177 @@ function daysBetween(a: string, b: string): number {
   ) + 1;
 }
 
+// Each PTO type maps to an accent color used across the panel (out-today
+// chips, upcoming-row left border, heatmap intensity). Kept here so any
+// future component can import a single source of truth.
+export const PTO_TYPE_COLOR: Record<PtoType, string> = {
+  vacation:    '#3b82f6',   // blue
+  sick:        '#ef4444',   // red
+  personal:    '#14b8a6',   // teal
+  bereavement: '#a855f7',   // purple
+  holiday:     '#10b981',   // green
+  unpaid:      '#64748b',   // slate
+};
+const PTO_TYPE_BG: Record<PtoType, string> = {
+  vacation:    'rgba(59,130,246,0.06)',
+  sick:        'rgba(239,68,68,0.05)',
+  personal:    'rgba(20,184,166,0.05)',
+  bereavement: 'rgba(168,85,247,0.05)',
+  holiday:     'rgba(16,185,129,0.05)',
+  unpaid:      'rgba(100,116,139,0.05)',
+};
+
+// ── Conflict detection: surface approved PTO that overlaps an on-call
+// week, an OT signup, or covers a primary-building assignment so the
+// manager knows what to backfill.
+
+type Conflict = {
+  pto: PtoRequest;
+  kind: 'oncall' | 'overtime' | 'primary_building';
+  severity: 'high' | 'medium';
+  detail: string;
+};
+
+function rangeOverlaps(a1: string, a2: string, b1: string, b2: string): boolean {
+  return a1 <= b2 && a2 >= b1;
+}
+
+function computeConflicts(
+  approved: PtoRequest[],
+  oncallWeeks: { user_id: string; week_start: string; week_end: string }[],
+  otSignups: { user_id: string; post: OvertimePost }[],
+  primaryByUser: Map<string, Building[]>,
+): Conflict[] {
+  const out: Conflict[] = [];
+  for (const p of approved) {
+    // On-call conflict — engineer scheduled on call during their PTO.
+    for (const w of oncallWeeks) {
+      if (w.user_id !== p.user_id) continue;
+      if (!rangeOverlaps(p.starts_on, p.ends_on, w.week_start, w.week_end)) continue;
+      out.push({
+        pto: p,
+        kind: 'oncall',
+        severity: 'high',
+        detail: `On call week of ${fmtMdOnc(w.week_start)}–${fmtMdOnc(w.week_end)}`,
+      });
+    }
+    // OT signup conflict.
+    for (const s of otSignups) {
+      if (s.user_id !== p.user_id) continue;
+      const otDay = (s.post.starts_at ?? '').slice(0, 10);
+      if (!otDay) continue;
+      if (otDay >= p.starts_on && otDay <= p.ends_on) {
+        out.push({
+          pto: p,
+          kind: 'overtime',
+          severity: 'high',
+          detail: `OT signup ${otDay}${s.post.scope ? ' — ' + s.post.scope : ''}`,
+        });
+      }
+    }
+    // Primary buildings — softer; coverage handled by lead in practice but
+    // worth surfacing once per engineer per PTO.
+    const prims = primaryByUser.get(p.user_id);
+    if (prims && prims.length > 0) {
+      out.push({
+        pto: p,
+        kind: 'primary_building',
+        severity: 'medium',
+        detail: `Primary on ${prims.map((b) => b.short_code ?? b.code).join(', ')} — assign coverage`,
+      });
+    }
+  }
+  return out;
+}
+
+/** Split upcoming-approved into chrono buckets so the manager doesn't have
+ *  to scan a flat list. "This week" = starts on or before next Sunday. */
+function groupUpcoming(rows: PtoRequest[], todayStr: string): {
+  thisWeek: PtoRequest[];
+  thisMonth: PtoRequest[];
+  later: PtoRequest[];
+} {
+  const today = new Date(todayStr + 'T00:00:00');
+  const endOfWeek = new Date(today);
+  // Days remaining until Sunday (0=Sun ... 6=Sat). 0 means today is Sun → 0 more days.
+  endOfWeek.setDate(today.getDate() + ((7 - today.getDay()) % 7));
+  const endOfWeekStr = endOfWeek.toISOString().slice(0, 10);
+  // Last day of the current calendar month.
+  const eom = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const eomStr = eom.toISOString().slice(0, 10);
+
+  const thisWeek:  PtoRequest[] = [];
+  const thisMonth: PtoRequest[] = [];
+  const later:     PtoRequest[] = [];
+  for (const r of rows) {
+    if (r.starts_on <= endOfWeekStr)  thisWeek.push(r);
+    else if (r.starts_on <= eomStr)   thisMonth.push(r);
+    else                              later.push(r);
+  }
+  return { thisWeek, thisMonth, later };
+}
+
 // ───────────────────────────── component
 
 export function PtoPanel() {
   usePtoRealtime();
-  const requestsQ  = usePtoRequests();
-  const summaryQ   = usePtoSummary();
-  const engineersQ = useEngineers();
-  const buckets    = usePtoBuckets();
+  const requestsQ      = usePtoRequests();
+  const summaryQ       = usePtoSummary();
+  const engineersQ     = useEngineers();
+  const buckets        = usePtoBuckets();
+  // Read-only — no realtime subs here. The respective panels on this page
+  // (OvertimePanel, OncallBadge, etc.) already subscribe to these tables
+  // and invalidate the shared react-query keys.
+  const participantsQ  = useOncallParticipants();
+  const settingsQ      = useOncallSettings();
+  const otPostsQ       = useOvertimePosts();
+  const assignmentsQ   = useCurrentBuildingAssignments();
+  const buildingsQ     = useBuildings();
+
+  // Pre-compute on-call weeks for everyone in the rotation horizon.
+  const oncallWeeks = useMemo(() => {
+    const startFriday = settingsQ.data?.start_friday;
+    const parts = participantsQ.data ?? [];
+    if (!startFriday || parts.length === 0) return [];
+    const N = parts.length;
+    const cycles = settingsQ.data?.rotations_per_engineer ?? 4;
+    const out: { user_id: string; week_start: string; week_end: string }[] = [];
+    for (let c = 0; c <= cycles + 1; c++) {
+      for (let i = 0; i < N; i++) {
+        const ws = addDaysIso(startFriday, (c * N + i) * 7);
+        out.push({ user_id: parts[i].user_id, week_start: ws, week_end: addDaysIso(ws, 6) });
+      }
+    }
+    return out;
+  }, [participantsQ.data, settingsQ.data]);
+
+  const otSignups = useMemo(() => {
+    const out: { user_id: string; post: OvertimePost }[] = [];
+    for (const post of otPostsQ.data ?? []) {
+      if (post.status !== 'open') continue;
+      for (const s of post.signups ?? []) out.push({ user_id: s.user_id, post });
+    }
+    return out;
+  }, [otPostsQ.data]);
+
+  const primaryByUser = useMemo(() => {
+    const bldById = new Map((buildingsQ.data ?? []).map((b) => [b.id, b]));
+    const m = new Map<string, Building[]>();
+    for (const a of (assignmentsQ.data ?? []) as BuildingAssignment[]) {
+      if (a.role_in_building !== 'primary') continue;
+      const b = bldById.get(a.building_id);
+      if (!b) continue;
+      const cur = m.get(a.user_id) ?? [];
+      cur.push(b);
+      m.set(a.user_id, cur);
+    }
+    return m;
+  }, [assignmentsQ.data, buildingsQ.data]);
+
+  const conflicts = useMemo(
+    () => computeConflicts(buckets.upcoming, oncallWeeks, otSignups, primaryByUser),
+    [buckets.upcoming, oncallWeeks, otSignups, primaryByUser],
+  );
 
   const [showAdd, setShowAdd]               = useState(false);
   const [showEditBalance, setShowEditBalance] = useState<PtoSummary | null>(null);
@@ -62,6 +232,14 @@ export function PtoPanel() {
       </span>
       {' · '}
       {buckets.upcoming.length} upcoming
+      {conflicts.length > 0 && (
+        <>
+          {' · '}
+          <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
+            {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
+          </span>
+        </>
+      )}
       <button
         onClick={() => setShowAdd(true)}
         className="ml-3 t-accent hover:underline"
@@ -85,6 +263,34 @@ export function PtoPanel() {
             onApprove={(id, opts) => review.mutate({ id, decision: 'approved', ...opts })}
             onDeny={(id, note)    => review.mutate({ id, decision: 'denied', review_note: note })}
           />
+
+          {/* Conflict alerts — approved PTO vs on-call/OT/primary building */}
+          {conflicts.length > 0 && (
+            <div>
+              <div className="t-small uppercase tracking-wider mb-2" style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
+                Conflicts ({conflicts.length}) — assign coverage
+              </div>
+              <ul className="space-y-1">
+                {conflicts.map((c, i) => (
+                  <li
+                    key={`${c.pto.id}-${c.kind}-${i}`}
+                    className="t-small"
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      borderLeft: `3px solid ${c.severity === 'high' ? 'var(--color-danger)' : '#d97706'}`,
+                      background: c.severity === 'high' ? 'rgba(220,38,38,0.06)' : 'rgba(217,119,6,0.05)',
+                      borderRadius: 4,
+                    }}
+                  >
+                    <span style={{ marginRight: 6 }}>{c.severity === 'high' ? '🔴' : '🟡'}</span>
+                    <strong>{c.pto.user_full_name ?? '?'}</strong>
+                    <span className="t-muted"> · PTO {fmtRange(c.pto.starts_on, c.pto.ends_on)} · </span>
+                    {c.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Out today */}
           {buckets.outToday.length > 0 && (
@@ -112,10 +318,13 @@ export function PtoPanel() {
             </div>
           )}
 
-          {/* Upcoming approved */}
+          {/* 9-week vacation-cap heatmap */}
+          <CapHeatmap requests={buckets.all} weeks={9} />
+
+          {/* Upcoming approved, grouped */}
           {buckets.upcoming.length > 0 && (
-            <UpcomingList
-              rows={buckets.upcoming.filter((r) => r.ends_on >= todayIso()).slice(0, 10)}
+            <UpcomingGroupedList
+              rows={buckets.upcoming.filter((r) => r.ends_on >= todayIso())}
               onCancel={(id) => {
                 if (confirm('Cancel this approved PTO?')) cancel.mutate(id);
               }}
@@ -330,45 +539,188 @@ function ApprovalControls({
 
 // ───────────────────────────── Upcoming approved
 
-function UpcomingList({ rows, onCancel }: { rows: PtoRequest[]; onCancel: (id: string) => void }) {
+function UpcomingGroupedList({ rows, onCancel }: { rows: PtoRequest[]; onCancel: (id: string) => void }) {
+  const groups = useMemo(() => groupUpcoming(rows, todayIso()), [rows]);
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">Upcoming approved</div>
-      <table className="min-w-full t-text t-small border-collapse">
-        <thead>
-          <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-            <th className="py-1 pr-2">Engineer</th>
-            <th className="py-1 pr-2">Type</th>
-            <th className="py-1 pr-2">Dates</th>
-            <th className="py-1 pr-2 text-right">Hours</th>
-            <th className="py-1 pr-2">Reason</th>
-            <th className="py-1 pl-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-              <td className="py-1 pr-2 font-medium">{r.user_full_name ?? '?'}</td>
-              <td className="py-1 pr-2">{PTO_TYPE_LABELS[r.type]}</td>
-              <td className="py-1 pr-2 t-mono">{fmtRange(r.starts_on, r.ends_on)} ({r.days}d)</td>
-              <td className="py-1 pr-2 text-right t-mono">{r.hours}h</td>
-              <td className="py-1 pr-2 t-muted">
-                {r.reason ?? '—'}
-                {r.cap_override && (
-                  <span
-                    className="ml-1 px-1 py-0.5 rounded"
-                    style={{ background: 'rgba(234,88,12,0.15)', color: '#c2410c', fontSize: 9, fontWeight: 600 }}
-                    title={`Cap override: ${r.cap_override_reason ?? ''}`}
-                  >OVERRIDE</span>
-                )}
-              </td>
-              <td className="py-1 pl-2 text-right">
-                <button onClick={() => onCancel(r.id)} className="t-small t-muted hover:t-danger" title="Cancel">×</button>
-              </td>
-            </tr>
+      <div className="space-y-3">
+        {groups.thisWeek.length > 0  && <UpcomingBucket label="This week"  rows={groups.thisWeek}  onCancel={onCancel} />}
+        {groups.thisMonth.length > 0 && <UpcomingBucket label="This month" rows={groups.thisMonth} onCancel={onCancel} />}
+        {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     onCancel={onCancel} />}
+      </div>
+    </div>
+  );
+}
+
+function UpcomingBucket({ label, rows, onCancel }: { label: string; rows: PtoRequest[]; onCancel: (id: string) => void }) {
+  return (
+    <div>
+      <div className="t-small font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
+        {label} <span className="t-muted ml-1">({rows.length})</span>
+      </div>
+      <ul className="space-y-1">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="t-small flex items-baseline gap-2 flex-wrap"
+            style={{
+              padding: '0.3rem 0.6rem',
+              borderLeft: `3px solid ${PTO_TYPE_COLOR[r.type]}`,
+              background: PTO_TYPE_BG[r.type],
+              borderRadius: 4,
+            }}
+          >
+            <strong style={{ minWidth: 130 }}>{r.user_full_name ?? '?'}</strong>
+            <span className="t-muted" style={{ minWidth: 70 }}>{PTO_TYPE_LABELS[r.type]}</span>
+            <span className="t-mono">{fmtRange(r.starts_on, r.ends_on)} <span className="t-muted">({r.days}d · {r.hours}h)</span></span>
+            {r.reason && <span className="t-muted">· {r.reason}</span>}
+            {r.cap_override && (
+              <span
+                className="px-1 py-0.5 rounded"
+                style={{ background: 'rgba(234,88,12,0.15)', color: '#c2410c', fontSize: 9, fontWeight: 600 }}
+                title={`Cap override: ${r.cap_override_reason ?? ''}`}
+              >OVERRIDE</span>
+            )}
+            <button
+              onClick={() => onCancel(r.id)}
+              className="ml-auto t-muted hover:t-danger"
+              title="Cancel this PTO"
+              style={{ fontSize: 14, lineHeight: 1 }}
+            >×</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ───────────────────────────── Cap heatmap (9-week vacation calendar)
+
+function CapHeatmap({ requests, weeks }: { requests: PtoRequest[]; weeks: number }) {
+  // Build day-keyed map of engineers on approved/pending vacation. Each cell
+  // shows the count + tooltip with names; color scales 0 (green) → 1 (yellow)
+  // → 2 (red = cap pinned) → 3+ (deep red = overridden).
+  const today = todayIso();
+  // Start on the most recent Monday so the calendar grid aligns to weeks.
+  const start = (() => {
+    const d = new Date(today + 'T00:00:00');
+    const dow = d.getDay();                       // 0=Sun ... 6=Sat
+    const back = (dow + 6) % 7;                   // days back to Monday
+    d.setDate(d.getDate() - back);
+    return d.toISOString().slice(0, 10);
+  })();
+  const totalDays = weeks * 7;
+
+  // Per-day list of engineer names on vacation (approved or pending), for
+  // both heat color and tooltip.
+  const byDay = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of requests) {
+      if (r.type !== 'vacation') continue;
+      if (r.status !== 'approved' && r.status !== 'pending') continue;
+      // Walk dates from starts_on to ends_on, push name into each day's bucket
+      let cur = r.starts_on;
+      while (cur <= r.ends_on) {
+        const cur2 = cur;
+        const cur3 = cur2;
+        const cur4 = cur3;
+        const cur5 = cur4;
+        void cur5; // (keep eslint happy if it complains about unused locals)
+        const list = m.get(cur) ?? [];
+        list.push(`${r.user_full_name ?? '?'}${r.status === 'pending' ? ' (pending)' : ''}`);
+        m.set(cur, list);
+        // Increment date
+        const d = new Date(cur + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        cur = d.toISOString().slice(0, 10);
+      }
+    }
+    return m;
+  }, [requests]);
+
+  // Render: rows = Mon..Sun, columns = weeks. Each cell is small (12px).
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Pre-compute the ISO date string for each cell, plus month labels.
+  const cells: { iso: string; col: number; row: number; isToday: boolean; isWeekend: boolean; names: string[] }[] = [];
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    const row = i % 7;
+    const col = Math.floor(i / 7);
+    const isWeekend = row >= 5;
+    const isToday = iso === today;
+    const names = byDay.get(iso) ?? [];
+    cells.push({ iso, col, row, isWeekend, isToday, names });
+  }
+
+  // Month labels — one per week column showing the month boundary.
+  const weekLabels: { col: number; label: string }[] = [];
+  let lastMonth = '';
+  for (let c = 0; c < weeks; c++) {
+    const cellAtRow0 = cells[c * 7];
+    const m = new Date(cellAtRow0.iso + 'T00:00:00').toLocaleString(undefined, { month: 'short' });
+    weekLabels.push({ col: c, label: m === lastMonth ? '' : m });
+    lastMonth = m;
+  }
+
+  const color = (count: number): string => {
+    if (count <= 0) return '#dcfce7';   // green-100
+    if (count === 1) return '#fef9c3';  // yellow-100
+    if (count === 2) return '#fed7aa';  // orange-200 (cap pinned)
+    return '#fecaca';                   // red-200 (override / over cap)
+  };
+
+  return (
+    <div>
+      <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline gap-2 flex-wrap">
+        <span>Vacation cap heatmap · next {weeks} weeks</span>
+        <span className="t-muted" style={{ textTransform: 'none', fontSize: 11 }}>
+          0 ◻︎ &nbsp; 1 ◻︎ &nbsp; <span style={{ color: '#c2410c' }}>2 (cap)</span> &nbsp; <span style={{ color: 'var(--color-danger)' }}>3+ (override)</span>
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+        {/* Day-of-week labels column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 18 }}>
+          {days.map((d) => (
+            <div key={d} className="t-muted" style={{ fontSize: 9, height: 14, lineHeight: '14px', textAlign: 'right', width: 24 }}>
+              {d}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+        {/* Heatmap grid */}
+        <div>
+          {/* Month labels row */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 14px)`, gap: 2, marginBottom: 4 }}>
+            {weekLabels.map((w) => (
+              <div key={w.col} className="t-muted" style={{ fontSize: 9, height: 12, textAlign: 'left' }}>
+                {w.label}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 14px)`, gridTemplateRows: 'repeat(7, 14px)', gap: 2, gridAutoFlow: 'column' }}>
+            {cells.map((cell) => {
+              const count = cell.names.length;
+              return (
+                <div
+                  key={cell.iso}
+                  title={
+                    `${cell.iso}${cell.isToday ? ' (today)' : ''}\n` +
+                    (count === 0 ? 'No one on vacation' : cell.names.join(', '))
+                  }
+                  style={{
+                    width: 14, height: 14, borderRadius: 2,
+                    background: color(count),
+                    opacity: cell.isWeekend ? 0.55 : 1,
+                    border: cell.isToday ? '1.5px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.05)',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

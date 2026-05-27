@@ -35,6 +35,7 @@ import {
   type OvertimeCategory,
   type OvertimePost,
 } from '../../hooks/useOvertime';
+import { usePtoRequests, usePtoRealtime, type PtoRequest } from '../../hooks/usePto';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -69,11 +70,13 @@ export default function TvView() {
   useShiftsRealtime();
   useBuildingsRealtime();
   useBuildingAssignmentsRealtime();
+  usePtoRealtime();
 
   const oncallQ      = useUpcomingOncall(12);
   const participantsQ = useOncallParticipants();
   const oncallSettingsQ = useOncallSettings();
   const oncallNotesQ = useOncallNotes();
+  const ptoQ         = usePtoRequests();
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
@@ -132,6 +135,7 @@ export default function TvView() {
           participants={participantsQ.data ?? []}
           settings={oncallSettingsQ.data ?? null}
           notes={oncallNotesQ.data ?? []}
+          ptoToday={ptoQ.data ?? []}
           now={now}
         />
       </main>
@@ -397,14 +401,20 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   );
 }
 
-function OncallPanel({ participants, settings, notes, now }: {
+function OncallPanel({ participants, settings, notes, ptoToday, now }: {
   participants: OncallParticipant[];
   settings: OncallSettings | null;
   notes: OncallNote[];
+  ptoToday: PtoRequest[];
   now: Date;
 }) {
   // Skip empty slots so the area collapses when nobody's written anything.
   const visibleNotes = notes.filter((n) => n.body.trim().length > 0);
+  // Engineers currently on approved PTO (any type) — drives the attendance strip.
+  const today = now.toLocaleDateString('en-CA');
+  const outToday = ptoToday.filter((r) =>
+    r.status === 'approved' && r.starts_on <= today && r.ends_on >= today,
+  );
   const grid = useMemo(() => {
     if (!settings?.start_friday || participants.length === 0) return null;
 
@@ -507,6 +517,7 @@ function OncallPanel({ participants, settings, notes, now }: {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
         {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
+        {outToday.length > 0 && <PtoOutStrip rows={outToday} />}
         <p className="tv-muted">No rotation set.</p>
       </Panel>
     );
@@ -518,6 +529,7 @@ function OncallPanel({ participants, settings, notes, now }: {
         {grid.N} engineers · {grid.cycles} cycles + 1 preview
       </div>
       {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
+      {outToday.length > 0 && <PtoOutStrip rows={outToday} />}
       <div className="tv-oncall-scroll">
         <table className="tv-oncall-grid">
           <thead>
@@ -556,6 +568,24 @@ function OncallPanel({ participants, settings, notes, now }: {
         </table>
       </div>
     </Panel>
+  );
+}
+
+/** Attendance strip on the TV on-call panel. Shows engineers currently on
+ *  approved PTO so the shop floor sees "who's not available" at a glance. */
+function PtoOutStrip({ rows }: { rows: PtoRequest[] }) {
+  return (
+    <div className="tv-pto-out">
+      <span className="tv-pto-out-label">OUT TODAY</span>
+      <div className="tv-pto-out-list">
+        {rows.map((r) => (
+          <span key={r.id} className={`tv-pto-out-chip tv-pto-out-${r.type}`}>
+            {shortName(r.user_full_name)}
+            <span className="tv-pto-out-type">{r.type === 'sick' ? 'sick' : r.type === 'vacation' ? 'vac' : r.type}</span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1572,6 +1602,54 @@ function TvStyles() {
         color: #94a3b8;
         margin-bottom: 0.3vw;
       }
+      /* PTO attendance strip — surfaces who's currently off so the shop
+         floor knows who's not available before paging them. */
+      .tv-pto-out {
+        margin-bottom: 0.4vw;
+        padding: 0.25vw 0.4vw;
+        background: rgba(59, 130, 246, 0.10);
+        border-left: 2px solid #3b82f6;
+        border-radius: 2px;
+        display: flex;
+        align-items: baseline;
+        gap: 0.4vw;
+        flex-wrap: wrap;
+      }
+      .tv-pto-out-label {
+        font-size: 0.55vw;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: #1d4ed8;
+        flex: 0 0 auto;
+      }
+      .tv-pto-out-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25vw 0.5vw;
+        flex: 1;
+        min-width: 0;
+      }
+      .tv-pto-out-chip {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.2vw;
+        font-size: 0.78vw;
+        color: #e2e8f0;
+      }
+      .tv-pto-out-type {
+        font-size: 0.55vw;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0 0.2vw;
+        border-radius: 2px;
+      }
+      .tv-pto-out-vacation .tv-pto-out-type { background: rgba(59, 130, 246, 0.25); color: #93c5fd; }
+      .tv-pto-out-sick     .tv-pto-out-type { background: rgba(239, 68, 68, 0.25);  color: #fca5a5; }
+      .tv-pto-out-personal .tv-pto-out-type { background: rgba(20, 184, 166, 0.25); color: #5eead4; }
+      .tv-pto-out-bereavement .tv-pto-out-type { background: rgba(168, 85, 247, 0.25); color: #c4b5fd; }
+      .tv-pto-out-holiday  .tv-pto-out-type { background: rgba(16, 185, 129, 0.25); color: #6ee7b7; }
+      .tv-pto-out-unpaid   .tv-pto-out-type { background: rgba(100, 116, 139, 0.30); color: #cbd5e1; }
+
       /* Sticky notes from Admin → On-call tab (full-width strip above table) */
       .tv-oncall-notes {
         margin-bottom: 0.4vw;
