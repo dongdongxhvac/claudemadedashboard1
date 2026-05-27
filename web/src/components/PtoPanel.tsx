@@ -16,18 +16,18 @@ import {
   type PtoRecord, type PtoBalance,
 } from '../hooks/usePto';
 import {
-  useOncallParticipants, useOncallSettings, useOncallRealtime,
+  useOncallParticipants, useOncallSettings,
   addDaysIso, fmtMd,
 } from '../hooks/useOncall';
 import {
-  useOvertimePosts, useOvertimeRealtime,
+  useOvertimePosts,
   type OvertimePost,
 } from '../hooks/useOvertime';
 import {
-  useCurrentBuildingAssignments, useBuildingAssignmentsRealtime,
+  useCurrentBuildingAssignments,
   type BuildingAssignment,
 } from '../hooks/useBuildingAssignments';
-import { useBuildings, useBuildingsRealtime, type Building } from '../hooks/useBuildings';
+import { useBuildings, type Building } from '../hooks/useBuildings';
 import { Section } from './Section';
 
 // ───────────────────────────── helpers
@@ -117,11 +117,12 @@ function computeConflicts(
 // ───────────────────────────── component
 
 export function PtoPanel() {
+  // Only subscribe to PTO realtime here — the other tables (oncall, OT,
+  // buildings) are already subscribed by their respective panels on this
+  // same page, and they invalidate the shared react-query keys. Re-subscribing
+  // to the same channel name throws "cannot add postgres_changes callbacks
+  // after subscribe()" and crashes the page.
   usePtoRealtime();
-  useOncallRealtime();
-  useOvertimeRealtime();
-  useBuildingAssignmentsRealtime();
-  useBuildingsRealtime();
 
   const ptosQ            = usePtoRecords();
   const balancesQ        = usePtoBalances();
