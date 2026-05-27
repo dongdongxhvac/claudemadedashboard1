@@ -117,22 +117,52 @@ def get_account_id() -> str:
 
 # ---------- cURL parsing ----------
 
-_CURL_URL_RE      = re.compile(r"curl\s+'([^']+)'", re.IGNORECASE)
-_CURL_COOKIE_RE   = re.compile(r"-b\s+'([^']+)'")
-_ACCOUNT_ID_RE    = re.compile(r"/api/accounts/([A-Za-z0-9_-]+)/")
+# URL: accept single quotes, double quotes, or unquoted (Windows curl uses
+# double quotes; bash curl uses single quotes; raw URLs lack quotes entirely).
+_CURL_URL_RE = re.compile(
+    r"""curl\s+(?:['"](https?://[^'"]+)['"]|(https?://\S+))""",
+    re.IGNORECASE,
+)
+# Cookies: -b 'val' or -b "val" or --cookie 'val'
+_CURL_COOKIE_RE = re.compile(
+    r"""(?:^|\s)(?:-b|--cookie)\s+(?:'([^']+)'|"([^"]+)")""",
+)
+# Any URL fragment that contains /api/accounts/{id}/, which we use as the
+# fallback when the captured curl is a non-API request but has the account
+# in its referer header.
+_ACCOUNT_ID_RE = re.compile(r"/api/accounts/([A-Za-z0-9_-]+)/")
 
 
 def parse_curl(text: str) -> tuple[str, dict[str, str]]:
-    """Pull account_id + cookies out of a 'Copy as cURL (bash)' blob."""
+    """Pull account_id + cookies out of a 'Copy as cURL' blob.
+    Tolerates bash (single-quoted), Windows (double-quoted), and unquoted
+    forms. Also accepts smart quotes if notepad autocorrected them."""
+    # Normalize smart quotes that notepad/Word sometimes inserts.
+    text = text.replace("‘", "'").replace("’", "'")
+    text = text.replace("“", '"').replace("”", '"')
+
+    if not text.strip():
+        raise SessionError(
+            "Input file is empty. Did you paste + save the curl in notepad?"
+        )
+    if "curl" not in text.lower():
+        raise SessionError(
+            "No 'curl' command found in the input. Make sure you saved the file "
+            "with the entire 'curl ...' block in it."
+        )
+
     m_url = _CURL_URL_RE.search(text)
     if not m_url:
-        raise SessionError("Could not find the curl URL in the input.")
-    url = m_url.group(1)
+        raise SessionError(
+            "Could not find a URL after 'curl '. "
+            "Expected: curl 'https://...' or curl \"https://...\"."
+        )
+    url = m_url.group(1) or m_url.group(2)
 
     m_acct = _ACCOUNT_ID_RE.search(url)
     if not m_acct:
-        # Maybe the URL was /bff/user or similar — try the referer header
-        m_ref = re.search(r"referer:\s*'([^']+)'", text, re.IGNORECASE)
+        # Maybe the URL was /bff/user or similar — try the referer header (both quote styles)
+        m_ref = re.search(r"""referer:\s*['"]([^'"]+)['"]""", text, re.IGNORECASE)
         if m_ref:
             m_acct = _ACCOUNT_ID_RE.search(m_ref.group(1))
     if not m_acct:
@@ -144,8 +174,11 @@ def parse_curl(text: str) -> tuple[str, dict[str, str]]:
 
     m_cookies = _CURL_COOKIE_RE.search(text)
     if not m_cookies:
-        raise SessionError("Could not find a -b '<cookies>' arg in the input.")
-    cookie_str = m_cookies.group(1)
+        raise SessionError(
+            "Could not find a -b '<cookies>' arg in the input. "
+            "Make sure the captured curl was 'Copy as cURL (bash)' from a logged-in session."
+        )
+    cookie_str = m_cookies.group(1) or m_cookies.group(2)
 
     cookies: dict[str, str] = {}
     for piece in cookie_str.split(";"):
