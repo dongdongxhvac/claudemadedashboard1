@@ -14,7 +14,8 @@ import {
   checkVacationCap, PTO_TYPE_LABELS,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
 } from '../hooks/usePto';
-import { useEngineers } from '../hooks/useEngineers';
+import { useEngineers, type EngineerRow } from '../hooks/useEngineers';
+import { useShifts } from '../hooks/useShifts';
 import {
   useOncallParticipants, useOncallSettings,
   addDaysIso, fmtMd as fmtMdOnc,
@@ -162,6 +163,7 @@ export function PtoPanel() {
   const requestsQ      = usePtoRequests();
   const summaryQ       = usePtoSummary();
   const engineersQ     = useEngineers();
+  const shiftsQ        = useShifts();
   const buckets        = usePtoBuckets();
   // Read-only — no realtime subs here. The respective panels on this page
   // (OvertimePanel, OncallBadge, etc.) already subscribe to these tables
@@ -292,31 +294,13 @@ export function PtoPanel() {
             </div>
           )}
 
-          {/* Out today */}
-          {buckets.outToday.length > 0 && (
-            <div>
-              <div className="t-small t-muted uppercase tracking-wider mb-2">Out today</div>
-              <ul className="space-y-1">
-                {buckets.outToday.map((r) => (
-                  <li
-                    key={r.id}
-                    className="t-small"
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      borderLeft: `3px solid ${r.type === 'vacation' ? '#3b82f6' : '#ef4444'}`,
-                      background: r.type === 'vacation' ? 'rgba(59,130,246,0.06)' : 'rgba(239,68,68,0.05)',
-                      borderRadius: 4,
-                    }}
-                  >
-                    <strong>{r.user_full_name ?? '?'}</strong>
-                    <span className="t-muted"> · {PTO_TYPE_LABELS[r.type]}</span>
-                    <span className="t-muted"> · returns {fmtMd(r.ends_on)}</span>
-                    {r.reason && <span className="t-muted"> · {r.reason}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Today's attendance — every engineer as a chip, working ones
+              clickable to one-click log them sick. */}
+          <TodayAttendance
+            engineers={engineersQ.data ?? []}
+            shifts={shiftsQ.data ?? []}
+            outToday={buckets.outToday}
+          />
 
           {/* 9-week vacation-cap heatmap */}
           <CapHeatmap requests={buckets.all} weeks={9} />
@@ -592,6 +576,166 @@ function UpcomingBucket({ label, rows, onCancel }: { label: string; rows: PtoReq
         ))}
       </ul>
     </div>
+  );
+}
+
+// ───────────────────────────── Today attendance (interactive roll)
+
+function TodayAttendance({
+  engineers, shifts, outToday,
+}: {
+  engineers: EngineerRow[];
+  shifts: { id: string; name: string; sort_order: number }[];
+  outToday: PtoRequest[];
+}) {
+  const submit = useSubmitPto();
+  // Build a quick lookup: user_id → today's active PTO record (if any).
+  const ptoByUser = useMemo(() => {
+    const m = new Map<string, PtoRequest>();
+    for (const r of outToday) m.set(r.user_id, r);
+    return m;
+  }, [outToday]);
+
+  // Group active engineers by shift in sort_order; engineers without a
+  // shift go to a trailing "Other" bucket.
+  const groups = useMemo(() => {
+    const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
+    const byShift = new Map<string, EngineerRow[]>();
+    const noShift: EngineerRow[] = [];
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer') continue;
+      if (e.shift_id && byShift.has(e.shift_id) || e.shift_id) {
+        const cur = byShift.get(e.shift_id!) ?? [];
+        cur.push(e);
+        byShift.set(e.shift_id!, cur);
+      } else {
+        noShift.push(e);
+      }
+    }
+    const out = orderedShifts.map((s) => ({
+      shift_id: s.id,
+      label: s.name,
+      engineers: (byShift.get(s.id) ?? []).sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    })).filter((g) => g.engineers.length > 0);
+    if (noShift.length > 0) {
+      out.push({
+        shift_id: '_noshift',
+        label: 'No shift',
+        engineers: noShift.sort((a, b) => a.full_name.localeCompare(b.full_name)),
+      });
+    }
+    return out;
+  }, [engineers, shifts]);
+
+  const onSick = (eng: EngineerRow) => {
+    if (!confirm(`Mark ${eng.full_name} out sick today (8h)? This logs an approved sick PTO for today and deducts 8h from balance.`)) return;
+    const today = todayIso();
+    submit.mutate({
+      user_id:  eng.user_id,
+      type:     'sick',
+      starts_on: today,
+      ends_on:   today,
+      hours:     8,
+      status:   'approved',
+      reason:   'called out',
+    });
+  };
+
+  const outCount = outToday.length;
+  const totalActive = engineers.filter((e) => e.active && e.role === 'engineer').length;
+  const inCount = totalActive - outCount;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <div className="t-small t-muted uppercase tracking-wider">
+          Today attendance · <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{inCount}/{totalActive} in</span>
+          {outCount > 0 && (
+            <span style={{ color: 'var(--color-warn, #d97706)', marginLeft: 6, fontWeight: 600 }}>
+              · {outCount} out
+            </span>
+          )}
+        </div>
+        <span className="t-small t-muted" style={{ fontSize: 11 }}>
+          Click a working engineer to mark them sick today
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {groups.map((g) => (
+          <div key={g.shift_id}>
+            <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: 10 }}>
+              {g.label} shift
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {g.engineers.map((eng) => {
+                const pto = ptoByUser.get(eng.user_id);
+                return (
+                  <AttendanceChip
+                    key={eng.user_id}
+                    engineer={eng}
+                    pto={pto ?? null}
+                    onSick={onSick}
+                    disabled={submit.isPending}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceChip({
+  engineer, pto, onSick, disabled,
+}: {
+  engineer: EngineerRow;
+  pto: PtoRequest | null;
+  onSick: (eng: EngineerRow) => void;
+  disabled: boolean;
+}) {
+  const out  = pto !== null;
+  const bg     = out ? PTO_TYPE_BG[pto!.type]    : 'rgba(34,197,94,0.08)';
+  const border = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
+  const label  = out
+    ? `${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== todayIso() ? ` · returns ${fmtMd(pto!.ends_on)}` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
+    : 'Working today — click to log sick';
+  return (
+    <button
+      type="button"
+      onClick={out ? undefined : () => onSick(engineer)}
+      disabled={disabled || out}
+      title={label}
+      className="t-small"
+      style={{
+        padding: '0.25rem 0.55rem',
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: 999,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: out ? 'default' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {out
+        ? <span style={{ color: border, fontWeight: 600 }}>● {engineer.full_name}</span>
+        : <span style={{ color: 'var(--color-text)' }}>○ {engineer.full_name}</span>}
+      {out && (
+        <span
+          style={{
+            background: border, color: 'white',
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+            padding: '0.05rem 0.3rem', borderRadius: 3,
+          }}
+        >
+          {pto!.type === 'sick' ? 'SICK' : pto!.type === 'vacation' ? 'VAC' : pto!.type.slice(0, 4).toUpperCase()}
+        </span>
+      )}
+    </button>
   );
 }
 
