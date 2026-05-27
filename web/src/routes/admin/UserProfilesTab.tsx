@@ -268,13 +268,14 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
           onClose={() => setEditing(null)}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
-            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string; is_manager?: boolean } = {};
+            const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string; is_manager?: boolean; ontheclock_employee_id?: string | null } = {};
             if (userPatch.full_name !== undefined && userPatch.full_name !== editing.full_name) _userPatch.full_name = userPatch.full_name;
             if (userPatch.email !== undefined && userPatch.email !== editing.email) _userPatch.email = userPatch.email;
             if (userPatch.phone !== undefined && userPatch.phone !== editing.phone) _userPatch.phone = userPatch.phone;
             if (userPatch.role !== undefined && userPatch.role !== editing.role)    _userPatch.role  = userPatch.role;
             if (userPatch.active !== undefined && userPatch.active !== editing.active) _userPatch.active = userPatch.active;
             if (userPatch.is_manager !== undefined && userPatch.is_manager !== editing.is_manager) _userPatch.is_manager = userPatch.is_manager;
+            if (userPatch.ontheclock_employee_id !== undefined && userPatch.ontheclock_employee_id !== editing.ontheclock_employee_id) _userPatch.ontheclock_employee_id = userPatch.ontheclock_employee_id;
             if (Object.keys(_userPatch).length > 0) {
               tasks.push(updateUser.mutateAsync({ user_id: editing.user_id, patch: _userPatch }));
             }
@@ -341,7 +342,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
 }
 
 type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
-type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean; is_manager: boolean };
+type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean; is_manager: boolean; ontheclock_employee_id: string | null };
 
 function EditDrawer({
   row,
@@ -366,6 +367,7 @@ function EditDrawer({
   const [shiftId, setShiftId] = useState<string>(row.shift_id ?? '');
   const [isLead, setIsLead] = useState<boolean>(row.is_lead);
   const [isManager, setIsManager] = useState<boolean>(row.is_manager);
+  const [ontheclockId, setOntheclockId] = useState<string>(row.ontheclock_employee_id ?? '');
   const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
   const [level, setLevel] = useState<number>(row.level);
   const [notes, setNotes] = useState<string>(row.notes ?? '');
@@ -396,6 +398,7 @@ function EditDrawer({
           role,
           active,
           is_manager: isManager,
+          ontheclock_employee_id: ontheclockId.trim() === '' ? null : ontheclockId.trim(),
         },
       );
     } finally {
@@ -566,6 +569,21 @@ function EditDrawer({
           />
           <p className="t-small t-muted mt-1">
             Must match the <code>Assigned To</code> column in PM CSV exports exactly. Only relevant for engineers; XP won't accumulate if this doesn't match.
+          </p>
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">OnTheClock employee ID</span>
+          <input
+            type="text"
+            value={ontheclockId}
+            onChange={(e) => setOntheclockId(e.target.value)}
+            placeholder="numeric employee id from OnTheClock"
+            className="w-full border rounded px-2 py-1 t-text t-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+          <p className="t-small t-muted mt-1">
+            Maps PTO records pulled from OnTheClock to this profile (§12 panel). Engineers + managers only.
           </p>
         </label>
 
