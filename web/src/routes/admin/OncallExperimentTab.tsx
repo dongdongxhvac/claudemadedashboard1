@@ -901,6 +901,49 @@ function AddCoverageModal({
     return out.filter((w) => addDaysIso(w, 7) > today);
   }, [participants.length, rotations, startFriday]);
 
+  // When the engineer is locked from a grid click, narrow the week quick-pick
+  // (and day quick-pick) to JUST that engineer's on-call weeks. Covering Sean
+  // for a week when Sean isn't scheduled doesn't make sense — surfacing only
+  // his actual weeks is much friendlier than scanning every Friday.
+  const lockedEngineerWeeks = useMemo(() => {
+    if (!lockedOriginal || !preset?.originalId) return [] as string[];
+    const idx = participants.findIndex((p) => p.user_id === preset.originalId);
+    if (idx < 0) return [];
+    const N = participants.length;
+    const out: string[] = [];
+    for (let cycle = 0; cycle <= rotations + 1; cycle++) {
+      out.push(addDaysIso(startFriday, (cycle * N + idx) * 7));
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    return out.filter((w) => addDaysIso(w, 7) > today);
+  }, [lockedOriginal, preset, participants, rotations, startFriday]);
+
+  /** What to show in the Full-week quick-pick row — locked engineer's weeks
+   *  if they exist, otherwise every upcoming Friday. */
+  const weekQuickPick = lockedEngineerWeeks.length > 0 ? lockedEngineerWeeks : upcomingFridays;
+
+  // For Day mode: explode the locked engineer's on-call weeks into individual
+  // dates (capped, since 4 cycles × 7 days = 28 chips would overflow).
+  const lockedEngineerDays = useMemo(() => {
+    if (lockedEngineerWeeks.length === 0) return [] as string[];
+    const out: string[] = [];
+    const today = new Date().toISOString().slice(0, 10);
+    for (const w of lockedEngineerWeeks) {
+      for (let i = 0; i < 7; i++) {
+        const d = addDaysIso(w, i);
+        if (d >= today) out.push(d);
+      }
+      if (out.length >= 14) break;
+    }
+    return out.slice(0, 14);
+  }, [lockedEngineerWeeks]);
+
+  /** Day mode quick-pick: locked engineer's on-call days when available, else
+   *  the generic next-10-days list. */
+  const dayQuickPick = lockedEngineerDays.length > 0
+    ? lockedEngineerDays
+    : Array.from({ length: 10 }, (_, i) => addDaysIso(todayStr, i));
+
   return (
     <div
       style={{
@@ -1054,15 +1097,21 @@ function AddCoverageModal({
                 )}
               </label>
 
-              {upcomingFridays.length > 0 && (
+              {/* In Swap mode, A's quick-pick narrows to the locked engineer's
+                  on-call weeks when applicable; B's stays open to all Fridays
+                  via the input. */}
+              {(lockedEngineerWeeks.length > 0 || upcomingFridays.length > 0) && (
                 <div className="col-span-2 t-small t-muted">
-                  Quick pick (click then choose A or B):{' '}
-                  {upcomingFridays.slice(0, 10).map((d) => (
+                  {lockedEngineerWeeks.length > 0 ? "A's on-call weeks:" : 'Quick pick (click for A, then B):'}{' '}
+                  {(lockedEngineerWeeks.length > 0 ? lockedEngineerWeeks : upcomingFridays).slice(0, 10).map((d) => (
                     <button
                       key={d}
                       onClick={() => {
-                        // Tap-cycle: empty A first, then empty B, otherwise overwrite A.
-                        if (!swapAWeek || swapAWeek === nextFridayIso()) setSwapAWeek(d);
+                        // If A is locked, all clicks set A's week. Otherwise tap-
+                        // cycle: fill A first (if blank/default), then B, else
+                        // overwrite A.
+                        if (lockedOriginal) setSwapAWeek(d);
+                        else if (!swapAWeek || swapAWeek === nextFridayIso()) setSwapAWeek(d);
                         else if (!swapBWeek || swapBWeek === nextFridayIso()) setSwapBWeek(d);
                         else setSwapAWeek(d);
                       }}
@@ -1139,10 +1188,12 @@ function AddCoverageModal({
                   {weekStart} is a {new Date(weekStart + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}, not a Friday. Pick a Friday so the swap aligns with the rotation cutover.
                 </p>
               )}
-              {upcomingFridays.length > 0 && (
+              {weekQuickPick.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                  <span className="t-small t-muted self-center mr-1">Quick pick:</span>
-                  {upcomingFridays.slice(0, 8).map((d) => (
+                  <span className="t-small t-muted self-center mr-1">
+                    {lockedEngineerWeeks.length > 0 ? "Their on-call weeks:" : 'Quick pick:'}
+                  </span>
+                  {weekQuickPick.slice(0, 8).map((d) => (
                     <button
                       key={d}
                       onClick={() => setWeekStart(d)}
@@ -1179,10 +1230,13 @@ function AddCoverageModal({
                 >+ Add day</button>
               </div>
 
-              {/* Quick-pick next 10 days */}
+              {/* Quick-pick: locked engineer's on-call days when applicable,
+                  else the next 10 days. */}
               <div className="flex flex-wrap gap-1 mt-2">
-                <span className="t-small t-muted self-center mr-1">Quick pick:</span>
-                {Array.from({ length: 10 }, (_, i) => addDaysIso(todayStr, i)).map((d) => {
+                <span className="t-small t-muted self-center mr-1">
+                  {lockedEngineerDays.length > 0 ? "Their on-call days:" : 'Quick pick:'}
+                </span>
+                {dayQuickPick.map((d) => {
                   const picked = selectedDays.includes(d);
                   return (
                     <button
