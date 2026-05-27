@@ -641,7 +641,8 @@ function AddCoverageModal({
 }) {
   const create = useCreateCoverageOverride();
   const del    = useDeleteCoverageOverride();
-  const [mode, setMode]                 = useState<ModalMode>('week');
+  // null = no mode picked yet; forces a conscious choice.
+  const [mode, setMode]                 = useState<ModalMode | null>(null);
   const [originalId, setOriginalId]     = useState<string>(preset?.originalId ?? '');
   const [coverId, setCoverId]           = useState<string>('');
   const [weekStart, setWeekStart]       = useState<string>(preset?.weekStart ?? nextFridayIso());
@@ -740,6 +741,7 @@ function AddCoverageModal({
 
   const submit = async () => {
     setErr(null);
+    if (!mode) { setErr('Pick a coverage type first.'); return; }
 
     if (mode === 'swap') {
       // ── Bidirectional week trade: 2 overrides as one logical operation.
@@ -864,8 +866,10 @@ function AddCoverageModal({
     <div
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        // Translucent backdrop — keeps the grid visible behind so you can
+        // sanity-check the date/engineer while picking. Click outside to close.
+        background: 'rgba(0,0,0,0.25)',
+        display: 'flex', justifyContent: 'flex-end',
         zIndex: 50,
       }}
       onClick={onClose}
@@ -873,7 +877,14 @@ function AddCoverageModal({
       <div
         onClick={(e) => e.stopPropagation()}
         className="t-card"
-        style={{ width: 'min(540px, 92vw)', maxHeight: '90vh', overflow: 'auto', padding: '1.25rem' }}
+        style={{
+          width: 'min(440px, 92vw)',
+          height: '100%',
+          overflow: 'auto',
+          padding: '1.25rem',
+          borderLeft: '1px solid var(--color-border)',
+          boxShadow: '-8px 0 24px rgba(0,0,0,0.25)',
+        }}
       >
         <div className="flex items-center justify-between mb-3">
           <h3 className="t-section-title">Add coverage</h3>
@@ -917,6 +928,21 @@ function AddCoverageModal({
           </p>
         )}
 
+        {!mode && (
+          <div
+            className="t-card t-small t-muted"
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'rgba(168,85,247,0.05)',
+              borderLeft: '3px solid #a855f7',
+              marginBottom: '0.5rem',
+            }}
+          >
+            Pick a coverage type above to continue.
+          </div>
+        )}
+
+        {mode && (
         <div className="grid grid-cols-2 gap-3">
           {mode === 'swap' ? (
             <>
@@ -1123,6 +1149,7 @@ function AddCoverageModal({
             />
           </label>
         </div>
+        )}
 
         {err && <p className="t-small t-danger mt-2">{err}</p>}
 
@@ -1132,20 +1159,22 @@ function AddCoverageModal({
             className="t-small px-3 py-1 rounded border"
             style={{ borderColor: 'var(--color-border)' }}
           >Cancel</button>
-          <button
-            onClick={submit}
-            disabled={create.isPending}
-            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
-            style={{
-              background: mode === 'swap' ? '#ea580c'
-                        : mode === 'week' ? '#7e22ce'
-                        : '#0f766e',
-            }}
-          >
-            {create.isPending
-              ? (mode === 'swap' ? 'Creating swap…' : 'Adding…')
-              : (mode === 'swap' ? 'Create swap (2 rows)' : 'Add coverage')}
-          </button>
+          {mode && (
+            <button
+              onClick={submit}
+              disabled={create.isPending}
+              className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+              style={{
+                background: mode === 'swap' ? '#ea580c'
+                          : mode === 'week' ? '#7e22ce'
+                          : '#0f766e',
+              }}
+            >
+              {create.isPending
+                ? (mode === 'swap' ? 'Creating swap…' : 'Adding…')
+                : (mode === 'swap' ? 'Create swap (2 rows)' : 'Add coverage')}
+            </button>
+          )}
         </div>
       </div>
     </div>
