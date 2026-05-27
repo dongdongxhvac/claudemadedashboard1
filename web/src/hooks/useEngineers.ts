@@ -30,7 +30,6 @@ export type EngineerRow = {
   active: boolean;
   role: Role;
   is_manager: boolean;
-  ontheclock_employee_id: string | null;
   cmms_assignee_name: string | null;
   plantlog_username: string | null;
   discipline: Discipline | null;
@@ -51,7 +50,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
   let q = supabase
     .from('users')
     .select(`
-      id, full_name, email, phone, hiring_date, auth_user_id, active, role, is_manager, ontheclock_employee_id,
+      id, full_name, email, phone, hiring_date, auth_user_id, active, role, is_manager,
       engineer_profiles!inner (
         cmms_assignee_name, plantlog_username, discipline, level, xp,
         visible_to_self, notes, title, shift_id, is_lead, updated_at
@@ -73,7 +72,6 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
     id: string; full_name: string; email: string | null; phone: string | null;
     hiring_date: string | null;
     auth_user_id: string | null; active: boolean; role: Role; is_manager: boolean;
-    ontheclock_employee_id: string | null;
     engineer_profiles: Profile | Profile[] | null;
   };
   return (data as unknown as Joined[])
@@ -92,7 +90,6 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
         active: r.active,
         role: r.role,
         is_manager: r.is_manager,
-        ontheclock_employee_id: r.ontheclock_employee_id,
         cmms_assignee_name: ep.cmms_assignee_name,
         plantlog_username: ep.plantlog_username,
         discipline: ep.discipline,
@@ -159,7 +156,7 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role' | 'active' | 'full_name' | 'hiring_date' | 'is_manager' | 'ontheclock_employee_id'>>;
+      patch: Partial<Pick<EngineerRow, 'email' | 'phone' | 'role' | 'active' | 'full_name' | 'hiring_date' | 'is_manager'>>;
     }) => {
       const cleaned: Partial<EngineerRow> = { ...input.patch };
       if (cleaned.email === '') cleaned.email = null;

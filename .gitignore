@@ -11,6 +11,10 @@ token.json
 **/.plantlog_*
 cove_session.json
 **/cove_session.json
+ontheclock_session.json
+**/ontheclock_session.json
+_otc_curl.txt
+**/_otc_curl.txt
 .delta_session*
 **/.delta_session*
 .cove_main.js

@@ -12,7 +12,6 @@ import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
 import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
-import { PtoPanel } from '../../components/PtoPanel';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -189,7 +188,6 @@ export default function ManagerPc() {
           <EmailAlarmsPanel />
           <BmsEmailAlarmsPanel />
           <OvertimePanel />
-          <PtoPanel />
         </div>
       </main>
     </div>
