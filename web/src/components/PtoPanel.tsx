@@ -220,6 +220,7 @@ export function PtoPanel() {
   );
 
   const [showAdd, setShowAdd]               = useState(false);
+  const [addPresetDate, setAddPresetDate]   = useState<string | null>(null);
   const [showEditBalance, setShowEditBalance] = useState<PtoSummary | null>(null);
 
   const review     = useReviewPto();
@@ -302,8 +303,12 @@ export function PtoPanel() {
             allApproved={buckets.all.filter((r) => r.status === 'approved')}
           />
 
-          {/* 9-week vacation-cap heatmap */}
-          <CapHeatmap requests={buckets.all} weeks={9} />
+          {/* Vacation-cap heatmap with horizon picker. Click a cell → open
+              Add PTO modal pre-filled with that date. */}
+          <CapHeatmap
+            requests={buckets.all}
+            onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
+          />
 
           {/* Upcoming approved, grouped */}
           {buckets.upcoming.length > 0 && (
@@ -329,7 +334,8 @@ export function PtoPanel() {
         <AddPtoModal
           engineers={engineersQ.data ?? []}
           allRequests={buckets.all}
-          onClose={() => setShowAdd(false)}
+          presetDate={addPresetDate}
+          onClose={() => { setShowAdd(false); setAddPresetDate(null); }}
         />
       )}
       {showEditBalance && (
@@ -838,40 +844,39 @@ function shortName(full: string): string {
 
 // ───────────────────────────── Cap heatmap (9-week vacation calendar)
 
-function CapHeatmap({ requests, weeks }: { requests: PtoRequest[]; weeks: number }) {
-  // Build day-keyed map of engineers on approved/pending vacation. Each cell
-  // shows the count + tooltip with names; color scales 0 (green) → 1 (yellow)
-  // → 2 (red = cap pinned) → 3+ (deep red = overridden).
+function CapHeatmap({ requests, onPickDate }: {
+  requests: PtoRequest[];
+  onPickDate?: (iso: string) => void;
+}) {
+  // Horizon picker — 4 / 9 / 13 weeks (1mo / 2mo / 3mo).
+  const [weeks, setWeeks] = useState<4 | 9 | 13>(9);
   const today = todayIso();
-  // Start on the most recent Monday so the calendar grid aligns to weeks.
-  const start = (() => {
+
+  // Calendar grid aligns to Mon-Sun rows so day-of-week labels stay stable;
+  // past cells of the current week render as blank spacers ("start from today"
+  // visually without breaking the calendar structure).
+  const start = useMemo(() => {
     const d = new Date(today + 'T00:00:00');
-    const dow = d.getDay();                       // 0=Sun ... 6=Sat
-    const back = (dow + 6) % 7;                   // days back to Monday
+    const dow = d.getDay();
+    const back = (dow + 6) % 7;
     d.setDate(d.getDate() - back);
     return d.toISOString().slice(0, 10);
-  })();
+  }, [today]);
   const totalDays = weeks * 7;
 
-  // Per-day list of engineer names on vacation (approved or pending), for
-  // both heat color and tooltip.
+  // Per-day list of engineers on vacation (approved or pending). Store
+  // {name, status} so we can build initials + tooltip with status hints.
+  type DayInfo = { name: string; status: 'approved' | 'pending'; };
   const byDay = useMemo(() => {
-    const m = new Map<string, string[]>();
+    const m = new Map<string, DayInfo[]>();
     for (const r of requests) {
       if (r.type !== 'vacation') continue;
       if (r.status !== 'approved' && r.status !== 'pending') continue;
-      // Walk dates from starts_on to ends_on, push name into each day's bucket
       let cur = r.starts_on;
       while (cur <= r.ends_on) {
-        const cur2 = cur;
-        const cur3 = cur2;
-        const cur4 = cur3;
-        const cur5 = cur4;
-        void cur5; // (keep eslint happy if it complains about unused locals)
         const list = m.get(cur) ?? [];
-        list.push(`${r.user_full_name ?? '?'}${r.status === 'pending' ? ' (pending)' : ''}`);
+        list.push({ name: r.user_full_name ?? '?', status: r.status });
         m.set(cur, list);
-        // Increment date
         const d = new Date(cur + 'T00:00:00');
         d.setDate(d.getDate() + 1);
         cur = d.toISOString().slice(0, 10);
@@ -880,52 +885,118 @@ function CapHeatmap({ requests, weeks }: { requests: PtoRequest[]; weeks: number
     return m;
   }, [requests]);
 
-  // Render: rows = Mon..Sun, columns = weeks. Each cell is small (12px).
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  // Pre-compute the ISO date string for each cell, plus month labels.
-  const cells: { iso: string; col: number; row: number; isToday: boolean; isWeekend: boolean; names: string[] }[] = [];
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  type Cell = {
+    iso: string;
+    col: number;
+    row: number;
+    isToday: boolean;
+    isPast: boolean;
+    isWeekend: boolean;
+    people: DayInfo[];
+  };
+  const cells: Cell[] = [];
   for (let i = 0; i < totalDays; i++) {
     const d = new Date(start + 'T00:00:00');
     d.setDate(d.getDate() + i);
     const iso = d.toISOString().slice(0, 10);
     const row = i % 7;
     const col = Math.floor(i / 7);
-    const isWeekend = row >= 5;
-    const isToday = iso === today;
-    const names = byDay.get(iso) ?? [];
-    cells.push({ iso, col, row, isWeekend, isToday, names });
+    cells.push({
+      iso,
+      col,
+      row,
+      isToday:   iso === today,
+      isPast:    iso < today,
+      isWeekend: row >= 5,
+      people:    byDay.get(iso) ?? [],
+    });
   }
 
   // Month labels — one per week column showing the month boundary.
   const weekLabels: { col: number; label: string }[] = [];
   let lastMonth = '';
   for (let c = 0; c < weeks; c++) {
-    const cellAtRow0 = cells[c * 7];
-    const m = new Date(cellAtRow0.iso + 'T00:00:00').toLocaleString(undefined, { month: 'short' });
+    const monthDate = new Date(cells[c * 7].iso + 'T00:00:00');
+    const m = monthDate.toLocaleString(undefined, { month: 'short' });
     weekLabels.push({ col: c, label: m === lastMonth ? '' : m });
     lastMonth = m;
   }
 
-  const color = (count: number): string => {
-    if (count <= 0) return '#dcfce7';   // green-100
-    if (count === 1) return '#fef9c3';  // yellow-100
-    if (count === 2) return '#fed7aa';  // orange-200 (cap pinned)
-    return '#fecaca';                   // red-200 (override / over cap)
+  // Slightly more saturated palette so the eye reads cap-pinning quickly.
+  const color = (count: number, past: boolean): string => {
+    if (past) return 'rgba(148,163,184,0.10)'; // slate-300, very faint
+    if (count <= 0) return 'rgba(34,197,94,0.18)';   // soft green
+    if (count === 1) return 'rgba(234,179,8,0.30)';  // amber
+    if (count === 2) return 'rgba(234,88,12,0.45)';  // orange — cap pinned
+    return 'rgba(220,38,38,0.50)';                   // red — over cap (override)
+  };
+
+  // Compact in-cell label: 1 person → 1 initial, 2 → 2 letters, 3+ → number.
+  const cellLabel = (people: DayInfo[]): string => {
+    if (people.length === 0) return '';
+    if (people.length === 1) return (people[0].name[0] ?? '?').toUpperCase();
+    if (people.length === 2) {
+      return people.map((p) => (p.name[0] ?? '?').toUpperCase()).join('·');
+    }
+    return String(people.length);
+  };
+
+  const tooltip = (cell: Cell): string => {
+    const date = `${cell.iso}${cell.isToday ? ' (today)' : ''}${cell.isPast ? ' (past)' : ''}`;
+    if (cell.people.length === 0) {
+      return cell.isPast
+        ? `${date}\n(past — nothing logged)`
+        : `${date}\nNo one on vacation${cell.isWeekend ? '' : ' — click to add'}`;
+    }
+    const names = cell.people.map((p) =>
+      `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`
+    ).join(', ');
+    return `${date}\n${names}${cell.isWeekend || cell.isPast ? '' : '\n(click to add another PTO)'}`;
   };
 
   return (
     <div>
-      <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline gap-2 flex-wrap">
+      <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline justify-between gap-2 flex-wrap">
         <span>Vacation cap heatmap · next {weeks} weeks</span>
-        <span className="t-muted" style={{ textTransform: 'none', fontSize: 11 }}>
-          0 ◻︎ &nbsp; 1 ◻︎ &nbsp; <span style={{ color: '#c2410c' }}>2 (cap)</span> &nbsp; <span style={{ color: 'var(--color-danger)' }}>3+ (override)</span>
+        <span style={{ textTransform: 'none', display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
+          {([4, 9, 13] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => setWeeks(w)}
+              className="t-small"
+              style={{
+                padding: '0.05rem 0.4rem',
+                border: '1px solid var(--color-border)',
+                borderRadius: 999,
+                background: w === weeks ? 'var(--color-accent)' : 'var(--color-card)',
+                color: w === weeks ? 'white' : 'var(--color-text-muted)',
+                fontWeight: w === weeks ? 600 : 400,
+                fontSize: 10,
+                cursor: 'pointer',
+              }}
+            >{w}w</button>
+          ))}
         </span>
       </div>
+
+      {/* Legend chips */}
+      <div className="t-small t-muted mb-2 flex items-center gap-3 flex-wrap" style={{ fontSize: 10 }}>
+        <LegendChip color="rgba(34,197,94,0.18)" label="0" />
+        <LegendChip color="rgba(234,179,8,0.30)" label="1" />
+        <LegendChip color="rgba(234,88,12,0.45)" label="2 (cap pinned)" />
+        <LegendChip color="rgba(220,38,38,0.50)" label="3+ (override)" />
+        <span className="t-muted" style={{ marginLeft: 'auto' }}>
+          Click a non-past cell to add a vacation request for that date.
+        </span>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
         {/* Day-of-week labels column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 18 }}>
-          {days.map((d) => (
-            <div key={d} className="t-muted" style={{ fontSize: 9, height: 14, lineHeight: '14px', textAlign: 'right', width: 24 }}>
+          {dayLabels.map((d) => (
+            <div key={d} className="t-muted" style={{ fontSize: 9, height: 18, lineHeight: '18px', textAlign: 'right', width: 24 }}>
               {d}
             </div>
           ))}
@@ -933,36 +1004,56 @@ function CapHeatmap({ requests, weeks }: { requests: PtoRequest[]; weeks: number
         {/* Heatmap grid */}
         <div>
           {/* Month labels row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 14px)`, gap: 2, marginBottom: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 18px)`, gap: 2, marginBottom: 4 }}>
             {weekLabels.map((w) => (
               <div key={w.col} className="t-muted" style={{ fontSize: 9, height: 12, textAlign: 'left' }}>
                 {w.label}
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 14px)`, gridTemplateRows: 'repeat(7, 14px)', gap: 2, gridAutoFlow: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 18px)`, gridTemplateRows: 'repeat(7, 18px)', gap: 2, gridAutoFlow: 'column' }}>
             {cells.map((cell) => {
-              const count = cell.names.length;
+              const count = cell.people.length;
+              const label = cellLabel(cell.people);
+              const clickable = !cell.isPast && !!onPickDate;
               return (
-                <div
+                <button
                   key={cell.iso}
-                  title={
-                    `${cell.iso}${cell.isToday ? ' (today)' : ''}\n` +
-                    (count === 0 ? 'No one on vacation' : cell.names.join(', '))
-                  }
+                  type="button"
+                  onClick={clickable ? () => onPickDate!(cell.iso) : undefined}
+                  disabled={!clickable}
+                  title={tooltip(cell)}
                   style={{
-                    width: 14, height: 14, borderRadius: 2,
-                    background: color(count),
-                    opacity: cell.isWeekend ? 0.55 : 1,
-                    border: cell.isToday ? '1.5px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.05)',
+                    width: 18, height: 18, padding: 0,
+                    borderRadius: 2,
+                    background: color(count, cell.isPast),
+                    opacity: cell.isPast ? 0.4 : cell.isWeekend ? 0.55 : 1,
+                    border: cell.isToday ? '1.5px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.08)',
+                    cursor: clickable ? 'pointer' : 'default',
+                    fontSize: label.length > 1 ? 8 : 10,
+                    fontWeight: 700,
+                    color: count >= 2 ? 'white' : 'var(--color-text)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1,
                   }}
-                />
+                >
+                  {label}
+                </button>
               );
             })}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function LegendChip({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ width: 12, height: 12, background: color, borderRadius: 2, border: '1px solid rgba(0,0,0,0.1)' }} />
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -1019,19 +1110,25 @@ function BalanceCell({ remaining, used, alloted }: { remaining: number; used: nu
 // ───────────────────────────── Add PTO modal
 
 function AddPtoModal({
-  engineers, allRequests, onClose,
+  engineers, allRequests, presetDate, onClose,
 }: {
   engineers: ReturnType<typeof useEngineers>['data'];
   allRequests: PtoRequest[];
+  presetDate?: string | null;
   onClose: () => void;
 }) {
   const submit = useSubmitPto();
   const today  = todayIso();
+  // When opened from a heatmap cell click, default to that date (the manager
+  // wants to add PTO FOR that day) and pre-select vacation since that's what
+  // the cap heatmap visualizes.
+  const initialDate = presetDate || today;
+  const initialType: PtoType = presetDate ? 'vacation' : 'vacation';
 
   const [userId, setUserId]                 = useState<string>('');
-  const [type, setType]                     = useState<PtoType>('vacation');
-  const [startsOn, setStartsOn]             = useState<string>(today);
-  const [endsOn, setEndsOn]                 = useState<string>(today);
+  const [type, setType]                     = useState<PtoType>(initialType);
+  const [startsOn, setStartsOn]             = useState<string>(initialDate);
+  const [endsOn, setEndsOn]                 = useState<string>(initialDate);
   const [hoursOverride, setHoursOverride]   = useState<string>('');  // blank = auto (8 * weekdays)
   const [reason, setReason]                 = useState<string>('');
   const [statusChoice, setStatusChoice]     = useState<PtoStatus>('approved'); // manager-added defaults to approved
