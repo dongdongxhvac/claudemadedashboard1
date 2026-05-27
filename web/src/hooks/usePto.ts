@@ -38,8 +38,52 @@ export type PtoPollState = {
   updated_at: string;
 };
 
-const KEY_RECORDS = ['pto_records'];
-const KEY_STATE   = ['pto_poll_state'];
+const KEY_RECORDS  = ['pto_records'];
+const KEY_BALANCES = ['pto_balances'];
+const KEY_STATE    = ['pto_poll_state'];
+
+export type PtoBalance = {
+  id: string;
+  user_id: string | null;
+  user_full_name: string | null;
+  ontheclock_employee_id: string;
+  year: number;
+  vacation_accrued:   number | null;
+  vacation_used:      number | null;
+  vacation_remaining: number | null;
+  vacation_rule:      string | null;
+  sick_accrued:       number | null;
+  sick_used:          number | null;
+  sick_remaining:     number | null;
+  sick_rule:          string | null;
+  personal_accrued:   number | null;
+  personal_used:      number | null;
+  personal_remaining: number | null;
+  personal_rule:      string | null;
+  holiday_accrued:    number | null;
+  holiday_used:       number | null;
+  holiday_remaining:  number | null;
+  holiday_rule:       string | null;
+  any_low: boolean;
+  updated_at: string;
+};
+
+/** Per-engineer balance snapshot. One row per (user, year). */
+export function usePtoBalances() {
+  return useQuery({
+    queryKey: KEY_BALANCES,
+    queryFn: async (): Promise<PtoBalance[]> => {
+      const { data, error } = await supabase
+        .from('v_pto_balances')
+        .select('*')
+        .order('year', { ascending: false })
+        .order('user_full_name');
+      if (error) throw error;
+      return (data ?? []) as PtoBalance[];
+    },
+    staleTime: 60_000,
+  });
+}
 
 /** All PTO records visible to the dashboard. Past records are kept (no
  *  client-side time filter) so the panel can show year-end forecasts. */
@@ -88,6 +132,10 @@ export function usePtoRealtime() {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'pto_poll_state' },
         () => qc.invalidateQueries({ queryKey: KEY_STATE }),
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'pto_balances' },
+        () => qc.invalidateQueries({ queryKey: KEY_BALANCES }),
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };

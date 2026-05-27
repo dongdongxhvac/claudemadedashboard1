@@ -12,8 +12,8 @@
 // buildings from building_assignments role='primary'.
 import { useMemo } from 'react';
 import {
-  usePtoRecords, usePtoPollState, usePtoRealtime,
-  type PtoRecord,
+  usePtoRecords, usePtoBalances, usePtoPollState, usePtoRealtime,
+  type PtoRecord, type PtoBalance,
 } from '../hooks/usePto';
 import {
   useOncallParticipants, useOncallSettings, useOncallRealtime,
@@ -124,6 +124,7 @@ export function PtoPanel() {
   useBuildingsRealtime();
 
   const ptosQ            = usePtoRecords();
+  const balancesQ        = usePtoBalances();
   const stateQ           = usePtoPollState();
   const participantsQ    = useOncallParticipants();
   const settingsQ        = useOncallSettings();
@@ -287,6 +288,9 @@ export function PtoPanel() {
             </div>
           )}
 
+          {/* Balances — per-engineer remaining hours for the current year */}
+          {(balancesQ.data ?? []).length > 0 && <BalancesGrid balances={balancesQ.data ?? []} />}
+
           {/* Rest of year forecast */}
           {forecast.length > 0 && (
             <div>
@@ -388,6 +392,71 @@ function MonthGroup({ month, rows, today, next30 }: {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function BalancesGrid({ balances }: { balances: PtoBalance[] }) {
+  // One row per engineer for the current year. Filter out disabled buckets
+  // (rule = "PTO Is Turned Off") so the panel doesn't show meaningless zeros.
+  const currentYear = new Date().getFullYear();
+  const rows = balances.filter((b) => b.year === currentYear)
+    .sort((a, b) => (a.user_full_name ?? '').localeCompare(b.user_full_name ?? ''));
+  if (rows.length === 0) return null;
+
+  return (
+    <div>
+      <div className="t-small t-muted uppercase tracking-wider mb-2">
+        Balances ({currentYear})
+      </div>
+      <table className="min-w-full t-text t-small border-collapse">
+        <thead>
+          <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
+            <th className="py-1 pr-3">Engineer</th>
+            <th className="py-1 pr-3 text-right">Vacation</th>
+            <th className="py-1 pr-3 text-right">Sick</th>
+            <th className="py-1 pr-3 text-right">Personal</th>
+            <th className="py-1 pr-3 text-right">Holiday</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => (
+            <tr
+              key={b.id}
+              style={{
+                borderBottom: '1px solid var(--color-border-soft)',
+                background: b.any_low ? 'rgba(217,119,6,0.05)' : undefined,
+              }}
+            >
+              <td className="py-1 pr-3 font-medium">
+                {b.user_full_name ?? <span className="t-muted italic">unmapped OTC #{b.ontheclock_employee_id}</span>}
+              </td>
+              <BalanceCell remaining={b.vacation_remaining} used={b.vacation_used} rule={b.vacation_rule} />
+              <BalanceCell remaining={b.sick_remaining}     used={b.sick_used}     rule={b.sick_rule} />
+              <BalanceCell remaining={b.personal_remaining} used={b.personal_used} rule={b.personal_rule} />
+              <BalanceCell remaining={b.holiday_remaining}  used={b.holiday_used}  rule={b.holiday_rule} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BalanceCell({ remaining, used, rule }: { remaining: number | null; used: number | null; rule: string | null }) {
+  const disabled = !rule || rule === 'PTO Is Turned Off';
+  if (disabled) {
+    return <td className="py-1 pr-3 text-right t-muted">—</td>;
+  }
+  const r = remaining ?? 0;
+  // <=0 = depleted (red), <=8 = low (amber), else default
+  const color = r <= 0 ? 'var(--color-danger)' : r <= 8 ? 'var(--color-warn, #d97706)' : 'var(--color-text)';
+  return (
+    <td className="py-1 pr-3 text-right t-mono">
+      <span style={{ color, fontWeight: r <= 8 ? 600 : 400 }}>{r}h</span>
+      {used != null && (
+        <span className="t-muted ml-1" style={{ fontSize: '0.7rem' }}>(used {used}h)</span>
+      )}
+    </td>
   );
 }
 
