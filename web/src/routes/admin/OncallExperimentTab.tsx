@@ -396,12 +396,14 @@ export function OncallExperimentTab() {
                         <span
                           className="t-small px-1.5 py-0.5 rounded"
                           style={
-                            o.kind === 'week'
-                              ? { background: 'rgba(168,85,247,0.15)', color: '#7e22ce', fontWeight: 600, fontSize: 10, letterSpacing: '0.5px' }
-                              : { background: 'rgba(20,184,166,0.15)', color: '#0f766e', fontWeight: 600, fontSize: 10, letterSpacing: '0.5px' }
+                            o.swap_pair_id
+                              ? { background: 'rgba(234,88,12,0.15)', color: '#c2410c', fontWeight: 600, fontSize: 10, letterSpacing: '0.5px' }
+                              : o.kind === 'week'
+                                ? { background: 'rgba(168,85,247,0.15)', color: '#7e22ce', fontWeight: 600, fontSize: 10, letterSpacing: '0.5px' }
+                                : { background: 'rgba(20,184,166,0.15)', color: '#0f766e', fontWeight: 600, fontSize: 10, letterSpacing: '0.5px' }
                           }
                         >
-                          {o.kind === 'week' ? 'WEEK' : 'DAY'}
+                          {o.swap_pair_id ? 'SWAP ⇄' : o.kind === 'week' ? 'WEEK' : 'DAY'}
                         </span>
                       </td>
                       <td className="py-1 pr-2 t-mono">{whenStr}</td>
@@ -414,9 +416,30 @@ export function OncallExperimentTab() {
                       {canWrite && (
                         <td className="py-1 pl-2 text-right">
                           <button
-                            onClick={() => { if (confirm('Remove this override?')) del.mutate(o.id); }}
+                            onClick={() => {
+                              // Swap-aware delete: find the partner row via
+                              // swap_pair_id and delete both halves so we
+                              // never leave an orphan one-sided swap.
+                              if (o.swap_pair_id) {
+                                const partner = overrides.find(
+                                  (x) => x.id !== o.id && x.swap_pair_id === o.swap_pair_id,
+                                );
+                                if (!partner) {
+                                  if (confirm('Remove this swap half? Its partner row could not be found.')) {
+                                    del.mutate(o.id);
+                                  }
+                                  return;
+                                }
+                                if (confirm('Remove BOTH halves of this swap?')) {
+                                  del.mutate(o.id);
+                                  del.mutate(partner.id);
+                                }
+                                return;
+                              }
+                              if (confirm('Remove this override?')) del.mutate(o.id);
+                            }}
                             className="t-small t-muted hover:t-danger"
-                            title="Remove"
+                            title={o.swap_pair_id ? 'Remove both halves of this swap' : 'Remove'}
                           >×</button>
                         </td>
                       )}
@@ -861,6 +884,8 @@ function AddCoverageModal({
       const softs = [c1.soft, c2.soft].filter(Boolean);
       if (softs.length > 0 && !confirm(`${softs.join('\n\n')}\n\nContinue?`)) return;
 
+      // One UUID shared by both rows so deletes can find the partner.
+      const pairId = crypto.randomUUID();
       let firstRowId: string | null = null;
       try {
         const firstRow = await create.mutateAsync({
@@ -870,6 +895,7 @@ function AddCoverageModal({
           starts_on:        dir1.week,
           ends_on:          addDaysIso(dir1.week, 6),
           reason:           reason.trim() ? `${reason.trim()} (swap)` : 'swap',
+          swap_pair_id:     pairId,
         }) as { id: string };
         firstRowId = firstRow?.id ?? null;
         await create.mutateAsync({
@@ -879,6 +905,7 @@ function AddCoverageModal({
           starts_on:        dir2.week,
           ends_on:          addDaysIso(dir2.week, 6),
           reason:           reason.trim() ? `${reason.trim()} (swap)` : 'swap',
+          swap_pair_id:     pairId,
         });
         onClose();
       } catch (e) {
@@ -984,13 +1011,11 @@ function AddCoverageModal({
     return out.filter((w) => addDaysIso(w, 7) > today);
   }, [participants.length, rotations, startFriday]);
 
-  // When the engineer is locked from a grid click, narrow the week quick-pick
-  // (and day quick-pick) to JUST that engineer's on-call weeks. Covering Sean
-  // for a week when Sean isn't scheduled doesn't make sense — surfacing only
-  // his actual weeks is much friendlier than scanning every Friday.
-  const lockedEngineerWeeks = useMemo(() => {
-    if (!lockedOriginal || !preset?.originalId) return [] as string[];
-    const idx = participants.findIndex((p) => p.user_id === preset.originalId);
+  /** All upcoming on-call Fridays for a given engineer, oldest first.
+   *  Returns [] when the engineer isn't in the current rotation. */
+  const onCallWeeksFor = (userId: string): string[] => {
+    if (!userId) return [];
+    const idx = participants.findIndex((p) => p.user_id === userId);
     if (idx < 0) return [];
     const N = participants.length;
     const out: string[] = [];
@@ -999,7 +1024,24 @@ function AddCoverageModal({
     }
     const today = new Date().toISOString().slice(0, 10);
     return out.filter((w) => addDaysIso(w, 7) > today);
-  }, [lockedOriginal, preset, participants, rotations, startFriday]);
+  };
+
+  // When the engineer is locked from a grid click, narrow the week quick-pick
+  // (and day quick-pick) to JUST that engineer's on-call weeks. Covering Sean
+  // for a week when Sean isn't scheduled doesn't make sense — surfacing only
+  // his actual weeks is much friendlier than scanning every Friday.
+  const lockedEngineerWeeks = useMemo(
+    () => lockedOriginal && preset?.originalId ? onCallWeeksFor(preset.originalId) : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lockedOriginal, preset, participants, rotations, startFriday],
+  );
+
+  // Swap-mode: B's upcoming on-call weeks, recomputed whenever B changes.
+  const swapBWeeks = useMemo(
+    () => onCallWeeksFor(swapBId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [swapBId, participants, rotations, startFriday],
+  );
 
   /** What to show in the Full-week quick-pick row — locked engineer's weeks
    *  if they exist, otherwise every upcoming Friday. */
@@ -1180,31 +1222,41 @@ function AddCoverageModal({
                 )}
               </label>
 
-              {/* In Swap mode, A's quick-pick narrows to the locked engineer's
-                  on-call weeks when applicable; B's stays open to all Fridays
-                  via the input. */}
-              {(lockedEngineerWeeks.length > 0 || upcomingFridays.length > 0) && (
+              {/* A's quick-pick — A's on-call weeks if A is picked, else all
+                  Fridays. Setting always targets A. */}
+              {((swapAId && onCallWeeksFor(swapAId).length > 0) || upcomingFridays.length > 0) && (
                 <div className="col-span-2 t-small t-muted">
-                  {lockedEngineerWeeks.length > 0 ? "A's on-call weeks:" : 'Quick pick (click for A, then B):'}{' '}
-                  {(lockedEngineerWeeks.length > 0 ? lockedEngineerWeeks : upcomingFridays).slice(0, 10).map((d) => (
+                  {swapAId && onCallWeeksFor(swapAId).length > 0 ? "A's on-call weeks:" : 'Quick pick for A:'}{' '}
+                  {(swapAId && onCallWeeksFor(swapAId).length > 0 ? onCallWeeksFor(swapAId) : upcomingFridays).slice(0, 10).map((d) => (
                     <button
                       key={d}
-                      onClick={() => {
-                        // If A is locked, all clicks set A's week. Otherwise tap-
-                        // cycle: fill A first (if blank/default), then B, else
-                        // overwrite A.
-                        if (lockedOriginal) setSwapAWeek(d);
-                        else if (!swapAWeek || swapAWeek === nextFridayIso()) setSwapAWeek(d);
-                        else if (!swapBWeek || swapBWeek === nextFridayIso()) setSwapBWeek(d);
-                        else setSwapAWeek(d);
-                      }}
+                      onClick={() => setSwapAWeek(d)}
                       className="t-small px-1.5 py-0.5 rounded border ml-1"
                       style={
                         swapAWeek === d
                           ? { background: '#ea580c', borderColor: '#ea580c', color: 'white' }
-                          : swapBWeek === d
-                            ? { background: '#fb923c', borderColor: '#fb923c', color: 'white' }
-                            : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+                          : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+                      }
+                    >{fmtMd(d)}</button>
+                  ))}
+                </div>
+              )}
+
+              {/* B's quick-pick — appears only once B is picked. Setting always
+                  targets B. Uses a slightly different shade (#fb923c) to make
+                  the two rows visually distinct. */}
+              {swapBId && swapBWeeks.length > 0 && (
+                <div className="col-span-2 t-small t-muted">
+                  B's on-call weeks:{' '}
+                  {swapBWeeks.slice(0, 10).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setSwapBWeek(d)}
+                      className="t-small px-1.5 py-0.5 rounded border ml-1"
+                      style={
+                        swapBWeek === d
+                          ? { background: '#fb923c', borderColor: '#fb923c', color: 'white' }
+                          : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
                       }
                     >{fmtMd(d)}</button>
                   ))}

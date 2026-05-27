@@ -20,6 +20,8 @@ export type CoverageOverride = {
   reason: string | null;
   created_by: string | null;
   created_at: string;
+  // Shared between the 2 rows of a Swap. NULL for single-direction overrides.
+  swap_pair_id: string | null;
 };
 
 const KEY = ['oncall_coverage_overrides_sandbox'];
@@ -60,6 +62,7 @@ export type CreateCoverageInput = {
   starts_on:        string;
   ends_on:          string;
   reason?:          string | null;
+  swap_pair_id?:    string | null;
 };
 
 export function useCreateCoverageOverride() {
@@ -81,6 +84,7 @@ export function useCreateCoverageOverride() {
           starts_on:        input.starts_on,
           ends_on:          input.ends_on,
           reason:           input.reason ?? null,
+          swap_pair_id:     input.swap_pair_id ?? null,
           created_by:       meRow?.id ?? null,
         })
         .select()
