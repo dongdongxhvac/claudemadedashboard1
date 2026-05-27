@@ -294,12 +294,12 @@ export function PtoPanel() {
             </div>
           )}
 
-          {/* Today's attendance — every engineer as a chip, working ones
-              clickable to one-click log them sick. */}
+          {/* Today + next 2 work days attendance — engineer rows × 3 date
+              cols. Working cells are clickable → log sick for THAT date. */}
           <TodayAttendance
             engineers={engineersQ.data ?? []}
             shifts={shiftsQ.data ?? []}
-            outToday={buckets.outToday}
+            allApproved={buckets.all.filter((r) => r.status === 'approved')}
           />
 
           {/* 9-week vacation-cap heatmap */}
@@ -581,20 +581,51 @@ function UpcomingBucket({ label, rows, onCancel }: { label: string; rows: PtoReq
 
 // ───────────────────────────── Today attendance (interactive roll)
 
+/** Compute today + next N work days (skips Sat/Sun). Always includes today
+ *  even if today is a weekend. */
+function computeWorkDays(extra: number): { iso: string; label: string; isToday: boolean }[] {
+  const fmt = (d: Date): string => d.toLocaleDateString('en-CA');
+  const labelOf = (d: Date) => {
+    const dow = d.toLocaleDateString(undefined, { weekday: 'short' });
+    return `${dow} ${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const out = [{ iso: fmt(today), label: labelOf(today), isToday: true }];
+  const cursor = new Date(today);
+  while (out.length < 1 + extra) {
+    cursor.setDate(cursor.getDate() + 1);
+    const dow = cursor.getDay();
+    if (dow === 0 || dow === 6) continue;  // skip weekends
+    out.push({ iso: fmt(cursor), label: labelOf(cursor), isToday: false });
+  }
+  return out;
+}
+
 function TodayAttendance({
-  engineers, shifts, outToday,
+  engineers, shifts, allApproved,
 }: {
   engineers: EngineerRow[];
   shifts: { id: string; name: string; sort_order: number }[];
-  outToday: PtoRequest[];
+  allApproved: PtoRequest[];
 }) {
   const submit = useSubmitPto();
-  // Build a quick lookup: user_id → today's active PTO record (if any).
-  const ptoByUser = useMemo(() => {
+
+  // 3 date columns: today + 2 work days.
+  const days = useMemo(() => computeWorkDays(2), []);
+
+  // Lookup: `${user_id}|${iso}` → PTO record covering that day (approved only).
+  const ptoByUserDay = useMemo(() => {
     const m = new Map<string, PtoRequest>();
-    for (const r of outToday) m.set(r.user_id, r);
+    for (const r of allApproved) {
+      for (const d of days) {
+        if (d.iso >= r.starts_on && d.iso <= r.ends_on) {
+          m.set(`${r.user_id}|${d.iso}`, r);
+        }
+      }
+    }
     return m;
-  }, [outToday]);
+  }, [allApproved, days]);
 
   // Group active engineers by shift in sort_order; engineers without a
   // shift go to a trailing "Other" bucket.
@@ -604,10 +635,10 @@ function TodayAttendance({
     const noShift: EngineerRow[] = [];
     for (const e of engineers) {
       if (!e.active || e.role !== 'engineer') continue;
-      if (e.shift_id && byShift.has(e.shift_id) || e.shift_id) {
-        const cur = byShift.get(e.shift_id!) ?? [];
+      if (e.shift_id) {
+        const cur = byShift.get(e.shift_id) ?? [];
         cur.push(e);
-        byShift.set(e.shift_id!, cur);
+        byShift.set(e.shift_id, cur);
       } else {
         noShift.push(e);
       }
@@ -627,59 +658,108 @@ function TodayAttendance({
     return out;
   }, [engineers, shifts]);
 
-  const onSick = (eng: EngineerRow) => {
-    if (!confirm(`Mark ${eng.full_name} out sick today (8h)? This logs an approved sick PTO for today and deducts 8h from balance.`)) return;
-    const today = todayIso();
+  // Rolling counts across the 3-day horizon for the header.
+  const counts = useMemo(() => {
+    const totalActive = engineers.filter((e) => e.active && e.role === 'engineer').length;
+    return days.map((d) => {
+      let out = 0;
+      for (const e of engineers) {
+        if (!e.active || e.role !== 'engineer') continue;
+        if (ptoByUserDay.has(`${e.user_id}|${d.iso}`)) out++;
+      }
+      return { iso: d.iso, out, in: totalActive - out, total: totalActive };
+    });
+  }, [days, engineers, ptoByUserDay]);
+
+  const onSick = (eng: EngineerRow, dateIso: string, dayLabel: string) => {
+    if (!confirm(`Mark ${eng.full_name} sick on ${dayLabel} (8h)? Logs an approved sick PTO and deducts 8h from balance.`)) return;
     submit.mutate({
       user_id:  eng.user_id,
       type:     'sick',
-      starts_on: today,
-      ends_on:   today,
+      starts_on: dateIso,
+      ends_on:   dateIso,
       hours:     8,
       status:   'approved',
       reason:   'called out',
     });
   };
 
-  const outCount = outToday.length;
-  const totalActive = engineers.filter((e) => e.active && e.role === 'engineer').length;
-  const inCount = totalActive - outCount;
+  // Compact grid styles.
+  const COL_NAME = 130;
+  const COL_DAY  = 110;
 
   return (
     <div>
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
         <div className="t-small t-muted uppercase tracking-wider">
-          Today attendance · <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{inCount}/{totalActive} in</span>
-          {outCount > 0 && (
-            <span style={{ color: 'var(--color-warn, #d97706)', marginLeft: 6, fontWeight: 600 }}>
-              · {outCount} out
-            </span>
-          )}
+          Attendance · today + next 2 work days
         </div>
         <span className="t-small t-muted" style={{ fontSize: 11 }}>
-          Click a working engineer to mark them sick today
+          Click a working cell to log sick for that day
         </span>
       </div>
 
-      <div className="space-y-2">
+      {/* Header row of day labels + per-day counts */}
+      <div
+        className="t-small t-muted"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `${COL_NAME}px repeat(3, ${COL_DAY}px)`,
+          gap: 4,
+          marginBottom: 4,
+          paddingBottom: 4,
+          borderBottom: '1px solid var(--color-border-soft)',
+        }}
+      >
+        <span></span>
+        {days.map((d, i) => (
+          <span key={d.iso} style={{ textAlign: 'center' }}>
+            <div style={{ color: d.isToday ? 'var(--color-accent)' : undefined, fontWeight: d.isToday ? 700 : 600 }}>
+              {d.label}{d.isToday && ' (today)'}
+            </div>
+            <div style={{ fontSize: 10 }}>
+              <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{counts[i].in}/{counts[i].total} in</span>
+              {counts[i].out > 0 && <span style={{ color: 'var(--color-warn, #d97706)' }}> · {counts[i].out} out</span>}
+            </div>
+          </span>
+        ))}
+      </div>
+
+      <div className="space-y-3">
         {groups.map((g) => (
           <div key={g.shift_id}>
             <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: 10 }}>
               {g.label} shift
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {g.engineers.map((eng) => {
-                const pto = ptoByUser.get(eng.user_id);
-                return (
-                  <AttendanceChip
-                    key={eng.user_id}
-                    engineer={eng}
-                    pto={pto ?? null}
-                    onSick={onSick}
-                    disabled={submit.isPending}
-                  />
-                );
-              })}
+            <div className="space-y-0.5">
+              {g.engineers.map((eng) => (
+                <div
+                  key={eng.user_id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `${COL_NAME}px repeat(3, ${COL_DAY}px)`,
+                    gap: 4,
+                    alignItems: 'center',
+                  }}
+                >
+                  <span className="t-small font-medium">{eng.full_name}</span>
+                  {days.map((d) => {
+                    const pto = ptoByUserDay.get(`${eng.user_id}|${d.iso}`) ?? null;
+                    return (
+                      <AttendanceCell
+                        key={d.iso}
+                        engineer={eng}
+                        pto={pto}
+                        dateIso={d.iso}
+                        dayLabel={d.label}
+                        isToday={d.isToday}
+                        disabled={submit.isPending}
+                        onSick={onSick}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -688,52 +768,61 @@ function TodayAttendance({
   );
 }
 
-function AttendanceChip({
-  engineer, pto, onSick, disabled,
+function AttendanceCell({
+  engineer, pto, dateIso, dayLabel, isToday, disabled, onSick,
 }: {
   engineer: EngineerRow;
   pto: PtoRequest | null;
-  onSick: (eng: EngineerRow) => void;
+  dateIso: string;
+  dayLabel: string;
+  isToday: boolean;
   disabled: boolean;
+  onSick: (eng: EngineerRow, iso: string, label: string) => void;
 }) {
-  const out  = pto !== null;
+  const out    = pto !== null;
   const bg     = out ? PTO_TYPE_BG[pto!.type]    : 'rgba(34,197,94,0.08)';
   const border = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
-  const label  = out
-    ? `${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== todayIso() ? ` · returns ${fmtMd(pto!.ends_on)}` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
-    : 'Working today — click to log sick';
+  const title  = out
+    ? `${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
+    : `${engineer.full_name} working ${dayLabel} — click to log sick`;
   return (
     <button
       type="button"
-      onClick={out ? undefined : () => onSick(engineer)}
+      onClick={out ? undefined : () => onSick(engineer, dateIso, dayLabel)}
       disabled={disabled || out}
-      title={label}
-      className="t-small"
+      title={title}
       style={{
-        padding: '0.25rem 0.55rem',
+        padding: '0.2rem 0.4rem',
         background: bg,
         border: `1px solid ${border}`,
-        borderRadius: 999,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
+        borderRadius: 4,
         cursor: out ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
+        outline: isToday ? '1px solid var(--color-accent)' : undefined,
+        outlineOffset: isToday ? 1 : undefined,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        fontSize: 11,
+        minHeight: 22,
       }}
     >
-      {out
-        ? <span style={{ color: border, fontWeight: 600 }}>● {engineer.full_name}</span>
-        : <span style={{ color: 'var(--color-text)' }}>○ {engineer.full_name}</span>}
-      {out && (
-        <span
-          style={{
-            background: border, color: 'white',
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-            padding: '0.05rem 0.3rem', borderRadius: 3,
-          }}
-        >
-          {pto!.type === 'sick' ? 'SICK' : pto!.type === 'vacation' ? 'VAC' : pto!.type.slice(0, 4).toUpperCase()}
-        </span>
+      {out ? (
+        <>
+          <span style={{ color: border, fontWeight: 600 }}>●</span>
+          <span
+            style={{
+              background: border, color: 'white',
+              fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+              padding: '0.05rem 0.25rem', borderRadius: 2,
+            }}
+          >
+            {pto!.type === 'sick' ? 'SICK' : pto!.type === 'vacation' ? 'VAC' : pto!.type.slice(0, 4).toUpperCase()}
+          </span>
+        </>
+      ) : (
+        <span style={{ color: '#10b981' }}>○ in</span>
       )}
     </button>
   );
