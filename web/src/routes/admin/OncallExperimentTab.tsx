@@ -115,6 +115,9 @@ type EffectiveOncall = {
   source: 'base' | 'week' | 'day';
   swapUntil: string | null;
   reason: string | null;
+  // Future day swaps inside the current rotation week — surfaced as a hint
+  // even when today is base rotation. Grouped by cover engineer.
+  upcomingWeekSwaps: Array<{ coverName: string; dates: string[] }>;
 };
 function computeEffectiveOncall(
   participants: OncallParticipant[],
@@ -126,12 +129,40 @@ function computeEffectiveOncall(
   if (participants.length === 0) return null;
   const ws = activeWeekStart(startFriday, todayIso);
   if (!ws) return null;
+  const weekEndExclusive = addDaysIso(ws, 7);
   const N = participants.length;
   const diff = daysBetween(startFriday, ws);
   const idx = (Math.floor(diff / 7)) % N;
   const scheduled = participants[idx];
   if (!scheduled) return null;
   const sched = { user_id: scheduled.user_id, full_name: scheduled.full_name };
+
+  // Find all future day swaps (starts > today) inside the current rotation
+  // week for the scheduled engineer, grouped by cover engineer. Surfaced
+  // as a hint so the user sees what's coming up this week without
+  // scanning the grid.
+  const upcomingMap = new Map<string, string[]>();
+  for (const o of overrides) {
+    if (o.kind !== 'day') continue;
+    if (o.original_user_id !== scheduled.user_id) continue;
+    if (o.starts_on <= todayIso) continue;
+    if (o.starts_on >= weekEndExclusive) continue;
+    // Enumerate the days of this row that fall inside the current week.
+    const dates: string[] = [];
+    let cur = o.starts_on > ws ? o.starts_on : ws;
+    while (cur <= o.ends_on && cur < weekEndExclusive) {
+      if (cur > todayIso) dates.push(cur);
+      cur = addDaysIso(cur, 1);
+    }
+    if (dates.length > 0) {
+      const existing = upcomingMap.get(o.cover_user_id) ?? [];
+      upcomingMap.set(o.cover_user_id, [...existing, ...dates]);
+    }
+  }
+  const upcomingWeekSwaps = Array.from(upcomingMap.entries()).map(([coverId, dates]) => ({
+    coverName: engById.get(coverId)?.full_name ?? '?',
+    dates: [...dates].sort(),
+  }));
 
   // Day override beats week override beats base.
   const todayDay = overrides.find(
@@ -147,6 +178,7 @@ function computeEffectiveOncall(
       source: 'day',
       swapUntil: todayDay.ends_on,
       reason: todayDay.reason,
+      upcomingWeekSwaps,
     };
   }
   const weekOv = overrides.find(
@@ -162,6 +194,7 @@ function computeEffectiveOncall(
       source: 'week',
       swapUntil: weekOv.ends_on,
       reason: weekOv.reason,
+      upcomingWeekSwaps,
     };
   }
   return {
@@ -170,6 +203,7 @@ function computeEffectiveOncall(
     source: 'base',
     swapUntil: null,
     reason: null,
+    upcomingWeekSwaps,
   };
 }
 
@@ -432,6 +466,7 @@ function EffectiveNowBanner({ data }: { data: EffectiveOncall }) {
   const tagFg  = covered
     ? (data.source === 'week' ? '#7e22ce' : '#0f766e')
     : '#15803d';
+  const hasUpcoming = data.upcomingWeekSwaps.length > 0;
   return (
     <div
       className="t-card"
@@ -460,6 +495,17 @@ function EffectiveNowBanner({ data }: { data: EffectiveOncall }) {
           {tag}
         </span>
       </div>
+      {hasUpcoming && (
+        <div className="t-small mt-1" style={{ color: '#0f766e' }}>
+          <span className="t-muted">later this week:</span>{' '}
+          {data.upcomingWeekSwaps.map((g, i) => (
+            <span key={g.coverName + i}>
+              {i > 0 && <span className="t-muted"> · </span>}
+              <strong>{compactDays(g.dates)}</strong> → {shortName(g.coverName)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -598,17 +644,27 @@ function OverrideGrid({
                       {hasWeek && coverName && (
                         <div className="t-small" style={{ color: '#7e22ce', fontWeight: 600 }}>→ {coverName}</div>
                       )}
-                      {hasDay && !hasWeek && (
-                        <div className="t-small" style={{ color: '#0f766e', fontWeight: 600 }}>
-                          {info.dayOverrides.length === 1
-                            ? `${compactDays(datesInRangeAndWeek(
-                                info.dayOverrides[0].starts_on,
-                                info.dayOverrides[0].ends_on,
-                                info.weekStart,
-                              ))} → ${shortName(engById.get(info.dayOverrides[0].cover_user_id)?.full_name)}`
-                            : `${info.dayOverrides.length} day swaps`}
-                        </div>
-                      )}
+                      {hasDay && !hasWeek && (() => {
+                        // Aggregate day overrides by cover engineer so a cell
+                        // with multiple individual-day rows shows each engineer
+                        // with their day list (e.g. "Wed, Fri → Piotr O.")
+                        // instead of an opaque "N day swaps".
+                        const byCover = new Map<string, string[]>();
+                        for (const o of info.dayOverrides) {
+                          const dates = datesInRangeAndWeek(o.starts_on, o.ends_on, info.weekStart);
+                          const cur = byCover.get(o.cover_user_id) ?? [];
+                          byCover.set(o.cover_user_id, [...cur, ...dates]);
+                        }
+                        return (
+                          <div className="t-small" style={{ color: '#0f766e', fontWeight: 600 }}>
+                            {Array.from(byCover.entries()).map(([coverId, dates]) => (
+                              <div key={coverId}>
+                                {compactDays([...dates].sort())} → {shortName(engById.get(coverId)?.full_name)}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </td>
                   );
                 })}
@@ -670,6 +726,33 @@ function AddCoverageModal({
   };
   const removeDay = (d: string) => {
     setSelectedDays((cur) => cur.filter((x) => x !== d));
+  };
+
+  /** Given an engineer user_id, find their NEXT upcoming on-call Friday
+   *  (the first week whose end is in the future). null if not in rotation. */
+  function nextOncallFridayFor(userId: string): string | null {
+    if (!userId) return null;
+    const i = participants.findIndex((p) => p.user_id === userId);
+    if (i < 0) return null;
+    const N = participants.length;
+    const today = new Date().toISOString().slice(0, 10);
+    for (let cycle = 0; cycle <= rotations + 1; cycle++) {
+      const w = addDaysIso(startFriday, (cycle * N + i) * 7);
+      if (addDaysIso(w, 7) > today) return w;
+    }
+    return null;
+  }
+  // Wrapper setters that also prefill the corresponding week. Used by the
+  // engineer dropdowns in Swap mode (and A in single-coverage when not locked).
+  const pickSwapA = (id: string) => {
+    setSwapAId(id);
+    const w = nextOncallFridayFor(id);
+    if (w) setSwapAWeek(w);
+  };
+  const pickSwapB = (id: string) => {
+    setSwapBId(id);
+    const w = nextOncallFridayFor(id);
+    if (w) setSwapBWeek(w);
   };
 
   // Engineer options for "Cover with": all active engineers minus the chosen original.
@@ -1039,7 +1122,7 @@ function AddCoverageModal({
                 </span>
                 <select
                   value={swapAId}
-                  onChange={(e) => setSwapAId(e.target.value)}
+                  onChange={(e) => pickSwapA(e.target.value)}
                   disabled={lockedOriginal}
                   className="w-full border rounded px-2 py-1 t-text disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{
@@ -1057,7 +1140,7 @@ function AddCoverageModal({
                 <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer B</span>
                 <select
                   value={swapBId}
-                  onChange={(e) => setSwapBId(e.target.value)}
+                  onChange={(e) => pickSwapB(e.target.value)}
                   className="w-full border rounded px-2 py-1 t-text"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
                 >
