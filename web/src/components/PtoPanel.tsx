@@ -996,7 +996,7 @@ function CapHeatmap({ requests, onPickDate }: {
         {/* Day-of-week labels column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 18 }}>
           {dayLabels.map((d) => (
-            <div key={d} className="t-muted" style={{ fontSize: 9, height: 18, lineHeight: '18px', textAlign: 'right', width: 24 }}>
+            <div key={d} className="t-muted" style={{ fontSize: 10, height: 26, lineHeight: '26px', textAlign: 'right', width: 28 }}>
               {d}
             </div>
           ))}
@@ -1004,14 +1004,14 @@ function CapHeatmap({ requests, onPickDate }: {
         {/* Heatmap grid */}
         <div>
           {/* Month labels row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 18px)`, gap: 2, marginBottom: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 4 }}>
             {weekLabels.map((w) => (
-              <div key={w.col} className="t-muted" style={{ fontSize: 9, height: 12, textAlign: 'left' }}>
+              <div key={w.col} className="t-muted" style={{ fontSize: 10, height: 14, textAlign: 'left' }}>
                 {w.label}
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 18px)`, gridTemplateRows: 'repeat(7, 18px)', gap: 2, gridAutoFlow: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gridTemplateRows: 'repeat(7, 26px)', gap: 3, gridAutoFlow: 'column' }}>
             {cells.map((cell) => {
               const count = cell.people.length;
               const label = cellLabel(cell.people);
@@ -1024,13 +1024,13 @@ function CapHeatmap({ requests, onPickDate }: {
                   disabled={!clickable}
                   title={tooltip(cell)}
                   style={{
-                    width: 18, height: 18, padding: 0,
-                    borderRadius: 2,
+                    width: 26, height: 26, padding: 0,
+                    borderRadius: 3,
                     background: color(count, cell.isPast),
                     opacity: cell.isPast ? 0.4 : cell.isWeekend ? 0.55 : 1,
-                    border: cell.isToday ? '1.5px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.08)',
+                    border: cell.isToday ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.08)',
                     cursor: clickable ? 'pointer' : 'default',
-                    fontSize: label.length > 1 ? 8 : 10,
+                    fontSize: label.length > 2 ? 10 : label.length === 2 ? 11 : 13,
                     fontWeight: 700,
                     color: count >= 2 ? 'white' : 'var(--color-text)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
