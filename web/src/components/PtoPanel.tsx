@@ -684,10 +684,6 @@ function TodayAttendance({
     });
   };
 
-  // Compact grid styles.
-  const COL_NAME = 130;
-  const COL_DAY  = 110;
-
   return (
     <div>
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
@@ -695,70 +691,33 @@ function TodayAttendance({
           Attendance · today + next 2 work days
         </div>
         <span className="t-small t-muted" style={{ fontSize: 11 }}>
-          Click a working cell to log sick for that day
+          {days.map((d, i) => (
+            <span key={d.iso}>
+              {i > 0 && <span className="t-muted"> · </span>}
+              <span style={{ color: d.isToday ? 'var(--color-accent)' : undefined, fontWeight: d.isToday ? 700 : 500 }}>
+                {d.label} ({counts[i].in}/{counts[i].total})
+              </span>
+            </span>
+          ))}
         </span>
       </div>
 
-      {/* Header row of day labels + per-day counts */}
-      <div
-        className="t-small t-muted"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `${COL_NAME}px repeat(3, ${COL_DAY}px)`,
-          gap: 4,
-          marginBottom: 4,
-          paddingBottom: 4,
-          borderBottom: '1px solid var(--color-border-soft)',
-        }}
-      >
-        <span></span>
-        {days.map((d, i) => (
-          <span key={d.iso} style={{ textAlign: 'center' }}>
-            <div style={{ color: d.isToday ? 'var(--color-accent)' : undefined, fontWeight: d.isToday ? 700 : 600 }}>
-              {d.label}{d.isToday && ' (today)'}
-            </div>
-            <div style={{ fontSize: 10 }}>
-              <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{counts[i].in}/{counts[i].total} in</span>
-              {counts[i].out > 0 && <span style={{ color: 'var(--color-warn, #d97706)' }}> · {counts[i].out} out</span>}
-            </div>
-          </span>
-        ))}
-      </div>
-
-      <div className="space-y-3">
+      <div className="space-y-2">
         {groups.map((g) => (
           <div key={g.shift_id}>
             <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: 10 }}>
               {g.label} shift
             </div>
-            <div className="space-y-0.5">
+            <div className="flex flex-wrap gap-1.5">
               {g.engineers.map((eng) => (
-                <div
+                <EngineerChip
                   key={eng.user_id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: `${COL_NAME}px repeat(3, ${COL_DAY}px)`,
-                    gap: 4,
-                    alignItems: 'center',
-                  }}
-                >
-                  <span className="t-small font-medium">{eng.full_name}</span>
-                  {days.map((d) => {
-                    const pto = ptoByUserDay.get(`${eng.user_id}|${d.iso}`) ?? null;
-                    return (
-                      <AttendanceCell
-                        key={d.iso}
-                        engineer={eng}
-                        pto={pto}
-                        dateIso={d.iso}
-                        dayLabel={d.label}
-                        isToday={d.isToday}
-                        disabled={submit.isPending}
-                        onSick={onSick}
-                      />
-                    );
-                  })}
-                </div>
+                  engineer={eng}
+                  days={days}
+                  ptoLookup={ptoByUserDay}
+                  disabled={submit.isPending}
+                  onSick={onSick}
+                />
               ))}
             </div>
           </div>
@@ -768,64 +727,91 @@ function TodayAttendance({
   );
 }
 
-function AttendanceCell({
-  engineer, pto, dateIso, dayLabel, isToday, disabled, onSick,
+/** Compact one-line chip: 3 inline day dots + engineer short name.
+ *  Each dot is independently clickable to log sick for THAT date. */
+function EngineerChip({
+  engineer, days, ptoLookup, disabled, onSick,
 }: {
   engineer: EngineerRow;
-  pto: PtoRequest | null;
-  dateIso: string;
-  dayLabel: string;
-  isToday: boolean;
+  days: { iso: string; label: string; isToday: boolean }[];
+  ptoLookup: Map<string, PtoRequest>;
   disabled: boolean;
   onSick: (eng: EngineerRow, iso: string, label: string) => void;
 }) {
-  const out    = pto !== null;
-  const bg     = out ? PTO_TYPE_BG[pto!.type]    : 'rgba(34,197,94,0.08)';
-  const border = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
-  const title  = out
-    ? `${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
-    : `${engineer.full_name} working ${dayLabel} — click to log sick`;
+  // The chip's overall outline reflects today's status (most-relevant day).
+  const today = days[0];
+  const ptoToday = ptoLookup.get(`${engineer.user_id}|${today.iso}`) ?? null;
+  const outlineColor = ptoToday ? PTO_TYPE_COLOR[ptoToday.type] : '#10b981';
+  const bgColor      = ptoToday ? PTO_TYPE_BG[ptoToday.type]    : 'rgba(34,197,94,0.05)';
+
   return (
-    <button
-      type="button"
-      onClick={out ? undefined : () => onSick(engineer, dateIso, dayLabel)}
-      disabled={disabled || out}
-      title={title}
+    <div
+      className="t-small"
       style={{
-        padding: '0.2rem 0.4rem',
-        background: bg,
-        border: `1px solid ${border}`,
-        borderRadius: 4,
-        cursor: out ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        outline: isToday ? '1px solid var(--color-accent)' : undefined,
-        outlineOffset: isToday ? 1 : undefined,
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        fontSize: 11,
-        minHeight: 22,
+        gap: 6,
+        padding: '0.2rem 0.5rem 0.2rem 0.35rem',
+        background: bgColor,
+        border: `1px solid ${outlineColor}`,
+        borderRadius: 999,
       }}
     >
-      {out ? (
-        <>
-          <span style={{ color: border, fontWeight: 600 }}>●</span>
-          <span
-            style={{
-              background: border, color: 'white',
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-              padding: '0.05rem 0.25rem', borderRadius: 2,
-            }}
-          >
-            {pto!.type === 'sick' ? 'SICK' : pto!.type === 'vacation' ? 'VAC' : pto!.type.slice(0, 4).toUpperCase()}
-          </span>
-        </>
-      ) : (
-        <span style={{ color: '#10b981' }}>○ in</span>
-      )}
-    </button>
+      {/* 3 day-dots inline */}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+        {days.map((d) => {
+          const pto = ptoLookup.get(`${engineer.user_id}|${d.iso}`) ?? null;
+          const out = pto !== null;
+          const color = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
+          const typeShort = pto
+            ? (pto.type === 'sick' ? 'sick' : pto.type === 'vacation' ? 'vac' : pto.type.slice(0, 3))
+            : null;
+          const tip = out
+            ? `${d.label}: ${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== d.iso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
+            : `${d.label}: ${engineer.full_name} working — click to log sick`;
+          return (
+            <button
+              key={d.iso}
+              type="button"
+              onClick={out ? undefined : () => onSick(engineer, d.iso, d.label)}
+              disabled={disabled || out}
+              title={tip}
+              style={{
+                width: 18, height: 18,
+                padding: 0,
+                background: 'transparent',
+                border: d.isToday ? `1.5px solid ${color}` : `1px solid ${color}`,
+                borderRadius: 999,
+                cursor: out ? 'default' : 'pointer',
+                color,
+                fontWeight: 700,
+                fontSize: 9,
+                lineHeight: '14px',
+                opacity: disabled ? 0.5 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {out
+                ? <span style={{ fontSize: 9 }}>{typeShort![0].toUpperCase()}</span>
+                : <span style={{ color: '#10b981', fontSize: 14, lineHeight: '14px' }}>○</span>}
+            </button>
+          );
+        })}
+      </span>
+      <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>
+        {shortName(engineer.full_name)}
+      </span>
+    </div>
   );
+}
+
+/** "Sean Martell" → "Sean M." */
+function shortName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 2) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
 // ───────────────────────────── Cap heatmap (9-week vacation calendar)
