@@ -102,8 +102,21 @@ function TestTable({
             const c = statusColor(s);
             const badge = statusBadge(s);
             const mapped = r.last_by_user ? userMap?.get(r.last_by_user) : null;
+            // Recency row tint: today=green, yesterday=amber. Makes "did this
+            // happen recently?" answerable from a glance instead of scanning
+            // to the far-right Days-ago column.
+            const rowBg =
+              r.days_ago === 0 ? 'rgba(34,197,94,0.10)'   // light green
+              : r.days_ago === 1 ? 'rgba(217,119,6,0.07)' // light amber
+              : undefined;
             return (
-              <tr key={r.log_name} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
+              <tr
+                key={r.log_name}
+                style={{
+                  borderTop: '1px solid var(--color-border-soft)',
+                  background: rowBg,
+                }}
+              >
                 <td className="py-1 pr-3">
                   <span>{r.log_name}</span>
                   {r.activity_name && r.activity_name !== r.log_name && (
