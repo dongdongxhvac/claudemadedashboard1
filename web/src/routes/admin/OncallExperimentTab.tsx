@@ -643,12 +643,18 @@ function AddCoverageModal({
   const del    = useDeleteCoverageOverride();
   // null = no mode picked yet; forces a conscious choice.
   const [mode, setMode]                 = useState<ModalMode | null>(null);
+  // Locked when the user opened the drawer by clicking a grid cell — that's
+  // an explicit "I want to cover THIS engineer" intent, so we don't let them
+  // change the original engineer mid-flow.
+  const lockedOriginal = !!preset?.originalId;
   const [originalId, setOriginalId]     = useState<string>(preset?.originalId ?? '');
   const [coverId, setCoverId]           = useState<string>('');
   const [weekStart, setWeekStart]       = useState<string>(preset?.weekStart ?? nextFridayIso());
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [dayStart, setDayStart]         = useState<string>(todayStr);
-  const [dayEnd, setDayEnd]             = useState<string>('');  // empty = single day = dayStart
+  // Day mode: array of individually-selected YYYY-MM-DD dates (not a range).
+  // Each selected day produces its own override row on submit.
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [dayPick, setDayPick]           = useState<string>(todayStr);
   // Swap-mode state: two engineers and two weeks. Engineer A defaults to the
   // preset engineer (the row whose cell was clicked).
   const [swapAId, setSwapAId]           = useState<string>(preset?.originalId ?? '');
@@ -657,6 +663,14 @@ function AddCoverageModal({
   const [swapBWeek, setSwapBWeek]       = useState<string>(nextFridayIso());
   const [reason, setReason]             = useState('');
   const [err, setErr]                   = useState<string | null>(null);
+
+  const addDay = (d: string) => {
+    if (!d) return;
+    setSelectedDays((cur) => cur.includes(d) ? cur : [...cur, d].sort());
+  };
+  const removeDay = (d: string) => {
+    setSelectedDays((cur) => cur.filter((x) => x !== d));
+  };
 
   // Engineer options for "Cover with": all active engineers minus the chosen original.
   const coverOptions = useMemo(() => {
@@ -802,45 +816,70 @@ function AddCoverageModal({
       return;
     }
 
-    let kind: OverrideKind;
-    let startsOn: string;
-    let endsOn:   string;
     if (mode === 'week') {
-      kind = 'week';
       if (!weekStart || !isFriday(weekStart)) {
         setErr('Week swaps must start on a Friday (matches the rotation cutover).');
         return;
       }
-      startsOn = weekStart;
-      endsOn   = addDaysIso(weekStart, 6);
-    } else {
-      kind = 'day';
-      if (!dayStart) { setErr('Pick a start date.'); return; }
-      const effectiveEnd = dayEnd || dayStart;
-      if (effectiveEnd < dayStart) {
-        setErr('End date can’t be before start date.');
-        return;
+      const startsOn = weekStart;
+      const endsOn   = addDaysIso(weekStart, 6);
+      const conflict = findConflict('week', originalId, startsOn, endsOn);
+      if (conflict.hard) { setErr(conflict.hard); return; }
+      if (conflict.soft && !confirm(`${conflict.soft}\n\nContinue?`)) return;
+      try {
+        await create.mutateAsync({
+          original_user_id: originalId,
+          cover_user_id:    coverId,
+          kind: 'week',
+          starts_on: startsOn,
+          ends_on:   endsOn,
+          reason:    reason.trim() || null,
+        });
+        onClose();
+      } catch (e) {
+        setErr((e as Error).message);
       }
-      startsOn = dayStart;
-      endsOn   = effectiveEnd;
+      return;
     }
 
-    const conflict = findConflict(kind, originalId, startsOn, endsOn);
-    if (conflict.hard) { setErr(conflict.hard); return; }
-    if (conflict.soft && !confirm(`${conflict.soft}\n\nContinue?`)) return;
+    // ── Day(s) mode — multi-day individual selection, one override row per day.
+    if (selectedDays.length === 0) {
+      setErr('Pick at least one day to cover.');
+      return;
+    }
+    // Run conflict checks across all selected days first; only proceed if
+    // none are hard-blocked and the user accepts any soft warnings.
+    const hardErrors: string[] = [];
+    const softWarnings: string[] = [];
+    for (const d of selectedDays) {
+      const c = findConflict('day', originalId, d, d);
+      if (c.hard) hardErrors.push(`${d}: ${c.hard}`);
+      if (c.soft) softWarnings.push(`${d}: ${c.soft}`);
+    }
+    if (hardErrors.length > 0) { setErr(hardErrors.join('\n')); return; }
+    if (softWarnings.length > 0 && !confirm(`${softWarnings.join('\n\n')}\n\nContinue?`)) return;
 
+    // Sequential creates; if any fails midway, roll back the rows already
+    // inserted so we don't leave a partial day-list on the engineer.
+    const insertedIds: string[] = [];
     try {
-      await create.mutateAsync({
-        original_user_id: originalId,
-        cover_user_id:    coverId,
-        kind,
-        starts_on:        startsOn,
-        ends_on:          endsOn,
-        reason:           reason.trim() || null,
-      });
+      for (const d of selectedDays) {
+        const row = await create.mutateAsync({
+          original_user_id: originalId,
+          cover_user_id:    coverId,
+          kind: 'day',
+          starts_on: d,
+          ends_on:   d,
+          reason:    reason.trim() || null,
+        }) as { id: string };
+        if (row?.id) insertedIds.push(row.id);
+      }
       onClose();
     } catch (e) {
-      setErr((e as Error).message);
+      for (const id of insertedIds) {
+        try { await del.mutateAsync(id); } catch { /* best-effort cleanup */ }
+      }
+      setErr(`Failed after ${insertedIds.length}/${selectedDays.length} days: ${(e as Error).message}`);
     }
   };
 
@@ -947,12 +986,23 @@ function AddCoverageModal({
           {mode === 'swap' ? (
             <>
               <label className="block">
-                <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer A</span>
+                <span className="t-small t-muted uppercase tracking-wider block mb-1">
+                  Engineer A
+                  {lockedOriginal && (
+                    <span className="ml-1" style={{ color: '#7e22ce', fontSize: 10, letterSpacing: '0.5px' }}>
+                      🔒 locked from grid
+                    </span>
+                  )}
+                </span>
                 <select
                   value={swapAId}
                   onChange={(e) => setSwapAId(e.target.value)}
-                  className="w-full border rounded px-2 py-1 t-text"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                  disabled={lockedOriginal}
+                  className="w-full border rounded px-2 py-1 t-text disabled:opacity-70 disabled:cursor-not-allowed"
+                  style={{
+                    borderColor: lockedOriginal ? '#a855f7' : 'var(--color-border)',
+                    background: 'var(--color-card)',
+                  }}
                 >
                   <option value="">— pick —</option>
                   {originalOptions.map((e) => (
@@ -1032,12 +1082,23 @@ function AddCoverageModal({
           ) : (
           <>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Engineer being covered</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Engineer being covered
+              {lockedOriginal && (
+                <span className="ml-1" style={{ color: '#7e22ce', fontSize: 10, letterSpacing: '0.5px' }}>
+                  🔒 locked from grid
+                </span>
+              )}
+            </span>
             <select
               value={originalId}
               onChange={(e) => setOriginalId(e.target.value)}
-              className="w-full border rounded px-2 py-1 t-text"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+              disabled={lockedOriginal}
+              className="w-full border rounded px-2 py-1 t-text disabled:opacity-70 disabled:cursor-not-allowed"
+              style={{
+                borderColor: lockedOriginal ? '#a855f7' : 'var(--color-border)',
+                background: 'var(--color-card)',
+              }}
             >
               <option value="">— pick —</option>
               {originalOptions.map((e) => (
@@ -1097,42 +1158,74 @@ function AddCoverageModal({
               )}
             </label>
           ) : (
-            <>
-              <label className="block">
-                <span className="t-small t-muted uppercase tracking-wider block mb-1">Start date</span>
+            <div className="col-span-2">
+              <span className="t-small t-muted uppercase tracking-wider block mb-1">
+                Days to cover <span className="t-muted">(pick each day individually — not a range)</span>
+              </span>
+              <div className="flex items-end gap-2 flex-wrap">
                 <input
                   type="date"
-                  value={dayStart}
-                  onChange={(e) => setDayStart(e.target.value)}
-                  className="w-full border rounded px-2 py-1 t-text t-mono"
+                  value={dayPick}
+                  onChange={(e) => setDayPick(e.target.value)}
+                  className="border rounded px-2 py-1 t-text t-mono"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
                 />
-                {dayStart && (
-                  <p className="t-small t-muted mt-1">{dayName(dayStart)} {fmtMd(dayStart)}</p>
-                )}
-              </label>
-              <label className="block">
-                <span className="t-small t-muted uppercase tracking-wider block mb-1">
-                  End date <span className="t-muted">(blank = single day)</span>
-                </span>
-                <input
-                  type="date"
-                  value={dayEnd}
-                  min={dayStart || undefined}
-                  onChange={(e) => setDayEnd(e.target.value)}
-                  className="w-full border rounded px-2 py-1 t-text t-mono"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-                />
-                {dayEnd && dayStart && dayEnd >= dayStart && (
-                  <p className="t-small t-muted mt-1">
-                    {dayName(dayEnd)} {fmtMd(dayEnd)}{' · '}
-                    {dayEnd === dayStart
-                      ? '1 day'
-                      : `${Math.round((new Date(dayEnd).getTime() - new Date(dayStart).getTime()) / 86_400_000) + 1} days`}
-                  </p>
-                )}
-              </label>
-            </>
+                <button
+                  type="button"
+                  onClick={() => { addDay(dayPick); }}
+                  disabled={!dayPick || selectedDays.includes(dayPick)}
+                  className="t-small px-3 py-1 rounded border font-medium disabled:opacity-40"
+                  style={{ background: '#14b8a6', borderColor: '#14b8a6', color: 'white' }}
+                >+ Add day</button>
+              </div>
+
+              {/* Quick-pick next 10 days */}
+              <div className="flex flex-wrap gap-1 mt-2">
+                <span className="t-small t-muted self-center mr-1">Quick pick:</span>
+                {Array.from({ length: 10 }, (_, i) => addDaysIso(todayStr, i)).map((d) => {
+                  const picked = selectedDays.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => picked ? removeDay(d) : addDay(d)}
+                      className="t-small px-1.5 py-0.5 rounded border"
+                      style={
+                        picked
+                          ? { background: '#14b8a6', borderColor: '#14b8a6', color: 'white' }
+                          : { background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }
+                      }
+                      title={`${dayName(d)} ${d}${picked ? ' — click to remove' : ''}`}
+                    >{dayName(d)} {fmtMd(d)}</button>
+                  );
+                })}
+              </div>
+
+              {/* Selected days chips */}
+              {selectedDays.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2 pt-2" style={{ borderTop: '1px dashed var(--color-border-soft)' }}>
+                  <span className="t-small t-muted self-center mr-1">
+                    Selected ({selectedDays.length}):
+                  </span>
+                  {selectedDays.map((d) => (
+                    <span
+                      key={d}
+                      className="t-small px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                      style={{ background: 'rgba(20,184,166,0.18)', color: '#0f766e', fontWeight: 600 }}
+                    >
+                      {dayName(d)} {fmtMd(d)}
+                      <button
+                        type="button"
+                        onClick={() => removeDay(d)}
+                        className="hover:text-red-600"
+                        style={{ fontSize: 11 }}
+                        title="Remove"
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           </>
           )}
