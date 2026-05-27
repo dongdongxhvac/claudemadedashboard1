@@ -699,7 +699,17 @@ function TodayAttendance({
         </span>
       </div>
 
-      <div className="space-y-3">
+      {/* 3 columns: today (2fr) + tomorrow (1fr) + day-after (1fr).
+          Today gets twice the width so the chips breathe and the eye
+          naturally lands there first. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '2fr 1fr 1fr',
+          gap: 12,
+          alignItems: 'flex-start',
+        }}
+      >
         {days.map((d, i) => (
           <DayAttendanceGroup
             key={d.iso}
@@ -709,6 +719,7 @@ function TodayAttendance({
             ptoLookup={ptoByUserDay}
             disabled={submit.isPending}
             onSick={onSick}
+            isPrimary={i === 0}
           />
         ))}
       </div>
@@ -717,9 +728,11 @@ function TodayAttendance({
 }
 
 /** One day's attendance roll — matches the original single-day chip design,
- *  rendered once per day in the 3-group stack. */
+ *  rendered once per day in the 3-column row. Today's column is wider and
+ *  gets a slightly larger font + accent treatment so the eye lands there
+ *  first. */
 function DayAttendanceGroup({
-  day, counts, shiftGroups, ptoLookup, disabled, onSick,
+  day, counts, shiftGroups, ptoLookup, disabled, onSick, isPrimary,
 }: {
   day: { iso: string; label: string; isToday: boolean };
   counts: { in: number; out: number; total: number };
@@ -727,21 +740,26 @@ function DayAttendanceGroup({
   ptoLookup: Map<string, PtoRequest>;
   disabled: boolean;
   onSick: (eng: EngineerRow, iso: string, label: string) => void;
+  isPrimary: boolean;
 }) {
+  // Today's chips & labels are full size; the two secondary columns drop a
+  // step down so they read as "preview" without losing legibility.
+  const headerSize    = isPrimary ? '0.85rem' : '0.78rem';
+  const shiftLabelMin = isPrimary ? 48 : 36;
   return (
     <div
       style={{
-        padding: '0.4rem 0.6rem',
+        padding: isPrimary ? '0.5rem 0.75rem' : '0.4rem 0.55rem',
         borderLeft: day.isToday ? '3px solid var(--color-accent)' : '3px solid var(--color-border-soft)',
-        background: day.isToday ? 'rgba(99,102,241,0.04)' : undefined,
+        background: day.isToday ? 'rgba(99,102,241,0.05)' : undefined,
         borderRadius: 4,
       }}
     >
-      <div className="t-small mb-1 flex items-baseline gap-2 flex-wrap">
-        <span style={{ fontWeight: 600, color: day.isToday ? 'var(--color-accent)' : 'var(--color-text)' }}>
+      <div className="mb-1 flex items-baseline gap-2 flex-wrap" style={{ fontSize: headerSize }}>
+        <span style={{ fontWeight: isPrimary ? 700 : 600, color: day.isToday ? 'var(--color-accent)' : 'var(--color-text)' }}>
           {day.label}{day.isToday && ' · today'}
         </span>
-        <span className="t-muted">
+        <span className="t-muted t-small">
           <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{counts.in}/{counts.total} in</span>
           {counts.out > 0 && (
             <span style={{ color: 'var(--color-warn, #d97706)', marginLeft: 6, fontWeight: 600 }}>
@@ -754,12 +772,12 @@ function DayAttendanceGroup({
         {shiftGroups.map((g) => (
           <div key={g.shift_id} className="flex items-baseline gap-2 flex-wrap">
             <span
-              className="t-small t-muted uppercase tracking-wider"
-              style={{ fontSize: 9, minWidth: 56 }}
+              className="t-muted uppercase tracking-wider"
+              style={{ fontSize: 9, minWidth: shiftLabelMin }}
             >
               {g.label}
             </span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {g.engineers.map((eng) => {
                 const pto = ptoLookup.get(`${eng.user_id}|${day.iso}`) ?? null;
                 return (
@@ -771,6 +789,7 @@ function DayAttendanceGroup({
                     dayLabel={day.label}
                     disabled={disabled}
                     onSick={onSick}
+                    isPrimary={isPrimary}
                   />
                 );
               })}
@@ -783,7 +802,7 @@ function DayAttendanceGroup({
 }
 
 function DayChip({
-  engineer, pto, dateIso, dayLabel, disabled, onSick,
+  engineer, pto, dateIso, dayLabel, disabled, onSick, isPrimary,
 }: {
   engineer: EngineerRow;
   pto: PtoRequest | null;
@@ -791,6 +810,7 @@ function DayChip({
   dayLabel: string;
   disabled: boolean;
   onSick: (eng: EngineerRow, iso: string, label: string) => void;
+  isPrimary?: boolean;
 }) {
   const out    = pto !== null;
   const bg     = out ? PTO_TYPE_BG[pto!.type]    : 'rgba(34,197,94,0.08)';
@@ -804,15 +824,15 @@ function DayChip({
       onClick={out ? undefined : () => onSick(engineer, dateIso, dayLabel)}
       disabled={disabled || out}
       title={tip}
-      className="t-small"
       style={{
-        padding: '0.15rem 0.5rem',
+        padding: isPrimary ? '0.15rem 0.5rem' : '0.1rem 0.4rem',
+        fontSize: isPrimary ? '0.75rem' : '0.68rem',
         background: bg,
         border: `1px solid ${border}`,
         borderRadius: 999,
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 5,
+        gap: isPrimary ? 5 : 3,
         cursor: out ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
       }}
