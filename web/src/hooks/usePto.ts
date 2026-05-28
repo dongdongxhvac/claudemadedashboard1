@@ -280,6 +280,57 @@ export function useReviewPto() {
   });
 }
 
+/** Manager edit: change any field on an existing request. RLS allows
+ *  admin/manager/lead via pto_requests_elevated_write. */
+export function useUpdatePto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      patch: Partial<{
+        type: PtoType;
+        starts_on: string;
+        ends_on: string;
+        hours: number;
+        status: PtoStatus;
+        reason: string | null;
+        request_source: PtoRequestSource | null;
+        request_source_detail: string | null;
+        cap_override: boolean;
+        cap_override_reason: string | null;
+      }>;
+    }) => {
+      const { error } = await supabase
+        .from('pto_requests')
+        .update(input.patch)
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY_REQUESTS });
+      qc.invalidateQueries({ queryKey: KEY_SUMMARY });
+    },
+  });
+}
+
+/** Manager hard-delete: removes the row entirely. Use for true mistakes /
+ *  duplicates only — for "engineer changed their mind", use cancel instead so
+ *  the audit trail stays intact. */
+export function useDeletePto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('pto_requests').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY_REQUESTS });
+      qc.invalidateQueries({ queryKey: KEY_SUMMARY });
+    },
+  });
+}
+
 export function useCancelPto() {
   const qc = useQueryClient();
   return useMutation({

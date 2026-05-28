@@ -27,11 +27,12 @@ import {
 } from '../hooks/usePto';
 import { PtoYearLog } from './PtoPanel';
 
+// Engineer self-serve only exposes the two real time-off categories.
+// Everything else (personal/holiday/bereavement/unpaid) goes through the
+// manager who has the full set in Add PTO.
 const PTO_TYPE_OPTIONS: { value: PtoType; label: string }[] = [
   { value: 'vacation', label: 'Vacation' },
   { value: 'sick',     label: 'Sick' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'unpaid',   label: 'Unpaid' },
 ];
 
 function todayIso(): string {

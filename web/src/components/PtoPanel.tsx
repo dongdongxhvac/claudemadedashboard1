@@ -10,7 +10,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
-  useSubmitPto, useReviewPto, useCancelPto, useUpdatePtoBalance,
+  useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
   checkVacationCap, PTO_TYPE_LABELS,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
@@ -224,9 +224,11 @@ export function PtoPanel() {
   const [showAdd, setShowAdd]               = useState(false);
   const [addPresetDate, setAddPresetDate]   = useState<string | null>(null);
   const [showEditBalance, setShowEditBalance] = useState<PtoSummary | null>(null);
+  const [editingRequest, setEditingRequest]   = useState<PtoRequest | null>(null);
 
   const review     = useReviewPto();
   const cancel     = useCancelPto();
+  const delPto     = useDeletePto();
 
   const subtitle = (
     <span className="t-small t-muted">
@@ -320,6 +322,10 @@ export function PtoPanel() {
               onCancel={(id) => {
                 if (confirm('Cancel this approved PTO?')) cancel.mutate(id);
               }}
+              onEdit={(r) => setEditingRequest(r)}
+              onDelete={(id) => {
+                if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
+              }}
             />
           )}
 
@@ -330,6 +336,10 @@ export function PtoPanel() {
               allRequests={buckets.all}
               engineers={engineersQ.data ?? []}
               onEdit={(s) => setShowEditBalance(s)}
+              onEditRequest={(r) => setEditingRequest(r)}
+              onDeleteRequest={(id) => {
+                if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
+              }}
             />
           )}
         </div>
@@ -347,6 +357,12 @@ export function PtoPanel() {
         <EditBalanceModal
           summary={showEditBalance}
           onClose={() => setShowEditBalance(null)}
+        />
+      )}
+      {editingRequest && (
+        <EditPtoModal
+          request={editingRequest}
+          onClose={() => setEditingRequest(null)}
         />
       )}
     </Section>
@@ -534,21 +550,27 @@ function ApprovalControls({
 
 // ───────────────────────────── Upcoming approved
 
-function UpcomingGroupedList({ rows, onCancel }: { rows: PtoRequest[]; onCancel: (id: string) => void }) {
+type UpcomingActions = {
+  onCancel: (id: string) => void;
+  onEdit:   (r: PtoRequest) => void;
+  onDelete: (id: string) => void;
+};
+
+function UpcomingGroupedList({ rows, ...actions }: { rows: PtoRequest[] } & UpcomingActions) {
   const groups = useMemo(() => groupUpcoming(rows, todayIso()), [rows]);
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">Upcoming approved</div>
       <div className="space-y-3">
-        {groups.thisWeek.length > 0  && <UpcomingBucket label="This week"  rows={groups.thisWeek}  onCancel={onCancel} />}
-        {groups.thisMonth.length > 0 && <UpcomingBucket label="This month" rows={groups.thisMonth} onCancel={onCancel} />}
-        {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     onCancel={onCancel} />}
+        {groups.thisWeek.length > 0  && <UpcomingBucket label="This week"  rows={groups.thisWeek}  {...actions} />}
+        {groups.thisMonth.length > 0 && <UpcomingBucket label="This month" rows={groups.thisMonth} {...actions} />}
+        {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     {...actions} />}
       </div>
     </div>
   );
 }
 
-function UpcomingBucket({ label, rows, onCancel }: { label: string; rows: PtoRequest[]; onCancel: (id: string) => void }) {
+function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: string; rows: PtoRequest[] } & UpcomingActions) {
   return (
     <div>
       <div className="t-small font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
@@ -577,12 +599,26 @@ function UpcomingBucket({ label, rows, onCancel }: { label: string; rows: PtoReq
                 title={`Cap override: ${r.cap_override_reason ?? ''}`}
               >OVERRIDE</span>
             )}
-            <button
-              onClick={() => onCancel(r.id)}
-              className="ml-auto t-muted hover:t-danger"
-              title="Cancel this PTO"
-              style={{ fontSize: 14, lineHeight: 1 }}
-            >×</button>
+            <span className="ml-auto" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <button
+                onClick={() => onEdit(r)}
+                className="t-muted hover:t-accent"
+                title="Edit"
+                style={{ fontSize: 12, lineHeight: 1 }}
+              >✎</button>
+              <button
+                onClick={() => onCancel(r.id)}
+                className="t-muted hover:t-danger"
+                title="Cancel (keeps audit row)"
+                style={{ fontSize: 14, lineHeight: 1 }}
+              >×</button>
+              <button
+                onClick={() => onDelete(r.id)}
+                className="t-muted hover:t-danger"
+                title="Delete (hard-remove)"
+                style={{ fontSize: 12, lineHeight: 1 }}
+              >🗑</button>
+            </span>
           </li>
         ))}
       </ul>
@@ -1110,12 +1146,14 @@ function fmtHireSeniority(hireIso: string | null): string {
 }
 
 function BalancesGrid({
-  summaries, allRequests, engineers, onEdit,
+  summaries, allRequests, engineers, onEdit, onEditRequest, onDeleteRequest,
 }: {
   summaries: PtoSummary[];
   allRequests: PtoRequest[];
   engineers: EngineerRow[];
   onEdit: (s: PtoSummary) => void;
+  onEditRequest?: (r: PtoRequest) => void;
+  onDeleteRequest?: (id: string) => void;
 }) {
   const currentYear = new Date().getFullYear();
   const rows = summaries
@@ -1220,7 +1258,12 @@ function BalancesGrid({
                 {isOpen && (
                   <tr style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
                     <td colSpan={6} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
-                      <PtoYearLog rows={log} year={currentYear} />
+                      <PtoYearLog
+                        rows={log}
+                        year={currentYear}
+                        onEdit={onEditRequest}
+                        onDelete={onDeleteRequest}
+                      />
                     </td>
                   </tr>
                 )}
@@ -1263,8 +1306,17 @@ function BalanceSplitCells({ remaining, used, alloted }: { remaining: number; us
 
 /** Chronological log of every PTO entry (any status) for one engineer in one year.
  *  Used by both the manager-side BalancesGrid drill-down and the engineer
- *  self-serve MyPtoSection (Phase 12b). */
-export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number }) {
+ *  self-serve MyPtoSection (Phase 12b). When onEdit/onDelete are passed, the
+ *  manager-only edit + delete icons render on each row. */
+export function PtoYearLog({
+  rows, year, onEdit, onDelete,
+}: {
+  rows: PtoRequest[];
+  year: number;
+  onEdit?: (r: PtoRequest) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const canEdit = !!onEdit || !!onDelete;
   if (rows.length === 0) {
     return <p className="t-small t-muted italic">No PTO entries in {year}.</p>;
   }
@@ -1339,6 +1391,26 @@ export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number })
                 </span>
               )}
               {r.reason && <span className="t-muted truncate" style={{ maxWidth: 240 }}>· {r.reason}</span>}
+              {canEdit && (
+                <span className="ml-auto" style={{ display: 'inline-flex', gap: 6 }}>
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(r)}
+                      className="t-muted hover:t-accent"
+                      title="Edit"
+                      style={{ fontSize: 11, lineHeight: 1 }}
+                    >✎</button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(r.id)}
+                      className="t-muted hover:t-danger"
+                      title="Delete (hard-remove from history)"
+                      style={{ fontSize: 11, lineHeight: 1 }}
+                    >🗑</button>
+                  )}
+                </span>
+              )}
             </li>
           );
         })}
@@ -1617,6 +1689,172 @@ function AddPtoModal({
             style={{ background: 'var(--color-accent)' }}
           >
             {submit.isPending ? 'Saving…' : 'Save PTO'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────── Edit PTO request modal
+
+function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () => void }) {
+  const update = useUpdatePto();
+  const [type, setType]                 = useState<PtoType>(request.type);
+  const [startsOn, setStartsOn]         = useState<string>(request.starts_on);
+  const [endsOn, setEndsOn]             = useState<string>(request.ends_on);
+  const [hours, setHours]               = useState<string>(String(request.hours));
+  const [status, setStatus]             = useState<PtoStatus>(request.status);
+  const [reason, setReason]             = useState<string>(request.reason ?? '');
+  const [source, setSource]             = useState<PtoRequestSource | ''>(request.request_source ?? '');
+  const [sourceDetail, setSourceDetail] = useState<string>(request.request_source_detail ?? '');
+  const [err, setErr]                   = useState<string | null>(null);
+
+  const onSave = async () => {
+    setErr(null);
+    if (endsOn < startsOn) { setErr('End date can\'t be before start date.'); return; }
+    const h = Number(hours);
+    if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
+    try {
+      await update.mutateAsync({
+        id: request.id,
+        patch: {
+          type, starts_on: startsOn, ends_on: endsOn, hours: h, status,
+          reason: reason.trim() || null,
+          request_source: source || null,
+          request_source_detail: sourceDetail.trim() || null,
+        },
+      });
+      onClose();
+    } catch (e) { setErr((e as Error).message); }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
+        display: 'flex', justifyContent: 'flex-end', zIndex: 50,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="t-card"
+        style={{
+          width: 'min(460px, 92vw)', height: '100%', overflow: 'auto', padding: '1.25rem',
+          borderLeft: '1px solid var(--color-border)',
+          boxShadow: '-8px 0 24px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="t-section-title">Edit PTO</h3>
+          <button onClick={onClose} className="t-small t-muted">✕</button>
+        </div>
+
+        <p className="t-small t-muted mb-3">
+          Editing <strong>{request.user_full_name ?? '?'}</strong>'s entry. Engineer is locked — use Delete + Add PTO if you need to reassign to a different engineer.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Type</span>
+            <select value={type} onChange={(e) => setType(e.target.value as PtoType)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][]).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value as PtoStatus)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="denied">Denied</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Start date</span>
+            <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">End date</span>
+            <input type="date" value={endsOn} min={startsOn} onChange={(e) => setEndsOn(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block col-span-2">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Hours</span>
+            <input type="number" min={0.25} step={0.25}
+              value={hours} onChange={(e) => setHours(e.target.value)}
+              className="w-32 border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block col-span-2">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Reason</span>
+            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Source</span>
+            <select value={source} onChange={(e) => setSource(e.target.value as PtoRequestSource | '')}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="">— none —</option>
+              {PTO_MANAGER_SOURCE_OPTIONS.map((s) => (
+                <option key={s} value={s}>{PTO_REQUEST_SOURCE_LABELS[s]}</option>
+              ))}
+              {/* Allow keeping the original source even if it's a system value */}
+              {request.request_source && !PTO_MANAGER_SOURCE_OPTIONS.includes(request.request_source) && (
+                <option value={request.request_source}>
+                  {PTO_REQUEST_SOURCE_LABELS[request.request_source]} (existing)
+                </option>
+              )}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Source detail</span>
+            <input type="text" value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+        </div>
+
+        {err && <p className="t-small t-danger mt-2">{err}</p>}
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="t-small px-3 py-1 rounded border" style={{ borderColor: 'var(--color-border)' }}>
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={update.isPending}
+            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {update.isPending ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>
