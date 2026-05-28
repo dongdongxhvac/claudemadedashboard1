@@ -14,6 +14,7 @@ import {
   useMyEngineerContext, useMyPmRows, useMyWoRows, useMyLaborRows, useMyPmCloses,
 } from '../../hooks/useMyAssignedData';
 import { MyPtoSection } from '../../components/MyPtoSection';
+import { MyOvertimeSection } from '../../components/MyOvertimeSection';
 import type { PmRow, WoRow } from '../../hooks/useCurrentSnapshots';
 import {
   isClosed, isNpm, localISODate, fmtMd,
@@ -349,6 +350,9 @@ export default function EngineerPc() {
             </div>
           </section>
         </div>
+
+        {/* Phase 11b — engineer self-serve OT coverage. NEW posts pinned to top. */}
+        <MyOvertimeSection userId={ctx.data.user_id} />
 
         {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
         <MyPtoSection userId={ctx.data.user_id} />

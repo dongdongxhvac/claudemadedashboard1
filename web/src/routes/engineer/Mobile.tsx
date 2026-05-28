@@ -20,6 +20,7 @@ import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { OncallBadge } from '../../components/OncallBadge';
 import { openPrintWindow } from '../../lib/printPmList';
 import { MyPtoSection } from '../../components/MyPtoSection';
+import { MyOvertimeSection } from '../../components/MyOvertimeSection';
 
 type Tab = 'now' | 'mine' | 'profile';
 
@@ -456,6 +457,9 @@ function MineTab({
           )}
         </div>
       </section>
+
+      {/* Phase 11b — engineer self-serve OT coverage. */}
+      <MyOvertimeSection userId={userId} compact />
 
       {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
       <MyPtoSection userId={userId} compact />
