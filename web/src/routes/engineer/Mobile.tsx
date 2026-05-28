@@ -19,6 +19,7 @@ import { isClosed, isNpm, localISODate, fmtMd, mondayOf, addDays } from '../../l
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { OncallBadge } from '../../components/OncallBadge';
 import { openPrintWindow } from '../../lib/printPmList';
+import { MyPtoSection } from '../../components/MyPtoSection';
 
 type Tab = 'now' | 'mine' | 'profile';
 
@@ -94,6 +95,7 @@ export default function EngineerMobile() {
         {tab === 'mine' && (
           <MineTab
             engineerName={ctx.data.cmms_assignee_name ?? 'Engineer'}
+            userId={ctx.data.user_id}
             pmRows={pmQ.data ?? []}
             woRows={woQ.data ?? []}
             loading={pmQ.isLoading || woQ.isLoading}
@@ -292,11 +294,13 @@ function NowTab({
 // ============================================================================
 function MineTab({
   engineerName,
+  userId,
   pmRows,
   woRows,
   loading,
 }: {
   engineerName: string;
+  userId: string;
   pmRows: import('../../hooks/useCurrentSnapshots').PmRow[];
   woRows: import('../../hooks/useCurrentSnapshots').WoRow[];
   loading: boolean;
@@ -452,6 +456,9 @@ function MineTab({
           )}
         </div>
       </section>
+
+      {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
+      <MyPtoSection userId={userId} compact />
     </div>
   );
 }

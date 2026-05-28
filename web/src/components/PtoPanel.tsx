@@ -7,7 +7,7 @@
 // Cap rule: at most 2 engineers on vacation any given day. Sick has no cap.
 // Cap can be overridden by manager at submit OR approve time (logged with
 // reason for audit).
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePtoBalance,
@@ -324,6 +324,7 @@ export function PtoPanel() {
           {(summaryQ.data ?? []).length > 0 && (
             <BalancesGrid
               summaries={summaryQ.data ?? []}
+              allRequests={buckets.all}
               onEdit={(s) => setShowEditBalance(s)}
             />
           )}
@@ -1079,15 +1080,45 @@ function LegendChip({ color, label }: { color: string; label: string }) {
 
 // ───────────────────────────── Balances grid
 
-function BalancesGrid({ summaries, onEdit }: { summaries: PtoSummary[]; onEdit: (s: PtoSummary) => void }) {
+function BalancesGrid({
+  summaries, allRequests, onEdit,
+}: {
+  summaries: PtoSummary[];
+  allRequests: PtoRequest[];
+  onEdit: (s: PtoSummary) => void;
+}) {
   const currentYear = new Date().getFullYear();
   const rows = summaries
     .filter((s) => s.year === currentYear)
     .sort((a, b) => (a.user_full_name ?? '').localeCompare(b.user_full_name ?? ''));
+  // Track which engineer row is currently expanded to show the full year log.
+  // Single-open accordion — clicking a different name swaps the open row.
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   if (rows.length === 0) return null;
+
+  // Pre-group all requests (approved + pending + cancelled) by user_id for the
+  // current year so each expansion just slices into the map. Sorted ascending
+  // so the log reads top-to-bottom chronological.
+  const logByUser = useMemo(() => {
+    const yr = String(currentYear);
+    const m = new Map<string, PtoRequest[]>();
+    for (const r of allRequests) {
+      if (!r.starts_on.startsWith(yr)) continue;
+      const cur = m.get(r.user_id) ?? [];
+      cur.push(r);
+      m.set(r.user_id, cur);
+    }
+    for (const arr of m.values()) {
+      arr.sort((a, b) => a.starts_on.localeCompare(b.starts_on));
+    }
+    return m;
+  }, [allRequests, currentYear]);
+
   return (
     <div>
-      <div className="t-small t-muted uppercase tracking-wider mb-2">Balances ({currentYear})</div>
+      <div className="t-small t-muted uppercase tracking-wider mb-2">
+        Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log</span>
+      </div>
       <table className="min-w-full t-text t-small border-collapse">
         <thead>
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
@@ -1099,19 +1130,117 @@ function BalancesGrid({ summaries, onEdit }: { summaries: PtoSummary[]; onEdit: 
           </tr>
         </thead>
         <tbody>
-          {rows.map((s) => (
-            <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-              <td className="py-1 pr-3 font-medium">{s.user_full_name ?? '?'}</td>
-              <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
-              <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
-              <BalanceCell remaining={s.personal_remaining} used={s.personal_used} alloted={s.personal_alloted} />
-              <td className="py-1 pl-2 text-right">
-                <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">edit allotment</button>
-              </td>
-            </tr>
-          ))}
+          {rows.map((s) => {
+            const isOpen = expandedUserId === s.user_id;
+            const log = logByUser.get(s.user_id) ?? [];
+            return (
+              <Fragment key={s.id}>
+                <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
+                  <td className="py-1 pr-3 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedUserId(isOpen ? null : s.user_id)}
+                      className="t-accent hover:underline text-left"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      title={isOpen ? 'Hide log' : `Show ${currentYear} log (${log.length} entr${log.length === 1 ? 'y' : 'ies'})`}
+                    >
+                      <span style={{ display: 'inline-block', width: 10, fontSize: 10, color: 'var(--color-text-muted)' }}>
+                        {isOpen ? '▾' : '▸'}
+                      </span>
+                      {s.user_full_name ?? '?'}
+                    </button>
+                  </td>
+                  <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
+                  <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
+                  <BalanceCell remaining={s.personal_remaining} used={s.personal_used} alloted={s.personal_alloted} />
+                  <td className="py-1 pl-2 text-right">
+                    <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">edit allotment</button>
+                  </td>
+                </tr>
+                {isOpen && (
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
+                    <td colSpan={5} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
+                      <PtoYearLog rows={log} year={currentYear} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Chronological log of every PTO entry (any status) for one engineer in one year.
+ *  Used by both the manager-side BalancesGrid drill-down and the engineer
+ *  self-serve MyPtoSection (Phase 12b). */
+export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number }) {
+  if (rows.length === 0) {
+    return <p className="t-small t-muted italic">No PTO entries in {year}.</p>;
+  }
+  // Split approved/pending vs cancelled/denied — cancelled rows are kept
+  // but visually de-emphasized so the running picture is still accurate.
+  const totals = rows.reduce(
+    (acc, r) => {
+      if (r.status === 'approved' || r.status === 'pending') {
+        const key = r.type as PtoType;
+        acc[key] = (acc[key] ?? 0) + Number(r.hours);
+      }
+      return acc;
+    },
+    {} as Partial<Record<PtoType, number>>,
+  );
+  const summaryLine = (Object.keys(totals) as PtoType[])
+    .sort()
+    .map((t) => `${PTO_TYPE_LABELS[t]} ${totals[t]!.toFixed(2).replace(/\.00$/, '')}h`)
+    .join(' · ');
+  return (
+    <div>
+      <div className="t-small t-muted mb-1.5">
+        <span className="font-medium">{rows.length} entr{rows.length === 1 ? 'y' : 'ies'}</span>
+        {summaryLine && <span className="ml-2">· {summaryLine}</span>}
+      </div>
+      <ul className="space-y-0.5">
+        {rows.map((r) => {
+          const isLive = r.status === 'approved' || r.status === 'pending';
+          return (
+            <li
+              key={r.id}
+              className="t-small flex items-baseline gap-2 flex-wrap"
+              style={{
+                padding: '0.2rem 0.5rem',
+                borderLeft: `3px solid ${PTO_TYPE_COLOR[r.type as PtoType]}`,
+                background: isLive ? PTO_TYPE_BG[r.type as PtoType] : 'transparent',
+                borderRadius: 3,
+                opacity: isLive ? 1 : 0.55,
+              }}
+              title={r.reason ?? undefined}
+            >
+              <span className="t-mono" style={{ minWidth: 90 }}>{fmtRange(r.starts_on, r.ends_on)}</span>
+              <span style={{ minWidth: 72 }}>{PTO_TYPE_LABELS[r.type as PtoType]}</span>
+              <span className="t-mono">{Number(r.hours)}h</span>
+              <span
+                className="px-1 py-0.5 rounded uppercase tracking-wide"
+                style={{
+                  fontSize: 9, fontWeight: 600,
+                  background: r.status === 'approved' ? 'rgba(16,185,129,0.15)' :
+                              r.status === 'pending'  ? 'rgba(234,179,8,0.18)'  :
+                              r.status === 'denied'   ? 'rgba(239,68,68,0.15)'  :
+                                                         'rgba(100,116,139,0.15)',
+                  color: r.status === 'approved' ? '#047857' :
+                         r.status === 'pending'  ? '#a16207' :
+                         r.status === 'denied'   ? '#b91c1c' : '#475569',
+                }}
+              >
+                {r.status}
+              </span>
+              {r.reason && <span className="t-muted truncate" style={{ maxWidth: 240 }}>· {r.reason}</span>}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

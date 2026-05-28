@@ -13,6 +13,7 @@ import { OncallBadge } from '../../components/OncallBadge';
 import {
   useMyEngineerContext, useMyPmRows, useMyWoRows, useMyLaborRows, useMyPmCloses,
 } from '../../hooks/useMyAssignedData';
+import { MyPtoSection } from '../../components/MyPtoSection';
 import type { PmRow, WoRow } from '../../hooks/useCurrentSnapshots';
 import {
   isClosed, isNpm, localISODate, fmtMd,
@@ -348,6 +349,9 @@ export default function EngineerPc() {
             </div>
           </section>
         </div>
+
+        {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
+        <MyPtoSection userId={ctx.data.user_id} />
 
         {snapshotLocal && (
           <p className="t-small t-muted text-center pt-2">Data as of {snapshotLocal}</p>
