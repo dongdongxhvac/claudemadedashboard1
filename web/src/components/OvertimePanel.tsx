@@ -82,8 +82,10 @@ export function OvertimePanel() {
       cold_weather: [], major_off_hour_pm: [], off_hour_repair: [], vendor_escort: [],
     };
     for (const p of postsQ.data ?? []) {
-      // Hide completed posts that ended >24h ago — keep the column tight.
-      if (p.status === 'completed') continue;
+      // Hide both completed AND cancelled posts — the panel is for "what's
+      // happening soon", not an audit log. Cancellations drop out immediately
+      // so the board doesn't accumulate strikethrough cards.
+      if (p.status === 'completed' || p.status === 'cancelled') continue;
       map[p.category].push(p);
     }
     return map;

@@ -67,14 +67,14 @@ export type OvertimePost = {
 
 const POSTS_KEY = ['overtime_posts'];
 
-/** All overtime posts (open + recently closed/cancelled), most-relevant first.
- *  Past posts older than 7 days are filtered out by the client to keep the panel
- *  scoped to upcoming + recent. */
+/** Upcoming overtime posts. Tight 24h window past starts_at so the panel is
+ *  always close to "what's about to happen", not history. Cancelled posts
+ *  are dropped at render time in OvertimePanel.tsx (immediate cleanup). */
 export function useOvertimePosts() {
   return useQuery({
     queryKey: POSTS_KEY,
     queryFn: async (): Promise<OvertimePost[]> => {
-      const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const { data, error } = await supabase
         .from('v_overtime_posts_with_signups')
         .select('*')
