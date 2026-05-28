@@ -12,7 +12,9 @@ import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePtoBalance,
   checkVacationCap, PTO_TYPE_LABELS,
+  PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
+  type PtoRequestSource,
 } from '../hooks/usePto';
 import { useEngineers, type EngineerRow } from '../hooks/useEngineers';
 import { useShifts } from '../hooks/useShifts';
@@ -693,6 +695,10 @@ function TodayAttendance({
       hours:     8,
       status:   'approved',
       reason:   'called out',
+      // One-click sick chip = engineer called out; default source to phone
+      // since that's the most common call-out channel. Manager can still
+      // add a richer entry via the Add PTO modal for unusual cases.
+      request_source: 'phone',
     });
   };
 
@@ -1298,7 +1304,11 @@ export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number })
                 borderRadius: 3,
                 opacity: isLive ? 1 : 0.55,
               }}
-              title={r.reason ?? undefined}
+              title={[
+                r.reason,
+                r.request_source && `via ${PTO_REQUEST_SOURCE_LABELS[r.request_source]}`,
+                r.request_source_detail,
+              ].filter(Boolean).join(' · ') || undefined}
             >
               <span className="t-mono" style={{ minWidth: 90 }}>{fmtRange(r.starts_on, r.ends_on)}</span>
               <span style={{ minWidth: 72 }}>{PTO_TYPE_LABELS[r.type as PtoType]}</span>
@@ -1318,6 +1328,16 @@ export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number })
               >
                 {r.status}
               </span>
+              {r.request_source && (
+                <span
+                  className="t-muted"
+                  style={{ fontSize: 10, fontStyle: 'italic' }}
+                  title={r.request_source_detail ?? undefined}
+                >
+                  via {PTO_REQUEST_SOURCE_LABELS[r.request_source]}
+                  {r.request_source_detail && ` (${r.request_source_detail})`}
+                </span>
+              )}
               {r.reason && <span className="t-muted truncate" style={{ maxWidth: 240 }}>· {r.reason}</span>}
             </li>
           );
@@ -1353,6 +1373,8 @@ function AddPtoModal({
   const [reason, setReason]                 = useState<string>('');
   const [statusChoice, setStatusChoice]     = useState<PtoStatus>('approved'); // manager-added defaults to approved
   const [overrideReason, setOverrideReason] = useState<string>('');
+  const [source, setSource]                 = useState<PtoRequestSource | ''>('');
+  const [sourceDetail, setSourceDetail]     = useState<string>('');
   const [err, setErr]                       = useState<string | null>(null);
 
   // Auto-compute hours: 8h × number of weekdays in range.
@@ -1382,6 +1404,7 @@ function AddPtoModal({
     if (!startsOn || !endsOn) { setErr('Pick dates.'); return; }
     if (endsOn < startsOn) { setErr('End date can\'t be before start date.'); return; }
     if (finalHours <= 0)   { setErr('Hours must be > 0.'); return; }
+    if (!source)         { setErr('Pick a request source (audit trail).'); return; }
 
     if (type === 'vacation' && cap.exceeded && statusChoice === 'approved' && !overrideReason.trim()) {
       setErr('2-engineer vacation cap is exceeded — provide an override reason to approve directly.');
@@ -1399,6 +1422,8 @@ function AddPtoModal({
         status:    statusChoice,
         cap_override:        cap.exceeded && statusChoice === 'approved',
         cap_override_reason: cap.exceeded && statusChoice === 'approved' ? overrideReason.trim() : null,
+        request_source:        source,
+        request_source_detail: sourceDetail.trim() || null,
       });
       onClose();
     } catch (e) {
@@ -1506,6 +1531,39 @@ function AddPtoModal({
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Reason (optional)</span>
             <input type="text" value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. vacation, doctor appt, family event"
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          {/* Audit trail: where did this request come from? Required so every
+              manager-entered PTO has a paper trail back to its origin. */}
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Request source <span style={{ color: 'var(--color-danger)' }}>*</span>
+            </span>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value as PtoRequestSource | '')}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="">— pick —</option>
+              {PTO_MANAGER_SOURCE_OPTIONS.map((s) => (
+                <option key={s} value={s}>{PTO_REQUEST_SOURCE_LABELS[s]}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Source detail <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(optional)</span>
+            </span>
+            <input
+              type="text"
+              value={sourceDetail}
+              onChange={(e) => setSourceDetail(e.target.value)}
+              placeholder="e.g. text 3:42pm, voicemail, hallway"
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />

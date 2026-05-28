@@ -25,6 +25,27 @@ export const PTO_TYPE_LABELS: Record<PtoType, string> = {
   unpaid: 'Unpaid',
 };
 
+export type PtoRequestSource =
+  | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'slack'
+  | 'ontheclock_csv' | 'unknown' | 'other';
+
+export const PTO_REQUEST_SOURCE_LABELS: Record<PtoRequestSource, string> = {
+  self_serve:     'Self-serve',
+  verbal:         'Verbal (in person)',
+  phone:          'Phone call',
+  text:           'Text',
+  email:          'Email',
+  slack:          'Slack',
+  ontheclock_csv: 'OnTheClock CSV',
+  unknown:        'Unknown',
+  other:          'Other',
+};
+
+/** Subset shown in the manager Add-PTO dropdown — the rest are system values. */
+export const PTO_MANAGER_SOURCE_OPTIONS: PtoRequestSource[] = [
+  'verbal', 'phone', 'text', 'email', 'slack', 'other',
+];
+
 export type PtoRequest = {
   id: string;
   user_id: string;
@@ -36,6 +57,8 @@ export type PtoRequest = {
   hours: number;
   status: PtoStatus;
   reason: string | null;
+  request_source: PtoRequestSource | null;
+  request_source_detail: string | null;
   submitted_by: string | null;
   submitted_by_name: string | null;
   submitted_at: string;
@@ -185,6 +208,8 @@ export type SubmitPtoInput = {
   status?: PtoStatus;             // defaults to 'pending'; manager add-direct can pass 'approved'
   cap_override?: boolean;
   cap_override_reason?: string | null;
+  request_source?: PtoRequestSource | null;   // required for manager add; auto-set for self-serve
+  request_source_detail?: string | null;
 };
 
 export function useSubmitPto() {
@@ -202,6 +227,8 @@ export function useSubmitPto() {
         hours:          input.hours,
         status:         input.status ?? 'pending',
         reason:         input.reason ?? null,
+        request_source: input.request_source ?? null,
+        request_source_detail: input.request_source_detail ?? null,
         submitted_by:   meRow?.id ?? null,
         submitted_at:   new Date().toISOString(),
         cap_override:   input.cap_override ?? false,

@@ -248,6 +248,7 @@ function RequestForm({
         hours:     finalHours,
         reason:    reason.trim() || null,
         status:    'pending',
+        request_source: 'self_serve',
       });
       onDone();
     } catch (e) {
