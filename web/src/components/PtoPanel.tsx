@@ -1153,15 +1153,14 @@ function BalancesGrid({
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log</span>
       </div>
-      <table className="min-w-full t-text t-small border-collapse">
+      <table className="t-text t-small border-collapse" style={{ width: 'auto' }}>
         <thead>
           {/* Two-level header: top row groups Vacation/Sick, bottom row labels
-              the Balance and Used/Allotted sub-columns. The Engineer column
-              gets width:100% so all numeric columns collapse to natural width
-              — keeps each (Balance, Used/Allotted) pair visually adjacent
-              instead of letting the table stretch them apart. */}
+              the Balance and Used/Allotted sub-columns. Table is natural-
+              width (not min-w-full) so columns cluster tight to the left
+              rather than stretching to fill the panel. */}
           <tr className="t-muted" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-            <th className="py-1 pr-3" style={{ width: '100%' }}></th>
+            <th className="py-1 pr-3"></th>
             <th className="py-1 px-3 text-center" colSpan={2} style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
               Vacation
             </th>
@@ -1171,7 +1170,7 @@ function BalancesGrid({
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
           </tr>
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-            <th className="py-1 pr-3" style={{ width: '100%' }}>Engineer</th>
+            <th className="py-1 pr-6">Engineer</th>
             <th className="py-1 pl-3 pr-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>Balance</th>
             <th className="py-1 pl-2 pr-3 text-right t-small" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>Used / Allotted</th>
             <th className="py-1 pl-3 pr-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>Balance</th>
@@ -1187,7 +1186,7 @@ function BalancesGrid({
             return (
               <Fragment key={s.id}>
                 <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
-                  <td className="py-1 pr-3">
+                  <td className="py-1 pr-6 align-top">
                     <button
                       type="button"
                       onClick={() => setExpandedUserId(isOpen ? null : s.user_id)}
@@ -1201,7 +1200,7 @@ function BalancesGrid({
                       <span className="font-medium">{s.user_full_name ?? '?'}</span>
                     </button>
                     {hireLine && (
-                      <div className="t-muted" style={{ fontSize: '0.7rem', marginLeft: 14, marginTop: 1 }}>
+                      <div className="t-muted" style={{ fontSize: '0.7rem', marginLeft: 14, marginTop: 1, whiteSpace: 'nowrap' }}>
                         {hireLine}
                       </div>
                     )}
