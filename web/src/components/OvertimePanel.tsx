@@ -7,12 +7,13 @@
 // Layout philosophy: a digital whiteboard. Reads top-to-bottom in chrono order
 // within each category column. Filled = grey card · open = brighter card with
 // the [+] CTA · cancelled = strikethrough.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useOvertimePosts,
   useOvertimeRealtime,
   useCreateOvertimePost,
   useCancelOvertimePost,
+  useRestoreOvertimePost,
   useSignUpForOvertime,
   useUnSignUpForOvertime,
   useAdminAssignToOvertime,
@@ -63,41 +64,90 @@ function shortName(full: string | null | undefined): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
+const RECENTLY_CANCELLED_WINDOW_DAYS = 3;
+const PAST_GRACE_HOURS = 24;
+
 export function OvertimePanel() {
   useOvertimeRealtime();
   const postsQ     = useOvertimePosts();
   const meQ        = useMe();
   const buildingsQ = useBuildings();
   const engineersQ = useEngineers();
+  const cancelPost  = useCancelOvertimePost();
+  const restorePost = useRestoreOvertimePost();
 
   const [showNew, setShowNew] = useState(false);
   const [showAssignFor, setShowAssignFor] = useState<string | null>(null);
+  const [showRecent, setShowRecent] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  // Last-cancelled toast — surfaces an [Undo] for ~10s right after a Cancel,
+  // independent of the longer 3-day Recently Cancelled drawer.
+  const [toastPostId, setToastPostId] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
 
   const me            = meQ.data ?? null;
   const canManage     = me?.role === 'admin' || me?.role === 'manager' || me?.is_manager || me?.is_lead;
   const myUserId      = me?.id ?? null;
 
-  const byCategory = useMemo(() => {
-    const map: Record<OvertimeCategory, OvertimePost[]> = {
+  // Partition posts client-side:
+  //   active            — open/closed AND within their time window
+  //   recentlyCancelled — cancelled in the last 3 days (drawer w/ Restore)
+  //   archive           — everything older or otherwise historical
+  const partitioned = useMemo(() => {
+    const active: Record<OvertimeCategory, OvertimePost[]> = {
       cold_weather: [], major_off_hour_pm: [], off_hour_repair: [], vendor_escort: [],
     };
+    const recentlyCancelled: OvertimePost[] = [];
+    const archive: OvertimePost[] = [];
+    const now      = Date.now();
+    const graceMs  = PAST_GRACE_HOURS * 3600 * 1000;
+    const undoMs   = RECENTLY_CANCELLED_WINDOW_DAYS * 24 * 3600 * 1000;
+
     for (const p of postsQ.data ?? []) {
-      // Hide both completed AND cancelled posts — the panel is for "what's
-      // happening soon", not an audit log. Cancellations drop out immediately
-      // so the board doesn't accumulate strikethrough cards.
-      if (p.status === 'completed' || p.status === 'cancelled') continue;
-      map[p.category].push(p);
+      const endAt  = new Date(p.ends_at ?? p.starts_at).getTime();
+      const isPast = endAt < now - graceMs;
+
+      if (p.status === 'cancelled') {
+        const cancelledMs = p.cancelled_at ? now - new Date(p.cancelled_at).getTime() : Infinity;
+        if (cancelledMs <= undoMs) recentlyCancelled.push(p);
+        else                       archive.push(p);
+        continue;
+      }
+      if (p.status === 'completed' || isPast) {
+        archive.push(p);
+        continue;
+      }
+      active[p.category].push(p);
     }
-    return map;
+
+    recentlyCancelled.sort((a, b) =>
+      (b.cancelled_at ?? '').localeCompare(a.cancelled_at ?? ''));
+    // Archive newest-first so recent history sits at the top of the drawer.
+    archive.sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+
+    return { active, recentlyCancelled, archive };
   }, [postsQ.data]);
 
   const totals = useMemo(() => {
-    const posts = postsQ.data ?? [];
-    const open = posts.filter((p) => p.status === 'open');
+    const open = (postsQ.data ?? []).filter((p) => p.status === 'open');
     const slotsNeeded = open.reduce((s, p) => s + p.slots_needed, 0);
     const slotsFilled = open.reduce((s, p) => s + p.slots_filled, 0);
     return { openCount: open.length, slotsNeeded, slotsFilled };
   }, [postsQ.data]);
+
+  const handleCancel = (postId: string) => {
+    cancelPost.mutate(postId);
+    setToastPostId(postId);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToastPostId(null), 10_000);
+  };
+  const handleUndo = () => {
+    if (toastPostId) restorePost.mutate(toastPostId);
+    setToastPostId(null);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+  };
+  // Clean up the timer if the panel unmounts.
+  useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current); }, []);
 
   const subtitle = (
     <span className="t-small t-muted">
@@ -123,20 +173,83 @@ export function OvertimePanel() {
       {postsQ.error ? (
         <p className="t-text t-danger">Error: {(postsQ.error as Error).message}</p>
       ) : (
+        <>
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
+          >
+            {OVERTIME_CATEGORY_ORDER.map((cat) => (
+              <CategoryColumn
+                key={cat}
+                category={cat}
+                posts={partitioned.active[cat]}
+                myUserId={myUserId}
+                canManage={!!canManage}
+                onAssign={(postId) => setShowAssignFor(postId)}
+                onCancel={handleCancel}
+              />
+            ))}
+          </div>
+
+          {/* Recently cancelled — last 3 days, with Restore. The DB trigger
+              clears cancelled_at on restore so posts vanish from this
+              drawer the moment they're brought back. */}
+          {partitioned.recentlyCancelled.length > 0 && (
+            <CollapsibleDrawer
+              open={showRecent}
+              onToggle={() => setShowRecent((v) => !v)}
+              label={`Recently cancelled · last ${RECENTLY_CANCELLED_WINDOW_DAYS} days`}
+              count={partitioned.recentlyCancelled.length}
+            >
+              <ul className="space-y-1.5 mt-2">
+                {partitioned.recentlyCancelled.map((p) => (
+                  <HistoryRow
+                    key={p.id}
+                    post={p}
+                    showRestore={!!canManage}
+                    onRestore={() => restorePost.mutate(p.id)}
+                  />
+                ))}
+              </ul>
+            </CollapsibleDrawer>
+          )}
+
+          {/* Archive — past + long-ago-cancelled. Read-only audit view. */}
+          {partitioned.archive.length > 0 && (
+            <CollapsibleDrawer
+              open={showArchive}
+              onToggle={() => setShowArchive((v) => !v)}
+              label="Archive · past 90 days"
+              count={partitioned.archive.length}
+            >
+              <ul className="space-y-1.5 mt-2">
+                {partitioned.archive.map((p) => (
+                  <HistoryRow key={p.id} post={p} showRestore={false} />
+                ))}
+              </ul>
+            </CollapsibleDrawer>
+          )}
+        </>
+      )}
+
+      {/* Undo toast — slides in for 10s after a Cancel. Independent of the
+          longer 3-day Recently Cancelled drawer; this is just the quick
+          "oh wait, I didn't mean to" affordance right after the click. */}
+      {toastPostId && (
         <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
+          role="status"
+          style={{
+            position: 'fixed', right: 24, bottom: 24,
+            background: 'var(--color-text)', color: 'var(--color-card)',
+            padding: '0.6rem 1rem', borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            zIndex: 50, display: 'flex', alignItems: 'center', gap: 12,
+          }}
+          className="t-small"
         >
-          {OVERTIME_CATEGORY_ORDER.map((cat) => (
-            <CategoryColumn
-              key={cat}
-              category={cat}
-              posts={byCategory[cat]}
-              myUserId={myUserId}
-              canManage={!!canManage}
-              onAssign={(postId) => setShowAssignFor(postId)}
-            />
-          ))}
+          <span>Overtime post cancelled.</span>
+          <button onClick={handleUndo} className="hover:underline" style={{ color: '#7dd3fc', fontWeight: 600 }}>
+            Undo
+          </button>
         </div>
       )}
 
@@ -160,13 +273,14 @@ export function OvertimePanel() {
 }
 
 function CategoryColumn({
-  category, posts, myUserId, canManage, onAssign,
+  category, posts, myUserId, canManage, onAssign, onCancel,
 }: {
   category: OvertimeCategory;
   posts: OvertimePost[];
   myUserId: string | null;
   canManage: boolean;
   onAssign: (postId: string) => void;
+  onCancel: (postId: string) => void;
 }) {
   const accent = CATEGORY_ACCENT[category];
   const label  = OVERTIME_CATEGORY_LABELS[category];
@@ -190,6 +304,7 @@ function CategoryColumn({
               myUserId={myUserId}
               canManage={canManage}
               onAssign={() => onAssign(p.id)}
+              onCancel={() => onCancel(p.id)}
             />
           ))}
         </div>
@@ -198,19 +313,122 @@ function CategoryColumn({
   );
 }
 
+/** Collapsible drawer used for the Recently Cancelled and Archive sections. */
+function CollapsibleDrawer({
+  open, onToggle, label, count, children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border-soft)' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="t-small t-muted hover:underline"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      >
+        <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
+        <span className="uppercase tracking-wider">{label}</span>
+        <span className="t-muted">({count})</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+/** Compact one-line row used inside the Recently Cancelled and Archive
+ *  drawers. Strikethrough for cancelled; status badge for everything else. */
+function HistoryRow({
+  post, showRestore, onRestore,
+}: {
+  post: OvertimePost;
+  showRestore: boolean;
+  onRestore?: () => void;
+}) {
+  const cancelled = post.status === 'cancelled';
+  const accent    = CATEGORY_ACCENT[post.category];
+  const filled    = post.slots_filled;
+  const needed    = post.slots_needed;
+  const stamp     = cancelled && post.cancelled_at
+    ? `cancelled ${fmtRelative(post.cancelled_at)}`
+    : null;
+  return (
+    <li
+      className="t-small flex items-baseline gap-2 flex-wrap"
+      style={{
+        padding: '0.35rem 0.6rem',
+        borderLeft: `3px solid ${accent}`,
+        background: 'var(--color-card)',
+        borderRadius: 4,
+        opacity: cancelled ? 0.6 : 0.9,
+      }}
+    >
+      <span className="t-muted" style={{ minWidth: 160 }}>
+        {fmtWhen(post.starts_at, post.ends_at)}
+      </span>
+      <span style={{ textDecoration: cancelled ? 'line-through' : undefined, fontWeight: 500 }}>
+        {buildingLabel(post) && <span className="t-mono">Bld {buildingLabel(post)} · </span>}
+        {post.scope}
+      </span>
+      <span
+        className="t-small uppercase tracking-wider"
+        style={{
+          fontSize: 9, fontWeight: 600,
+          padding: '0.05rem 0.4rem', borderRadius: 3,
+          background: cancelled ? 'rgba(239,68,68,0.12)' : 'rgba(100,116,139,0.12)',
+          color: cancelled ? '#b91c1c' : '#475569',
+        }}
+      >
+        {cancelled ? 'Cancelled' : post.status === 'completed' ? 'Completed' : 'Past'}
+      </span>
+      {stamp && <span className="t-muted" style={{ fontSize: 10 }}>{stamp}</span>}
+      <span className="t-muted t-mono ml-auto" style={{ fontSize: 11 }}>
+        {filled}/{needed}{post.signups.length > 0 && (
+          <span className="ml-1">· {post.signups.map((s) => shortName(s.user_name)).join(', ')}</span>
+        )}
+      </span>
+      {showRestore && onRestore && (
+        <button
+          onClick={onRestore}
+          className="t-accent hover:underline"
+          style={{ fontSize: 11, fontWeight: 600 }}
+        >
+          Restore
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** "2026-05-27T18:23:00Z" → "5h ago" / "2d ago" / "just now". */
+function fmtRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return 'just now';
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
 function PostCard({
-  post, accent, myUserId, canManage, onAssign,
+  post, accent, myUserId, canManage, onAssign, onCancel,
 }: {
   post: OvertimePost;
   accent: string;
   myUserId: string | null;
   canManage: boolean;
   onAssign: () => void;
+  onCancel: () => void;
 }) {
   const signUp     = useSignUpForOvertime();
   const unSignUp   = useUnSignUpForOvertime();
   const adminRm    = useAdminRemoveSignup();
-  const cancelPost = useCancelOvertimePost();
 
   const cancelled = post.status === 'cancelled';
   const closed    = post.status === 'closed';
@@ -303,11 +521,10 @@ function PostCard({
         )}
         {!cancelled && canManage && (
           <button
-            onClick={() => {
-              if (confirm('Cancel this post?')) cancelPost.mutate(post.id);
-            }}
+            onClick={onCancel}
             className="t-small t-muted hover:t-danger ml-auto"
             style={{ fontSize: '0.7rem' }}
+            title="Cancel this post (undo for 10s via toast, or anytime in the next 3 days via Recently Cancelled drawer)"
           >Cancel</button>
         )}
         {cancelled && (

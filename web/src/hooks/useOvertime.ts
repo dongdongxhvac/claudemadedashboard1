@@ -56,6 +56,7 @@ export type OvertimePost = {
   scope: string;
   slots_needed: number;
   status: OvertimeStatus;
+  cancelled_at: string | null;
   notes: string | null;
   created_by: string | null;
   created_by_name: string | null;
@@ -67,14 +68,17 @@ export type OvertimePost = {
 
 const POSTS_KEY = ['overtime_posts'];
 
-/** Upcoming overtime posts. Tight 24h window past starts_at so the panel is
- *  always close to "what's about to happen", not history. Cancelled posts
- *  are dropped at render time in OvertimePanel.tsx (immediate cleanup). */
+/** Fetches the last 90 days plus all future overtime posts so the panel can
+ *  render three tiers off one query:
+ *    • Active board     — open/closed posts within their time window
+ *    • Recently cancelled — cancelled_at within the last 3 days (undo zone)
+ *    • Archive           — everything older, for audit/analysis
+ *  Partitioning happens client-side in OvertimePanel.tsx. */
 export function useOvertimePosts() {
   return useQuery({
     queryKey: POSTS_KEY,
     queryFn: async (): Promise<OvertimePost[]> => {
-      const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
       const { data, error } = await supabase
         .from('v_overtime_posts_with_signups')
         .select('*')
@@ -172,6 +176,24 @@ export function useCancelOvertimePost() {
       const { error } = await supabase
         .from('overtime_posts')
         .update({ status: 'cancelled' })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: POSTS_KEY }),
+  });
+}
+
+/** Flip a cancelled post back to 'open'. The DB trigger
+ *  overtime_posts_stamp_cancelled_at_trg automatically clears cancelled_at
+ *  on the transition so the post drops out of the "Recently cancelled"
+ *  drawer the moment it's restored. */
+export function useRestoreOvertimePost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('overtime_posts')
+        .update({ status: 'open' })
         .eq('id', id);
       if (error) throw error;
     },
