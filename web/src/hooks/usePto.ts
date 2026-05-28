@@ -26,7 +26,7 @@ export const PTO_TYPE_LABELS: Record<PtoType, string> = {
 };
 
 export type PtoRequestSource =
-  | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'slack'
+  | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'team'
   | 'ontheclock_csv' | 'unknown' | 'other';
 
 export const PTO_REQUEST_SOURCE_LABELS: Record<PtoRequestSource, string> = {
@@ -35,7 +35,7 @@ export const PTO_REQUEST_SOURCE_LABELS: Record<PtoRequestSource, string> = {
   phone:          'Phone call',
   text:           'Text',
   email:          'Email',
-  slack:          'Slack',
+  team:           'Team',
   ontheclock_csv: 'OnTheClock CSV',
   unknown:        'Unknown',
   other:          'Other',
@@ -43,7 +43,7 @@ export const PTO_REQUEST_SOURCE_LABELS: Record<PtoRequestSource, string> = {
 
 /** Subset shown in the manager Add-PTO dropdown — the rest are system values. */
 export const PTO_MANAGER_SOURCE_OPTIONS: PtoRequestSource[] = [
-  'verbal', 'phone', 'text', 'email', 'slack', 'other',
+  'verbal', 'phone', 'text', 'email', 'team', 'other',
 ];
 
 export type PtoRequest = {
