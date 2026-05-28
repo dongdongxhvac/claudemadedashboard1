@@ -4,6 +4,7 @@
 // follow-up; current RLS is permissive (any authenticated user reads all).
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useMe } from './useMe';
 import type { PmRow, WoRow, LaborRow, PmCloseEvent } from './useCurrentSnapshots';
 
 export type MyContext = {
@@ -15,25 +16,25 @@ export type MyContext = {
   xp: number;
 };
 
-/** Lookup the current user's engineer_profile (returns null if they're not an engineer). */
+/** Lookup the EFFECTIVE user's engineer_profile (returns null if they're not
+ *  an engineer). Keys off useMe so admin impersonation resolves to the
+ *  impersonated engineer's profile + assigned data. */
 export function useMyEngineerContext() {
+  const me = useMe();
+  const userId = me.data?.id ?? null;
+  const isEngineer = me.data?.role === 'engineer';
   return useQuery({
-    queryKey: ['my_engineer_context'],
+    queryKey: ['my_engineer_context', userId],
+    enabled: !!userId && isEngineer,
     queryFn: async (): Promise<MyContext | null> => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return null;
-
-      const { data: u, error: ue } = await supabase
-        .from('users')
-        .select('id, role, engineer_profiles!inner(cmms_assignee_name, visible_to_self, discipline, level, xp)')
-        .eq('auth_user_id', auth.user.id)
-        .eq('role', 'engineer')
+      const { data: ep, error } = await supabase
+        .from('engineer_profiles')
+        .select('cmms_assignee_name, visible_to_self, discipline, level, xp')
+        .eq('user_id', userId!)
         .maybeSingle();
-      if (ue) throw ue;
-      if (!u) return null;
-
-      const raw = (u as { engineer_profiles: unknown }).engineer_profiles;
-      const ep = (Array.isArray(raw) ? raw[0] : raw) as {
+      if (error) throw error;
+      if (!ep) return null;
+      const p = ep as {
         cmms_assignee_name: string | null;
         visible_to_self: boolean;
         discipline: string | null;
@@ -41,12 +42,12 @@ export function useMyEngineerContext() {
         xp: number;
       };
       return {
-        user_id: (u as { id: string }).id,
-        cmms_assignee_name: ep.cmms_assignee_name,
-        visible_to_self: ep.visible_to_self,
-        discipline: ep.discipline,
-        level: ep.level,
-        xp: ep.xp,
+        user_id: userId!,
+        cmms_assignee_name: p.cmms_assignee_name,
+        visible_to_self: p.visible_to_self,
+        discipline: p.discipline,
+        level: p.level,
+        xp: p.xp,
       };
     },
     staleTime: 60_000,
