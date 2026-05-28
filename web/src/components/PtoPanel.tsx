@@ -741,15 +741,19 @@ function DayAttendanceGroup({
   isPrimary: boolean;
 }) {
   // Today's chips & labels are full size; the two secondary columns drop a
-  // step down so they read as "preview" without losing legibility.
+  // step down so they read as "preview" without losing legibility. All three
+  // cells share the same card container so the 4-cell row reads as one band.
   const headerSize    = isPrimary ? '0.85rem' : '0.78rem';
   const shiftLabelMin = isPrimary ? 48 : 36;
   return (
     <div
       style={{
         padding: isPrimary ? '0.5rem 0.75rem' : '0.4rem 0.55rem',
-        borderLeft: day.isToday ? '3px solid var(--color-accent)' : '3px solid var(--color-border-soft)',
-        background: day.isToday ? 'rgba(99,102,241,0.05)' : undefined,
+        border: day.isToday
+          ? '1px solid var(--color-accent)'
+          : '1px solid var(--color-border-soft)',
+        borderLeftWidth: day.isToday ? 3 : 1,
+        background: day.isToday ? 'rgba(99,102,241,0.05)' : 'var(--color-card)',
         borderRadius: 4,
       }}
     >
@@ -999,15 +1003,13 @@ function CapHeatmap({ requests, onPickDate }: {
         </span>
       </div>
 
-      {/* Legend chips */}
-      <div className="t-small t-muted mb-2 flex items-center gap-3 flex-wrap" style={{ fontSize: 10 }}>
+      {/* Legend chips — kept on one line. Click hint moved to a tiny
+          footer below the grid so the legend doesn't wrap. */}
+      <div className="t-small t-muted mb-2 flex items-center gap-2" style={{ fontSize: 10 }}>
         <LegendChip color="rgba(34,197,94,0.18)" label="0" />
         <LegendChip color="rgba(234,179,8,0.30)" label="1" />
-        <LegendChip color="rgba(234,88,12,0.45)" label="2 (cap pinned)" />
-        <LegendChip color="rgba(220,38,38,0.50)" label="3+ (override)" />
-        <span className="t-muted" style={{ marginLeft: 'auto' }}>
-          Click a non-past cell to add a vacation request for that date.
-        </span>
+        <LegendChip color="rgba(234,88,12,0.45)" label="2 cap" />
+        <LegendChip color="rgba(220,38,38,0.50)" label="3+" />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -1061,6 +1063,9 @@ function CapHeatmap({ requests, onPickDate }: {
             })}
           </div>
         </div>
+      </div>
+      <div className="t-muted" style={{ fontSize: 9, marginTop: 4, fontStyle: 'italic' }}>
+        Click a future cell to add PTO
       </div>
     </div>
   );
