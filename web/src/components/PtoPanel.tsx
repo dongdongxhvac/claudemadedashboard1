@@ -325,6 +325,7 @@ export function PtoPanel() {
             <BalancesGrid
               summaries={summaryQ.data ?? []}
               allRequests={buckets.all}
+              engineers={engineersQ.data ?? []}
               onEdit={(s) => setShowEditBalance(s)}
             />
           )}
@@ -1080,11 +1081,33 @@ function LegendChip({ color, label }: { color: string; label: string }) {
 
 // ───────────────────────────── Balances grid
 
+/** "2025-11-24" → "Hired 11/24/25 · 6 mo" (or "· 2.5 yr"). Months are rounded
+ *  to the nearest whole; years to one decimal once we cross 12 months. */
+function fmtHireSeniority(hireIso: string | null): string {
+  if (!hireIso) return '';
+  const hire = new Date(hireIso + 'T00:00:00');
+  if (isNaN(hire.getTime())) return '';
+  const now = new Date();
+  const monthsTotal =
+    (now.getFullYear() - hire.getFullYear()) * 12 +
+    (now.getMonth() - hire.getMonth()) +
+    (now.getDate() >= hire.getDate() ? 0 : -1);
+  const months = Math.max(0, monthsTotal);
+  const seniority = months < 12
+    ? `${months} mo`
+    : `${(months / 12).toFixed(months % 12 === 0 ? 0 : 1)} yr`;
+  const mm = hire.getMonth() + 1;
+  const dd = hire.getDate();
+  const yy = String(hire.getFullYear()).slice(2);
+  return `Hired ${mm}/${dd}/${yy} · ${seniority}`;
+}
+
 function BalancesGrid({
-  summaries, allRequests, onEdit,
+  summaries, allRequests, engineers, onEdit,
 }: {
   summaries: PtoSummary[];
   allRequests: PtoRequest[];
+  engineers: EngineerRow[];
   onEdit: (s: PtoSummary) => void;
 }) {
   const currentYear = new Date().getFullYear();
@@ -1094,7 +1117,15 @@ function BalancesGrid({
   // Track which engineer row is currently expanded to show the full year log.
   // Single-open accordion — clicking a different name swaps the open row.
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
-  if (rows.length === 0) return null;
+
+  // Hire-date lookup keyed by user_id. We get this from useEngineers (which
+  // already pulls users.hiring_date as part of EngineerRow) so we don't have
+  // to widen v_pto_summary.
+  const hireByUser = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const e of engineers) m.set(e.user_id, e.hiring_date);
+    return m;
+  }, [engineers]);
 
   // Pre-group all requests (approved + pending + cancelled) by user_id for the
   // current year so each expansion just slices into the map. Sorted ascending
@@ -1114,6 +1145,8 @@ function BalancesGrid({
     return m;
   }, [allRequests, currentYear]);
 
+  if (rows.length === 0) return null;
+
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">
@@ -1121,11 +1154,24 @@ function BalancesGrid({
       </div>
       <table className="min-w-full t-text t-small border-collapse">
         <thead>
+          {/* Two-level header: top row groups Vacation/Sick, bottom row labels
+              the Balance and Used/Allotted sub-columns. */}
+          <tr className="t-muted" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
+            <th className="py-1 pr-3"></th>
+            <th className="py-1 pr-3 text-center" colSpan={2} style={{ borderLeft: '1px solid var(--color-border-soft)' }}>
+              Vacation
+            </th>
+            <th className="py-1 pr-3 text-center" colSpan={2} style={{ borderLeft: '1px solid var(--color-border-soft)' }}>
+              Sick
+            </th>
+            <th className="py-1 pl-2"></th>
+          </tr>
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
             <th className="py-1 pr-3">Engineer</th>
-            <th className="py-1 pr-3 text-right">Vacation</th>
-            <th className="py-1 pr-3 text-right">Sick</th>
-            <th className="py-1 pr-3 text-right">Personal</th>
+            <th className="py-1 pr-3 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)' }}>Balance</th>
+            <th className="py-1 pr-3 text-right t-small" style={{ fontWeight: 400 }}>Used / Allotted</th>
+            <th className="py-1 pr-3 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)' }}>Balance</th>
+            <th className="py-1 pr-3 text-right t-small" style={{ fontWeight: 400 }}>Used / Allotted</th>
             <th className="py-1 pl-2"></th>
           </tr>
         </thead>
@@ -1133,10 +1179,11 @@ function BalancesGrid({
           {rows.map((s) => {
             const isOpen = expandedUserId === s.user_id;
             const log = logByUser.get(s.user_id) ?? [];
+            const hireLine = fmtHireSeniority(hireByUser.get(s.user_id) ?? null);
             return (
               <Fragment key={s.id}>
                 <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
-                  <td className="py-1 pr-3 font-medium">
+                  <td className="py-1 pr-3">
                     <button
                       type="button"
                       onClick={() => setExpandedUserId(isOpen ? null : s.user_id)}
@@ -1147,19 +1194,23 @@ function BalancesGrid({
                       <span style={{ display: 'inline-block', width: 10, fontSize: 10, color: 'var(--color-text-muted)' }}>
                         {isOpen ? '▾' : '▸'}
                       </span>
-                      {s.user_full_name ?? '?'}
+                      <span className="font-medium">{s.user_full_name ?? '?'}</span>
                     </button>
+                    {hireLine && (
+                      <div className="t-muted" style={{ fontSize: '0.7rem', marginLeft: 14, marginTop: 1 }}>
+                        {hireLine}
+                      </div>
+                    )}
                   </td>
-                  <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
-                  <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
-                  <BalanceCell remaining={s.personal_remaining} used={s.personal_used} alloted={s.personal_alloted} />
-                  <td className="py-1 pl-2 text-right">
+                  <BalanceSplitCells remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
+                  <BalanceSplitCells remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
+                  <td className="py-1 pl-2 text-right align-top">
                     <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">edit allotment</button>
                   </td>
                 </tr>
                 {isOpen && (
                   <tr style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-                    <td colSpan={5} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
+                    <td colSpan={6} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
                       <PtoYearLog rows={log} year={currentYear} />
                     </td>
                   </tr>
@@ -1170,6 +1221,32 @@ function BalancesGrid({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Splits the old single-cell "8h (80/88)" rendering into two right-aligned
+ *  cells so they line up under the new "Balance" / "Used / Allotted" headers. */
+function BalanceSplitCells({ remaining, used, alloted }: { remaining: number; used: number; alloted: number }) {
+  if (alloted === 0) {
+    return (
+      <>
+        <td className="py-1 pr-3 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)' }}>—</td>
+        <td className="py-1 pr-3 text-right t-muted align-top">—</td>
+      </>
+    );
+  }
+  const color = remaining <= 0 ? 'var(--color-danger)'
+              : remaining <= 8 ? 'var(--color-warn, #d97706)'
+              : 'var(--color-text)';
+  return (
+    <>
+      <td className="py-1 pr-3 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)' }}>
+        <span style={{ color, fontWeight: remaining <= 8 ? 600 : 400 }}>{remaining}h</span>
+      </td>
+      <td className="py-1 pr-3 text-right t-mono t-muted align-top" style={{ fontSize: '0.75rem' }}>
+        {used} / {alloted}
+      </td>
+    </>
   );
 }
 
@@ -1242,17 +1319,6 @@ export function PtoYearLog({ rows, year }: { rows: PtoRequest[]; year: number })
         })}
       </ul>
     </div>
-  );
-}
-
-function BalanceCell({ remaining, used, alloted }: { remaining: number; used: number; alloted: number }) {
-  if (alloted === 0) return <td className="py-1 pr-3 text-right t-muted">—</td>;
-  const color = remaining <= 0 ? 'var(--color-danger)' : remaining <= 8 ? 'var(--color-warn, #d97706)' : 'var(--color-text)';
-  return (
-    <td className="py-1 pr-3 text-right t-mono">
-      <span style={{ color, fontWeight: remaining <= 8 ? 600 : 400 }}>{remaining}h</span>
-      <span className="t-muted ml-1" style={{ fontSize: '0.7rem' }}>({used}/{alloted})</span>
-    </td>
   );
 }
 
