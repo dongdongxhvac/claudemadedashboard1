@@ -180,7 +180,7 @@ export default function ManagerPc() {
         )}
 
         <SectionsProvider>
-          <div className="space-y-6 pt-2">
+          <div className="space-y-3 pt-2">
             <DueNowList />
             <DueThisMonth />
             <OpenPmsBreakdown />
