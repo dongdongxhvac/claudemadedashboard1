@@ -66,6 +66,14 @@ function shortName(full: string | null | undefined): string {
 
 const RECENTLY_CANCELLED_WINDOW_DAYS = 3;
 const PAST_GRACE_HOURS = 24;
+/** How long a post stays "NEW" — pinned to the top of its category column
+ *  with a NEW badge so engineers can't miss a freshly-posted shift. */
+const NEW_POST_WINDOW_HOURS = 24;
+
+function isNewPost(p: OvertimePost): boolean {
+  const ageMs = Date.now() - new Date(p.created_at).getTime();
+  return ageMs <= NEW_POST_WINDOW_HOURS * 3600 * 1000;
+}
 
 export function OvertimePanel() {
   useOvertimeRealtime();
@@ -118,6 +126,18 @@ export function OvertimePanel() {
         continue;
       }
       active[p.category].push(p);
+    }
+
+    // Within each category: NEW posts (created in last 24h) lead, then
+    // everyone else sorted by starts_at ascending. Engineers see fresh
+    // listings at the top regardless of when the shift actually is.
+    for (const cat of Object.keys(active) as OvertimeCategory[]) {
+      active[cat].sort((a, b) => {
+        const an = isNewPost(a) ? 1 : 0;
+        const bn = isNewPost(b) ? 1 : 0;
+        if (an !== bn) return bn - an;   // new first
+        return a.starts_at.localeCompare(b.starts_at);
+      });
     }
 
     recentlyCancelled.sort((a, b) =>
@@ -435,6 +455,7 @@ function PostCard({
   const isFull    = post.slots_filled >= post.slots_needed;
   const mySignup  = myUserId ? post.signups.find((s) => s.user_id === myUserId) ?? null : null;
   const iAmIn     = !!mySignup;
+  const isNew     = isNewPost(post) && !cancelled;
 
   return (
     <div
@@ -444,9 +465,27 @@ function PostCard({
         opacity: cancelled ? 0.45 : 1,
         textDecoration: cancelled ? 'line-through' : undefined,
         padding: '0.6rem 0.8rem',
+        // Faint accent fill + thicker shadow on NEW posts so they catch the eye.
+        background: isNew ? `${accent}11` : undefined,
+        boxShadow: isNew ? `0 0 0 1px ${accent}66` : undefined,
       }}
     >
-      <div className="t-small t-muted">{fmtWhen(post.starts_at, post.ends_at)}</div>
+      <div className="t-small t-muted flex items-center gap-2">
+        {isNew && (
+          <span
+            className="uppercase tracking-wider"
+            style={{
+              fontSize: 9, fontWeight: 700, padding: '0.1rem 0.4rem',
+              borderRadius: 3, background: accent, color: '#fff',
+              letterSpacing: '0.08em',
+            }}
+            title={`Posted ${fmtRelative(post.created_at)}`}
+          >
+            NEW
+          </span>
+        )}
+        <span>{fmtWhen(post.starts_at, post.ends_at)}</span>
+      </div>
       <div className="t-text font-semibold" style={{ marginTop: '0.15rem' }}>
         {buildingLabel(post) && (
           <span className="t-mono" style={{ color: 'var(--color-text)' }}>
