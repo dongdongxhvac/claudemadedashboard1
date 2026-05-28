@@ -1208,7 +1208,7 @@ function BalancesGrid({
                   </td>
                   <BalanceSplitCells remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
                   <BalanceSplitCells remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
-                  <td className="py-1 pl-2 text-right align-top">
+                  <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
                     <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">edit allotment</button>
                   </td>
                 </tr>
