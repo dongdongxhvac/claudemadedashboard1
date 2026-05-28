@@ -42,7 +42,10 @@ function computeStats(rows: PmRow[]) {
   const twoWeeks = new Date(now);
   twoWeeks.setDate(twoWeeks.getDate() + 14);
   const twoWeeksStr = isoLocal(twoWeeks);
+  // "Due this month" window extends 3 days past month-end so PMs landing on
+  // the 1st–3rd of next month (last month's PMs slipping a day) aren't missed.
   const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  eom.setDate(eom.getDate() + 3);
   const eomStr = isoLocal(eom);
 
   let overdue = 0;
@@ -174,7 +177,7 @@ export default function ManagerPc() {
               subLabel="NPM"
               subValue={pmStats.npm}
             />
-            <Card label="Due this month" value={pmStats.dueEom} />
+            <Card label="Due this month +3d" value={pmStats.dueEom} />
             <Card label="WOs open" value={woOpen} />
           </div>
         )}

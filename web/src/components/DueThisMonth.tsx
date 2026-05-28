@@ -18,11 +18,16 @@ type Row = {
 export function DueThisMonth() {
   const pmQ = useCurrentPmRows();
 
-  const { rows, totals } = useMemo(() => {
+  const { rows, totals, windowEndLabel } = useMemo(() => {
     const pmRows = pmQ.data ?? [];
     const now = new Date();
+    // Window = end of current month + 3 days, so PMs that land on the 1st–3rd
+    // of next month (typically the *previous* month's PMs slipping a day) still
+    // surface here instead of being missed on a month boundary.
     const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    eom.setDate(eom.getDate() + 3);
     const eomStr = localISODate(eom);
+    const windowEndLabel = eom.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
     // Per-assignee NPM count — across ALL open PMs, no date filter (per user spec).
     const npmByAssignee = new Map<string, number>();
@@ -96,7 +101,7 @@ export function DueThisMonth() {
       totals.npm += r.npm;
     }
 
-    return { rows, totals };
+    return { rows, totals, windowEndLabel };
   }, [pmQ.data]);
 
   if (pmQ.isLoading) return <Section title="§03 Due this month · by assignee" loading />;
@@ -104,7 +109,7 @@ export function DueThisMonth() {
   return (
     <Section
       title="§03 Due this month · by assignee"
-      subtitle={`${totals.total} PMs · ${totals.npm} NPMs · ${rows.length} ${rows.length === 1 ? 'assignee' : 'assignees'}`}
+      subtitle={`${totals.total} PMs · ${totals.npm} NPMs · ${rows.length} ${rows.length === 1 ? 'assignee' : 'assignees'} · through ${windowEndLabel}`}
     >
       <style>{`
         .eq-chip:hover { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); filter: brightness(1.04); }
