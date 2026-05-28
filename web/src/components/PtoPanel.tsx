@@ -931,10 +931,13 @@ function CapHeatmap({ requests, onPickDate }: {
   // Per-day list of engineers on vacation (approved or pending). Store
   // {name, status} so we can build initials + tooltip with status hints.
   type DayInfo = { name: string; status: 'approved' | 'pending'; };
-  const byDay = useMemo(() => {
+
+  // Generic per-day grouper for one PTO type. Reused for vacation (drives the
+  // cell colour + cap count) and sick (drives the non-counting corner dot).
+  const groupByDay = (type: PtoType): Map<string, DayInfo[]> => {
     const m = new Map<string, DayInfo[]>();
     for (const r of requests) {
-      if (r.type !== 'vacation') continue;
+      if (r.type !== type) continue;
       if (r.status !== 'approved' && r.status !== 'pending') continue;
       let cur = r.starts_on;
       while (cur <= r.ends_on) {
@@ -947,7 +950,11 @@ function CapHeatmap({ requests, onPickDate }: {
       }
     }
     return m;
-  }, [requests]);
+  };
+  const byDay     = useMemo(() => groupByDay('vacation'), [requests]);
+  // Sick is shown as a corner dot only — it never counts toward the vacation
+  // cap colour, so the 2-engineer cap math stays untouched.
+  const sickByDay = useMemo(() => groupByDay('sick'), [requests]);
 
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   type Cell = {
@@ -958,6 +965,7 @@ function CapHeatmap({ requests, onPickDate }: {
     isPast: boolean;
     isWeekend: boolean;
     people: DayInfo[];
+    sick: DayInfo[];
   };
   const cells: Cell[] = [];
   for (let i = 0; i < totalDays; i++) {
@@ -974,6 +982,7 @@ function CapHeatmap({ requests, onPickDate }: {
       isPast:    iso < today,
       isWeekend: row >= 5,
       people:    byDay.get(iso) ?? [],
+      sick:      sickByDay.get(iso) ?? [],
     });
   }
 
@@ -1008,15 +1017,19 @@ function CapHeatmap({ requests, onPickDate }: {
 
   const tooltip = (cell: Cell): string => {
     const date = `${cell.iso}${cell.isToday ? ' (today)' : ''}${cell.isPast ? ' (past)' : ''}`;
+    const sickLine = cell.sick.length > 0
+      ? `\nSick: ${cell.sick.map((p) => `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`).join(', ')}`
+      : '';
     if (cell.people.length === 0) {
-      return cell.isPast
-        ? `${date}\n(past — nothing logged)`
+      const base = cell.isPast
+        ? `${date}\n(past — no vacation)`
         : `${date}\nNo one on vacation${cell.isWeekend ? '' : ' — click to add'}`;
+      return base + sickLine;
     }
     const names = cell.people.map((p) =>
       `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`
     ).join(', ');
-    return `${date}\n${names}${cell.isWeekend || cell.isPast ? '' : '\n(click to add another PTO)'}`;
+    return `${date}\nVacation: ${names}${sickLine}${cell.isWeekend || cell.isPast ? '' : '\n(click to add another PTO)'}`;
   };
 
   return (
@@ -1046,12 +1059,17 @@ function CapHeatmap({ requests, onPickDate }: {
       </div>
 
       {/* Legend chips — kept on one line. Click hint moved to a tiny
-          footer below the grid so the legend doesn't wrap. */}
+          footer below the grid so the legend doesn't wrap. The vacation
+          colours show the cap count; the red dot flags sick (uncapped). */}
       <div className="t-small t-muted mb-2 flex items-center gap-2" style={{ fontSize: 10 }}>
         <LegendChip color="rgba(34,197,94,0.18)" label="0" />
         <LegendChip color="rgba(234,179,8,0.30)" label="1" />
         <LegendChip color="rgba(234,88,12,0.45)" label="2 cap" />
         <LegendChip color="rgba(220,38,38,0.50)" label="3+" />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 999, background: '#ef4444', border: '1px solid rgba(0,0,0,0.15)' }} />
+          <span>sick</span>
+        </span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -1078,6 +1096,7 @@ function CapHeatmap({ requests, onPickDate }: {
               const count = cell.people.length;
               const label = cellLabel(cell.people);
               const clickable = !cell.isPast && !!onPickDate;
+              const hasSick = cell.sick.length > 0;
               return (
                 <button
                   key={cell.iso}
@@ -1086,6 +1105,7 @@ function CapHeatmap({ requests, onPickDate }: {
                   disabled={!clickable}
                   title={tooltip(cell)}
                   style={{
+                    position: 'relative',
                     width: 26, height: 26, padding: 0,
                     borderRadius: 3,
                     background: color(count, cell.isPast),
@@ -1100,6 +1120,23 @@ function CapHeatmap({ requests, onPickDate }: {
                   }}
                 >
                   {label}
+                  {hasSick && (
+                    // Non-counting sick marker: red corner dot. Shows count if
+                    // more than one person is sick that day.
+                    <span
+                      style={{
+                        position: 'absolute', top: 1, right: 1,
+                        minWidth: 7, height: 7, borderRadius: 999,
+                        background: '#ef4444',
+                        border: '1px solid rgba(255,255,255,0.85)',
+                        fontSize: 7, lineHeight: '6px', color: '#fff',
+                        fontWeight: 700, padding: cell.sick.length > 1 ? '0 1px' : 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      {cell.sick.length > 1 ? cell.sick.length : ''}
+                    </span>
+                  )}
                 </button>
               );
             })}
