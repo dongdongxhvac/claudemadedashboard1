@@ -295,19 +295,20 @@ export function PtoPanel() {
             </div>
           )}
 
-          {/* Today + next 2 work days attendance — engineer rows × 3 date
-              cols. Working cells are clickable → log sick for THAT date. */}
+          {/* Top row: heatmap | today | tomorrow | day-after — all in one
+              4-column grid so the manager scans coverage left→right.
+              The heatmap lives in the leading cell of TodayAttendance's
+              grid; the 3 day blocks fill the rest. */}
           <TodayAttendance
             engineers={engineersQ.data ?? []}
             shifts={shiftsQ.data ?? []}
             allApproved={buckets.all.filter((r) => r.status === 'approved')}
-          />
-
-          {/* Vacation-cap heatmap with horizon picker. Click a cell → open
-              Add PTO modal pre-filled with that date. */}
-          <CapHeatmap
-            requests={buckets.all}
-            onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
+            leadingCell={
+              <CapHeatmap
+                requests={buckets.all}
+                onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
+              />
+            }
           />
 
           {/* Upcoming approved, grouped */}
@@ -611,11 +612,14 @@ function computeWorkDays(extra: number): { iso: string; label: string; isToday: 
 }
 
 function TodayAttendance({
-  engineers, shifts, allApproved,
+  engineers, shifts, allApproved, leadingCell,
 }: {
   engineers: EngineerRow[];
   shifts: { id: string; name: string; sort_order: number }[];
   allApproved: PtoRequest[];
+  /** Optional left-most cell rendered in the same grid row as the 3 day
+   *  blocks. Used to pin the vacation-cap heatmap alongside attendance. */
+  leadingCell?: React.ReactNode;
 }) {
   const submit = useSubmitPto();
 
@@ -692,39 +696,31 @@ function TodayAttendance({
     });
   };
 
+  // When the heatmap is pinned to the leading cell, the row becomes
+  // heatmap | today (2fr) | tomorrow (1fr) | day-after (1fr).
+  // Otherwise it stays 3-col attendance-only.
   return (
-    <div>
-      <div className="t-small t-muted uppercase tracking-wider mb-2">
-        Attendance · today + next 2 work days
-        <span className="ml-2" style={{ fontSize: 11, textTransform: 'none', letterSpacing: 'normal' }}>
-          (click a green chip to log sick for that day)
-        </span>
-      </div>
-
-      {/* 3 columns: today (2fr) + tomorrow (1fr) + day-after (1fr).
-          Today gets twice the width so the chips breathe and the eye
-          naturally lands there first. */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr 1fr',
-          gap: 12,
-          alignItems: 'flex-start',
-        }}
-      >
-        {days.map((d, i) => (
-          <DayAttendanceGroup
-            key={d.iso}
-            day={d}
-            counts={counts[i]}
-            shiftGroups={groups}
-            ptoLookup={ptoByUserDay}
-            disabled={submit.isPending}
-            onSick={onSick}
-            isPrimary={i === 0}
-          />
-        ))}
-      </div>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: leadingCell ? 'auto 2fr 1fr 1fr' : '2fr 1fr 1fr',
+        gap: 12,
+        alignItems: 'flex-start',
+      }}
+    >
+      {leadingCell}
+      {days.map((d, i) => (
+        <DayAttendanceGroup
+          key={d.iso}
+          day={d}
+          counts={counts[i]}
+          shiftGroups={groups}
+          ptoLookup={ptoByUserDay}
+          disabled={submit.isPending}
+          onSick={onSick}
+          isPrimary={i === 0}
+        />
+      ))}
     </div>
   );
 }
