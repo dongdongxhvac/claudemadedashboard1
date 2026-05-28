@@ -13,6 +13,7 @@ import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
+import { SectionsProvider, SectionsNav } from '../../components/SectionsNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -178,19 +179,22 @@ export default function ManagerPc() {
           </div>
         )}
 
-        <div className="space-y-6 pt-2">
-          <DueNowList />
-          <DueThisMonth />
-          <OpenPmsBreakdown />
-          <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
-          <PlantlogRoundsPanel />
-          <PlantlogWeeklyTestsPanel />
-          <DeltaAlarmsPanel />
-          <EmailAlarmsPanel />
-          <BmsEmailAlarmsPanel />
-          <OvertimePanel />
-          <PtoPanel />
-        </div>
+        <SectionsProvider>
+          <div className="space-y-6 pt-2">
+            <DueNowList />
+            <DueThisMonth />
+            <OpenPmsBreakdown />
+            <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
+            <PlantlogRoundsPanel />
+            <PlantlogWeeklyTestsPanel />
+            <DeltaAlarmsPanel />
+            <EmailAlarmsPanel />
+            <BmsEmailAlarmsPanel />
+            <OvertimePanel />
+            <PtoPanel />
+          </div>
+          <SectionsNav />
+        </SectionsProvider>
       </main>
     </div>
   );
