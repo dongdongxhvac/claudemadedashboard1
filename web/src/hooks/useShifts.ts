@@ -35,7 +35,7 @@ export function useShiftsRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('shifts-changes')
+      .channel(`shifts-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
         qc.invalidateQueries({ queryKey: KEY });
       })

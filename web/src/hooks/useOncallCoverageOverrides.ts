@@ -45,7 +45,7 @@ export function useCoverageOverridesRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('oncall-coverage-overrides-changes')
+      .channel(`oncall-coverage-overrides-changes-${crypto.randomUUID()}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'oncall_coverage_overrides_sandbox' },
         () => qc.invalidateQueries({ queryKey: KEY }),

@@ -155,7 +155,7 @@ export function useAdminProposalsRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('admin-proposals-changes')
+      .channel(`admin-proposals-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_proposals' }, () => {
         qc.invalidateQueries({ queryKey: ['admin_proposal_pending', 'oncall'] });
         qc.invalidateQueries({ queryKey: ['admin_proposal_pending', 'buildings'] });

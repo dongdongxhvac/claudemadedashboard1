@@ -102,7 +102,7 @@ export function useRoundsRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('rounds-changes')
+      .channel(`rounds-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds'             }, () => qc.invalidateQueries({ queryKey: KEY }))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'round_stops'        }, () => qc.invalidateQueries({ queryKey: KEY }))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'round_assignments'  }, () => qc.invalidateQueries({ queryKey: KEY }))
@@ -309,7 +309,7 @@ export function useRoundsNotesRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('rounds-notes-changes')
+      .channel(`rounds-notes-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds_notes' },
         () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
       .subscribe();

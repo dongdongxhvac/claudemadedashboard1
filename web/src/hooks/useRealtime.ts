@@ -16,7 +16,7 @@ export function useSnapshotRealtime() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('snapshots-changes')
+      .channel(`snapshots-changes-${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'snapshots' },

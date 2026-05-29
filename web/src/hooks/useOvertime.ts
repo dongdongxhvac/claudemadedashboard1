@@ -96,7 +96,7 @@ export function useOvertimeRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('overtime-changes')
+      .channel(`overtime-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'overtime_posts' }, () => {
         qc.invalidateQueries({ queryKey: POSTS_KEY });
       })

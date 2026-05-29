@@ -48,7 +48,7 @@ export function useBuildingsNotesRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('buildings-notes-changes')
+      .channel(`buildings-notes-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'buildings_notes' },
         () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
       .subscribe();
@@ -91,7 +91,7 @@ export function useBuildingAssignmentsRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('building-assignments-changes')
+      .channel(`building-assignments-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'building_assignments' }, () => {
         qc.invalidateQueries({ queryKey: KEY });
       })

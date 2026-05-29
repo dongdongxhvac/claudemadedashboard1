@@ -34,7 +34,7 @@ export function useBuildingsRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('buildings-changes')
+      .channel(`buildings-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'buildings' }, () => {
         qc.invalidateQueries({ queryKey: KEY });
       })

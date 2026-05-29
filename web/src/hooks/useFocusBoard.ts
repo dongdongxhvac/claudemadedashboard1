@@ -91,7 +91,7 @@ export function useFocusBoardRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('focus-board-changes')
+      .channel(`focus-board-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'focus_board_items' }, () => {
         qc.invalidateQueries({ queryKey: KEY });
       })

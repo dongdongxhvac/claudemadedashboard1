@@ -162,7 +162,7 @@ export function useOncallRealtime() {
       qc.invalidateQueries({ queryKey: KEY_SETTINGS });
     };
     const channel = supabase
-      .channel('oncall-changes')
+      .channel(`oncall-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oncall_rotations' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oncall_participants' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oncall_schedule_settings' }, invalidate)
@@ -442,7 +442,7 @@ export function useOncallNotesRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
     const channel = supabase
-      .channel('oncall-notes-changes')
+      .channel(`oncall-notes-changes-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oncall_notes' },
         () => qc.invalidateQueries({ queryKey: KEY_NOTES }))
       .subscribe();
