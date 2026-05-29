@@ -26,7 +26,6 @@ import {
   type PtoRequest, type PtoType,
 } from '../hooks/usePto';
 import { PtoYearLog } from './PtoPanel';
-import { useImpersonation } from '../lib/impersonationContext';
 
 // Engineer self-serve only exposes the two real time-off categories.
 // Everything else (personal/holiday/bereavement/unpaid) goes through the
@@ -72,30 +71,23 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
   );
 
   const [showForm, setShowForm] = useState(false);
-  const { canAct } = useImpersonation();
 
   return (
     <section className={compact ? '' : 't-card'} style={compact ? undefined : { padding: 0 }}>
       <div className={compact ? 'px-3 py-2' : 'px-4 py-3'} style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <h2 className="t-section-title">My time off</h2>
-          {canAct ? (
-            <button
-              onClick={() => setShowForm((v) => !v)}
-              className="t-small px-2 py-1 rounded border"
-              style={{
-                background: showForm ? 'var(--color-card)' : 'var(--color-accent)',
-                color: showForm ? 'var(--color-text-muted)' : '#fff',
-                borderColor: showForm ? 'var(--color-border)' : 'var(--color-accent)',
-              }}
-            >
-              {showForm ? 'Cancel' : '+ Request PTO'}
-            </button>
-          ) : (
-            <span className="t-small t-muted italic" title="Read-only preview — enable “Act as them” in the impersonation banner to submit">
-              read-only
-            </span>
-          )}
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="t-small px-2 py-1 rounded border"
+            style={{
+              background: showForm ? 'var(--color-card)' : 'var(--color-accent)',
+              color: showForm ? 'var(--color-text-muted)' : '#fff',
+              borderColor: showForm ? 'var(--color-border)' : 'var(--color-accent)',
+            }}
+          >
+            {showForm ? 'Cancel' : '+ Request PTO'}
+          </button>
         </div>
 
         {/* Balances strip */}
@@ -177,7 +169,6 @@ function BalanceChip({
 
 function PendingMineList({ rows }: { rows: PtoRequest[] }) {
   const cancel = useCancelPto();
-  const { canAct } = useImpersonation();
   return (
     <ul className="space-y-1">
       {rows.map((r) => (
@@ -199,14 +190,12 @@ function PendingMineList({ rows }: { rows: PtoRequest[] }) {
           <span>{r.type}</span>
           <span className="t-mono">{Number(r.hours)}h</span>
           {r.reason && <span className="t-muted">· {r.reason}</span>}
-          {canAct && (
-            <button
-              onClick={() => { if (confirm('Withdraw this pending PTO request?')) cancel.mutate(r.id); }}
-              className="ml-auto t-muted hover:t-danger"
-              style={{ fontSize: 13 }}
-              title="Withdraw request"
-            >Withdraw</button>
-          )}
+          <button
+            onClick={() => { if (confirm('Withdraw this pending PTO request?')) cancel.mutate(r.id); }}
+            className="ml-auto t-muted hover:t-danger"
+            style={{ fontSize: 13 }}
+            title="Withdraw request"
+          >Withdraw</button>
         </li>
       ))}
     </ul>

@@ -8,7 +8,6 @@ import EngineerMe from './routes/engineer/Me';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
 import TvView from './routes/tv/TvView';
 import { useMe } from './hooks/useMe';
-import { ImpersonationProvider, ImpersonationBar, ImpersonationFrame } from './components/Impersonation';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -36,22 +35,17 @@ function Home() {
 export default function App() {
   return (
     <BrowserRouter>
-      <ImpersonationProvider>
-        <ImpersonationBar />
-        <ImpersonationFrame>
-          <Routes>
-            <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
-            <Route path="/manager" element={<Protected><Manager /></Protected>} />
-            <Route path="/admin"   element={<Protected><Admin /></Protected>} />
-            <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
-            <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
-            <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
-            <Route path="/tv" element={<Protected><TvView /></Protected>} />
-            <Route path="/"        element={<Protected><Home /></Protected>} />
-            <Route path="*"        element={<Protected><Home /></Protected>} />
-          </Routes>
-        </ImpersonationFrame>
-      </ImpersonationProvider>
+      <Routes>
+        <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
+        <Route path="/manager" element={<Protected><Manager /></Protected>} />
+        <Route path="/admin"   element={<Protected><Admin /></Protected>} />
+        <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
+        <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
+        <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
+        <Route path="/tv" element={<Protected><TvView /></Protected>} />
+        <Route path="/"        element={<Protected><Home /></Protected>} />
+        <Route path="*"        element={<Protected><Home /></Protected>} />
+      </Routes>
     </BrowserRouter>
   );
 }

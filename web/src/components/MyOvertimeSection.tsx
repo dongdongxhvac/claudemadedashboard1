@@ -20,7 +20,6 @@ import {
   OVERTIME_CATEGORY_LABELS,
   type OvertimePost,
 } from '../hooks/useOvertime';
-import { useImpersonation } from '../lib/impersonationContext';
 
 const CATEGORY_ACCENT: Record<string, string> = {
   cold_weather:      '#60a5fa',
@@ -59,7 +58,6 @@ export function MyOvertimeSection({ userId, compact = false }: { userId: string;
   const postsQ   = useOvertimePosts();
   const signUp   = useSignUpForOvertime();
   const unSignUp = useUnSignUpForOvertime();
-  const { canAct } = useImpersonation();
 
   const visible = useMemo(() => {
     const now = Date.now();
@@ -108,7 +106,6 @@ export function MyOvertimeSection({ userId, compact = false }: { userId: string;
                 key={p.id}
                 post={p}
                 userId={userId}
-                canAct={canAct}
                 onSignUp={() => signUp.mutate(p.id)}
                 onUnSignUp={() => { if (confirm('Remove yourself from this OT?')) unSignUp.mutate(p.id); }}
                 pending={signUp.isPending || unSignUp.isPending}
@@ -122,11 +119,10 @@ export function MyOvertimeSection({ userId, compact = false }: { userId: string;
 }
 
 function PostRow({
-  post, userId, canAct, onSignUp, onUnSignUp, pending,
+  post, userId, onSignUp, onUnSignUp, pending,
 }: {
   post: OvertimePost;
   userId: string;
-  canAct: boolean;
   onSignUp: () => void;
   onUnSignUp: () => void;
   pending: boolean;
@@ -217,14 +213,12 @@ function PostRow({
         {mine ? (
           <button
             onClick={onUnSignUp}
-            disabled={pending || !canAct}
-            title={!canAct ? 'Read-only preview — enable “Act as them” to withdraw' : undefined}
+            disabled={pending}
             className="t-small px-2 py-1 rounded border"
             style={{
               background: 'var(--color-card)',
               borderColor: 'var(--color-border)',
               color: 'var(--color-text-muted)',
-              opacity: canAct ? 1 : 0.5,
             }}
           >
             {pending ? 'Working…' : 'Withdraw'}
@@ -236,10 +230,9 @@ function PostRow({
         ) : (
           <button
             onClick={onSignUp}
-            disabled={pending || !canAct}
-            title={!canAct ? 'Read-only preview — enable “Act as them” to sign up' : undefined}
+            disabled={pending}
             className="t-small px-3 py-1 rounded text-white"
-            style={{ background: accent, fontWeight: 600, opacity: canAct ? 1 : 0.5 }}
+            style={{ background: accent, fontWeight: 600 }}
           >
             {pending ? 'Signing up…' : 'Sign me up'}
           </button>
