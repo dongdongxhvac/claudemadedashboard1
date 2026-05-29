@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Login from './routes/Login';
 import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <ErrorBoundary>
       <Routes>
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/manager" element={<Protected><RequireManagerArea><Manager /></RequireManagerArea></Protected>} />
@@ -68,6 +70,7 @@ export default function App() {
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
       </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
