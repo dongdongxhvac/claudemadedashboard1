@@ -9,6 +9,8 @@
 // collapse flag flips).
 
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useIsAdmin } from '../hooks/useMe';
 
 type Entry = { id: string; title: string; collapsed: boolean };
 
@@ -45,6 +47,7 @@ export function JumpNav() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const isAdmin = useIsAdmin();
 
   // Re-scan on mount + whenever a Section signals a collapse change.
   const refresh = useCallback(() => setEntries(scanSections()), []);
@@ -221,6 +224,40 @@ export function JumpNav() {
             );
           })}
         </ul>
+
+        {/* Admin shortcut — bottom of the panel, admin-only. Visible in
+            both compact (icon) and expanded (labeled) modes so the manager
+            can hop to /admin without scrolling back to the page header. */}
+        {isAdmin && (
+          <div
+            style={{
+              marginTop: open ? 8 : 6,
+              paddingTop: open ? 6 : 4,
+              borderTop: '1px solid var(--color-border-soft)',
+              display: 'flex', justifyContent: open ? 'stretch' : 'flex-end',
+            }}
+          >
+            <Link
+              to="/admin"
+              title="Open Admin"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: open ? '3px 8px' : '3px 4px',
+                borderRadius: 4,
+                background: 'rgba(94,106,210,0.10)',
+                color: 'var(--color-accent)',
+                textDecoration: 'none',
+                fontSize: open ? 11 : 12,
+                fontWeight: 600,
+                flex: open ? 1 : undefined,
+                justifyContent: open ? 'center' : undefined,
+              }}
+            >
+              <span aria-hidden>⚙</span>
+              {open && <span>Admin</span>}
+            </Link>
+          </div>
+        )}
       </div>
     </nav>
   );
