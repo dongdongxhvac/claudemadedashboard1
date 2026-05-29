@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import Login from './routes/Login';
 import Manager from './routes/manager/Manager';
@@ -8,6 +9,15 @@ import EngineerMe from './routes/engineer/Me';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
 import TvView from './routes/tv/TvView';
 import { useMe } from './hooks/useMe';
+
+/** Reset scroll to the top on every route change. Without this, navigating
+ *  from a long page (e.g. the manager dashboard) to another route leaves the
+ *  window scrolled mid-page, so the new page looks blank until you refresh. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -46,6 +56,7 @@ function RequireManagerArea({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/manager" element={<Protected><RequireManagerArea><Manager /></RequireManagerArea></Protected>} />
