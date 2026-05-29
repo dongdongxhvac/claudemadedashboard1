@@ -2,7 +2,7 @@
 // table of PMs + WOs + NPMs side-by-side. Same data hooks as Mobile.
 // Read-only per plan.
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe, useIsAdmin } from '../../hooks/useMe';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
@@ -154,6 +154,12 @@ export default function EngineerPc() {
 
   if (me.isLoading || ctx.isLoading) {
     return <div className="min-h-screen t-bg p-8 t-text t-muted">Loading...</div>;
+  }
+  // Non-engineers (admin/manager/etc.) have no engineer context — send them to
+  // the manager dashboard instead of the "Setup pending" dead-end. Mirrors the
+  // guard the mobile layout already has.
+  if (me.data && me.data.role !== 'engineer') {
+    return <Navigate to="/manager" replace />;
   }
   if (!ctx.data) {
     return (
