@@ -116,7 +116,7 @@ export function JumpNav() {
         position: 'fixed', right: 8, top: '50%', transform: 'translateY(-50%)',
         zIndex: 40, maxHeight: '92vh',
       }}
-      className="hidden lg:block"
+      className="hidden md:block"
     >
       <div
         className="t-card"
