@@ -44,6 +44,7 @@ export function OpenPmsBreakdown() {
 
   return (
     <Section
+      collapsible
       title="§01 Open PMs · by type & equipment"
       subtitle={`${totalOpen} open PMs`}
     >

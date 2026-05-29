@@ -223,6 +223,7 @@ export function BmsEmailAlarmsPanel() {
 
   return (
     <Section
+      collapsible
       title="§10 BMS alarms via email (Siemens · Delta · 730/750)"
       subtitle={subtitle}
       loading={openQ.isLoading}

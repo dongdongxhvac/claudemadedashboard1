@@ -166,6 +166,7 @@ export function EmailAlarmsPanel() {
 
   return (
     <Section
+      collapsible
       title="§09 BMS heartbeats (4 BMS + Power Automate)"
       subtitle={subtitle}
       loading={hbQ.isLoading}

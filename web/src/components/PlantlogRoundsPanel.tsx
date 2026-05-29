@@ -178,7 +178,7 @@ export function PlantlogRoundsPanel() {
   );
 
   return (
-    <Section title="§06 Plantlog rounds" subtitle={subtitle} loading={loading}>
+    <Section collapsible title="§06 Plantlog rounds" subtitle={subtitle} loading={loading}>
       {err ? (
         <p className="t-text t-danger">Error loading plantlog data: {(err as Error).message}</p>
       ) : matrix.grandTotal === 0 ? (

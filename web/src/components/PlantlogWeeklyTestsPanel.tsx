@@ -170,7 +170,7 @@ export function PlantlogWeeklyTestsPanel() {
   );
 
   return (
-    <Section title="§07 Weekly compliance tests" subtitle={subtitle} loading={testsQ.isLoading}>
+    <Section collapsible title="§07 Weekly compliance tests" subtitle={subtitle} loading={testsQ.isLoading}>
       {testsQ.error ? (
         <p className="t-text t-danger">Error: {(testsQ.error as Error).message}</p>
       ) : generators.length === 0 && waters.length === 0 ? (

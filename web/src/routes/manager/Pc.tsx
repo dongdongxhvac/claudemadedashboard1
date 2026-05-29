@@ -13,6 +13,7 @@ import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
+import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -194,6 +195,7 @@ export default function ManagerPc() {
           <OvertimePanel />
           <PtoPanel />
         </div>
+        <JumpNav />
       </main>
     </div>
   );
