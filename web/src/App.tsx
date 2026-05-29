@@ -32,12 +32,23 @@ function Home() {
   return <Navigate to="/manager" replace />;
 }
 
+/** Gate the manager dashboard to non-engineers. Engineers/TV that reach
+ *  /manager (bookmark, stale tab, manual URL) bounce to their own home, so the
+ *  "engineer → /engineer/me, admin → /manager" rule holds however they arrive. */
+function RequireManagerArea({ children }: { children: React.ReactNode }) {
+  const me = useMe();
+  if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
+  if (me.data?.role === 'tv')       return <Navigate to="/tv" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
-        <Route path="/manager" element={<Protected><Manager /></Protected>} />
+        <Route path="/manager" element={<Protected><RequireManagerArea><Manager /></RequireManagerArea></Protected>} />
         <Route path="/admin"   element={<Protected><Admin /></Protected>} />
         <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
         <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
