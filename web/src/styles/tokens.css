@@ -1,74 +1,45 @@
 /* =============================================================================
-   Theme tokens. Each style defines the same set of CSS variables so components
-   reference --space-card, --color-card, etc. The visible style is selected by
-   the data-style attribute on <html>, set by <StyleProvider>.
+   Theme tokens. Single style ("Linear — denser, monospace-leaning, compact").
+   The previous V5/airy alternate and its data-style switcher were removed
+   per user request — everything renders in this one style now.
    ========================================================================== */
 
 :root {
-  /* defaults (also = V5) */
-  --color-bg:          #f7f7f5;
+  --color-bg:          #f4f4f5;        /* cool/gray bg */
   --color-card:        #ffffff;
-  --color-border:      #e5e7eb;
-  --color-border-soft: #f3f4f6;
-  --color-text:        #1a1a1a;
-  --color-text-muted:  #6b7280;
-  --color-accent:      #8b5cf6;
-  --color-accent-soft: #f3e8ff;
-  --color-danger:      #dc2626;
-  --color-warn:        #d97706;
-  --color-ok:          #10b981;
-
-  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-body:    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono:    ui-monospace, "JetBrains Mono", Consolas, monospace;
-
-  --font-size-section-title: 1.125rem;  /* 18px */
-  --font-size-base:          0.875rem;  /* 14px */
-  --font-size-small:         0.75rem;   /* 12px */
-  --font-size-stat:          2rem;      /* 32px — V5 big-number cards */
-  --font-size-comp-num:      1.5rem;    /* 24px — comp grid card numbers */
-
-  --space-card-pad: 1.25rem;  /* 20px — V5 airy */
-  --space-row-pad:  0.5rem;
-  --radius-card:    0.5rem;
-  --radius-pill:    9999px;
-
-  --border-card: 1px solid var(--color-border);
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-}
-
-/* ---------- Linear (denser, monospace-leaning, more compact) -------------- */
-[data-style="linear"] {
-  --color-bg:          #f4f4f5;        /* visibly cooler/grayer than V5's warm bg */
-  --color-card:        #ffffff;
-  --color-border:      #d4d4d8;        /* slightly darker so cards pop against denser bg */
+  --color-border:      #d4d4d8;
   --color-border-soft: #f4f4f5;
   --color-text:        #18181b;
   --color-text-muted:  #71717a;
   --color-accent:      #5e6ad2;        /* Linear app's signature blue-violet */
   --color-accent-soft: #eef0ff;
+  --color-danger:      #dc2626;
+  --color-warn:        #d97706;
+  --color-ok:          #10b981;
 
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:    ui-monospace, "JetBrains Mono", Consolas, monospace;
 
-  --font-size-section-title: 0.875rem;  /* 14px — smaller headers */
+  --font-size-section-title: 0.875rem;  /* 14px */
   --font-size-base:          0.8125rem; /* 13px */
   --font-size-small:         0.6875rem; /* 11px */
-  --font-size-stat:          1.25rem;   /* 20px — way denser than V5's 32px */
+  --font-size-stat:          1.25rem;   /* 20px */
   --font-size-comp-num:      1rem;      /* 16px */
 
-  --space-card-pad: 0.625rem;           /* 10px — much tighter */
+  --space-card-pad: 0.625rem;           /* 10px — tight */
   --space-row-pad:  0.125rem;
   --radius-card:    0.25rem;
+  --radius-pill:    9999px;
 
+  --border-card: 1px solid var(--color-border);
   --shadow-card: none;
 }
 
 /* ---------- Token-driven primitive classes -------------------------------- */
-/* Components opt into these via className so a style swap is purely CSS. */
+/* Components opt into these via className. */
 
 /* ---------- TV mode — bumps up sizes for across-the-room viewing --------- */
-/* Sits on top of whatever data-style is active. */
 [data-mode="tv"] {
   --font-size-section-title: 1.5rem;    /* 24px */
   --font-size-base:          1.0625rem; /* 17px */

@@ -15,7 +15,6 @@ import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
 import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
-import { StyleSwitcher } from '../../components/StyleSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { OncallBadge } from '../../components/OncallBadge';
@@ -146,7 +145,6 @@ export default function ManagerPc() {
           </div>
           <div className="flex items-center gap-4">
             <OncallBadge />
-            <StyleSwitcher />
             {isAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 Admin
