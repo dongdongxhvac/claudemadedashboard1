@@ -108,6 +108,7 @@ export function DueThisMonth() {
 
   return (
     <Section
+      collapsible
       title="§03 Due this month · by assignee"
       subtitle={`${totals.total} PMs · ${totals.npm} NPMs · ${rows.length} ${rows.length === 1 ? 'assignee' : 'assignees'} · through ${windowEndLabel}`}
     >

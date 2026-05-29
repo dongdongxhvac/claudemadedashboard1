@@ -189,7 +189,7 @@ export function OvertimePanel() {
   );
 
   return (
-    <Section title="§11 Upcoming overtime" subtitle={subtitle} loading={postsQ.isLoading}>
+    <Section collapsible title="§11 Upcoming overtime" subtitle={subtitle} loading={postsQ.isLoading}>
       {postsQ.error ? (
         <p className="t-text t-danger">Error: {(postsQ.error as Error).message}</p>
       ) : (

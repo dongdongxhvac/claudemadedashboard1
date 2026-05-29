@@ -147,6 +147,7 @@ export function WeeklyCompletions({
 
   return (
     <Section
+      collapsible
       title={`§00 Crew performance · ${periodLabel}`}
       subtitle={
         <>

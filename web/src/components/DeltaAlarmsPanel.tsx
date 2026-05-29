@@ -198,7 +198,7 @@ export function DeltaAlarmsPanel() {
   );
 
   return (
-    <Section title="§08 BMS alarms (Delta)" subtitle={subtitle} loading={currentQ.isLoading || categoryQ.isLoading}>
+    <Section collapsible title="§08 BMS alarms (Delta)" subtitle={subtitle} loading={currentQ.isLoading || categoryQ.isLoading}>
       {currentQ.error ? (
         <p className="t-text t-danger">Error: {(currentQ.error as Error).message}</p>
       ) : (

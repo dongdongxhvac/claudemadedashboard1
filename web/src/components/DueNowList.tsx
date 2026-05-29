@@ -135,7 +135,7 @@ export function DueNowList() {
         }`;
 
   return (
-    <Section title="§02 Due today / overdue · or WOs · by assignee" subtitle={subtitle}>
+    <Section collapsible title="§02 Due today / overdue · or WOs · by assignee" subtitle={subtitle}>
       <div className="flex items-center gap-2 mb-3">
         <span className="t-small t-muted uppercase tracking-wider">Sort</span>
         <SortBtn label="PMs"   active={sort === 'pms'}   onClick={() => setSort('pms')} />
