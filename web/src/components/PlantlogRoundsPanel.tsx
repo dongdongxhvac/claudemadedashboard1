@@ -136,8 +136,9 @@ export function PlantlogRoundsPanel() {
     return users;
   }, [ubdQ.data, days]);
 
-  // Lookup: `${user_name}|${day}` -> per-building visit rows, sorted by total
-  // time descending so the building they spent most time at leads.
+  // Lookup: `${user_name}|${day}` -> per-building visit rows, sorted by FIRST
+  // entry time ascending so the rows read in route order — the order the
+  // engineer actually walked the buildings that day.
   const visitsByEngineerDay = useMemo(() => {
     const m = new Map<string, PlantlogUserBuildingVisit[]>();
     for (const r of visitsQ.data ?? []) {
@@ -147,7 +148,7 @@ export function PlantlogRoundsPanel() {
       m.set(key, list);
     }
     for (const list of m.values()) {
-      list.sort((a, b) => b.total_visit_seconds - a.total_visit_seconds);
+      list.sort((a, b) => a.first_entry_utc.localeCompare(b.first_entry_utc));
     }
     return m;
   }, [visitsQ.data]);
@@ -387,8 +388,9 @@ export function PlantlogRoundsPanel() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-building breakdown shown inside the Daily round efficiency table when
-// an engineer row is expanded. Rows are pre-sorted by total_visit_seconds
-// descending so the engineer's "longest building" leads.
+// an engineer row is expanded. Rows are pre-sorted by first_entry_utc
+// ascending so they read in route order — the order the engineer actually
+// walked the buildings that day.
 function BuildingVisitsBreakdown({ rows }: { rows: PlantlogUserBuildingVisit[] }) {
   return (
     <div style={{ padding: '0 0 0 18px' }}>
