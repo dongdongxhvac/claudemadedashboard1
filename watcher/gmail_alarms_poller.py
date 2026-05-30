@@ -406,13 +406,32 @@ def _parse_event_class(body_text: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+_ANGLE_EMAIL_RE = re.compile(r"<\s*([^>\s]+@[^>\s]+)\s*>")
+_BARE_EMAIL_RE  = re.compile(r"\b([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b")
+
+
 def _extract_original_sender(body_text: str) -> str | None:
     """Find the first 'From: ...' line in the forwarded body and return
-    the email address portion."""
+    the email address portion.
+
+    parseaddr() returns ('', '') when the display-name field *itself*
+    looks like an email address ("email@x <email@x>"), which is exactly
+    what some BMS gateways do — so we fall back to angle-bracket / bare-
+    email extraction when parseaddr fails. Without this fallback the
+    classifier loses 730/750-style senders and the row ends up with
+    null vendor."""
     for m in _BODY_FROM_RE.finditer(body_text):
-        addr = parseaddr(m["from"].strip())[1]
+        raw = m["from"].strip()
+        addr = parseaddr(raw)[1]
         if addr and "@" in addr:
             return addr.lower()
+        # parseaddr returned empty — try regex fallbacks.
+        ang = _ANGLE_EMAIL_RE.search(raw)
+        if ang:
+            return ang.group(1).lower()
+        bare = _BARE_EMAIL_RE.search(raw)
+        if bare:
+            return bare.group(1).lower()
     return None
 
 
@@ -424,6 +443,11 @@ def _infer_vendor(original_sender: str | None, body_text: str) -> str | None:
         if "delta" in s or "albireo" in s: return "delta"
         if "honeywell" in s:  return "honeywell"
         if "tridium" in s or "niagara" in s: return "tridium"
+        # Northeast Tech BMS at 730/750 Main. Heartbeat side already knew
+        # this sender (HB_SENDER_TO_VENDOR); the alarm-side classifier was
+        # missing it, so every 730/750 alarm landed as vendor=null.
+        if "northeast-tech.com" in s or "jll750mainbms" in s:
+            return "northeasttech_730_750"
     if "siemens" in body_text.lower():
         return "siemens"
     return None
@@ -634,6 +658,88 @@ def _process_delta_alarm(
     }
 
 
+# ----- Northeast Tech BMS at 730/750 Main parser ----------------------------
+# Body format (verified via real 5/30 alarm — bug discovered when first
+# 730/750 alarm landed with vendor=null):
+#
+#   Source: 730_AS03_AHU03--SaTmpAlm_Alm
+#   Alarm text: SaTmpAlm - Supply Air Temp Alarm Is Active.
+#   Timestamp: 2026-05-30 08:56:07 -4H, DST
+#
+# Building inferred from the Source-line prefix (730 → "730 Main",
+# 750 → "750 Main"). Alarm state from the "Is Active" / "Is Cleared" /
+# "Returned to Normal" suffix in the Alarm text line.
+
+_NET_SOURCE_RE    = re.compile(r"^\s*Source\s*:\s*(?P<src>.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_NET_ALARMTXT_RE  = re.compile(r"^\s*Alarm text\s*:\s*(?P<txt>.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_NET_TIMESTAMP_RE = re.compile(r"^\s*Timestamp\s*:\s*(?P<ts>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})", re.IGNORECASE | re.MULTILINE)
+
+
+def _process_northeasttech_alarm(
+    subject_clean: str,
+    body_text: str,
+    received_at: datetime,
+) -> dict:
+    """Extract Northeast Tech 730/750 fields from the forwarded alarm body."""
+    src_m  = _NET_SOURCE_RE.search(body_text)
+    txt_m  = _NET_ALARMTXT_RE.search(body_text)
+    time_m = _NET_TIMESTAMP_RE.search(body_text)
+
+    source = src_m["src"].strip() if src_m else None
+    alarm_txt = txt_m["txt"].strip() if txt_m else None
+
+    # Building: leading digits of the Source field (e.g. "730_AS03..." → "730 Main").
+    building = None
+    if source:
+        bm = re.match(r"^(\d{2,4})\b", source)
+        if bm:
+            building = f"{bm.group(1)} Main"
+
+    # Point name: full source string (best chance of being unique).
+    point_name = source
+
+    # Alarm state from the message text suffix.
+    state_canonical = None
+    event_class     = None
+    if alarm_txt:
+        low = alarm_txt.lower()
+        if "is active" in low:
+            state_canonical, event_class = "Active", "Off Normal"
+        elif "is cleared" in low or "returned to normal" in low or "is normal" in low:
+            state_canonical, event_class = "Quiet", "Normal"
+
+    # Timestamp is local site time; convert to UTC the same way Siemens path does.
+    time_str = time_m["ts"].strip() if time_m else None
+    alarm_time_utc = None
+    if time_str:
+        try:
+            alarm_time_utc = (
+                datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=SITE_TZ)
+                .astimezone(UTC)
+            )
+        except ValueError:
+            pass
+
+    return {
+        "building":         building,
+        "point_name":       point_name,
+        "point_ref":        source,
+        "alarm_state":      state_canonical,
+        "event_class":      event_class,
+        "event_value":      alarm_txt,
+        "alarm_time_local": time_str,
+        "alarm_time_utc":   alarm_time_utc.isoformat() if alarm_time_utc else None,
+        "parsed_fields": {
+            "subject_clean":  subject_clean,
+            "source":         source,
+            "alarm_text":     alarm_txt,
+            "timestamp_str":  time_str,
+            "state":          state_canonical,
+        },
+    }
+
+
 def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
     """Fetch one message and return a row ready for upsert into
     email_alarm_events, or None on parse failure. Dispatches to a
@@ -659,6 +765,8 @@ def _process(M: imaplib.IMAP4_SSL, uid: bytes, label: str) -> dict | None:
             vendor = "delta_10green"
         elif original_sender == "takedabms@albireoenergy.com":
             vendor = "delta_takeda"
+    elif vendor == "northeasttech_730_750":
+        v_fields = _process_northeasttech_alarm(subject_clean, body_text, received_at)
     else:
         # Default = Siemens-shaped parser
         subj_fields = _parse_subject(subject_clean)
