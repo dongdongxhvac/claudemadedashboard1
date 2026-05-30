@@ -94,7 +94,8 @@ export type PlantlogUserDailySpan = {
 };
 
 /** Per-user × per-day round efficiency: first/last entry, count, span.
- *  Excludes water treatment so spans reflect daily-round effort only. */
+ *  Excludes water treatment + weekly/monthly rounds so spans reflect
+ *  daily-round effort only. */
 export function usePlantlogUserDailySpan(daysBack: number = 14) {
   return useQuery({
     queryKey: ['plantlog_user_daily_span', daysBack],
@@ -108,6 +109,39 @@ export function usePlantlogUserDailySpan(daysBack: number = 14) {
         .gte('et_day', sinceStr);
       if (error) throw error;
       return (data ?? []) as PlantlogUserDailySpan[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Per-user × per-day × per-building visit-roll-up. Each row = an engineer's
+ *  total time at one building on one day, computed from contiguous "visits"
+ *  (same building + < 30 min gap = same visit). Used to show how long an
+ *  engineer spent at each building. Same exclusion set as the span view so
+ *  the per-building totals reconcile with the engineer's daily span. */
+export type PlantlogUserBuildingVisit = {
+  user_name: string;
+  et_day: string;
+  building: string;
+  visits: number;             // visit count (e.g. "went back to A twice")
+  entries: number;            // total entry rows
+  first_entry_utc: string;
+  last_entry_utc: string;
+  total_visit_seconds: number; // sum of all visit spans for this building
+};
+export function usePlantlogUserBuildingDailyVisits(daysBack: number = 14) {
+  return useQuery({
+    queryKey: ['plantlog_user_building_daily_visits', daysBack],
+    queryFn: async (): Promise<PlantlogUserBuildingVisit[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const sinceStr = since.toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('v_plantlog_user_building_daily_visits')
+        .select('*')
+        .gte('et_day', sinceStr);
+      if (error) throw error;
+      return (data ?? []) as PlantlogUserBuildingVisit[];
     },
     staleTime: 60_000,
   });

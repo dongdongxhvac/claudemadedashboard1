@@ -9,13 +9,15 @@
 // lookup from plantlog's /groups + /logs catalog). Some rows are "direct"
 // (unambiguous) and some are "inferred" (nearest unambiguous in time). Both
 // surface here as concrete building counts.
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   usePlantlogBuildingDaily,
   usePlantlogUserBuildingDaily,
   usePlantlogUserDailySpan,
+  usePlantlogUserBuildingDailyVisits,
   usePlantlogUserMap,
   type PlantlogUserDailySpan,
+  type PlantlogUserBuildingVisit,
 } from '../hooks/usePlantlog';
 import { Section } from './Section';
 
@@ -64,8 +66,12 @@ export function PlantlogRoundsPanel() {
   const bdQ = usePlantlogBuildingDaily(days);
   const ubdQ = usePlantlogUserBuildingDaily(days);
   const spanQ = usePlantlogUserDailySpan(days);
+  const visitsQ = usePlantlogUserBuildingDailyVisits(days);
   const userMapQ = usePlantlogUserMap();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  // Expand state for the per-building breakdown inside Daily round efficiency.
+  // Key shape: `${day}|${user_name}` — one engineer-day row at a time.
+  const [expandedSpan, setExpandedSpan] = useState<string | null>(null);
 
   const matrix = useMemo(() => {
     const rows = bdQ.data ?? [];
@@ -130,6 +136,22 @@ export function PlantlogRoundsPanel() {
     return users;
   }, [ubdQ.data, days]);
 
+  // Lookup: `${user_name}|${day}` -> per-building visit rows, sorted by total
+  // time descending so the building they spent most time at leads.
+  const visitsByEngineerDay = useMemo(() => {
+    const m = new Map<string, PlantlogUserBuildingVisit[]>();
+    for (const r of visitsQ.data ?? []) {
+      const key = `${r.user_name}|${r.et_day}`;
+      const list = m.get(key) ?? [];
+      list.push(r);
+      m.set(key, list);
+    }
+    for (const list of m.values()) {
+      list.sort((a, b) => b.total_visit_seconds - a.total_visit_seconds);
+    }
+    return m;
+  }, [visitsQ.data]);
+
   // Daily round efficiency: group by day, list engineers with first/last/span.
   const dailySpan = useMemo(() => {
     const rows = spanQ.data ?? [];
@@ -151,8 +173,8 @@ export function PlantlogRoundsPanel() {
     }));
   }, [spanQ.data, days]);
 
-  const loading = bdQ.isLoading || ubdQ.isLoading || spanQ.isLoading;
-  const err = bdQ.error || ubdQ.error || spanQ.error;
+  const loading = bdQ.isLoading || ubdQ.isLoading || spanQ.isLoading || visitsQ.isLoading;
+  const err = bdQ.error || ubdQ.error || spanQ.error || visitsQ.error;
 
   const subtitle = (
     <div className="flex items-center gap-2">
@@ -230,10 +252,12 @@ export function PlantlogRoundsPanel() {
             </table>
           </div>
 
-          {/* Daily round efficiency — start / end / entries / span per engineer */}
+          {/* Daily round efficiency — start / end / entries / span per engineer.
+              Each engineer row is click-to-expand for a per-building breakdown
+              of how long they spent at each building. */}
           <div className="mb-6">
             <div className="t-small t-muted uppercase tracking-wider mb-2">
-              Daily round efficiency · excludes water treatment
+              Daily round efficiency · daily rounds only (excl. water treatment, weekly &amp; monthly) · click an engineer for per-building time
             </div>
             <div className="space-y-3">
               {dailySpan.map(({ day, engineers }) => (
@@ -244,6 +268,7 @@ export function PlantlogRoundsPanel() {
                   <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
                     <thead>
                       <tr className="t-muted">
+                        <th className="text-left pb-1" style={{ width: 14 }}></th>
                         <th className="text-left pb-1">Engineer</th>
                         <th className="text-right pb-1 px-2">Start</th>
                         <th className="text-right pb-1 px-2">End</th>
@@ -255,19 +280,40 @@ export function PlantlogRoundsPanel() {
                       {engineers.map((e) => {
                         const mapped = userMapQ.data?.get(e.user_name);
                         const display = mapped?.full_name ?? e.user_name;
+                        const rowKey = `${day}|${e.user_name}`;
+                        const isOpen = expandedSpan === rowKey;
+                        const visits = visitsByEngineerDay.get(`${e.user_name}|${day}`) ?? [];
+                        const hasVisits = visits.length > 0;
                         return (
-                          <tr key={e.user_name} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
-                            <td className="py-1 pr-2">
-                              <span>{display}</span>
-                              {mapped && (
-                                <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>@{e.user_name}</span>
-                              )}
-                            </td>
-                            <td className="text-right px-2 py-1">{fmtTime(e.first_entry_utc)}</td>
-                            <td className="text-right px-2 py-1">{fmtTime(e.last_entry_utc)}</td>
-                            <td className="text-right px-2 py-1">{e.entries}</td>
-                            <td className="text-right px-2 py-1">{fmtSpan(e.span_seconds)}</td>
-                          </tr>
+                          <Fragment key={e.user_name}>
+                            <tr
+                              style={{ borderTop: '1px solid var(--color-border-soft)', cursor: hasVisits ? 'pointer' : 'default' }}
+                              onClick={() => hasVisits && setExpandedSpan(isOpen ? null : rowKey)}
+                              title={hasVisits ? (isOpen ? 'Hide per-building breakdown' : 'Show per-building breakdown') : 'No attributed buildings on this day'}
+                            >
+                              <td className="py-1 t-muted" style={{ fontSize: 10, paddingLeft: 2 }}>
+                                {hasVisits ? (isOpen ? '▾' : '▸') : ''}
+                              </td>
+                              <td className="py-1 pr-2">
+                                <span>{display}</span>
+                                {mapped && (
+                                  <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>@{e.user_name}</span>
+                                )}
+                              </td>
+                              <td className="text-right px-2 py-1">{fmtTime(e.first_entry_utc)}</td>
+                              <td className="text-right px-2 py-1">{fmtTime(e.last_entry_utc)}</td>
+                              <td className="text-right px-2 py-1">{e.entries}</td>
+                              <td className="text-right px-2 py-1">{fmtSpan(e.span_seconds)}</td>
+                            </tr>
+                            {isOpen && hasVisits && (
+                              <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
+                                <td></td>
+                                <td colSpan={5} className="pt-1 pb-2">
+                                  <BuildingVisitsBreakdown rows={visits} />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -336,5 +382,47 @@ export function PlantlogRoundsPanel() {
         </>
       )}
     </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-building breakdown shown inside the Daily round efficiency table when
+// an engineer row is expanded. Rows are pre-sorted by total_visit_seconds
+// descending so the engineer's "longest building" leads.
+function BuildingVisitsBreakdown({ rows }: { rows: PlantlogUserBuildingVisit[] }) {
+  return (
+    <div style={{ padding: '0 0 0 18px' }}>
+      <table className="t-mono t-small" style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr className="t-muted" style={{ fontSize: 10 }}>
+            <th className="text-left pb-1">Building</th>
+            <th className="text-right pb-1 px-2">First</th>
+            <th className="text-right pb-1 px-2">Last</th>
+            <th className="text-right pb-1 px-2">Entries</th>
+            <th className="text-right pb-1 px-2">Visits</th>
+            <th className="text-right pb-1 px-2">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.building}>
+              <td className="py-0.5 pr-2">{r.building}</td>
+              <td className="text-right px-2 py-0.5">{fmtTime(r.first_entry_utc)}</td>
+              <td className="text-right px-2 py-0.5">{fmtTime(r.last_entry_utc)}</td>
+              <td className="text-right px-2 py-0.5">{r.entries}</td>
+              <td className="text-right px-2 py-0.5">
+                {r.visits}
+                {r.visits > 1 && (
+                  <span className="t-muted ml-1" style={{ fontSize: 9 }} title="Engineer returned to this building during the day">
+                    ↺
+                  </span>
+                )}
+              </td>
+              <td className="text-right px-2 py-0.5">{fmtSpan(r.total_visit_seconds)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
