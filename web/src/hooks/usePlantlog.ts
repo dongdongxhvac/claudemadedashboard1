@@ -84,6 +84,33 @@ export function usePlantlogWeeklyTests() {
   });
 }
 
+export type PlantlogMonthlyMeter = {
+  log_name: string;
+  activity_name: string | null;
+  last_done_utc: string;
+  days_ago: number;
+  last_by_user: string | null;
+  building: string | null;
+};
+
+/** Latest completion per monthly water meter reading log. Compliance window
+ *  is the first 6 days of each calendar month (computed client-side in the
+ *  §07 panel). Separate from the weekly view so the weekly compliance path
+ *  stays untouched. */
+export function usePlantlogMonthlyWaterMeters() {
+  return useQuery({
+    queryKey: ['plantlog_monthly_water_meters'],
+    queryFn: async (): Promise<PlantlogMonthlyMeter[]> => {
+      const { data, error } = await supabase
+        .from('v_plantlog_monthly_water_meters_status')
+        .select('*');
+      if (error) throw error;
+      return (data ?? []) as PlantlogMonthlyMeter[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 export type PlantlogUserDailySpan = {
   user_name: string;
   et_day: string;
