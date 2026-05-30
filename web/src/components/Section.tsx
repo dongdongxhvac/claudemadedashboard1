@@ -35,9 +35,15 @@ export function Section({
   const canCollapse = collapsible && !!resolvedId;
   const storageKey = canCollapse ? `cove.section.collapsed:${resolvedId}` : null;
 
+  // Default to COLLAPSED on the manager view so the page loads compact.
+  // localStorage truth table:
+  //   '0'  → user explicitly opened it    → stays open
+  //   '1'  → user explicitly collapsed it → stays collapsed
+  //   null → never touched                 → collapsed by default
+  // The new-default is `true`, so "anything other than explicit '0'" closes.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (!storageKey || typeof window === 'undefined') return false;
-    try { return window.localStorage.getItem(storageKey) === '1'; } catch { return false; }
+    if (!storageKey || typeof window === 'undefined') return true;
+    try { return window.localStorage.getItem(storageKey) !== '0'; } catch { return true; }
   });
 
   // Persist + broadcast on change so the JumpNav can re-render its rail.
