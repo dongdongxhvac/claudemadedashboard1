@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
+	<title>Mail Filters</title>
+	<id>tag:mail.google.com,2008:filters:z0000001779625887056*9152736669045869151,z0000001779627538857*1869690597113974670,z0000001779663514152*2258955735559395575,z0000001779663969048*8166930995298936422,z0000001779664566412*1275357814238071929,z0000001779748533925*3694284317903663280</id>
+	<updated>2026-05-30T14:57:04Z</updated>
+	<author>
+		<name>Upark BMR</name>
+		<email>bmrupark55@gmail.com</email>
+	</author>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779625887056*9152736669045869151</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='from' value='jie.lao@cwservices.com'/>
+		<apps:property name='hasTheWord' value='noreply@siemens.com'/>
+		<apps:property name='doesNotHaveTheWord' value='Test_page OR &quot;test alarm&quot; OR testalarm OR LLEngDailyTestAlm OR &quot;EmergencyPowerStatus&quot; OR GENERATOR OR &quot;Generator_REF1T_BB&quot; OR &quot;GenStsOn_Al&quot; OR GenComAlm_Al OR &quot;35_PH_GeneratorStatus&quot; OR &quot;Base_Generator_Status&quot;'/>
+		<apps:property name='label' value='UPark Siemens Alarms from Power Automate'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779627538857*1869690597113974670</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='from' value='jie.lao@cwservices.com'/>
+		<apps:property name='hasTheWord' value='Test_page OR &quot;test alarm&quot; OR testalarm OR LLEngDailyTestAlm'/>
+		<apps:property name='doesNotHaveTheWord' value='EmergencyPowerStatus OR GENERATOR OR &quot;Generator_REF1T_BB&quot; OR &quot;GenStsOn_Al&quot; OR GenComAlm_Al OR 35_PH_GeneratorStatus OR Base_Generator_Status'/>
+		<apps:property name='label' value='UPark 4 BMS Heart Beat from Power automate'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779663514152*2258955735559395575</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='from' value='jie.lao@cwservices.com'/>
+		<apps:property name='hasTheWord' value='EmergencyPowerStatus OR GENERATOR OR &quot;Generator_REF1T_BB&quot; OR &quot;GenStsOn_Al&quot; OR GenComAlm_Al OR 35_PH_GeneratorStatus OR Base_Generator_Status'/>
+		<apps:property name='doesNotHaveTheWord' value='Test_page OR &quot;test alarm&quot; OR testalarm OR LLEngDailyTestAlm'/>
+		<apps:property name='label' value='UPark Generator run from power automate'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779663969048*8166930995298936422</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='from' value='jie.lao@cwservices.com'/>
+		<apps:property name='hasTheWord' value='&quot;takedabms@albireoenergy.com&quot; OR &quot;deltabms@albireoenergy.com&quot;'/>
+		<apps:property name='doesNotHaveTheWord' value='Test_page OR &quot;test alarm&quot; OR testalarm OR LLEngDailyTestAlm OR &quot;EmergencyPowerStatus&quot; OR GENERATOR OR &quot;Generator_REF1T_BB&quot; OR &quot;GenStsOn_Al&quot; OR GenComAlm_Al OR &quot;35_PH_GeneratorStatus&quot; OR &quot;Base_Generator_Status&quot;'/>
+		<apps:property name='label' value='UPark Delta Alarms from power automate'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779664566412*1275357814238071929</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='from' value='jie.lao@cwservices.com'/>
+		<apps:property name='hasTheWord' value='jll750mainbms@northeast-tech.com'/>
+		<apps:property name='doesNotHaveTheWord' value='Test_page OR &quot;test alarm&quot; OR testalarm OR LLEngDailyTestAlm OR EmergencyPowerStatus OR GENERATOR OR Generator_REF1T_BB OR &quot;GenStsOn_Al&quot; OR GenComAlm_Al OR &quot;35_PH_GeneratorStatus&quot; OR &quot;Base_Generator_Status&quot;'/>
+		<apps:property name='label' value='UPark 730750 Alarms from power automatic'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001779748533925*3694284317903663280</id>
+		<updated>2026-05-30T14:57:04Z</updated>
+		<content></content>
+		<apps:property name='subject' value='PA Heartbeat'/>
+		<apps:property name='label' value='Power Automate Heartbeat'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+</feed>
