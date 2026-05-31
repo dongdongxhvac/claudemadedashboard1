@@ -26,6 +26,7 @@ Defaults to 4 days. Output is a table + diagnostic counters.
 """
 from __future__ import annotations
 
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -47,6 +48,61 @@ H = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "application/json",
 }
+
+# --- Log-prefix-based attribution -------------------------------------------
+#
+# Time-cluster inference fails for monthly compliance tasks: a once-a-month
+# log entry has no nearby daily-round entries to cluster against, so the
+# building stays unknown.
+#
+# Workaround: when the user renames per-building monthly logs in plantlog
+# with a building-number prefix (e.g. "26 Monthly Water Meter Readings"
+# inside the "26 Landsdowne St" folder), we can extract the building
+# directly from the log_name string — no neighbors needed.
+#
+# The map below is the canonical (number prefix -> plantlog building name)
+# lookup. Building names match exactly what plantlog uses (and what shows up
+# in `building_inferred` for the daily-round path), so downstream joins
+# stay consistent. Garages included for safety; they'll only ever resolve
+# if the user actually puts a prefixed log in their folder.
+_BUILDING_PREFIX_MAP: dict[str, str] = {
+    "10":  "10 Green St",
+    "20":  "20 Sidney St",
+    "26":  "26 Landsdowne St",
+    "30":  "30 Pilgrim St",       # garage
+    "35":  "35 Landsdowne St",
+    "38":  "38 Sidney St",
+    "40":  "40 Landsdowne St",
+    "45":  "45 Sidney St",
+    "55":  "55 Franklin St",      # garage
+    "64":  "64 Sidney St",
+    "65":  "65 Landsdowne St",
+    "75":  "75 Sidney St",
+    "80":  "80 Landsdowne St",    # garage
+    "88":  "88 Sidney St",
+    "300": "300 Mass Ave",
+    "350": "350 Mass Ave",
+    "730": "730 Main St",
+    "750": "750 Main St",
+}
+
+# `^<digits><whitespace>` — exact leading-digit run, then whitespace. Using a
+# whitespace boundary means "30" never matches "300 Mass Ave" because "300"
+# extracts as exactly "300" (and "30 " requires a space, not another digit).
+_LOG_PREFIX_RE = re.compile(r"^(\d+)\s+")
+
+
+def _building_from_log_prefix(log_name: str | None) -> str | None:
+    """Return the canonical building name if `log_name` starts with a known
+    building-number prefix (e.g. "26 Monthly Water Meter Readings" -> "26
+    Landsdowne St"). Returns None for any unrecognized prefix or no prefix.
+    """
+    if not log_name:
+        return None
+    m = _LOG_PREFIX_RE.match(log_name)
+    if not m:
+        return None
+    return _BUILDING_PREFIX_MAP.get(m.group(1))
 
 
 def build_lookup(cookies: dict[str, str]) -> dict[tuple[str, str], frozenset[str]]:
@@ -195,7 +251,7 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
         day = r["performed_at_utc"][:10]
         by_user_day[(r["user_name"], day)].append(r)
 
-    diag = {"total": len(rows), "unambiguous": 0, "inferred": 0, "unattributed": 0}
+    diag = {"total": len(rows), "log_prefix": 0, "unambiguous": 0, "inferred": 0, "unattributed": 0}
     updates: list[dict] = []
 
     for (_user, _day), day_rows in by_user_day.items():
@@ -204,13 +260,25 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
             bs = lookup.get(key, frozenset())
             r["_ts"] = datetime.fromisoformat(r["performed_at_utc"].replace("Z", "+00:00"))
             r["_building"] = next(iter(bs)) if len(bs) == 1 else None
+            # Log-prefix attribution: if log_name starts with "<num> " and
+            # the number is a known building, that's the most reliable
+            # signal — engineers explicitly chose a per-building log. Wins
+            # over both cluster inference and ambiguous unambiguous-set
+            # tie-breaking. Set here so a row that ALSO would have been
+            # unambiguous still prefers the explicit prefix (consistent).
+            r["_prefix_building"] = _building_from_log_prefix(r["log_name"])
 
         anchors = [r for r in day_rows if r["_building"] is not None]
         anchor_idx = 0
         for r in day_rows:
             building = None
             source = None
-            if r["_building"] is not None:
+            # Priority 1: explicit log-name prefix (most reliable).
+            if r["_prefix_building"] is not None:
+                building = r["_prefix_building"]
+                source = "log_prefix"
+                diag["log_prefix"] += 1
+            elif r["_building"] is not None:
                 building = r["_building"]
                 source = "direct"
                 diag["unambiguous"] += 1

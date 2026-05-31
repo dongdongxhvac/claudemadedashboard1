@@ -45,6 +45,15 @@ function fmtDoneAt(utcIso: string): string {
   });
 }
 
+/** Strip the building-number prefix some logs carry (e.g.
+ *  "26 Monthly Water Meter Readings" → "Monthly Water Meter Readings").
+ *  The prefix exists only so the watcher can attribute the log to a
+ *  building (see plantlog_building_attribution.py); the building lives in
+ *  its own column, so showing it twice would be redundant. */
+function stripLogPrefix(logName: string): string {
+  return logName.replace(/^\d+\s+/, '');
+}
+
 /** Monday 00:00 ET of the week containing `d` (treats Sunday as the END of
  *  the previous week). */
 function startOfWeekMondayET(d: Date): Date {
@@ -175,7 +184,7 @@ function TestTable({
                 }}
               >
                 <td className="py-1 pr-3">
-                  <span>{r.log_name}</span>
+                  <span>{stripLogPrefix(r.log_name)}</span>
                   {r.activity_name && r.activity_name !== r.log_name && (
                     <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>{r.activity_name}</span>
                   )}
@@ -242,7 +251,7 @@ function MonthlyMeterTable({
                   key={r.log_name}
                   style={{ borderTop: '1px solid var(--color-border-soft)' }}
                 >
-                  <td className="py-1 pr-3">{r.log_name}</td>
+                  <td className="py-1 pr-3">{stripLogPrefix(r.log_name)}</td>
                   <td className="py-1 pr-3 t-muted">{r.building ?? '—'}</td>
                   <td className="py-1 pr-3">
                     {mapped ? mapped.full_name : r.last_by_user ?? '—'}
