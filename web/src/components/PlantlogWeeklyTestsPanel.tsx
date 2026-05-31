@@ -1,9 +1,12 @@
 // §07 — Plant Log Compliance Tests.
 //
 // Three sections in one panel:
-//   * Generator Weekly Tests       (weekly cadence, Mon-Sun ET)
-//   * Weekly Water Test            (weekly cadence, Mon-Sun ET)
-//   * Monthly Water Meter Readings (monthly cadence, due in days 1-6 ET)
+//   * Generator Weekly Tests  (weekly cadence, Mon-Sun ET)
+//   * Weekly Water Test       (weekly cadence, Mon-Sun ET)
+//   * Monthly Activities      (monthly cadence, due in days 1-6 ET) — any
+//     plantlog log under group_name='Monthly Activities' (currently
+//     Monthly Water Meter Readings + Monthly DEP Log; auto-includes future
+//     monthly tasks)
 //
 // Weekly compliance rule is CALENDAR-WEEK based, not rolling-7-days, because
 // the real-world question is "did each item get done once this week (Mon-Sun)?"
@@ -215,7 +218,7 @@ function MonthlyMeterTable({
       </div>
       {rows.length === 0 ? (
         <p className="t-text t-muted">
-          No monthly water meter readings ingested yet. (Polling runs hourly 7 AM-7 PM.)
+          No monthly activities ingested yet. (Polling runs hourly 7 AM-7 PM.)
         </p>
       ) : (
         <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
@@ -296,7 +299,7 @@ export function PlantlogWeeklyTestsPanel() {
         {weeklyFresh} ✓ this week
       </span>
       <span className="ml-2">· {generators.length} generators · {waters.length} water tests</span>
-      <span className="ml-2">· {meters.length} monthly meter{meters.length === 1 ? '' : 's'}</span>
+      <span className="ml-2">· {meters.length} monthly task{meters.length === 1 ? '' : 's'}</span>
       {monthlyFresh > 0 && (
         <span className="ml-2" style={{ color: 'var(--color-ok, #10b981)' }}>
           · {monthlyFresh} ✓ this month
@@ -341,7 +344,7 @@ export function PlantlogWeeklyTestsPanel() {
           <TestTable title="Generator Weekly Tests" rows={generators} userMap={userMapQ.data} />
           <TestTable title="Weekly Water Test"      rows={waters}      userMap={userMapQ.data} />
           <MonthlyMeterTable
-            title="Monthly Water Meter Readings"
+            title="Monthly Activities"
             rows={meters}
             userMap={userMapQ.data}
           />
