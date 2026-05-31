@@ -128,6 +128,37 @@ export function usePlantlogMonthlyMeterLatestReadings() {
   });
 }
 
+export type PlantlogDailyMeterLatestReading = {
+  building: string;
+  log_name: string;
+  completed_at_utc: string;
+  completed_by_user: string | null;
+  activity_name: string | null;
+  note: string | null;
+  readings: PlantlogMeterReadingItem[];
+  attribution_source: 'direct' | 'inferred' | 'log_prefix' | null;
+};
+
+/** Latest daily-round meter readings per (building, log_name). Each row
+ *  is the most recent completion of one meter log at one building — e.g.
+ *  "CT Meters (Always)" at 26 Landsdowne St with its current Cubic Feet
+ *  values. Building comes from building_inferred via a join to
+ *  plantlog_log_records (already populated by cluster inference for
+ *  daily rounds). */
+export function usePlantlogDailyMeterLatestReadings() {
+  return useQuery({
+    queryKey: ['plantlog_daily_meter_latest_readings'],
+    queryFn: async (): Promise<PlantlogDailyMeterLatestReading[]> => {
+      const { data, error } = await supabase
+        .from('v_plantlog_daily_meter_latest_readings')
+        .select('*');
+      if (error) throw error;
+      return (data ?? []) as PlantlogDailyMeterLatestReading[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** Latest completion per monthly water meter reading log. Compliance window
  *  is the first 6 days of each calendar month (computed client-side in the
  *  §07 panel). Separate from the weekly view so the weekly compliance path
