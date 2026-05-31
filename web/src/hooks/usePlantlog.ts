@@ -93,6 +93,41 @@ export type PlantlogMonthlyMeter = {
   building: string | null;
 };
 
+export type PlantlogMeterReadingItem = {
+  item: string;
+  unit: string | null;
+  value: string;
+};
+
+export type PlantlogMonthlyMeterLatestReading = {
+  log_name: string;
+  building_prefix: string | null;
+  building: string | null;
+  completed_at_utc: string;
+  completed_by_user: string | null;
+  activity_name: string | null;
+  note: string | null;
+  readings: PlantlogMeterReadingItem[];
+};
+
+/** Latest monthly water meter readings per building. One row per prefixed
+ *  log (i.e. one per building that's been renamed in plantlog with a
+ *  building-number prefix). `readings` is the JSONB array of per-meter
+ *  items captured at the latest completion. */
+export function usePlantlogMonthlyMeterLatestReadings() {
+  return useQuery({
+    queryKey: ['plantlog_monthly_meter_latest_readings'],
+    queryFn: async (): Promise<PlantlogMonthlyMeterLatestReading[]> => {
+      const { data, error } = await supabase
+        .from('v_plantlog_monthly_water_meter_latest_readings')
+        .select('*');
+      if (error) throw error;
+      return (data ?? []) as PlantlogMonthlyMeterLatestReading[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** Latest completion per monthly water meter reading log. Compliance window
  *  is the first 6 days of each calendar month (computed client-side in the
  *  §07 panel). Separate from the weekly view so the weekly compliance path
