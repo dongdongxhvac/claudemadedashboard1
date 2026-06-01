@@ -1386,12 +1386,29 @@ function CoverageTvPanel({
 }) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
-  const open = (postsQ.data ?? []).filter((p) => p.status === 'open');
+  // Filter to OT posts that are CURRENTLY relevant — status='open' AND the
+  // event hasn't already ended. Without the time check, posts that managers
+  // forget to close stay on /tv long after they happened. Use ends_at when
+  // present, else starts_at (open-ended posts stay on the board until manually
+  // closed, which is the desired behavior).
+  const open = useMemo(() => {
+    const nowMs = now.getTime();
+    return (postsQ.data ?? []).filter((p) => {
+      if (p.status !== 'open') return false;
+      const tail = p.ends_at ? new Date(p.ends_at).getTime() : new Date(p.starts_at).getTime();
+      return tail >= nowMs;
+    });
+  }, [postsQ.data, now]);
+  // Sort soonest-first so the imminent slots surface at the top.
+  const sortedOt = useMemo(
+    () => [...open].sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
+    [open],
+  );
   // Fewer rows visible than the standalone OT panel had — we share space
   // with the 3-day PTO preview above. The "+N more" line still surfaces
   // overflow so nothing gets silently hidden.
-  const visibleOt = open.slice(0, 4);
-  const overflowOt = open.length - visibleOt.length;
+  const visibleOt = sortedOt.slice(0, 4);
+  const overflowOt = sortedOt.length - visibleOt.length;
 
   const catTotals = useMemo(() => {
     const map: Record<OvertimeCategory, number> = {
