@@ -5,11 +5,11 @@
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ WORKLOAD +       │ BMS HEALTH       │ §11 OVERTIME                 │
-//   │ PERFORMANCE      │ §08 + §09 + §10  │  (open posts, read-only)     │
-//   │  · Workload      ├──────────────────┼──────────────────────────────┤
-//   │  · Crew 7d       │ BUILDINGS        │ ON-CALL SCHEDULE             │
-//   │  · Recent closes │ (rounds + assign)│ (whole table)                │
+//   │ WORKLOAD +       │ BMS HEALTH       │ COVERAGE                     │
+//   │ PERFORMANCE      │ §08 + §09 + §10  │  §12 PTO next 3 days +       │
+//   │  · Workload      ├──────────────────┤  §11 open OT posts           │
+//   │  · Crew 7d       │ BUILDINGS        ├──────────────────────────────┤
+//   │  · Recent closes │ (rounds + assign)│ ON-CALL SCHEDULE             │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 //
 // Focus-board announcements still surface via the header strip (top-2);
@@ -120,8 +120,12 @@ export default function TvView() {
         />
         {/* Middle column — top: consolidated BMS health (§08 + §09 + §10) */}
         <BmsHealthPanel />
-        {/* Right column top — §11 Upcoming overtime (read-only) */}
-        <OvertimeTvPanel />
+        {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
+        <CoverageTvPanel
+          engineers={engineersQ.data ?? []}
+          pto={ptoQ.data ?? []}
+          now={now}
+        />
         {/* Middle column bottom */}
         <BuildingsPanel
           engineers={engineersQ.data ?? []}
@@ -135,7 +139,6 @@ export default function TvView() {
           participants={participantsQ.data ?? []}
           settings={oncallSettingsQ.data ?? null}
           notes={oncallNotesQ.data ?? []}
-          ptoToday={ptoQ.data ?? []}
           now={now}
         />
       </main>
@@ -401,20 +404,17 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   );
 }
 
-function OncallPanel({ participants, settings, notes, ptoToday, now }: {
+function OncallPanel({ participants, settings, notes, now }: {
   participants: OncallParticipant[];
   settings: OncallSettings | null;
   notes: OncallNote[];
-  ptoToday: PtoRequest[];
   now: Date;
 }) {
   // Skip empty slots so the area collapses when nobody's written anything.
   const visibleNotes = notes.filter((n) => n.body.trim().length > 0);
-  // Engineers currently on approved PTO (any type) — drives the attendance strip.
-  const today = now.toLocaleDateString('en-CA');
-  const outToday = ptoToday.filter((r) =>
-    r.status === 'approved' && r.starts_on <= today && r.ends_on >= today,
-  );
+  // PTO attendance strip moved to CoverageTvPanel (the new combined coverage
+  // panel) — don't show OUT chips here too. Keeps OncallPanel focused on the
+  // rotation grid alone.
   const grid = useMemo(() => {
     if (!settings?.start_friday || participants.length === 0) return null;
 
@@ -517,7 +517,6 @@ function OncallPanel({ participants, settings, notes, ptoToday, now }: {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
         {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
-        {outToday.length > 0 && <PtoOutStrip rows={outToday} />}
         <p className="tv-muted">No rotation set.</p>
       </Panel>
     );
@@ -529,7 +528,6 @@ function OncallPanel({ participants, settings, notes, ptoToday, now }: {
         {grid.N} engineers · {grid.cycles} cycles + 1 preview
       </div>
       {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
-      {outToday.length > 0 && <PtoOutStrip rows={outToday} />}
       <div className="tv-oncall-scroll">
         <table className="tv-oncall-grid">
           <thead>
@@ -568,24 +566,6 @@ function OncallPanel({ participants, settings, notes, ptoToday, now }: {
         </table>
       </div>
     </Panel>
-  );
-}
-
-/** Attendance strip on the TV on-call panel. Shows engineers currently on
- *  approved PTO so the shop floor sees "who's not available" at a glance. */
-function PtoOutStrip({ rows }: { rows: PtoRequest[] }) {
-  return (
-    <div className="tv-pto-out">
-      <span className="tv-pto-out-label">OUT TODAY</span>
-      <div className="tv-pto-out-list">
-        {rows.map((r) => (
-          <span key={r.id} className={`tv-pto-out-chip tv-pto-out-${r.type}`}>
-            {shortName(r.user_full_name)}
-            <span className="tv-pto-out-type">{r.type === 'sick' ? 'sick' : r.type === 'vacation' ? 'vac' : r.type}</span>
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -1271,87 +1251,176 @@ function tvBuildingLabel(p: OvertimePost): string {
   return p.building_short_code ?? p.building_code ?? p.building_label ?? '—';
 }
 
-function OvertimeTvPanel() {
+/** Combined Coverage panel — §12 PTO (next 3 days) on top, §11 open OT
+ *  posts on the bottom. Replaces the standalone OvertimeTvPanel and the
+ *  PtoOutStrip-on-OncallPanel approach so the shop floor has ONE place to
+ *  scan for coverage gaps. */
+function CoverageTvPanel({
+  engineers,
+  pto,
+  now,
+}: {
+  engineers: EngineerRow[];
+  pto: PtoRequest[];
+  now: Date;
+}) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
   const open = (postsQ.data ?? []).filter((p) => p.status === 'open');
-  const visible = open.slice(0, 8);
-  const overflow = open.length - visible.length;
+  // Fewer rows visible than the standalone OT panel had — we share space
+  // with the 3-day PTO preview above. The "+N more" line still surfaces
+  // overflow so nothing gets silently hidden.
+  const visibleOt = open.slice(0, 4);
+  const overflowOt = open.length - visibleOt.length;
 
-  // Count open slots per category, used in the title-row meta.
   const catTotals = useMemo(() => {
     const map: Record<OvertimeCategory, number> = {
       cold_weather: 0, major_off_hour_pm: 0, off_hour_repair: 0, vendor_escort: 0,
     };
-    for (const p of open) {
-      map[p.category] += Math.max(0, p.slots_needed - p.slots_filled);
-    }
+    for (const p of open) map[p.category] += Math.max(0, p.slots_needed - p.slots_filled);
     return map;
   }, [open]);
-
   const totalOpenSlots = Object.values(catTotals).reduce((s, n) => s + n, 0);
+
+  // Active engineer headcount drives the "X/Y in" denominator. Engineers
+  // only — leads/managers don't show up on the daily roster.
+  const totalEngineers = useMemo(
+    () => engineers.filter((e) => e.active && e.role === 'engineer').length,
+    [engineers],
+  );
+
+  // 3-day attendance preview: today + next 2 days. Each row collects the
+  // PTO rows that span the day.
+  const days = useMemo(() => {
+    const out: Array<{
+      iso: string;
+      label: string;
+      monthDay: string;
+      outRows: PtoRequest[];
+      inCount: number;
+    }> = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      const iso = localISODate(d);
+      const outRows = pto.filter(
+        (r) => r.status === 'approved' && r.starts_on <= iso && r.ends_on >= iso,
+      );
+      out.push({
+        iso,
+        label:
+          i === 0 ? 'today' :
+          i === 1 ? 'tmrw'  :
+          d.toLocaleDateString(undefined, { weekday: 'short' }),
+        monthDay: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+        outRows,
+        inCount: Math.max(0, totalEngineers - outRows.length),
+      });
+    }
+    return out;
+  }, [pto, now, totalEngineers]);
 
   return (
     <section className="tv-panel" style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">§11 Upcoming overtime</h2>
+        <h2 className="tv-panel-title">Coverage · §12 PTO + §11 OT</h2>
         <div className="tv-panel-meta">
-          {open.length === 0 ? 'no posts' : (
+          {open.length === 0 ? 'no OT posts' : (
             <>
-              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> open slot{totalOpenSlots === 1 ? '' : 's'}
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> OT slot{totalOpenSlots === 1 ? '' : 's'}
             </>
           )}
         </div>
       </div>
-      <div className="tv-panel-body tv-ot-body">
-        {open.length === 0 ? (
-          <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing posted.</p>
-        ) : (
-          <>
-            <div className="tv-ot-catbar">
-              {OVERTIME_CATEGORY_ORDER.map((c) => (
-                <span key={c} className="tv-ot-catbar-item">
-                  <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[c] }} />
-                  <span className="tv-ot-catbar-label">{OVERTIME_CATEGORY_LABELS[c]}</span>
-                  <span className="tv-ot-catbar-count">{catTotals[c]}</span>
+      <div className="tv-panel-body tv-cov-body">
+        {/* Top: 3-day attendance preview */}
+        <div className="tv-cov-days">
+          {days.map((d) => (
+            <div key={d.iso} className="tv-cov-day">
+              <div className="tv-cov-day-head">
+                <span className="tv-cov-day-label">{d.label}</span>
+                <span className="tv-cov-day-date">{d.monthDay}</span>
+                <span className="tv-cov-day-count">
+                  <span style={{ color: '#f8fafc', fontWeight: 700 }}>{d.inCount}</span>
+                  <span style={{ color: '#475569' }}>/{totalEngineers}</span>
+                  <span className="tv-cov-day-in"> in</span>
+                  {d.outRows.length > 0 && (
+                    <>
+                      <span style={{ color: '#475569', margin: '0 0.25vw' }}>·</span>
+                      <span style={{ color: '#fca5a5', fontWeight: 700 }}>{d.outRows.length}</span>
+                      <span className="tv-cov-day-out"> out</span>
+                    </>
+                  )}
                 </span>
-              ))}
-            </div>
-            <ul className="tv-ot-list">
-              {visible.map((p) => {
-                const isFull = p.slots_filled >= p.slots_needed;
-                return (
-                  <li key={p.id} className={isFull ? 'tv-ot-row tv-ot-row-full' : 'tv-ot-row'}>
-                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
-                    <span className="tv-ot-when">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
-                    <span className="tv-ot-bld">{tvBuildingLabel(p)}</span>
-                    <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
-                    <span className="tv-ot-slots">
-                      {p.signups.length > 0 ? (
-                        p.signups.map((s, i) => (
-                          <span key={s.id}>
-                            {i > 0 && <span className="tv-ot-sep">·</span>}
-                            <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="tv-ot-empty">—</span>
-                      )}
-                    </span>
-                    <span className="tv-ot-filled">
-                      <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
-                        {p.slots_filled}/{p.slots_needed}
+              </div>
+              {d.outRows.length > 0 && (
+                <div className="tv-cov-day-chips">
+                  {d.outRows.map((r) => (
+                    <span key={r.id} className={`tv-pto-out-chip tv-pto-out-${r.type}`}>
+                      {shortName(r.user_full_name)}
+                      <span className="tv-pto-out-type">
+                        {r.type === 'sick' ? 'sick' : r.type === 'vacation' ? 'vac' : r.type}
                       </span>
                     </span>
-                  </li>
-                );
-              })}
-              {overflow > 0 && (
-                <li className="tv-ot-overflow">+{overflow} more on the manager dashboard</li>
+                  ))}
+                </div>
               )}
-            </ul>
-          </>
-        )}
+            </div>
+          ))}
+        </div>
+
+        <div className="tv-cov-divider" />
+
+        {/* Bottom: OT posts */}
+        <div className="tv-cov-ot">
+          {open.length === 0 ? (
+            <p className="tv-muted" style={{ fontSize: '0.85vw' }}>No open OT posts.</p>
+          ) : (
+            <>
+              <div className="tv-ot-catbar">
+                {OVERTIME_CATEGORY_ORDER.map((c) => (
+                  <span key={c} className="tv-ot-catbar-item">
+                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[c] }} />
+                    <span className="tv-ot-catbar-label">{OVERTIME_CATEGORY_LABELS[c]}</span>
+                    <span className="tv-ot-catbar-count">{catTotals[c]}</span>
+                  </span>
+                ))}
+              </div>
+              <ul className="tv-ot-list">
+                {visibleOt.map((p) => {
+                  const isFull = p.slots_filled >= p.slots_needed;
+                  return (
+                    <li key={p.id} className={isFull ? 'tv-ot-row tv-ot-row-full' : 'tv-ot-row'}>
+                      <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
+                      <span className="tv-ot-when">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
+                      <span className="tv-ot-bld">{tvBuildingLabel(p)}</span>
+                      <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
+                      <span className="tv-ot-slots">
+                        {p.signups.length > 0 ? (
+                          p.signups.map((s, i) => (
+                            <span key={s.id}>
+                              {i > 0 && <span className="tv-ot-sep">·</span>}
+                              <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
+                            </span>
+                          ))
+                        ) : (
+                          <span className="tv-ot-empty">—</span>
+                        )}
+                      </span>
+                      <span className="tv-ot-filled">
+                        <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
+                          {p.slots_filled}/{p.slots_needed}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+                {overflowOt > 0 && (
+                  <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
+                )}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -2041,6 +2110,56 @@ function TvStyles() {
         color: #c4b5fd;
       }
       .tv-wkl-chip-major .tv-wkl-chip-count { color: #a78bfa; }
+
+      /* Coverage panel — combines §12 PTO (3-day attendance preview) on
+         top with §11 open OT posts on the bottom. */
+      .tv-cov-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
+      .tv-cov-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
+      .tv-cov-days {
+        display: flex; flex-direction: column; gap: 0.25vw;
+        flex: 0 0 auto;
+      }
+      .tv-cov-day {
+        padding: 0.18vw 0.35vw;
+        background: rgba(59, 130, 246, 0.08);
+        border-left: 2px solid #3b82f6;
+        border-radius: 2px;
+      }
+      .tv-cov-day-head {
+        display: flex; align-items: baseline; gap: 0.4vw;
+        font-size: 0.78vw;
+      }
+      .tv-cov-day-label {
+        font-size: 0.6vw; font-weight: 700;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        color: #93c5fd;
+        flex: 0 0 auto;
+      }
+      .tv-cov-day-date {
+        font-size: 0.7vw; color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+        flex: 0 0 auto;
+      }
+      .tv-cov-day-count {
+        font-size: 0.78vw;
+        font-variant-numeric: tabular-nums;
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .tv-cov-day-in,
+      .tv-cov-day-out {
+        font-size: 0.6vw;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-left: 0.15vw;
+      }
+      .tv-cov-day-chips {
+        display: flex; flex-wrap: wrap;
+        gap: 0.2vw 0.5vw;
+        margin-top: 0.18vw;
+      }
+      .tv-cov-ot { display: flex; flex-direction: column; gap: 0.25vw; min-height: 0; overflow: hidden; }
 
       /* §11 Overtime — TV variant. Compact one-line rows with a small
          category bar at the top showing open-slot counts. */
