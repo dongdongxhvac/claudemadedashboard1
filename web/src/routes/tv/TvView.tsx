@@ -35,7 +35,10 @@ import {
   type OvertimeCategory,
   type OvertimePost,
 } from '../../hooks/useOvertime';
-import { usePtoRequests, usePtoRealtime, type PtoRequest } from '../../hooks/usePto';
+import {
+  usePtoRequests, usePtoRealtime, isPartialDay, partialDayLabel,
+  type PtoRequest,
+} from '../../hooks/usePto';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -1290,13 +1293,17 @@ function CoverageTvPanel({
   );
 
   // 3-day attendance preview: today + next 2 days. Each row collects the
-  // PTO rows that span the day.
+  // PTO rows that span the day. Partial-day rows DON'T subtract from the
+  // headcount (engineer is in for part of the day) but get a separate
+  // tally + a time-range label on the chip.
   const days = useMemo(() => {
     const out: Array<{
       iso: string;
       label: string;
       monthDay: string;
-      outRows: PtoRequest[];
+      outRows: PtoRequest[];     // both full-day and partial-day, for chip render
+      fullDayCount: number;
+      partialCount: number;
       inCount: number;
     }> = [];
     for (let i = 0; i < 3; i++) {
@@ -1305,6 +1312,8 @@ function CoverageTvPanel({
       const outRows = pto.filter(
         (r) => r.status === 'approved' && r.starts_on <= iso && r.ends_on >= iso,
       );
+      const partialCount = outRows.filter(isPartialDay).length;
+      const fullDayCount = outRows.length - partialCount;
       out.push({
         iso,
         label:
@@ -1313,7 +1322,9 @@ function CoverageTvPanel({
           d.toLocaleDateString(undefined, { weekday: 'short' }),
         monthDay: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
         outRows,
-        inCount: Math.max(0, totalEngineers - outRows.length),
+        fullDayCount,
+        partialCount,
+        inCount: Math.max(0, totalEngineers - fullDayCount),
       });
     }
     return out;
@@ -1343,25 +1354,43 @@ function CoverageTvPanel({
                   <span style={{ color: '#f8fafc', fontWeight: 700 }}>{d.inCount}</span>
                   <span style={{ color: '#475569' }}>/{totalEngineers}</span>
                   <span className="tv-cov-day-in"> in</span>
-                  {d.outRows.length > 0 && (
+                  {d.fullDayCount > 0 && (
                     <>
                       <span style={{ color: '#475569', margin: '0 0.25vw' }}>·</span>
-                      <span style={{ color: '#fca5a5', fontWeight: 700 }}>{d.outRows.length}</span>
+                      <span style={{ color: '#fca5a5', fontWeight: 700 }}>{d.fullDayCount}</span>
                       <span className="tv-cov-day-out"> out</span>
+                    </>
+                  )}
+                  {d.partialCount > 0 && (
+                    <>
+                      <span style={{ color: '#475569', margin: '0 0.25vw' }}>·</span>
+                      <span style={{ color: '#fbbf24', fontWeight: 700 }}>{d.partialCount}</span>
+                      <span className="tv-cov-day-out"> partial</span>
                     </>
                   )}
                 </span>
               </div>
               {d.outRows.length > 0 && (
                 <div className="tv-cov-day-chips">
-                  {d.outRows.map((r) => (
-                    <span key={r.id} className={`tv-pto-out-chip tv-pto-out-${r.type}`}>
-                      {shortName(r.user_full_name)}
-                      <span className="tv-pto-out-type">
-                        {r.type === 'sick' ? 'sick' : r.type === 'vacation' ? 'vac' : r.type}
+                  {d.outRows.map((r) => {
+                    const partial = isPartialDay(r);
+                    const label = partialDayLabel(r);
+                    const typeText =
+                      r.type === 'sick'     ? 'sick' :
+                      r.type === 'vacation' ? 'vac'  :
+                      r.type;
+                    return (
+                      <span
+                        key={r.id}
+                        className={`tv-pto-out-chip tv-pto-out-${r.type}${partial ? ' tv-pto-out-partial' : ''}`}
+                      >
+                        {shortName(r.user_full_name)}
+                        <span className="tv-pto-out-type">
+                          {typeText}{label ? ` ${label}` : ''}
+                        </span>
                       </span>
-                    </span>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1718,6 +1747,13 @@ function TvStyles() {
       .tv-pto-out-bereavement .tv-pto-out-type { background: rgba(168, 85, 247, 0.25); color: #c4b5fd; }
       .tv-pto-out-holiday  .tv-pto-out-type { background: rgba(16, 185, 129, 0.25); color: #6ee7b7; }
       .tv-pto-out-unpaid   .tv-pto-out-type { background: rgba(100, 116, 139, 0.30); color: #cbd5e1; }
+      /* Partial-day variant: lighter background so the chip reads "softer"
+         than a full-day-out chip without losing the type color. */
+      .tv-pto-out-partial .tv-pto-out-type {
+        background: transparent;
+        border: 1px solid currentColor;
+      }
+      .tv-pto-out-partial { opacity: 0.85; }
 
       /* Sticky notes from Admin → On-call tab (full-width strip above table) */
       .tv-oncall-notes {

@@ -57,6 +57,12 @@ export type PtoRequest = {
   hours: number;
   status: PtoStatus;
   reason: string | null;
+  /** Time the engineer LEAVES (start of off-time). Null = off from start
+   *  of day. When both out_from + out_until are null, this is a full day. */
+  out_from: string | null;        // 'HH:MM:SS' from Postgres time column
+  /** Time the engineer RETURNS (end of off-time). Null = off through end
+   *  of day. */
+  out_until: string | null;
   request_source: PtoRequestSource | null;
   request_source_detail: string | null;
   submitted_by: string | null;
@@ -71,6 +77,41 @@ export type PtoRequest = {
   created_at: string;
   updated_at: string;
 };
+
+/** True when out_from OR out_until is set — engineer is only off part of
+ *  the day, not the full shift. Counter logic should treat the engineer as
+ *  "in" for headcount, with a "partial" annotation. */
+export function isPartialDay(r: { out_from: string | null; out_until: string | null }): boolean {
+  return !!r.out_from || !!r.out_until;
+}
+
+/** Convert "HH:MM:SS" or "HH:MM" to compact 12-hour form: "12p", "9a",
+ *  "8:30a". For chip labels. */
+function fmtTime12(hhmm: string | null | undefined): string {
+  if (!hhmm) return '';
+  const [hStr, mStr] = hhmm.split(':');
+  const h = Number(hStr);
+  const m = Number(mStr ?? '0');
+  if (!Number.isFinite(h)) return hhmm;
+  const ampm = h < 12 ? 'a' : 'p';
+  const h12 = h % 12 || 12;
+  return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+}
+
+/** Returns the partial-day annotation for a PTO row, or null when the row
+ *  is a full day. Shown next to the type pill on chips:
+ *    out_from=null, out_until='12:00' → "in 12p"   (late start)
+ *    out_from='14:00', out_until=null → "out 2p"   (early leave)
+ *    out_from='10:00', out_until='14:00' → "10a–2p" (mid-day window)
+ */
+export function partialDayLabel(
+  r: { out_from: string | null; out_until: string | null },
+): string | null {
+  if (!r.out_from && !r.out_until) return null;
+  if (!r.out_from && r.out_until)  return `in ${fmtTime12(r.out_until)}`;
+  if (r.out_from && !r.out_until)  return `out ${fmtTime12(r.out_from)}`;
+  return `${fmtTime12(r.out_from!)}–${fmtTime12(r.out_until!)}`;
+}
 
 export type PtoSummary = {
   id: string;
@@ -210,6 +251,9 @@ export type SubmitPtoInput = {
   cap_override_reason?: string | null;
   request_source?: PtoRequestSource | null;   // required for manager add; auto-set for self-serve
   request_source_detail?: string | null;
+  /** Partial-day time window — see PtoRequest.out_from / .out_until. */
+  out_from?: string | null;
+  out_until?: string | null;
 };
 
 export function useSubmitPto() {
@@ -227,6 +271,8 @@ export function useSubmitPto() {
         hours:          input.hours,
         status:         input.status ?? 'pending',
         reason:         input.reason ?? null,
+        out_from:       input.out_from ?? null,
+        out_until:      input.out_until ?? null,
         request_source: input.request_source ?? null,
         request_source_detail: input.request_source_detail ?? null,
         submitted_by:   meRow?.id ?? null,
@@ -294,6 +340,8 @@ export function useUpdatePto() {
         hours: number;
         status: PtoStatus;
         reason: string | null;
+        out_from: string | null;
+        out_until: string | null;
         request_source: PtoRequestSource | null;
         request_source_detail: string | null;
         cap_override: boolean;

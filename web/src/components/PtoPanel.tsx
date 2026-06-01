@@ -13,6 +13,7 @@ import {
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
   checkVacationCap, PTO_TYPE_LABELS,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
+  isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
   type PtoRequestSource,
 } from '../hooks/usePto';
@@ -708,16 +709,28 @@ function TodayAttendance({
     return out;
   }, [engineers, shifts]);
 
-  // Rolling counts across the 3-day horizon for the header.
+  // Rolling counts across the 3-day horizon for the header. Partial-day
+  // engineers are counted as "in" (they're around for part of the day) but
+  // get a separate "partial" tally so the manager sees them at a glance.
   const counts = useMemo(() => {
     const totalActive = engineers.filter((e) => e.active && e.role === 'engineer').length;
     return days.map((d) => {
-      let out = 0;
+      let fullOut = 0;
+      let partial = 0;
       for (const e of engineers) {
         if (!e.active || e.role !== 'engineer') continue;
-        if (ptoByUserDay.has(`${e.user_id}|${d.iso}`)) out++;
+        const p = ptoByUserDay.get(`${e.user_id}|${d.iso}`);
+        if (!p) continue;
+        if (isPartialDay(p)) partial++;
+        else fullOut++;
       }
-      return { iso: d.iso, out, in: totalActive - out, total: totalActive };
+      return {
+        iso: d.iso,
+        out: fullOut,
+        partial,
+        in: totalActive - fullOut,
+        total: totalActive,
+      };
     });
   }, [days, engineers, ptoByUserDay]);
 
@@ -775,7 +788,7 @@ function DayAttendanceGroup({
   day, counts, shiftGroups, ptoLookup, disabled, onSick, isPrimary,
 }: {
   day: { iso: string; label: string; isToday: boolean };
-  counts: { in: number; out: number; total: number };
+  counts: { in: number; out: number; partial: number; total: number };
   shiftGroups: { shift_id: string; label: string; engineers: EngineerRow[] }[];
   ptoLookup: Map<string, PtoRequest>;
   disabled: boolean;
@@ -808,6 +821,11 @@ function DayAttendanceGroup({
           {counts.out > 0 && (
             <span style={{ color: 'var(--color-warn, #d97706)', marginLeft: 6, fontWeight: 600 }}>
               · {counts.out} out
+            </span>
+          )}
+          {counts.partial > 0 && (
+            <span style={{ color: 'var(--color-accent, #4f46e5)', marginLeft: 6, fontWeight: 600 }}>
+              · {counts.partial} partial
             </span>
           )}
         </span>
@@ -856,12 +874,17 @@ function DayChip({
   onSick: (eng: EngineerRow, iso: string, label: string) => void;
   isPrimary?: boolean;
 }) {
-  const out    = pto !== null;
-  const bg     = out ? PTO_TYPE_BG[pto!.type]    : 'rgba(34,197,94,0.08)';
-  const border = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
-  const tip    = out
+  const out      = pto !== null;
+  const partial  = out && isPartialDay(pto!);
+  const label    = out ? partialDayLabel(pto!) : null;
+  const bg       = out
+    ? (partial ? 'transparent' : PTO_TYPE_BG[pto!.type])
+    : 'rgba(34,197,94,0.08)';
+  const border   = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
+  const tipBase  = out
     ? `${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
     : `${engineer.full_name} working ${dayLabel} — click to log sick`;
+  const tip = partial && label ? `${tipBase} · ${label}` : tipBase;
   return (
     <button
       type="button"
@@ -872,7 +895,7 @@ function DayChip({
         padding: isPrimary ? '0.15rem 0.5rem' : '0.1rem 0.4rem',
         fontSize: isPrimary ? '0.75rem' : '0.68rem',
         background: bg,
-        border: `1px solid ${border}`,
+        border: `1px ${partial ? 'dashed' : 'solid'} ${border}`,
         borderRadius: 999,
         display: 'inline-flex',
         alignItems: 'center',
@@ -887,12 +910,15 @@ function DayChip({
       {out && (
         <span
           style={{
-            background: border, color: 'white',
+            background: partial ? 'transparent' : border,
+            color: partial ? border : 'white',
+            border: partial ? `1px solid ${border}` : 'none',
             fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
             padding: '0.05rem 0.3rem', borderRadius: 3,
           }}
         >
           {pto!.type === 'sick' ? 'SICK' : pto!.type === 'vacation' ? 'VAC' : pto!.type.slice(0, 4).toUpperCase()}
+          {label && <span style={{ marginLeft: 4, fontWeight: 500, letterSpacing: 0 }}>{label}</span>}
         </span>
       )}
     </button>
@@ -1484,6 +1510,10 @@ function AddPtoModal({
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [source, setSource]                 = useState<PtoRequestSource | ''>('');
   const [sourceDetail, setSourceDetail]     = useState<string>('');
+  // Partial-day time range. Empty strings = full day. Engineer sees them as
+  // "Out from" / "Out until"; chip rendering computes the label.
+  const [outFrom, setOutFrom]               = useState<string>('');
+  const [outUntil, setOutUntil]             = useState<string>('');
   const [err, setErr]                       = useState<string | null>(null);
 
   // Auto-compute hours: 8h × number of weekdays in range.
@@ -1519,6 +1549,10 @@ function AddPtoModal({
       setErr('2-engineer vacation cap is exceeded — provide an override reason to approve directly.');
       return;
     }
+    if (outFrom && outUntil && outUntil <= outFrom) {
+      setErr('"Out until" must be later than "Out from".');
+      return;
+    }
 
     try {
       await submit.mutateAsync({
@@ -1533,6 +1567,8 @@ function AddPtoModal({
         cap_override_reason: cap.exceeded && statusChoice === 'approved' ? overrideReason.trim() : null,
         request_source:        source,
         request_source_detail: sourceDetail.trim() || null,
+        out_from:  outFrom  || null,
+        out_until: outUntil || null,
       });
       onClose();
     } catch (e) {
@@ -1635,6 +1671,42 @@ function AddPtoModal({
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
+
+          {/* Partial-day window: optional. Leave both blank = full day(s).
+              For "Mark comes in at noon": Out from blank, Out until 12:00.
+              For "Mark leaves at 2pm":     Out from 14:00, Out until blank.
+              For mid-day window:            both filled. */}
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out from <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(leave blank = start of day)</span>
+            </span>
+            <input
+              type="time"
+              value={outFrom}
+              onChange={(e) => setOutFrom(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out until <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(leave blank = end of day)</span>
+            </span>
+            <input
+              type="time"
+              value={outUntil}
+              onChange={(e) => setOutUntil(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          {(outFrom || outUntil) && (
+            <p className="t-small t-muted col-span-2" style={{ marginTop: -6 }}>
+              Partial day — engineer will be counted as "in (partial)" on the Coverage panel.
+            </p>
+          )}
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Reason (optional)</span>
@@ -1745,6 +1817,9 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
   const [reason, setReason]             = useState<string>(request.reason ?? '');
   const [source, setSource]             = useState<PtoRequestSource | ''>(request.request_source ?? '');
   const [sourceDetail, setSourceDetail] = useState<string>(request.request_source_detail ?? '');
+  // Postgres returns time as 'HH:MM:SS'; the <input type="time"> wants 'HH:MM'.
+  const [outFrom, setOutFrom]           = useState<string>((request.out_from  ?? '').slice(0, 5));
+  const [outUntil, setOutUntil]         = useState<string>((request.out_until ?? '').slice(0, 5));
   const [err, setErr]                   = useState<string | null>(null);
 
   const onSave = async () => {
@@ -1752,6 +1827,10 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
     if (endsOn < startsOn) { setErr('End date can\'t be before start date.'); return; }
     const h = Number(hours);
     if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
+    if (outFrom && outUntil && outUntil <= outFrom) {
+      setErr('"Out until" must be later than "Out from".');
+      return;
+    }
     try {
       await update.mutateAsync({
         id: request.id,
@@ -1760,6 +1839,8 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
           reason: reason.trim() || null,
           request_source: source || null,
           request_source_detail: sourceDetail.trim() || null,
+          out_from:  outFrom  || null,
+          out_until: outUntil || null,
         },
       });
       onClose();
@@ -1839,6 +1920,26 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
             <input type="number" min={0.25} step={0.25}
               value={hours} onChange={(e) => setHours(e.target.value)}
               className="w-32 border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out from <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(blank = start of day)</span>
+            </span>
+            <input type="time" value={outFrom} onChange={(e) => setOutFrom(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out until <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(blank = end of day)</span>
+            </span>
+            <input type="time" value={outUntil} onChange={(e) => setOutUntil(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
