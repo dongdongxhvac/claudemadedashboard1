@@ -24,6 +24,18 @@ function fmtDate(iso: string | null): string {
   });
 }
 
+/** "3d ago", "5h ago", "now" — for the last-status-change column. */
+function relTime(utcIso: string): string {
+  const ms = Date.now() - new Date(utcIso).getTime();
+  const mins = Math.round(ms / 60_000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
+
 function statusPillColor(s: EquipmentStatus): { bg: string; fg: string } {
   // Both off_pm and down_cm are red — but down_cm gets the stronger fill
   // to communicate "broken" vs "intentionally offline for PM".
@@ -101,13 +113,15 @@ export function EquipmentDownPanel() {
         <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr className="t-muted">
-              <th className="text-left pb-1 pr-3">Building</th>
-              <th className="text-left pb-1 pr-3">Short name</th>
+              <th className="text-left pb-1 pr-3">Bldg</th>
+              <th className="text-left pb-1 pr-3">Short</th>
               <th className="text-left pb-1 pr-3">Equipment</th>
               <th className="text-left pb-1 pr-3">Status</th>
               <th className="text-left pb-1 pr-3">Date</th>
               <th className="text-left pb-1 pr-3">WO #</th>
               <th className="text-left pb-1 pr-3">RSP</th>
+              <th className="text-left pb-1 pr-3">Detail</th>
+              <th className="text-right pb-1 pl-3">Last change</th>
             </tr>
           </thead>
           <tbody>
@@ -147,6 +161,22 @@ export function EquipmentDownPanel() {
                   <td className="py-1 pr-3 t-muted">{fmtDate(r.status_date)}</td>
                   <td className="py-1 pr-3 t-mono">{r.wo_number ?? '—'}</td>
                   <td className="py-1 pr-3">{r.rsp ?? '—'}</td>
+                  <td
+                    className="py-1 pr-3"
+                    style={{
+                      maxWidth: 280, overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                    title={r.status_detail ?? ''}
+                  >
+                    {r.status_detail ?? '—'}
+                  </td>
+                  <td
+                    className="text-right pl-3 t-muted"
+                    title={new Date(r.last_status_change_at).toLocaleString()}
+                  >
+                    {relTime(r.last_status_change_at)}
+                  </td>
                 </tr>
               );
             })}

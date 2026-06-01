@@ -850,8 +850,11 @@ function BmsHealthPanel() {
 }
 
 /** §10.x equivalent on /tv — equipment currently off_pm / down_cm, in the
- *  bottom half of the BMS alarms panel. Tight one-line rows so a dozen
- *  down items still fit without scrolling. */
+ *  bottom half of the BMS alarms panel. Two-line block per item so every
+ *  field surfaces without losing the shop-floor-readable font size:
+ *    Line 1: building · short name · status pill · WO# · RSP · "Nd ago"
+ *    Line 2: full_name + status_detail (when detail is present)
+ *  Up to 5 items visible; overflow line points to §10.1 for the rest. */
 function EquipmentDownStripe({
   eqDown,
 }: {
@@ -860,8 +863,21 @@ function EquipmentDownStripe({
   const rows = eqDown ?? [];
   const downCm = rows.filter((r) => r.status === 'down_cm').length;
   const offPm  = rows.filter((r) => r.status === 'off_pm').length;
-  const visible = rows.slice(0, 8);
+  const visible = rows.slice(0, 5);
   const overflow = rows.length - visible.length;
+
+  // "3d ago" / "5h ago" / "now" — same shape as other TV relative-time
+  // helpers (relTime exists higher up but is private to closes-list).
+  const rel = (utcIso: string): string => {
+    const ms = Date.now() - new Date(utcIso).getTime();
+    const mins = Math.round(ms / 60_000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.round(hrs / 24);
+    return `${days}d`;
+  };
 
   return (
     <>
@@ -888,20 +904,46 @@ function EquipmentDownStripe({
           <p className="tv-muted" style={{ fontSize: '0.78vw' }}>All catalogued equipment operational.</p>
         ) : (
           <ul className="tv-eq-down-list">
-            {visible.map((r) => (
-              <li key={r.id} className="tv-eq-down-row">
-                <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
-                <span className="tv-eq-down-name">{r.short_name ?? r.full_name}</span>
-                <span
-                  className="tv-eq-down-status"
-                  style={{ color: r.status === 'down_cm' ? '#fca5a5' : '#fbbf24' }}
-                >
-                  {EQUIPMENT_STATUS_LABELS[r.status]}
-                </span>
-                <span className="tv-eq-down-rsp">{r.rsp ?? '—'}</span>
-                <span className="tv-eq-down-date">{r.status_date ?? '—'}</span>
-              </li>
-            ))}
+            {visible.map((r) => {
+              const statusFg = r.status === 'down_cm' ? '#fca5a5' : '#fbbf24';
+              const equipDisplay = r.short_name
+                ? `${r.short_name} · ${r.full_name}`
+                : r.full_name;
+              return (
+                <li key={r.id} className="tv-eq-down-item">
+                  <div className="tv-eq-down-line1">
+                    <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
+                    <span
+                      className="tv-eq-down-status"
+                      style={{
+                        color: statusFg,
+                        border: `1px solid ${statusFg}`,
+                      }}
+                    >
+                      {EQUIPMENT_STATUS_LABELS[r.status]}
+                    </span>
+                    <span className="tv-eq-down-name">{equipDisplay}</span>
+                    {r.wo_number && (
+                      <span className="tv-eq-down-wo">{r.wo_number}</span>
+                    )}
+                    {r.rsp && (
+                      <span className="tv-eq-down-rsp">{r.rsp}</span>
+                    )}
+                    <span
+                      className="tv-eq-down-age"
+                      title={new Date(r.last_status_change_at).toLocaleString()}
+                    >
+                      {rel(r.last_status_change_at)}
+                    </span>
+                  </div>
+                  {r.status_detail && (
+                    <div className="tv-eq-down-line2" title={r.status_detail}>
+                      {r.status_detail}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
             {overflow > 0 && (
               <li className="tv-eq-down-overflow">+{overflow} more — see §10.1 on manager dashboard</li>
             )}
@@ -2042,32 +2084,73 @@ function TvStyles() {
         font-variant-numeric: tabular-nums;
       }
 
-      /* Equipment-down stripe rows — one line per off_pm / down_cm item.
-         Building short_code | short_name | status pill | RSP | date. */
+      /* Equipment-down stripe — 2-line block per off_pm / down_cm item so
+         every field (building, short+full name, status, WO#, RSP, age,
+         AND status detail) fits without losing legibility. */
       .tv-eq-down-list {
         list-style: none; padding: 0; margin: 0;
-        display: flex; flex-direction: column; gap: 0.16vw;
+        display: flex; flex-direction: column; gap: 0.25vw;
         min-height: 0; overflow: hidden;
       }
-      .tv-eq-down-row {
-        display: grid;
-        grid-template-columns: 1.6vw minmax(0, 1fr) 4.5vw 4vw 2vw;
-        gap: 0.35vw;
+      .tv-eq-down-item {
+        display: flex; flex-direction: column;
+        gap: 0.05vw;
+        padding: 0.15vw 0.3vw;
+        border-left: 2px solid rgba(252, 165, 165, 0.35);
+        background: rgba(239, 68, 68, 0.04);
+        border-radius: 2px;
+        min-width: 0;
+      }
+      .tv-eq-down-line1 {
+        display: flex; flex-wrap: wrap;
+        gap: 0.15vw 0.4vw;
         align-items: baseline;
         font-size: 0.78vw;
         font-variant-numeric: tabular-nums;
+        min-width: 0;
       }
-      .tv-eq-down-row > * {
+      .tv-eq-down-line2 {
+        font-size: 0.7vw;
+        color: #cbd5e1;
+        line-height: 1.2;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        min-width: 0;
+        padding-left: 0.2vw;
       }
-      .tv-eq-down-bld { color: #f1f5f9; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .tv-eq-down-name { color: #e2e8f0; }
-      .tv-eq-down-status { font-size: 0.62vw; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-      .tv-eq-down-rsp { color: #94a3b8; }
-      .tv-eq-down-date { color: #64748b; text-align: right; font-size: 0.7vw; }
+      .tv-eq-down-bld {
+        color: #f1f5f9; font-weight: 700;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        flex: 0 0 auto;
+      }
+      .tv-eq-down-status {
+        font-size: 0.6vw; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        padding: 0 0.3vw; border-radius: 2px;
+        flex: 0 0 auto;
+      }
+      .tv-eq-down-name {
+        color: #e2e8f0;
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tv-eq-down-wo {
+        color: #cbd5e1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72vw;
+        flex: 0 0 auto;
+      }
+      .tv-eq-down-rsp {
+        color: #94a3b8; flex: 0 0 auto;
+      }
+      .tv-eq-down-age {
+        color: #64748b; font-size: 0.7vw;
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
       .tv-eq-down-overflow { color: #64748b; font-style: italic; font-size: 0.7vw; }
 
       /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column.
