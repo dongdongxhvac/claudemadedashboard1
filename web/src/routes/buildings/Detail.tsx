@@ -13,17 +13,46 @@ import {
   useBuildingSections,
   useBuildingEquipment,
   useBuildingKbRealtime,
-  SECTION_KEYS,
   SECTION_LABELS,
   type SectionKey,
 } from '../../hooks/useBuildingKb';
 import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
+import { PartsPanel } from '../../components/buildings/PartsPanel';
+import { VendorVisitsPanel } from '../../components/buildings/VendorVisitsPanel';
 
-type Tab = SectionKey | 'equipment';
+// Tab order: Overview → Equipment → Inventory (parts) → 4 system categories
+// → Access → Troubleshooting → Vendors. Equipment + Inventory live near the
+// front because they're the most-frequent field lookups (per the use case
+// that prompted this whole feature).
+type Tab =
+  | 'overview'
+  | 'equipment'
+  | 'inventory'
+  | 'mechanical'
+  | 'control'
+  | 'electrical'
+  | 'plumbing'
+  | 'access'
+  | 'troubleshooting'
+  | 'vendors';
+
 const TABS: { key: Tab; label: string }[] = [
-  ...SECTION_KEYS.map((k) => ({ key: k as Tab, label: SECTION_LABELS[k] })),
-  { key: 'equipment', label: 'Equipment' },
+  { key: 'overview',        label: SECTION_LABELS.overview },
+  { key: 'equipment',       label: 'Equipment' },
+  { key: 'inventory',       label: 'Inventory' },
+  { key: 'mechanical',      label: SECTION_LABELS.mechanical },
+  { key: 'control',         label: SECTION_LABELS.control },
+  { key: 'electrical',      label: SECTION_LABELS.electrical },
+  { key: 'plumbing',        label: SECTION_LABELS.plumbing },
+  { key: 'access',          label: SECTION_LABELS.access },
+  { key: 'troubleshooting', label: SECTION_LABELS.troubleshooting },
+  { key: 'vendors',         label: 'Vendors' },
+];
+
+const SECTION_TAB_KEYS: SectionKey[] = [
+  'overview', 'mechanical', 'control', 'electrical', 'plumbing',
+  'access', 'troubleshooting',
 ];
 
 export default function BuildingDetail() {
@@ -145,13 +174,17 @@ export default function BuildingDetail() {
       <main className="max-w-5xl mx-auto px-4 py-6">
         {tab === 'equipment' ? (
           <EquipmentList buildingId={building.id} />
-        ) : (
+        ) : tab === 'inventory' ? (
+          <PartsPanel buildingId={building.id} />
+        ) : tab === 'vendors' ? (
+          <VendorVisitsPanel buildingId={building.id} />
+        ) : SECTION_TAB_KEYS.includes(tab as SectionKey) ? (
           <SectionEditor
             buildingId={building.id}
-            sectionKey={tab}
-            note={sectionByKey.get(tab)}
+            sectionKey={tab as SectionKey}
+            note={sectionByKey.get(tab as SectionKey)}
           />
-        )}
+        ) : null}
       </main>
     </div>
   );

@@ -141,6 +141,23 @@ function EquipmentCard({
         )}
       </div>
 
+      {eq.photo_url && (
+        <a href={eq.photo_url} target="_blank" rel="noopener noreferrer">
+          <img
+            src={eq.photo_url}
+            alt={eq.name}
+            style={{
+              maxWidth: '100%',
+              maxHeight: 320,
+              borderRadius: 4,
+              border: '1px solid var(--color-border)',
+              objectFit: 'contain',
+              background: 'var(--color-bg)',
+            }}
+            loading="lazy"
+          />
+        </a>
+      )}
       {eq.location_note && (
         <Field label="Location" body={eq.location_note} />
       )}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   useUpsertBuildingEquipment,
+  uploadEquipmentPhoto,
   type BuildingEquipment,
 } from '../../hooks/useBuildingKb';
 
@@ -36,6 +37,9 @@ export function EquipmentForm({
   const [troubleshooting, setTroubleshooting] = useState(
     existing?.troubleshooting ?? '',
   );
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -46,7 +50,8 @@ export function EquipmentForm({
       return;
     }
     try {
-      await upsert.mutateAsync({
+      // Step 1: upsert the row first to get an id (for the photo storage path).
+      const saved = await upsert.mutateAsync({
         id: existing?.id,
         building_id: buildingId,
         name: name.trim(),
@@ -55,8 +60,25 @@ export function EquipmentForm({
         parts_notes: partsNotes.trim() || null,
         common_issues: commonIssues.trim() || null,
         troubleshooting: troubleshooting.trim() || null,
+        photo_url: removePhoto ? null : existing?.photo_url ?? null,
         sort_order: existing?.sort_order ?? 0,
       });
+
+      // Step 2: if a new photo was picked, upload and second-pass update.
+      if (photoFile) {
+        setUploading(true);
+        try {
+          const url = await uploadEquipmentPhoto(saved.id, photoFile);
+          await upsert.mutateAsync({
+            id: saved.id,
+            building_id: buildingId,
+            name: saved.name,
+            photo_url: url,
+          });
+        } finally {
+          setUploading(false);
+        }
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
@@ -132,6 +154,48 @@ export function EquipmentForm({
         />
       </Field>
 
+      <Field label="Photo (optional)" hint="JPEG / PNG / WebP / HEIC, up to 10 MB">
+        <div style={{ display: 'grid', gap: 8 }}>
+          {existing?.photo_url && !removePhoto && !photoFile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img
+                src={existing.photo_url}
+                alt={existing.name}
+                style={{ maxHeight: 120, maxWidth: 200, borderRadius: 4, border: '1px solid var(--color-border)' }}
+              />
+              <button
+                type="button"
+                onClick={() => setRemovePhoto(true)}
+                className="t-small"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--color-danger)',
+                }}
+              >
+                Remove photo
+              </button>
+            </div>
+          )}
+          {photoFile && (
+            <div className="t-small t-muted">New photo selected: {photoFile.name}</div>
+          )}
+          {removePhoto && !photoFile && (
+            <div className="t-small" style={{ color: 'var(--color-warn, #d97706)' }}>
+              Photo will be removed on save.
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              setPhotoFile(f);
+              if (f) setRemovePhoto(false);
+            }}
+          />
+        </div>
+      </Field>
+
       {error && (
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
@@ -139,14 +203,14 @@ export function EquipmentForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={upsert.isPending}
+          disabled={upsert.isPending || uploading}
           className="t-small t-accent"
           style={{
             padding: '8px 14px', border: '1px solid var(--color-accent)',
             borderRadius: 4, background: 'var(--color-card)',
           }}
         >
-          {upsert.isPending ? 'Saving…' : existing ? 'Save changes' : 'Add equipment'}
+          {uploading ? 'Uploading…' : upsert.isPending ? 'Saving…' : existing ? 'Save changes' : 'Add equipment'}
         </button>
         <button
           type="button"

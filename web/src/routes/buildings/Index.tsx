@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe, useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings, useBuildingsRealtime } from '../../hooks/useBuildings';
+import { KbSearchBar } from '../../components/buildings/KbSearchBar';
 
 function compareByShortCode(
   a: { short_code: string | null; code: string },
@@ -58,6 +59,7 @@ export default function BuildingsIndex() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
+        <KbSearchBar />
         {buildingsQ.isLoading ? (
           <p className="t-text t-muted">Loading buildings…</p>
         ) : buildingsQ.error ? (
