@@ -21,12 +21,14 @@ import { EquipmentList } from '../../components/buildings/EquipmentList';
 import { PartsPanel } from '../../components/buildings/PartsPanel';
 import { VendorVisitsPanel } from '../../components/buildings/VendorVisitsPanel';
 
-// Tab order: Overview → Equipment → Inventory (parts) → 4 system categories
-// → Access → Troubleshooting → Vendors. Equipment + Inventory live near the
-// front because they're the most-frequent field lookups (per the use case
-// that prompted this whole feature).
+// Tab order: Overview → Vendor Log → Equipment → Inventory (parts) → 4
+// system categories → Access → Troubleshooting. Vendor Log sits right after
+// Overview because logging a vendor visit is the most-frequent in-field
+// write (engineers escorting vendors); Equipment + Inventory follow as the
+// next-highest-frequency lookups.
 type Tab =
   | 'overview'
+  | 'vendors'
   | 'equipment'
   | 'inventory'
   | 'mechanical'
@@ -34,11 +36,11 @@ type Tab =
   | 'electrical'
   | 'plumbing'
   | 'access'
-  | 'troubleshooting'
-  | 'vendors';
+  | 'troubleshooting';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview',        label: SECTION_LABELS.overview },
+  { key: 'vendors',         label: 'Vendor Log' },
   { key: 'equipment',       label: 'Equipment' },
   { key: 'inventory',       label: 'Inventory' },
   { key: 'mechanical',      label: SECTION_LABELS.mechanical },
@@ -47,7 +49,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'plumbing',        label: SECTION_LABELS.plumbing },
   { key: 'access',          label: SECTION_LABELS.access },
   { key: 'troubleshooting', label: SECTION_LABELS.troubleshooting },
-  { key: 'vendors',         label: 'Vendors' },
 ];
 
 const SECTION_TAB_KEYS: SectionKey[] = [
