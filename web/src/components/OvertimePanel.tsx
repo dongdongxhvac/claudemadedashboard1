@@ -14,6 +14,7 @@ import {
   useCreateOvertimePost,
   useCancelOvertimePost,
   useRestoreOvertimePost,
+  useArchivePastOvertimePosts,
   useSignUpForOvertime,
   useUnSignUpForOvertime,
   useAdminAssignToOvertime,
@@ -81,8 +82,9 @@ export function OvertimePanel() {
   const meQ        = useMe();
   const buildingsQ = useBuildings();
   const engineersQ = useEngineers();
-  const cancelPost  = useCancelOvertimePost();
-  const restorePost = useRestoreOvertimePost();
+  const cancelPost   = useCancelOvertimePost();
+  const restorePost  = useRestoreOvertimePost();
+  const archivePast  = useArchivePastOvertimePosts();
 
   const [showNew, setShowNew] = useState(false);
   const [showAssignFor, setShowAssignFor] = useState<string | null>(null);
@@ -152,7 +154,15 @@ export function OvertimePanel() {
     const open = (postsQ.data ?? []).filter((p) => p.status === 'open');
     const slotsNeeded = open.reduce((s, p) => s + p.slots_needed, 0);
     const slotsFilled = open.reduce((s, p) => s + p.slots_filled, 0);
-    return { openCount: open.length, slotsNeeded, slotsFilled };
+    // Past-but-still-open count. These are stale rows the manager forgot
+    // to close — same posts /tv hides via its time filter. Showing the
+    // count + a one-click bulk-archive button surfaces the cleanup.
+    const nowMs = Date.now();
+    const pastOpen = open.filter((p) => {
+      const tail = p.ends_at ? new Date(p.ends_at).getTime() : new Date(p.starts_at).getTime();
+      return tail < nowMs;
+    }).length;
+    return { openCount: open.length, slotsNeeded, slotsFilled, pastOpen };
   }, [postsQ.data]);
 
   const handleCancel = (postId: string) => {
@@ -183,6 +193,34 @@ export function OvertimePanel() {
           style={{ fontWeight: 600 }}
         >
           + New post
+        </button>
+      )}
+      {canManage && totals.pastOpen > 0 && (
+        <button
+          onClick={async () => {
+            const ok = confirm(
+              `Archive ${totals.pastOpen} past-but-still-open OT post${totals.pastOpen === 1 ? '' : 's'}? ` +
+              `Their status flips to "completed" and they drop off /tv and the active board.`
+            );
+            if (!ok) return;
+            try {
+              const n = await archivePast.mutateAsync();
+              alert(`Archived ${n} post${n === 1 ? '' : 's'}.`);
+            } catch (e) {
+              alert(`Archive failed: ${(e as Error).message}`);
+            }
+          }}
+          disabled={archivePast.isPending}
+          className="ml-3 hover:underline"
+          style={{
+            fontWeight: 600,
+            color: 'var(--color-warning, #d97706)',
+          }}
+          title="Bulk-flip every status='open' post whose end time is in the past to status='completed'."
+        >
+          {archivePast.isPending
+            ? 'Archiving…'
+            : `Archive ${totals.pastOpen} past`}
         </button>
       )}
     </span>

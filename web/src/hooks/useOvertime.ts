@@ -212,6 +212,44 @@ export function useDeleteOvertimePost() {
   });
 }
 
+/** Bulk-archive: flip every status='open' post whose ends_at (or starts_at
+ *  if no ends_at) is in the past to status='completed'. Use when stale
+ *  unclosed posts are cluttering the manager / TV view. Returns the number
+ *  of rows updated so the UI can show "Archived N posts". */
+export function useArchivePastOvertimePosts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<number> => {
+      const nowIso = new Date().toISOString();
+      // PostgREST can't express "coalesce(ends_at, starts_at) < now" in a
+      // single .or() clause cleanly, so we do two passes:
+      //   1. ends_at is not null AND ends_at < now
+      //   2. ends_at is null     AND starts_at < now
+      // The DB applies them atomically per-row; total is the sum.
+      const r1 = await supabase
+        .from('overtime_posts')
+        .update({ status: 'completed' })
+        .eq('status', 'open')
+        .not('ends_at', 'is', null)
+        .lt('ends_at', nowIso)
+        .select('id');
+      if (r1.error) throw r1.error;
+
+      const r2 = await supabase
+        .from('overtime_posts')
+        .update({ status: 'completed' })
+        .eq('status', 'open')
+        .is('ends_at', null)
+        .lt('starts_at', nowIso)
+        .select('id');
+      if (r2.error) throw r2.error;
+
+      return (r1.data?.length ?? 0) + (r2.data?.length ?? 0);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: POSTS_KEY }),
+  });
+}
+
 /** Sign up the currently authenticated engineer for a post. */
 export function useSignUpForOvertime() {
   const qc = useQueryClient();
