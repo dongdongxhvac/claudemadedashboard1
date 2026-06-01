@@ -194,6 +194,9 @@ export default function EngineerPc() {
                 View profile →
               </Link>
             )}
+            <Link to="/buildings" className="t-small t-accent hover:underline">
+              Buildings
+            </Link>
             {canAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 {isAdmin ? 'Admin' : 'Admin (lead)'}

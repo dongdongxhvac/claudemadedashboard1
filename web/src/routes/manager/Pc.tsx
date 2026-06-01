@@ -146,6 +146,9 @@ export default function ManagerPc() {
           </div>
           <div className="flex items-center gap-4">
             <OncallBadge />
+            <Link to="/buildings" className="t-small t-accent hover:underline">
+              Buildings
+            </Link>
             {isAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 Admin
