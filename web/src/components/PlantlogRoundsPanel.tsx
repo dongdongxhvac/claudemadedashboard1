@@ -258,7 +258,7 @@ export function PlantlogRoundsPanel() {
               of how long they spent at each building. */}
           <div className="mb-6">
             <div className="t-small t-muted uppercase tracking-wider mb-2">
-              Daily round efficiency · daily rounds only (excl. water treatment, weekly &amp; monthly) · click an engineer for per-building time
+              Daily round efficiency · daily rounds only (excl. water treatment, weekly &amp; monthly) · <span title="Active = sum of per-building visit durations. Span = wall-clock first→last entry. When Active &lt;&lt; Span the engineer was off-round (weekly test, paperwork, travel, break)" style={{ borderBottom: '1px dotted var(--color-text-muted)', cursor: 'help' }}>Active vs Span</span> · click an engineer for per-building time
             </div>
             <div className="space-y-3">
               {dailySpan.map(({ day, engineers }) => (
@@ -274,7 +274,8 @@ export function PlantlogRoundsPanel() {
                         <th className="text-right pb-1 px-2">Start</th>
                         <th className="text-right pb-1 px-2">End</th>
                         <th className="text-right pb-1 px-2">Entries</th>
-                        <th className="text-right pb-1 px-2">Span</th>
+                        <th className="text-right pb-1 px-2" title="Sum of per-building visit durations">Active</th>
+                        <th className="text-right pb-1 px-2" title="Wall-clock first→last entry">Span</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -304,12 +305,25 @@ export function PlantlogRoundsPanel() {
                               <td className="text-right px-2 py-1">{fmtTime(e.first_entry_utc)}</td>
                               <td className="text-right px-2 py-1">{fmtTime(e.last_entry_utc)}</td>
                               <td className="text-right px-2 py-1">{e.entries}</td>
-                              <td className="text-right px-2 py-1">{fmtSpan(e.span_seconds)}</td>
+                              <td className="text-right px-2 py-1">{fmtSpan(e.active_seconds)}</td>
+                              <td className="text-right px-2 py-1">
+                                {fmtSpan(e.span_seconds)}
+                                {e.span_seconds > 0 && e.active_seconds > 0 &&
+                                 (e.span_seconds - e.active_seconds) > 30 * 60 && (
+                                  <span
+                                    className="t-muted ml-1"
+                                    style={{ fontSize: '0.7rem' }}
+                                    title="Span − Active = off-round time (weekly/monthly task, paperwork, travel, break)"
+                                  >
+                                    (+{fmtSpan(e.span_seconds - e.active_seconds)} off)
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                             {isOpen && hasVisits && (
                               <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
                                 <td></td>
-                                <td colSpan={5} className="pt-1 pb-2">
+                                <td colSpan={6} className="pt-1 pb-2">
                                   <BuildingVisitsBreakdown rows={visits} />
                                 </td>
                               </tr>

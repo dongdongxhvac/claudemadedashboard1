@@ -184,6 +184,10 @@ export type PlantlogUserDailySpan = {
   last_entry_utc: string;
   entries: number;
   span_seconds: number;
+  /** Sum of per-building visit durations (active building time). Independent
+   *  of mid-round gaps — when an engineer interleaves a weekly/monthly task
+   *  in the middle of the daily round, span widens but active stays put. */
+  active_seconds: number;
 };
 
 /** Per-user × per-day round efficiency: first/last entry, count, span.
