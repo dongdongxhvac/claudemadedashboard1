@@ -28,6 +28,11 @@ import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useDeltaAlarmsCurrent, useDeltaPollState } from '../../hooks/useDeltaAlarms';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import {
+  useBuildingEquipmentDown,
+  useBuildingEquipmentDownRealtime,
+  EQUIPMENT_STATUS_LABELS,
+} from '../../hooks/useBuildingKb';
+import {
   useOvertimePosts,
   useOvertimeRealtime,
   OVERTIME_CATEGORY_LABELS,
@@ -74,6 +79,7 @@ export default function TvView() {
   useBuildingsRealtime();
   useBuildingAssignmentsRealtime();
   usePtoRealtime();
+  useBuildingEquipmentDownRealtime();
 
   const oncallQ      = useUpcomingOncall(12);
   const participantsQ = useOncallParticipants();
@@ -678,6 +684,7 @@ function BmsHealthPanel() {
   const hbQ           = useBmsHeartbeats();
   const emailOpenQ    = useEmailAlarmsOpen();
   const emailStateQ   = useEmailPollState();
+  const eqDownQ       = useBuildingEquipmentDown();
 
   // §08 — Delta direct
   const delta = useMemo(() => {
@@ -832,8 +839,76 @@ function BmsHealthPanel() {
             </div>
           )}
         </div>
+
+        {/* Equipment-down stripe — bottom half of the BMS panel. Surfaces
+            rows where status is off_pm or down_cm so a glance at the wall
+            shows what's offline across all buildings. */}
+        <EquipmentDownStripe eqDown={eqDownQ.data ?? []} />
       </div>
     </section>
+  );
+}
+
+/** §10.x equivalent on /tv — equipment currently off_pm / down_cm, in the
+ *  bottom half of the BMS alarms panel. Tight one-line rows so a dozen
+ *  down items still fit without scrolling. */
+function EquipmentDownStripe({
+  eqDown,
+}: {
+  eqDown: ReturnType<typeof useBuildingEquipmentDown>['data'] extends infer T ? T : never;
+}) {
+  const rows = eqDown ?? [];
+  const downCm = rows.filter((r) => r.status === 'down_cm').length;
+  const offPm  = rows.filter((r) => r.status === 'off_pm').length;
+  const visible = rows.slice(0, 8);
+  const overflow = rows.length - visible.length;
+
+  return (
+    <>
+      <div className="tv-bms-divider" />
+      <div className="tv-bms-stripe">
+        <div className="tv-bms-stripe-head">
+          <span className="tv-bms-stripe-tag">EQ</span>
+          <span className="tv-bms-stripe-label">Equipment down</span>
+          <span className="tv-bms-stripe-meta">
+            {rows.length === 0 ? '—' : (
+              <>
+                {downCm > 0 && (
+                  <span style={{ color: '#fca5a5', fontWeight: 700 }}>{downCm} CM</span>
+                )}
+                {downCm > 0 && offPm > 0 && <span style={{ color: '#475569' }}> · </span>}
+                {offPm > 0 && (
+                  <span style={{ color: '#fbbf24' }}>{offPm} PM</span>
+                )}
+              </>
+            )}
+          </span>
+        </div>
+        {rows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.78vw' }}>All catalogued equipment operational.</p>
+        ) : (
+          <ul className="tv-eq-down-list">
+            {visible.map((r) => (
+              <li key={r.id} className="tv-eq-down-row">
+                <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
+                <span className="tv-eq-down-name">{r.short_name ?? r.full_name}</span>
+                <span
+                  className="tv-eq-down-status"
+                  style={{ color: r.status === 'down_cm' ? '#fca5a5' : '#fbbf24' }}
+                >
+                  {EQUIPMENT_STATUS_LABELS[r.status]}
+                </span>
+                <span className="tv-eq-down-rsp">{r.rsp ?? '—'}</span>
+                <span className="tv-eq-down-date">{r.status_date ?? '—'}</span>
+              </li>
+            ))}
+            {overflow > 0 && (
+              <li className="tv-eq-down-overflow">+{overflow} more — see §10.1 on manager dashboard</li>
+            )}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1966,6 +2041,34 @@ function TvStyles() {
         font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
+
+      /* Equipment-down stripe rows — one line per off_pm / down_cm item.
+         Building short_code | short_name | status pill | RSP | date. */
+      .tv-eq-down-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.16vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-eq-down-row {
+        display: grid;
+        grid-template-columns: 1.6vw minmax(0, 1fr) 4.5vw 4vw 2vw;
+        gap: 0.35vw;
+        align-items: baseline;
+        font-size: 0.78vw;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-eq-down-row > * {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .tv-eq-down-bld { color: #f1f5f9; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .tv-eq-down-name { color: #e2e8f0; }
+      .tv-eq-down-status { font-size: 0.62vw; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+      .tv-eq-down-rsp { color: #94a3b8; }
+      .tv-eq-down-date { color: #64748b; text-align: right; font-size: 0.7vw; }
+      .tv-eq-down-overflow { color: #64748b; font-style: italic; font-size: 0.7vw; }
 
       /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column.
          Right column gets a left border so the two halves read as distinct cards. */

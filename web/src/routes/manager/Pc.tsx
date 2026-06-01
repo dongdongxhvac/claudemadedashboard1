@@ -14,6 +14,7 @@ import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
+import { EquipmentDownPanel } from '../../components/EquipmentDownPanel';
 import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -194,6 +195,7 @@ export default function ManagerPc() {
           <DeltaAlarmsPanel />
           <EmailAlarmsPanel />
           <BmsEmailAlarmsPanel />
+          <EquipmentDownPanel />
           <OvertimePanel />
           <PtoPanel />
           <MonthlyMeterReadingsPanel />

@@ -38,7 +38,7 @@ export function PartsPanel({ buildingId }: { buildingId: string }) {
       if (p.equipment_id && eqById.has(p.equipment_id)) {
         const eq = eqById.get(p.equipment_id)!;
         const k = p.equipment_id;
-        const g = groups.get(k) ?? { label: eq.name, rows: [] };
+        const g = groups.get(k) ?? { label: eq.full_name, rows: [] as BuildingPart[] };
         g.rows.push(p);
         groups.set(k, g);
       } else {
@@ -178,7 +178,7 @@ function PartForm({
   onClose,
 }: {
   buildingId: string;
-  equipmentOptions: { id: string; name: string }[];
+  equipmentOptions: { id: string; full_name: string }[];
   existing?: BuildingPart;
   onClose: () => void;
 }) {
@@ -258,7 +258,7 @@ function PartForm({
         <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} style={inputStyle}>
           <option value="">(none — building-level)</option>
           {equipmentOptions.map((eq) => (
-            <option key={eq.id} value={eq.id}>{eq.name}</option>
+            <option key={eq.id} value={eq.id}>{eq.full_name}</option>
           ))}
         </select>
       </Field>

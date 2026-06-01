@@ -40,21 +40,95 @@ export type BuildingSectionNote = {
   updated_by: string | null;
 };
 
+export const EQUIPMENT_CATEGORIES = [
+  'chiller_plant',
+  'boiler_plant',
+  'compressed_air',
+  'vacuum_air',
+  'rodi',
+  'plumbing',
+  'control',
+  'electrical',
+] as const;
+export type EquipmentCategory = (typeof EQUIPMENT_CATEGORIES)[number];
+
+/** Friendly labels for the category dropdown. Match the wording the
+ *  engineer uses in the field, not the slug. */
+export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
+  chiller_plant:  'Chiller plant',
+  boiler_plant:   'Boiler plant',
+  compressed_air: 'cAIR',
+  vacuum_air:     'vAir',
+  rodi:           'RODI',
+  plumbing:       'Plumbing',
+  control:        'Control',
+  electrical:     'Electrical',
+};
+
+export const EQUIPMENT_STATUSES = [
+  'operational',
+  'standby_auto',
+  'defaulted',
+  'off_pm',
+  'down_cm',
+] as const;
+export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number];
+
+export const EQUIPMENT_STATUS_LABELS: Record<EquipmentStatus, string> = {
+  operational:  'Operational',
+  standby_auto: 'Standby auto',
+  defaulted:    'Defaulted',
+  off_pm:       'Off — PM',
+  down_cm:      'Down — CM',
+};
+
+/** Color band for the equipment row. Green = good, amber = degraded but
+ *  running, red = needs attention. Drives row tint + status pill color
+ *  + §10.1 / TV alarm panel inclusion. */
+export function equipmentStatusTone(s: EquipmentStatus): 'good' | 'warn' | 'bad' {
+  if (s === 'operational' || s === 'standby_auto') return 'good';
+  if (s === 'defaulted') return 'warn';
+  return 'bad';   // off_pm, down_cm
+}
+
 export type BuildingEquipment = {
   id: string;
   building_id: string;
-  name: string;
-  category: 'mechanical' | 'control' | 'electrical' | 'plumbing' | 'other' | null;
+  full_name: string;
+  short_name: string | null;
+  category: EquipmentCategory | null;
   location_note: string | null;
   parts_notes: string | null;
   common_issues: string | null;
   troubleshooting: string | null;
   photo_url: string | null;
+  status: EquipmentStatus;
+  status_detail: string | null;
+  status_date: string | null;     // YYYY-MM-DD
+  wo_number: string | null;
+  rsp: string | null;
+  last_status_change_at: string;  // timestamptz
   active: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
   updated_by: string | null;
+};
+
+export type BuildingEquipmentStatusRow = {
+  id: string;
+  building_id: string;
+  building_short_code: string | null;
+  building_name: string;
+  full_name: string;
+  short_name: string | null;
+  category: EquipmentCategory | null;
+  status: EquipmentStatus;
+  status_detail: string | null;
+  status_date: string | null;
+  wo_number: string | null;
+  rsp: string | null;
+  last_status_change_at: string;
 };
 
 export const PART_TYPES = ['filter','belt','oil','seal','bearing','fuse','sensor','other'] as const;
@@ -199,7 +273,7 @@ export function useUpsertBuildingEquipment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (
-      input: Partial<BuildingEquipment> & { building_id: string; name: string },
+      input: Partial<BuildingEquipment> & { building_id: string; full_name: string },
     ) => {
       const row = { ...input, updated_at: new Date().toISOString() };
       const { data, error } = await supabase
@@ -214,6 +288,41 @@ export function useUpsertBuildingEquipment() {
       qc.invalidateQueries({ queryKey: equipmentKey(vars.building_id) });
     },
   });
+}
+
+/** Equipment currently in off_pm or down_cm status, joined with the
+ *  parent building for compact rendering. Drives §10.1 (manager view)
+ *  + the equipment-down stripe on the TV BMS alarms panel. */
+export function useBuildingEquipmentDown() {
+  return useQuery({
+    queryKey: ['building_equipment_status_down'],
+    queryFn: async (): Promise<BuildingEquipmentStatusRow[]> => {
+      const { data, error } = await supabase
+        .from('v_building_equipment_status')
+        .select('*')
+        .order('last_status_change_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as BuildingEquipmentStatusRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Realtime: invalidate the equipment-down list whenever ANY building_equipment
+ *  row changes (status updates can drop rows in/out of the view). */
+export function useBuildingEquipmentDownRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel(`be-down-${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'building_equipment' },
+        () => qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] }),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
 }
 
 /** Soft-delete: flip active=false so historical references survive. */
