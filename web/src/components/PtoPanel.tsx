@@ -7,7 +7,7 @@
 // Cap rule: at most 2 engineers on vacation any given day. Sick has no cap.
 // Cap can be overridden by manager at submit OR approve time (logged with
 // reason for audit).
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
@@ -734,21 +734,14 @@ function TodayAttendance({
     });
   }, [days, engineers, ptoByUserDay]);
 
-  const onSick = (eng: EngineerRow, dateIso: string, dayLabel: string) => {
-    if (!confirm(`Mark ${eng.full_name} sick on ${dayLabel} (8h)? Logs an approved sick PTO and deducts 8h from balance.`)) return;
-    submit.mutate({
-      user_id:  eng.user_id,
-      type:     'sick',
-      starts_on: dateIso,
-      ends_on:   dateIso,
-      hours:     8,
-      status:   'approved',
-      reason:   'called out',
-      // One-click sick chip = engineer called out; default source to phone
-      // since that's the most common call-out channel. Manager can still
-      // add a richer entry via the Add PTO modal for unusual cases.
-      request_source: 'phone',
-    });
+  // Clicking an empty DayChip opens a QuickPtoModal pre-filled for that
+  // (engineer, date) so the manager can pick a type (defaults to sick),
+  // optionally narrow to a partial-day time window, and pick a source.
+  const [logTarget, setLogTarget] = useState<{
+    engineer: EngineerRow; dateIso: string; dayLabel: string;
+  } | null>(null);
+  const onLogClick = (eng: EngineerRow, dateIso: string, dayLabel: string) => {
+    setLogTarget({ engineer: eng, dateIso, dayLabel });
   };
 
   // When the heatmap is pinned to the leading cell, the row becomes
@@ -772,10 +765,18 @@ function TodayAttendance({
           shiftGroups={groups}
           ptoLookup={ptoByUserDay}
           disabled={submit.isPending}
-          onSick={onSick}
+          onLogClick={onLogClick}
           isPrimary={i === 0}
         />
       ))}
+      {logTarget && (
+        <QuickPtoModal
+          engineer={logTarget.engineer}
+          dateIso={logTarget.dateIso}
+          dayLabel={logTarget.dayLabel}
+          onClose={() => setLogTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -785,14 +786,14 @@ function TodayAttendance({
  *  gets a slightly larger font + accent treatment so the eye lands there
  *  first. */
 function DayAttendanceGroup({
-  day, counts, shiftGroups, ptoLookup, disabled, onSick, isPrimary,
+  day, counts, shiftGroups, ptoLookup, disabled, onLogClick, isPrimary,
 }: {
   day: { iso: string; label: string; isToday: boolean };
   counts: { in: number; out: number; partial: number; total: number };
   shiftGroups: { shift_id: string; label: string; engineers: EngineerRow[] }[];
   ptoLookup: Map<string, PtoRequest>;
   disabled: boolean;
-  onSick: (eng: EngineerRow, iso: string, label: string) => void;
+  onLogClick: (eng: EngineerRow, iso: string, label: string) => void;
   isPrimary: boolean;
 }) {
   // Today's chips & labels are full size; the two secondary columns drop a
@@ -850,7 +851,7 @@ function DayAttendanceGroup({
                     dateIso={day.iso}
                     dayLabel={day.label}
                     disabled={disabled}
-                    onSick={onSick}
+                    onLogClick={onLogClick}
                     isPrimary={isPrimary}
                   />
                 );
@@ -864,14 +865,14 @@ function DayAttendanceGroup({
 }
 
 function DayChip({
-  engineer, pto, dateIso, dayLabel, disabled, onSick, isPrimary,
+  engineer, pto, dateIso, dayLabel, disabled, onLogClick, isPrimary,
 }: {
   engineer: EngineerRow;
   pto: PtoRequest | null;
   dateIso: string;
   dayLabel: string;
   disabled: boolean;
-  onSick: (eng: EngineerRow, iso: string, label: string) => void;
+  onLogClick: (eng: EngineerRow, iso: string, label: string) => void;
   isPrimary?: boolean;
 }) {
   const out      = pto !== null;
@@ -883,12 +884,12 @@ function DayChip({
   const border   = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
   const tipBase  = out
     ? `${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
-    : `${engineer.full_name} working ${dayLabel} — click to log sick`;
+    : `${engineer.full_name} working ${dayLabel} — click to log PTO`;
   const tip = partial && label ? `${tipBase} · ${label}` : tipBase;
   return (
     <button
       type="button"
-      onClick={out ? undefined : () => onSick(engineer, dateIso, dayLabel)}
+      onClick={out ? undefined : () => onLogClick(engineer, dateIso, dayLabel)}
       disabled={disabled || out}
       title={tip}
       style={{
@@ -930,6 +931,232 @@ function shortName(full: string): string {
   const parts = full.trim().split(/\s+/);
   if (parts.length < 2) return parts[0];
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+// ───────────────────────────── Quick PTO modal (click on empty chip)
+//
+// Lightweight centered modal. Defaults type=sick, source=phone (most common
+// call-out channel). Optional out_from / out_until time fields for partial
+// days; hours auto-adjust (8 full / 4 partial) but stay editable.
+
+function QuickPtoModal({
+  engineer, dateIso, dayLabel, onClose,
+}: {
+  engineer: EngineerRow;
+  dateIso: string;
+  dayLabel: string;
+  onClose: () => void;
+}) {
+  const submit = useSubmitPto();
+  const [type, setType]               = useState<PtoType>('sick');
+  const [outFrom, setOutFrom]         = useState<string>('');
+  const [outUntil, setOutUntil]       = useState<string>('');
+  const [source, setSource]           = useState<PtoRequestSource>('phone');
+  const [sourceDetail, setSourceDetail] = useState<string>('');
+  const [reason, setReason]           = useState<string>('called out');
+  const [hours, setHours]             = useState<string>('8');
+  const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false);
+  const [err, setErr]                 = useState<string | null>(null);
+
+  // Auto-adjust hours when partial-day window changes — unless the manager
+  // already typed a custom value, in which case respect it.
+  useEffect(() => {
+    if (hoursManuallyEdited) return;
+    const isPartial = !!outFrom || !!outUntil;
+    setHours(isPartial ? '4' : '8');
+  }, [outFrom, outUntil, hoursManuallyEdited]);
+
+  // Switching type: keep "called out" tied to sick, blank otherwise so the
+  // manager doesn't accidentally log "called out" for a planned vacation.
+  useEffect(() => {
+    if (type === 'sick' && !reason) setReason('called out');
+    if (type !== 'sick' && reason === 'called out') setReason('');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
+  const onSave = async () => {
+    setErr(null);
+    if (!source) { setErr('Source required for audit trail.'); return; }
+    if (outFrom && outUntil && outUntil <= outFrom) {
+      setErr('"Out until" must be later than "Out from".');
+      return;
+    }
+    const h = Number(hours);
+    if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
+
+    try {
+      await submit.mutateAsync({
+        user_id:   engineer.user_id,
+        type,
+        starts_on: dateIso,
+        ends_on:   dateIso,
+        hours:     h,
+        status:    'approved',
+        reason:    reason.trim() || null,
+        request_source:        source,
+        request_source_detail: sourceDetail.trim() || null,
+        out_from:  outFrom  || null,
+        out_until: outUntil || null,
+      });
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
+  const isPartial = !!outFrom || !!outUntil;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 60,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="t-card"
+        style={{
+          width: 'min(440px, 92vw)', padding: '1.25rem',
+          borderRadius: 6, boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+          maxHeight: '90vh', overflow: 'auto',
+        }}
+      >
+        <div className="flex items-baseline justify-between mb-2 gap-2">
+          <h3 className="t-section-title">Log PTO</h3>
+          <button onClick={onClose} className="t-small t-muted" aria-label="Close">✕</button>
+        </div>
+        <p className="t-small t-muted mb-3">
+          <strong>{engineer.full_name}</strong> · {dayLabel}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Type</span>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as PtoType)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][]).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Source <span style={{ color: 'var(--color-danger)' }}>*</span>
+            </span>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value as PtoRequestSource)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              {PTO_MANAGER_SOURCE_OPTIONS.map((s) => (
+                <option key={s} value={s}>{PTO_REQUEST_SOURCE_LABELS[s]}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out from <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(blank = start)</span>
+            </span>
+            <input
+              type="time"
+              value={outFrom}
+              onChange={(e) => setOutFrom(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Out until <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(blank = end)</span>
+            </span>
+            <input
+              type="time"
+              value={outUntil}
+              onChange={(e) => setOutUntil(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Hours</span>
+            <input
+              type="number"
+              min={0.25}
+              step={0.25}
+              value={hours}
+              onChange={(e) => { setHours(e.target.value); setHoursManuallyEdited(true); }}
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Source detail <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(opt)</span>
+            </span>
+            <input
+              type="text"
+              value={sourceDetail}
+              onChange={(e) => setSourceDetail(e.target.value)}
+              placeholder="text 7:42am, voicemail, etc."
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+
+          <label className="block col-span-2">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Reason (optional)</span>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. flu, kid school pickup, doctor appt"
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+        </div>
+
+        {isPartial && (
+          <p className="t-small t-muted mt-2">
+            Partial day — {engineer.full_name.split(' ')[0]} will be counted as in (partial) on the Coverage panel. Hours auto-set to 4h; override above if needed.
+          </p>
+        )}
+
+        {err && <p className="t-small t-danger mt-2">{err}</p>}
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onClose}
+            className="t-small px-3 py-1 rounded border"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={submit.isPending}
+            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {submit.isPending ? 'Saving…' : 'Log PTO'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ───────────────────────────── Cap heatmap (9-week vacation calendar)
