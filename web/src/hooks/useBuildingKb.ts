@@ -208,7 +208,7 @@ export function useBuildingEquipment(buildingId: string | null | undefined) {
         .eq('building_id', buildingId)
         .eq('active', true)
         .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
+        .order('full_name', { ascending: true });
       if (error) throw error;
       return (data ?? []) as BuildingEquipment[];
     },
