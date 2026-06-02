@@ -43,6 +43,7 @@ export type BuildingSectionNote = {
 export const EQUIPMENT_CATEGORIES = [
   'chiller_plant',
   'boiler_plant',
+  'ahu',
   'compressed_air',
   'vacuum_air',
   'rodi',
@@ -57,6 +58,7 @@ export type EquipmentCategory = (typeof EQUIPMENT_CATEGORIES)[number];
 export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
   chiller_plant:  'Chiller plant',
   boiler_plant:   'Boiler plant',
+  ahu:            'AHU',
   compressed_air: 'cAIR',
   vacuum_air:     'vAir',
   rodi:           'RODI',
