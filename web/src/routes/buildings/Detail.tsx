@@ -20,15 +20,16 @@ import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
 import { PartsPanel } from '../../components/buildings/PartsPanel';
 import { VendorVisitsPanel } from '../../components/buildings/VendorVisitsPanel';
+import { ProjectsPanel } from '../../components/buildings/ProjectsPanel';
 
-// Tab order: Overview → Vendor Log → Equipment → Inventory (parts) → 4
-// system categories → Access → Troubleshooting. Vendor Log sits right after
-// Overview because logging a vendor visit is the most-frequent in-field
-// write (engineers escorting vendors); Equipment + Inventory follow as the
-// next-highest-frequency lookups.
+// Tab order: Overview → Vendor Log → Projects → Equipment → Inventory →
+// 4 system categories → Access → Troubleshooting. Vendor Log + Projects
+// cluster as the "operational logs" group; Equipment + Inventory are the
+// "catalog" group; the rest are free-form sections.
 type Tab =
   | 'overview'
   | 'vendors'
+  | 'projects'
   | 'equipment'
   | 'inventory'
   | 'mechanical'
@@ -41,6 +42,7 @@ type Tab =
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview',        label: SECTION_LABELS.overview },
   { key: 'vendors',         label: 'Vendor Log' },
+  { key: 'projects',        label: 'Projects' },
   { key: 'equipment',       label: 'Equipment' },
   { key: 'inventory',       label: 'Inventory' },
   { key: 'mechanical',      label: SECTION_LABELS.mechanical },
@@ -179,6 +181,8 @@ export default function BuildingDetail() {
           <PartsPanel buildingId={building.id} />
         ) : tab === 'vendors' ? (
           <VendorVisitsPanel buildingId={building.id} />
+        ) : tab === 'projects' ? (
+          <ProjectsPanel buildingId={building.id} />
         ) : SECTION_TAB_KEYS.includes(tab as SectionKey) ? (
           <SectionEditor
             buildingId={building.id}

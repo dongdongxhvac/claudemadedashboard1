@@ -555,6 +555,80 @@ export function useInsertVendorVisit() {
   });
 }
 
+// ----- Projects -----------------------------------------------------------
+
+export type BuildingProject = {
+  id: string;
+  building_id: string;
+  title: string;
+  detail: string | null;
+  rsp: string | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+const projectsKey = (buildingId: string) => ['building_projects', buildingId];
+
+export function useBuildingProjects(buildingId: string | null | undefined) {
+  return useQuery({
+    queryKey: projectsKey(buildingId ?? ''),
+    queryFn: async (): Promise<BuildingProject[]> => {
+      if (!buildingId) return [];
+      const { data, error } = await supabase
+        .from('building_projects')
+        .select('*')
+        .eq('building_id', buildingId)
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as BuildingProject[];
+    },
+    staleTime: 60_000,
+    enabled: !!buildingId,
+  });
+}
+
+export function useUpsertBuildingProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<BuildingProject> & { building_id: string; title: string },
+    ) => {
+      const row = { ...input, updated_at: new Date().toISOString() };
+      const { data, error } = await supabase
+        .from('building_projects')
+        .upsert(row, { onConflict: 'id' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as BuildingProject;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: projectsKey(vars.building_id) });
+    },
+  });
+}
+
+export function useDeleteBuildingProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; building_id: string }) => {
+      const { error } = await supabase
+        .from('building_projects')
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: projectsKey(vars.building_id) });
+    },
+  });
+}
+
 export function useDeleteVendorVisit() {
   const qc = useQueryClient();
   return useMutation({
