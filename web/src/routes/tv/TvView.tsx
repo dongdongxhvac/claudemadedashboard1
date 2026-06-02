@@ -14,7 +14,7 @@
 //
 // Focus-board announcements still surface via the header strip (top-2);
 // the standalone panel got displaced when BMS health moved in.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses } from '../../hooks/useCurrentSnapshots';
@@ -917,7 +917,11 @@ function EquipmentDownStripe({
   );
 }
 
-/** One crew column with a tiny header row, used twice side-by-side. */
+/** One crew column with a tiny header row, used twice side-by-side. The
+ *  whole column is ONE grid — header row + separator + per-engineer rows
+ *  all share the same column widths. Name column uses max-content so it
+ *  hugs the widest engineer name (no big gap to the PMs number); the
+ *  number/delta columns are fixed widths for vertical scan alignment. */
 function CrewColumn({ rows, renderRow }: {
   rows: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }[];
   renderRow: (c: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }) => React.ReactNode;
@@ -925,14 +929,19 @@ function CrewColumn({ rows, renderRow }: {
   if (rows.length === 0) return <div />;
   return (
     <div className="tv-crew-col">
-      <div className="tv-crew-headerrow">
-        <span />
-        <span className="tv-crew-colhead">PMs</span>
-        <span />
-        <span className="tv-crew-colhead">Hrs</span>
-        <span />
-      </div>
-      <ul className="tv-crew-list">{rows.map(renderRow)}</ul>
+      {/* Header — display: contents so its 5 spans become direct grid
+          items in column 1-5 of the parent grid. */}
+      <span />
+      <span className="tv-crew-colhead">PMs</span>
+      <span />
+      <span className="tv-crew-colhead">Hrs</span>
+      <span />
+      {/* Separator — spans all 5 columns, gives the panel its under-header
+          border without forcing the header into its own non-aligned grid. */}
+      <div className="tv-crew-sep" aria-hidden="true" />
+      {/* Per-engineer rows — each renderRow returns 5 sibling spans (via
+          Fragment), all participating in the same parent grid. */}
+      {rows.map(renderRow)}
     </div>
   );
 }
@@ -987,13 +996,15 @@ function CrewSection({ closes, laborDaily, now }: {
   const rightCol = data.slice(5);
 
   const renderRow = (c: typeof data[number]) => (
-    <li key={c.name}>
+    // Fragment so the 5 spans become siblings under the column's parent
+    // grid — keeps name column hugging max content, numbers in fixed lanes.
+    <Fragment key={c.name}>
       <span className="tv-crew-name">{shortName(c.name)}</span>
       <span className="tv-crew-num">{c.pms}</span>
       <span className="tv-crew-deltacell"><Delta v={c.pmsDelta} /></span>
       <span className="tv-crew-num">{Math.round(c.hours)}</span>
       <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={0} /></span>
-    </li>
+    </Fragment>
   );
 
   return (
@@ -2329,39 +2340,53 @@ function TvStyles() {
       }
       .tv-eq-down-overflow { color: #64748b; font-style: italic; font-size: 0.7vw; }
 
-      /* Crew stats — 2 columns of 5; each row is 5 cells with deltas in their own column.
-         Right column gets a left border so the two halves read as distinct cards. */
+      /* Crew stats — 2 side-by-side columns. Each column is ONE grid:
+         header row + separator + per-engineer rows all share the same
+         column widths. Name column uses max-content so it hugs the widest
+         name and the numbers sit right after with a small column-gap —
+         no big empty stretch like the previous 1fr layout. */
       .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 0; }
-      .tv-crew-col { display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; padding: 0 0.9vw; }
-      .tv-crew-col:first-child  { padding-left: 0; border-right: 1px solid #1e293b; }
-      .tv-crew-col:last-child   { padding-right: 0; }
-      .tv-crew-headerrow,
-      .tv-crew-list li {
+      .tv-crew-col {
         display: grid;
-        grid-template-columns: 1fr 1.8vw 1.4vw 2.0vw 1.4vw;
-        gap: 0.3vw;
+        grid-template-columns: max-content 1.8vw 1.4vw 2.0vw 1.4vw;
+        column-gap: 0.3vw;
+        row-gap: 0.2vw;
         align-items: baseline;
         min-width: 0;
+        padding: 0 0.9vw;
       }
-      .tv-crew-headerrow {
+      .tv-crew-col:first-child  { padding-left: 0; border-right: 1px solid #1e293b; }
+      .tv-crew-col:last-child   { padding-right: 0; }
+      .tv-crew-colhead {
         font-size: 0.6vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #475569;
-        padding-bottom: 0.1vw;
-        border-bottom: 1px solid rgba(30, 41, 59, 0.6);
-        margin-bottom: 0.15vw;
+        text-align: right;
       }
-      .tv-crew-colhead { text-align: right; }
-      .tv-crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
-      .tv-crew-list li { font-size: 0.92vw; line-height: 1.2; }
-      .tv-crew-list li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-      .tv-crew-name { font-weight: 600; color: #f1f5f9; }
+      .tv-crew-sep {
+        grid-column: 1 / -1;
+        height: 1px;
+        background: rgba(30, 41, 59, 0.6);
+        margin: 0.05vw 0 0.05vw;
+      }
+      .tv-crew-name {
+        font-weight: 600;
+        color: #f1f5f9;
+        font-size: 0.92vw;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
       .tv-crew-num {
         color: #f1f5f9;
         text-align: right;
         font-variant-numeric: tabular-nums;
         font-weight: 600;
+        font-size: 0.92vw;
+        line-height: 1.2;
       }
       .tv-crew-deltacell { text-align: left; font-size: 0.6vw; }
       .tv-crew-delta { font-size: 0.6vw; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; opacity: 0.85; }
