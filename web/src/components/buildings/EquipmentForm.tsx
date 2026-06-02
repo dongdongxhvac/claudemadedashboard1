@@ -19,6 +19,7 @@ import {
   EQUIPMENT_STATUSES,
   EQUIPMENT_STATUS_LABELS,
   equipmentStatusTone,
+  equipmentStatusNeedsDetail,
   type BuildingEquipment,
   type EquipmentCategory,
   type EquipmentStatus,
@@ -65,7 +66,9 @@ export function EquipmentForm({
 
   const [error, setError] = useState<string | null>(null);
 
-  const showStatusDetail = status === 'off_pm' || status === 'down_cm';
+  // Detail block opens for any "needs attention" status (off_pm, down_cm,
+  // degraded, bypass) — defaulted is left soft per the helper's spec.
+  const showStatusDetail = equipmentStatusNeedsDetail(status);
   const tone = equipmentStatusTone(status);
 
   async function submit(e: React.FormEvent) {
@@ -304,7 +307,13 @@ export function EquipmentForm({
           </Field>
 
           <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
-            <Field label={`Date of ${status === 'off_pm' ? 'off-PM' : 'down-CM'}`}>
+            <Field label={
+              status === 'off_pm'   ? 'Date of off-PM' :
+              status === 'down_cm'  ? 'Date of down-CM' :
+              status === 'degraded' ? 'Date noticed' :
+              status === 'bypass'   ? 'Date bypassed' :
+              'Date'
+            }>
               <input
                 type="date"
                 value={statusDate}

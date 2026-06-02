@@ -37,13 +37,16 @@ function relTime(utcIso: string): string {
 }
 
 function statusPillColor(s: EquipmentStatus): { bg: string; fg: string } {
-  // Both off_pm and down_cm are red — but down_cm gets the stronger fill
-  // to communicate "broken" vs "intentionally offline for PM".
+  // Red — offline (down_cm worst, off_pm intentional).
   if (s === 'down_cm') {
     return { bg: 'var(--color-danger)', fg: 'white' };
   }
   if (s === 'off_pm') {
     return { bg: 'rgba(239, 68, 68, 0.18)', fg: 'var(--color-danger)' };
+  }
+  // Amber — running but needs attention.
+  if (s === 'degraded' || s === 'bypass') {
+    return { bg: 'rgba(217, 119, 6, 0.18)', fg: 'var(--color-warn, #d97706)' };
   }
   return { bg: 'var(--color-text-muted)', fg: 'white' };
 }
@@ -53,12 +56,12 @@ export function EquipmentDownPanel() {
   const rowsQ = useBuildingEquipmentDown();
   const rows = rowsQ.data ?? [];
 
-  // Sort: down_cm first (most urgent), then off_pm. Within each group,
-  // most-recently-changed first so what just broke surfaces up top.
+  // Sort: down_cm first (most urgent), then off_pm, then degraded/bypass.
+  // Within each group, most-recently-changed first.
   const sorted = useMemo(() => {
     const order: Record<EquipmentStatus, number> = {
-      down_cm: 0, off_pm: 1,
-      operational: 2, standby_auto: 3, defaulted: 4,
+      down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
+      operational: 4, standby_auto: 5, defaulted: 6,
     };
     return [...rows].sort((a, b) => {
       const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
@@ -67,13 +70,16 @@ export function EquipmentDownPanel() {
     });
   }, [rows]);
 
-  const downCm = rows.filter((r) => r.status === 'down_cm').length;
-  const offPm  = rows.filter((r) => r.status === 'off_pm').length;
+  const downCm   = rows.filter((r) => r.status === 'down_cm').length;
+  const offPm    = rows.filter((r) => r.status === 'off_pm').length;
+  const degraded = rows.filter((r) => r.status === 'degraded').length;
+  const bypass   = rows.filter((r) => r.status === 'bypass').length;
+  const warnTotal = degraded + bypass;
 
   const subtitle = (
     <span className="t-small t-muted text-right block">
       {rows.length === 0 ? (
-        <span>nothing down</span>
+        <span>everything operational</span>
       ) : (
         <>
           {downCm > 0 && (
@@ -87,11 +93,23 @@ export function EquipmentDownPanel() {
               {offPm} off-PM
             </span>
           )}
+          {(downCm > 0 || offPm > 0) && warnTotal > 0 && <span> · </span>}
+          {degraded > 0 && (
+            <span style={{ color: 'var(--color-warn, #d97706)', fontWeight: 700 }}>
+              {degraded} degraded
+            </span>
+          )}
+          {degraded > 0 && bypass > 0 && <span> · </span>}
+          {bypass > 0 && (
+            <span style={{ color: 'var(--color-warn, #d97706)' }}>
+              {bypass} bypass
+            </span>
+          )}
         </>
       )}
       <br />
       <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>
-        equipment currently off-PM or down-CM · auto-clears when status flips to operational / standby auto
+        equipment off-PM, down-CM, degraded, or in bypass · auto-clears when status flips to operational / standby auto
       </span>
     </span>
   );
@@ -99,7 +117,7 @@ export function EquipmentDownPanel() {
   return (
     <Section
       collapsible
-      title="§10.1 Equipment down / off"
+      title="§10.1 Equipment needing attention"
       subtitle={subtitle}
       loading={rowsQ.isLoading}
     >

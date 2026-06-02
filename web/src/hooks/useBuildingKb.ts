@@ -71,6 +71,8 @@ export const EQUIPMENT_STATUSES = [
   'operational',
   'standby_auto',
   'defaulted',
+  'degraded',
+  'bypass',
   'off_pm',
   'down_cm',
 ] as const;
@@ -80,17 +82,29 @@ export const EQUIPMENT_STATUS_LABELS: Record<EquipmentStatus, string> = {
   operational:  'Operational',
   standby_auto: 'Standby auto',
   defaulted:    'Defaulted',
+  degraded:     'Degraded',
+  bypass:       'Bypass / Manual',
   off_pm:       'Off — PM',
   down_cm:      'Down — CM',
 };
 
-/** Color band for the equipment row. Green = good, amber = degraded but
- *  running, red = needs attention. Drives row tint + status pill color
- *  + §10.1 / TV alarm panel inclusion. */
+/** Color band for the equipment row.
+ *   good — running normally (green)
+ *   warn — running but needs attention (amber): defaulted, degraded, bypass
+ *   bad  — offline (red): off_pm, down_cm
+ *  Drives row tint + status pill color + §10.1 / TV alarm panel inclusion. */
 export function equipmentStatusTone(s: EquipmentStatus): 'good' | 'warn' | 'bad' {
   if (s === 'operational' || s === 'standby_auto') return 'good';
-  if (s === 'defaulted') return 'warn';
+  if (s === 'defaulted' || s === 'degraded' || s === 'bypass') return 'warn';
   return 'bad';   // off_pm, down_cm
+}
+
+/** True when the status requires the engineer to fill in detail / date /
+ *  WO# / RSP. Triggered for anything non-good. Defaulted is the one
+ *  exception — it's a BMS sensor state that doesn't always need an
+ *  immediate writeup; left as soft-trigger (form can still ask). */
+export function equipmentStatusNeedsDetail(s: EquipmentStatus): boolean {
+  return s === 'off_pm' || s === 'down_cm' || s === 'degraded' || s === 'bypass';
 }
 
 export type BuildingEquipment = {

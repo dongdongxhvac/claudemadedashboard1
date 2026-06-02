@@ -861,8 +861,10 @@ function EquipmentDownStripe({
   eqDown: ReturnType<typeof useBuildingEquipmentDown>['data'] extends infer T ? T : never;
 }) {
   const rows = eqDown ?? [];
-  const downCm = rows.filter((r) => r.status === 'down_cm').length;
-  const offPm  = rows.filter((r) => r.status === 'off_pm').length;
+  const downCm   = rows.filter((r) => r.status === 'down_cm').length;
+  const offPm    = rows.filter((r) => r.status === 'off_pm').length;
+  const degraded = rows.filter((r) => r.status === 'degraded').length;
+  const bypass   = rows.filter((r) => r.status === 'bypass').length;
   const visible = rows.slice(0, 5);
   const overflow = rows.length - visible.length;
 
@@ -885,7 +887,7 @@ function EquipmentDownStripe({
       <div className="tv-bms-stripe">
         <div className="tv-bms-stripe-head">
           <span className="tv-bms-stripe-tag">EQ</span>
-          <span className="tv-bms-stripe-label">Equipment down</span>
+          <span className="tv-bms-stripe-label">Equipment attention</span>
           <span className="tv-bms-stripe-meta">
             {rows.length === 0 ? '—' : (
               <>
@@ -894,7 +896,15 @@ function EquipmentDownStripe({
                 )}
                 {downCm > 0 && offPm > 0 && <span style={{ color: '#475569' }}> · </span>}
                 {offPm > 0 && (
-                  <span style={{ color: '#fbbf24' }}>{offPm} PM</span>
+                  <span style={{ color: '#fca5a5' }}>{offPm} PM</span>
+                )}
+                {(downCm > 0 || offPm > 0) && (degraded + bypass) > 0 && <span style={{ color: '#475569' }}> · </span>}
+                {degraded > 0 && (
+                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>{degraded} deg</span>
+                )}
+                {degraded > 0 && bypass > 0 && <span style={{ color: '#475569' }}> · </span>}
+                {bypass > 0 && (
+                  <span style={{ color: '#fbbf24' }}>{bypass} byp</span>
                 )}
               </>
             )}
@@ -905,7 +915,10 @@ function EquipmentDownStripe({
         ) : (
           <ul className="tv-eq-down-list">
             {visible.map((r) => {
-              const statusFg = r.status === 'down_cm' ? '#fca5a5' : '#fbbf24';
+              // Red for offline states (down_cm, off_pm), amber for "running
+              // but needs attention" (degraded, bypass).
+              const statusFg =
+                r.status === 'down_cm' || r.status === 'off_pm' ? '#fca5a5' : '#fbbf24';
               const equipDisplay = r.short_name
                 ? `${r.short_name} · ${r.full_name}`
                 : r.full_name;
