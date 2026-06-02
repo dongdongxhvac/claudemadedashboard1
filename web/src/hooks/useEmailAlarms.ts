@@ -86,6 +86,28 @@ export function useEmailAlarmsHistory(opts?: { manualOnly?: boolean; limit?: num
   });
 }
 
+/** Window-scoped fetch for §10.2 aggregations. Returns ALL events whose
+ *  received_at_utc is within the window — no row cap. Volumes are small
+ *  enough (~hundreds of events per 30 days) that fetching the window and
+ *  aggregating client-side is simpler than parameterized SQL views. */
+export function useEmailAlarmsInWindow(windowDays: number) {
+  return useQuery({
+    queryKey: ['email_alarms_window', windowDays],
+    queryFn: async (): Promise<EmailAlarmHistoryRow[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - windowDays);
+      const { data, error } = await supabase
+        .from('v_email_alarms_history')
+        .select('*')
+        .gte('received_at_utc', since.toISOString())
+        .order('received_at_utc', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as EmailAlarmHistoryRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Manually close a BMS email alarm whose "back to normal" never arrived
  *  (common Siemens glitch). Inserts a synthetic Quiet event so the alarm
  *  drops out of v_email_alarms_open and a paper trail lands in
@@ -105,6 +127,7 @@ export function useCloseEmailAlarmManual() {
       qc.invalidateQueries({ queryKey: ['email_alarms_by_building'] });
       qc.invalidateQueries({ queryKey: ['email_alarms_recent'] });
       qc.invalidateQueries({ queryKey: ['email_alarms_history'] });
+      qc.invalidateQueries({ queryKey: ['email_alarms_window'] });
     },
   });
 }
