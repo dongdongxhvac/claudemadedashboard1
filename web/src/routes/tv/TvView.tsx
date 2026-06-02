@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
-import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses, type PmCloseEvent, type WoCloseEvent } from '../../hooks/useCurrentSnapshots';
+import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useRounds, useRoundsRealtime } from '../../hooks/useRounds';
 import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
@@ -125,23 +125,30 @@ export default function TvView() {
           closes={closesQ.data ?? []}
           woCloses={woClosesQ.data ?? []}
           laborDaily={laborDailyQ.data ?? []}
+          buildings={buildingsQ.data ?? []}
+          assignments={assignmentsQ.data ?? []}
+          rounds={roundsQ.data ?? []}
           now={now}
         />
-        {/* Middle column — top: consolidated BMS health (§08 + §09 + §10) */}
-        <BmsHealthPanel />
+        {/* Middle column — wrapper spans both grid rows so its two panels
+            (BMS + Buildings) can split vertically based on CONTENT instead
+            of the rigid 50/50 the grid would impose. Total column height
+            stays locked at the grid's row-1 + row-2 footprint. */}
+        <div className="tv-mid-flex">
+          <BmsHealthPanel />
+          <BuildingsPanel
+            engineers={engineersQ.data ?? []}
+            buildings={buildingsQ.data ?? []}
+            assignments={assignmentsQ.data ?? []}
+            rounds={roundsQ.data ?? []}
+            shifts={shiftsQ.data ?? []}
+          />
+        </div>
         {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
         <CoverageTvPanel
           engineers={engineersQ.data ?? []}
           pto={ptoQ.data ?? []}
           now={now}
-        />
-        {/* Middle column bottom */}
-        <BuildingsPanel
-          engineers={engineersQ.data ?? []}
-          buildings={buildingsQ.data ?? []}
-          assignments={assignmentsQ.data ?? []}
-          rounds={roundsQ.data ?? []}
-          shifts={shiftsQ.data ?? []}
         />
         {/* Right column bottom */}
         <OncallPanel
@@ -264,11 +271,14 @@ function Panel({ title, children, accent, meta }: { title: string; children: Rea
 }
 
 /** Combined Workload + Performance panel — spans both rows in the left column.
- *  Contains three sub-sections: Workload (top), Crew last 7d (middle),
- *  and Top 5 recent closes (bottom). Mirrors the §00 + Workload combo from
- *  the manager dashboard, tailored for TV-wall legibility. */
+ *  Three sub-sections: Workload (top), Crew last 7d (middle), Buildings
+ *  rounds + assignments (bottom — replaced the previous Top-5 recent closes).
+ *  The Buildings sub-section here is the SAME content as the middle column's
+ *  BuildingsPanel, surfaced again in the tall left panel so it's visible
+ *  at glance height alongside the other workload-shape data. */
 function WorkloadPerformancePanel({
   pmRows, laborRows, engineers, shifts, closes, woCloses, laborDaily, now,
+  buildings, assignments, rounds,
 }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   laborRows: NonNullable<ReturnType<typeof useCurrentLaborRows>['data']>;
@@ -277,6 +287,9 @@ function WorkloadPerformancePanel({
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   woCloses: NonNullable<ReturnType<typeof useRecentWoCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
+  buildings: Building[];
+  assignments: BuildingAssignment[];
+  rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
   now: Date;
 }) {
   const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
@@ -287,18 +300,13 @@ function WorkloadPerformancePanel({
   }, null);
   const laborAge = formatDataAge(now, laborLatest);
 
-  // Top 5 most recent closes, interleaving PMs and WOs by completed_on desc.
-  const recentCloses = useMemo(() => {
-    type Row =
-      | { kind: 'PM'; ev: PmCloseEvent }
-      | { kind: 'WO'; ev: WoCloseEvent };
-    const all: Row[] = [
-      ...closes.map((ev) => ({ kind: 'PM' as const, ev })),
-      ...woCloses.map((ev) => ({ kind: 'WO' as const, ev })),
-    ];
-    all.sort((a, b) => b.ev.completed_on.localeCompare(a.ev.completed_on));
-    return all.slice(0, 5);
-  }, [closes, woCloses]);
+  // Buildings data — same computation BuildingsPanel does — exposed as a
+  // sub-section here instead of "Top 5 recent closes".
+  const bldgData = useBuildingsRollup({ engineers, buildings, assignments, rounds, shifts });
+
+  // recentCloses memo retained (no consumer here right now) — closes / woCloses
+  // remain available for downstream tweaks without re-threading props.
+  void closes; void woCloses;
 
   return (
     <section className="tv-panel tv-panel-tall" style={{ borderTopColor: '#f59e0b' }}>
@@ -315,83 +323,26 @@ function WorkloadPerformancePanel({
       <div className="tv-panel-body tv-wp-body">
         <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
         <div className="tv-wp-divider" />
-        <CrewSection closes={closes} laborDaily={laborDaily} now={now} />
+        <div className="tv-wp-crew-wrap">
+          <CrewSection closes={closes} laborDaily={laborDaily} now={now} />
+        </div>
         <div className="tv-wp-divider" />
-        <RecentClosesSection rows={recentCloses} now={now} />
+        <div className="tv-wp-bldgs-wrap">
+          <div className="tv-workload-section-label" style={{ marginBottom: '0.2vw' }}>
+            Buildings · rounds + assignments
+          </div>
+          <BuildingsInner data={bldgData} />
+        </div>
       </div>
     </section>
   );
 }
 
-/** Top 5 most recent closes — PM/WO chip, task #, short description, tech, hours, when. */
-function RecentClosesSection({ rows, now }: {
-  rows: Array<
-    | { kind: 'PM'; ev: PmCloseEvent }
-    | { kind: 'WO'; ev: WoCloseEvent }
-  >;
-  now: Date;
-}) {
-  return (
-    <div className="tv-wp-closes">
-      <div className="tv-workload-section-label">Recent closes · top 5</div>
-      {rows.length === 0 ? (
-        <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No closes yet.</p>
-      ) : (
-        <ul className="tv-closes-list">
-          {rows.map((r, i) => {
-            const id   = r.kind === 'PM' ? r.ev.task_no : r.ev.wo_id;
-            const desc = r.kind === 'PM' ? r.ev.task_name : r.ev.description;
-            const tech = r.ev.assigned_to_name;
-            const bld  = r.ev.building_code;
-            const hrs  = r.ev.labor_hours;
-            return (
-              <li key={`${r.kind}-${id ?? i}-${r.ev.completed_on}`}>
-                <span className={`tv-closes-chip tv-closes-chip-${r.kind.toLowerCase()}`}>{r.kind}</span>
-                <span className="tv-closes-id" title={id ?? ''}>{shortTaskId(id)}</span>
-                <span className="tv-closes-desc" title={desc ?? ''}>{shortDesc(desc, 60)}</span>
-                <span className="tv-closes-tech">{shortName(tech)}</span>
-                <span className="tv-closes-bld" title={bld ?? ''}>{buildingShortCode(bld)}</span>
-                <span className="tv-closes-hrs">{hrs == null ? '—' : `${hrs.toFixed(1)}h`}</span>
-                <span className="tv-closes-when">{relTime(r.ev.completed_on, now)}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function shortDesc(s: string | null | undefined, n: number): string {
-  if (!s) return '—';
-  const one = s.replace(/\s+/g, ' ').trim();
-  return one.length > n ? one.slice(0, n - 1) + '…' : one;
-}
-
-/** "40 Landsdowne Street" → "40", "G-80 Bldg" → "G-80". Take first whitespace-delimited token. */
-function buildingShortCode(s: string | null | undefined): string {
-  if (!s) return '—';
-  const tok = s.trim().split(/\s+/)[0];
-  return tok || '—';
-}
-
-/** "PM-UNP-19043" → "19043", "W-UNP-3820" → "3820". Strip the leading prefix segments. */
-function shortTaskId(s: string | null | undefined): string {
-  if (!s) return '—';
-  const parts = s.trim().split('-');
-  return parts[parts.length - 1] || s;
-}
-
-function relTime(iso: string, now: Date): string {
-  const d = new Date(iso);
-  const mins = Math.round((now.getTime() - d.getTime()) / 60_000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.round(hrs / 24);
-  return `${days}d`;
-}
+// RecentClosesSection removed — the left panel's bottom sub-section now
+// renders the Buildings rollup instead. The helpers that used to support
+// it (shortDesc, buildingShortCode, shortTaskId, relTime) were unused
+// after the swap and got stripped to keep tsc clean. Re-add from git
+// history if you bring back a closes list later.
 
 function WklRow({ row }: { row: { name: string; pm14: number; major46: number } }) {
   return (
@@ -1212,14 +1163,18 @@ function WorkloadSection({ pmRows, engineers, shifts, now }: {
                 {data.pm.map((r) => <WklRow key={r.name} row={r} />)}
               </ul>
             </div>
-            {data.other.length > 0 && (
-              <div className="tv-wkl-shift-col tv-wkl-shift-other">
-                <div className="tv-wkl-shift-label">No shift</div>
+            {/* No-shift column always renders — keeps the 3-col grid stable
+                even when nobody's there. Empty-state is just a muted dash. */}
+            <div className="tv-wkl-shift-col">
+              <div className="tv-wkl-shift-label">No shift</div>
+              {data.other.length === 0 ? (
+                <p className="tv-muted" style={{ fontSize: '0.7vw', margin: 0 }}>—</p>
+              ) : (
                 <ul className="tv-wkl-chip-list">
                   {data.other.map((r) => <WklRow key={r.name} row={r} />)}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1228,17 +1183,34 @@ function WorkloadSection({ pmRows, engineers, shifts, now }: {
 }
 
 
-function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
+/** Rollup hook used by both BuildingsPanel (middle column) and the
+ *  Buildings sub-section inside the left WorkloadPerformancePanel. */
+type BuildingsRollup = {
+  shiftGroups: Array<{
+    shift: { id: string; name: string; sort_order: number };
+    bandLabel: string;
+    engineers: Array<{
+      user_id: string;
+      name: string;
+      primary: Building[];
+      round: NonNullable<ReturnType<typeof useRounds>['data']>[number] | null;
+    }>;
+  }>;
+  leads: Array<{ user_id: string; name: string; coverage: Building[] }>;
+};
+
+function useBuildingsRollup({
+  engineers, buildings, assignments, rounds, shifts,
+}: {
   engineers: EngineerRow[];
   buildings: Building[];
   assignments: BuildingAssignment[];
   rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
   shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
-}) {
-  const data = useMemo(() => {
+}): BuildingsRollup {
+  return useMemo(() => {
     const bldById = new Map(buildings.map((b) => [b.id, b]));
 
-    // Per-user primary/coverage assignments
     const primaryByUser  = new Map<string, Building[]>();
     const coverageByUser = new Map<string, Building[]>();
     for (const a of assignments) {
@@ -1257,13 +1229,11 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
         (x.short_code ?? x.code).localeCompare(y.short_code ?? y.code, undefined, { numeric: true }),
       );
 
-    // Round currently assigned to each user (latest single open assignment).
     const roundByUser = new Map<string, NonNullable<ReturnType<typeof useRounds>['data']>[number]>();
     for (const r of rounds) {
       if (r.current) roundByUser.set(r.current.user_id, r);
     }
 
-    // Group engineers (non-lead) by shift in shift sort_order.
     const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
     const shiftGroups = orderedShifts.map((s, idx) => ({
       shift: s,
@@ -1280,7 +1250,6 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
         .sort((a, b) => a.name.localeCompare(b.name)),
     })).filter((g) => g.engineers.length > 0);
 
-    // Leads: full-coverage row at the bottom.
     const leads = engineers
       .filter((e) => e.active && e.role === 'engineer' && e.is_lead)
       .map((e) => ({
@@ -1292,53 +1261,70 @@ function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
 
     return { shiftGroups, leads };
   }, [engineers, buildings, assignments, rounds, shifts]);
+}
 
+/** Shared inner JSX for the buildings rollup — used inside the middle
+ *  BuildingsPanel and as a sub-section in the left WorkloadPerformancePanel. */
+function BuildingsInner({ data }: { data: BuildingsRollup }) {
   const fmtCodes = (list: Building[]) =>
     list.map((b) => b.short_code ?? b.code).join(' · ');
 
   return (
-    <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
-      <div className="tv-bldgs">
-        <div className="tv-bldgs-headerrow">
-          <div className="tv-bldgs-colhead tv-bldgs-col-rounds">Rounds</div>
-          <div className="tv-bldgs-colhead tv-bldgs-col-name">Engineer</div>
-          <div className="tv-bldgs-colhead tv-bldgs-col-assign">Assignments</div>
-        </div>
-        {data.shiftGroups.length === 0 ? (
-          <p className="tv-muted">No assignments.</p>
-        ) : (
-          data.shiftGroups.map((g) => (
-            <div key={g.shift.id} className="tv-bldgs-band">
-              <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
-              <ul className="tv-bldgs-rows">
-                {g.engineers.map((e) => (
-                  <li key={e.user_id} className="tv-bldgs-row">
-                    <span className="tv-bldgs-codes tv-bldgs-col-rounds">
-                      {e.round ? e.round.stops.map((s) => s.short_code ?? s.code).join(' · ') : '—'}
-                    </span>
-                    <span className="tv-bldgs-eng tv-bldgs-col-name">{shortName(e.name)}</span>
-                    <span className="tv-bldgs-codes tv-bldgs-col-assign">
-                      {e.primary.length > 0 ? fmtCodes(e.primary) : '—'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
-        )}
-        {data.leads.length > 0 && (
-          <div className="tv-bldgs-leads">
-            {data.leads.map((l) => (
-              <div key={l.user_id} className="tv-bldgs-lead-row">
-                <span className="tv-bldgs-lead-name">★ {shortName(l.name)}</span>
-                <span className="tv-bldgs-lead-codes">
-                  {l.coverage.length > 0 ? fmtCodes(l.coverage) : 'no coverage set'}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="tv-bldgs">
+      <div className="tv-bldgs-headerrow">
+        <div className="tv-bldgs-colhead tv-bldgs-col-rounds">Rounds</div>
+        <div className="tv-bldgs-colhead tv-bldgs-col-name">Engineer</div>
+        <div className="tv-bldgs-colhead tv-bldgs-col-assign">Assignments</div>
       </div>
+      {data.shiftGroups.length === 0 ? (
+        <p className="tv-muted">No assignments.</p>
+      ) : (
+        data.shiftGroups.map((g) => (
+          <div key={g.shift.id} className="tv-bldgs-band">
+            <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
+            <ul className="tv-bldgs-rows">
+              {g.engineers.map((e) => (
+                <li key={e.user_id} className="tv-bldgs-row">
+                  <span className="tv-bldgs-codes tv-bldgs-col-rounds">
+                    {e.round ? e.round.stops.map((s) => s.short_code ?? s.code).join(' · ') : '—'}
+                  </span>
+                  <span className="tv-bldgs-eng tv-bldgs-col-name">{shortName(e.name)}</span>
+                  <span className="tv-bldgs-codes tv-bldgs-col-assign">
+                    {e.primary.length > 0 ? fmtCodes(e.primary) : '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+      {data.leads.length > 0 && (
+        <div className="tv-bldgs-leads">
+          {data.leads.map((l) => (
+            <div key={l.user_id} className="tv-bldgs-lead-row">
+              <span className="tv-bldgs-lead-name">★ {shortName(l.name)}</span>
+              <span className="tv-bldgs-lead-codes">
+                {l.coverage.length > 0 ? fmtCodes(l.coverage) : 'no coverage set'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
+  engineers: EngineerRow[];
+  buildings: Building[];
+  assignments: BuildingAssignment[];
+  rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
+  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
+}) {
+  const data = useBuildingsRollup({ engineers, buildings, assignments, rounds, shifts });
+  return (
+    <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
+      <BuildingsInner data={data} />
     </Panel>
   );
 }
@@ -1760,10 +1746,40 @@ function TvStyles() {
       /* LOCKED — Workload+Performance is the only row-spanning panel */
       .tv-panel-tall { grid-row: 1 / span 2; }
 
-      /* Combined Workload + Performance panel body */
+      /* Combined Workload + Performance panel body. The two BOTTOM sub-
+         sections (Crew + Buildings) share remaining vertical space with
+         content-adaptive sizing — the panel's total height stays locked
+         at the grid's row-span-2 footprint. Top (Workload section) stays
+         auto-sized: its rows are critical, must always fit. */
       .tv-wp-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
       .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
-      .tv-wp-workload, .tv-wp-crew, .tv-wp-closes { display: flex; flex-direction: column; gap: 0.2vw; min-height: 0; }
+      .tv-wp-workload, .tv-wp-crew, .tv-wp-closes {
+        display: flex; flex-direction: column; gap: 0.2vw; min-height: 0;
+      }
+      .tv-wp-crew-wrap, .tv-wp-bldgs-wrap {
+        display: flex; flex-direction: column;
+        min-height: 0;
+        /* flex: 1 1 auto — both grow/shrink, starting from content size.
+           Equal weight so neither dominates; gets out of each other's way
+           when one has more rows than the other. */
+        flex: 1 1 auto;
+        overflow: hidden;
+      }
+
+      /* Middle-column flex container: BMS + Buildings, both panels sized
+         to fit their content, total height locked at the column's
+         row-span-2 footprint. Replaces the previous rigid 50/50 split. */
+      .tv-mid-flex {
+        grid-row: 1 / span 2;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6vw;
+        min-height: 0;
+      }
+      .tv-mid-flex > .tv-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
 
       /* Recent closes list (top 5) — every cell forced to a single line */
       .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }
@@ -2310,14 +2326,15 @@ function TvStyles() {
       }
       /* (no .tv-workload-top overrides needed — base .tv-today-list is already chip-shaped) */
 
-      /* Workload bottom: per-tech chip list (§03-style chips), split by shift */
+      /* Workload bottom: per-tech chip list (§03-style chips). 3 columns
+         (7AM shift · 9:30AM shift · No shift). Each gets its own column
+         even when one is empty so the visual rhythm stays consistent. */
       .tv-wkl-shift-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 0.35vw 0.6vw;
       }
       .tv-wkl-shift-col { min-width: 0; }
-      .tv-wkl-shift-other { grid-column: 1 / -1; }
       .tv-wkl-shift-label {
         font-size: 0.68vw;
         text-transform: uppercase;
