@@ -563,11 +563,26 @@ export type BuildingProject = {
   title: string;
   detail: string | null;
   rsp: string | null;
+  wo_number: string | null;
   active: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
   updated_by: string | null;
+};
+
+export type BuildingProjectActiveRow = {
+  id: string;
+  building_id: string;
+  building_short_code: string | null;
+  building_name: string;
+  title: string;
+  detail: string | null;
+  rsp: string | null;
+  wo_number: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 };
 
 const projectsKey = (buildingId: string) => ['building_projects', buildingId];
@@ -611,6 +626,42 @@ export function useUpsertBuildingProject() {
       qc.invalidateQueries({ queryKey: projectsKey(vars.building_id) });
     },
   });
+}
+
+/** All active projects across all buildings, joined with building info.
+ *  Drives the TV-side ProjectsTvPanel (analogous to useBuildingEquipmentDown
+ *  for the equipment-attention stripe). Sorted most-recently-updated first
+ *  so fresh activity surfaces at the top. */
+export function useAllActiveProjects() {
+  return useQuery({
+    queryKey: ['building_projects_active_all'],
+    queryFn: async (): Promise<BuildingProjectActiveRow[]> => {
+      const { data, error } = await supabase
+        .from('v_building_projects_active')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as BuildingProjectActiveRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Realtime: any change to building_projects invalidates the active-list
+ *  query so the /tv panel and any building-detail view re-render in sync. */
+export function useAllActiveProjectsRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel(`bld-proj-${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'building_projects' },
+        () => qc.invalidateQueries({ queryKey: ['building_projects_active_all'] }),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
 }
 
 export function useDeleteBuildingProject() {

@@ -30,6 +30,8 @@ import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../h
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
+  useAllActiveProjects,
+  useAllActiveProjectsRealtime,
   EQUIPMENT_STATUS_LABELS,
 } from '../../hooks/useBuildingKb';
 import {
@@ -80,6 +82,7 @@ export default function TvView() {
   useBuildingAssignmentsRealtime();
   usePtoRealtime();
   useBuildingEquipmentDownRealtime();
+  useAllActiveProjectsRealtime();
 
   const oncallQ      = useUpcomingOncall(12);
   const participantsQ = useOncallParticipants();
@@ -130,17 +133,12 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           now={now}
         />
-        {/* Middle column — wrapper spans both grid rows. BMS health takes
-            the full column for now; the bottom slot is intentionally blank
-            so when BMS gains more content (more equipment-down rows,
-            additional alarm vendors, etc.) it has room to grow into. The
-            Buildings rollup that used to live here still shows in the
-            left panel's bottom sub-section, so nothing is lost. To add a
-            new panel later, drop it inside .tv-mid-flex below BMS — the
-            flex sizing will balance the two automatically. */}
+        {/* Middle column — wrapper spans both grid rows. BMS panel on top,
+            Projects panel on bottom. flex sizing in .tv-mid-flex lets the
+            two share the column's total height based on content. */}
         <div className="tv-mid-flex">
           <BmsHealthPanel />
-          <div className="tv-mid-placeholder" aria-hidden="true" />
+          <ProjectsTvPanel />
         </div>
         {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
         <CoverageTvPanel
@@ -1314,17 +1312,79 @@ function BuildingsInner({ data }: { data: BuildingsRollup }) {
 }
 
 // BuildingsPanel (the Panel-wrapped variant for the middle column) is no
-// longer rendered — the bottom middle slot is intentionally blank. The
-// shared useBuildingsRollup + BuildingsInner above still drive the left
-// panel's "Buildings · rounds + assignments" sub-section. To re-add a
-// middle-column Panel variant later:
-//   function BuildingsPanel(props) {
-//     const data = useBuildingsRollup(props);
-//     return <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
-//       <BuildingsInner data={data} />
-//     </Panel>;
-//   }
-// and drop `<BuildingsPanel ... />` inside `.tv-mid-flex` below `<BmsHealthPanel />`.
+// longer rendered — the bottom middle slot now holds ProjectsTvPanel.
+// The shared useBuildingsRollup + BuildingsInner above still drive the
+// left panel's "Buildings · rounds + assignments" sub-section.
+
+/** Projects across all buildings — mirrors the equipment-attention stripe
+ *  format (per-item left border + 2-line block). Each item:
+ *    line 1: building# · title · WO# · RSP · "Nd ago"
+ *    line 2: detail (when set, ellipsis-truncated with full tooltip)
+ *  Up to 6 items visible; overflow line points to /buildings → Projects tab. */
+function ProjectsTvPanel() {
+  const projQ = useAllActiveProjects();
+  const rows = projQ.data ?? [];
+  const visible = rows.slice(0, 6);
+  const overflow = rows.length - visible.length;
+
+  const rel = (utcIso: string): string => {
+    const ms = Date.now() - new Date(utcIso).getTime();
+    const mins = Math.round(ms / 60_000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.round(hrs / 24);
+    return `${days}d`;
+  };
+
+  return (
+    <section className="tv-panel" style={{ borderTopColor: '#3b82f6' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Projects · active</h2>
+        <div className="tv-panel-meta">
+          {rows.length === 0 ? 'none' : (
+            <>
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{rows.length}</span> active
+            </>
+          )}
+        </div>
+      </div>
+      <div className="tv-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.25vw', minHeight: 0, overflow: 'hidden' }}>
+        {rows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.85vw' }}>No active projects.</p>
+        ) : (
+          <ul className="tv-proj-list">
+            {visible.map((p) => (
+              <li key={p.id} className="tv-proj-item">
+                <div className="tv-proj-line1">
+                  <span className="tv-proj-bld">{p.building_short_code ?? p.building_name}</span>
+                  <span className="tv-proj-title">{p.title}</span>
+                  {p.wo_number && <span className="tv-proj-wo">{p.wo_number}</span>}
+                  {p.rsp && <span className="tv-proj-rsp">{p.rsp}</span>}
+                  <span
+                    className="tv-proj-age"
+                    title={new Date(p.updated_at).toLocaleString()}
+                  >
+                    {rel(p.updated_at)}
+                  </span>
+                </div>
+                {p.detail && (
+                  <div className="tv-proj-line2" title={p.detail}>
+                    {p.detail}
+                  </div>
+                )}
+              </li>
+            ))}
+            {overflow > 0 && (
+              <li className="tv-proj-overflow">+{overflow} more — see /buildings → Projects tab</li>
+            )}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
 
 
 // ============================================================================
@@ -1783,9 +1843,71 @@ function TvStyles() {
         flex: 0 0 0;
         min-height: 0;
         visibility: hidden;
-        /* Drop a new panel here and remove the visibility: hidden line
-           when ready. flex sizing balances automatically. */
       }
+
+      /* Projects panel — bottom middle slot. Mirrors the equipment-down
+         stripe format (per-item left border + 2-line block) but with a
+         blue accent so the eye distinguishes "initiative" from
+         "broken right now". */
+      .tv-proj-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.25vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-proj-item {
+        display: flex; flex-direction: column;
+        gap: 0.05vw;
+        padding: 0.15vw 0.3vw;
+        border-left: 2px solid rgba(96, 165, 250, 0.45);
+        background: rgba(59, 130, 246, 0.05);
+        border-radius: 2px;
+        min-width: 0;
+      }
+      .tv-proj-line1 {
+        display: flex; flex-wrap: wrap;
+        gap: 0.15vw 0.4vw;
+        align-items: baseline;
+        font-size: 0.78vw;
+        font-variant-numeric: tabular-nums;
+        min-width: 0;
+      }
+      .tv-proj-line2 {
+        font-size: 0.7vw;
+        color: #cbd5e1;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-left: 0.2vw;
+      }
+      .tv-proj-bld {
+        color: #f1f5f9; font-weight: 700;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        flex: 0 0 auto;
+      }
+      .tv-proj-title {
+        color: #e2e8f0;
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tv-proj-wo {
+        color: #cbd5e1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72vw;
+        flex: 0 0 auto;
+      }
+      .tv-proj-rsp {
+        color: #94a3b8; flex: 0 0 auto;
+      }
+      .tv-proj-age {
+        color: #64748b; font-size: 0.7vw;
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+      .tv-proj-overflow { color: #64748b; font-style: italic; font-size: 0.7vw; }
 
       /* Recent closes list (top 5) — every cell forced to a single line */
       .tv-closes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2vw; }

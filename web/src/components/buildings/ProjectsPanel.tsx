@@ -147,12 +147,23 @@ function ProjectCard({
           <div className="t-text" style={{ whiteSpace: 'pre-wrap' }}>{project.detail}</div>
         </div>
       )}
-      {project.rsp && (
-        <div>
-          <PillLabel label="RSP" />
-          <div className="t-text">{project.rsp}</div>
-        </div>
-      )}
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: 'minmax(140px, 1fr) minmax(120px, auto)' }}
+      >
+        {project.rsp && (
+          <div>
+            <PillLabel label="RSP" />
+            <div className="t-text">{project.rsp}</div>
+          </div>
+        )}
+        {project.wo_number && (
+          <div>
+            <PillLabel label="WO #" />
+            <div className="t-text t-mono">{project.wo_number}</div>
+          </div>
+        )}
+      </div>
       <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
         Updated {fmtTime(project.updated_at)}
       </div>
@@ -170,10 +181,11 @@ function ProjectForm({
   onClose: () => void;
 }) {
   const upsert = useUpsertBuildingProject();
-  const [title, setTitle]   = useState(existing?.title ?? '');
-  const [detail, setDetail] = useState(existing?.detail ?? '');
-  const [rsp, setRsp]       = useState(existing?.rsp ?? '');
-  const [error, setError]   = useState<string | null>(null);
+  const [title, setTitle]     = useState(existing?.title ?? '');
+  const [detail, setDetail]   = useState(existing?.detail ?? '');
+  const [rsp, setRsp]         = useState(existing?.rsp ?? '');
+  const [woNumber, setWoNumber] = useState(existing?.wo_number ?? '');
+  const [error, setError]     = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -186,9 +198,10 @@ function ProjectForm({
       await upsert.mutateAsync({
         id: existing?.id,
         building_id: buildingId,
-        title:  title.trim(),
-        detail: detail.trim() || null,
-        rsp:    rsp.trim() || null,
+        title:     title.trim(),
+        detail:    detail.trim() || null,
+        rsp:       rsp.trim() || null,
+        wo_number: woNumber.trim() || null,
         sort_order: existing?.sort_order ?? 0,
       });
       onClose();
@@ -227,14 +240,24 @@ function ProjectForm({
         />
       </Field>
 
-      <Field label="RSP (responsible party)" hint="who's owning this — engineer / vendor / PM">
-        <input
-          type="text"
-          value={rsp}
-          onChange={(e) => setRsp(e.target.value)}
-          style={inputStyle}
-        />
-      </Field>
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
+        <Field label="RSP (responsible party)" hint="engineer / vendor / PM">
+          <input
+            type="text"
+            value={rsp}
+            onChange={(e) => setRsp(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="WO #" hint='e.g. "PR-1234", "JIRA-5678"'>
+          <input
+            type="text"
+            value={woNumber}
+            onChange={(e) => setWoNumber(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+      </div>
 
       {error && <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>}
 
