@@ -50,7 +50,12 @@ export type EmailAlarmHistoryRow = {
   received_at_utc: string;
   alarm_time_utc: string | null;
   vendor: string | null;
+  /** Original ingested building value — may be NULL when the BMS email
+   *  didn't carry the building tag (Northeast Tech 730/750 in particular). */
   building: string | null;
+  /** building (when set) → else short_code inferred from
+   *  point_ref / point_name / event_value → else inferred from body_text. */
+  building_resolved: string | null;
   point_name: string | null;
   point_ref: string | null;
   alarm_state: string | null;

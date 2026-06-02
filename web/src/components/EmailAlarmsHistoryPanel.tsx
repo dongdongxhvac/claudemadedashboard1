@@ -76,11 +76,18 @@ const GROUP_KEY_LABELS: Record<GroupKey, string> = {
   class:    'By class',
 };
 
-/** Per-row key extractor and friendly display label. */
+/** Per-row key extractor and friendly display label. Building uses
+ *  building_resolved (raw `building` → structured-field inference →
+ *  body-text inference) so 730/750 rows that arrive without an explicit
+ *  building tag still cluster correctly. */
 function keyOf(r: EmailAlarmHistoryRow, g: GroupKey): { key: string; label: string } {
   if (g === 'building') {
-    const k = r.building ?? '(unknown)';
-    return { key: k, label: k };
+    const resolved = r.building_resolved ?? '(unknown)';
+    const inferred = !r.building && !!r.building_resolved;
+    return {
+      key: resolved,
+      label: inferred ? `${resolved} (inferred)` : resolved,
+    };
   }
   if (g === 'point') {
     const k = r.point_ref ?? r.point_name ?? '(unknown)';
@@ -189,12 +196,14 @@ export function EmailAlarmsHistoryPanel() {
     );
   }, [rows, groupBy]);
 
-  // Stat 4 — top building (always, regardless of current groupBy)
+  // Stat 4 — top building (always, regardless of current groupBy).
+  // Uses building_resolved so 730/750 rows tagged via point-ref inference
+  // count toward their actual building rather than landing in "(unknown)".
   const topBuilding = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of rows) {
       if (r.is_manual_close) continue;  // manual close shouldn't pad a building's "noise" count
-      const b = r.building ?? '(unknown)';
+      const b = r.building_resolved ?? '(unknown)';
       counts.set(b, (counts.get(b) ?? 0) + 1);
     }
     let topName: string | null = null;
@@ -370,7 +379,7 @@ function topBuildingForPoint(rows: EmailAlarmHistoryRow[], pointRef: string): st
   const counts = new Map<string, number>();
   for (const r of rows) {
     if (r.point_ref !== pointRef) continue;
-    const b = r.building ?? '(unknown)';
+    const b = r.building_resolved ?? '(unknown)';
     counts.set(b, (counts.get(b) ?? 0) + 1);
   }
   let top: string | null = null;
@@ -423,7 +432,12 @@ function RecentEventsLog() {
                 <td className="py-1 pr-3">{vendorLabel(r.vendor)}</td>
                 <td className="py-1 pr-3" style={{ maxWidth: '18rem' }}>
                   <div>{r.point_name ?? r.point_ref ?? '—'}</div>
-                  <div className="t-muted" style={{ fontSize: '0.7rem' }}>{r.building ?? '—'}</div>
+                  <div className="t-muted" style={{ fontSize: '0.7rem' }}>
+                    {r.building_resolved ?? '—'}
+                    {!r.building && r.building_resolved && (
+                      <span className="ml-1" style={{ fontStyle: 'italic' }}>(inferred)</span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-1 pr-3">
                   <StatePill state={r.alarm_state} isManual={r.is_manual_close} />
