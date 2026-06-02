@@ -130,19 +130,17 @@ export default function TvView() {
           rounds={roundsQ.data ?? []}
           now={now}
         />
-        {/* Middle column — wrapper spans both grid rows so its two panels
-            (BMS + Buildings) can split vertically based on CONTENT instead
-            of the rigid 50/50 the grid would impose. Total column height
-            stays locked at the grid's row-1 + row-2 footprint. */}
+        {/* Middle column — wrapper spans both grid rows. BMS health takes
+            the full column for now; the bottom slot is intentionally blank
+            so when BMS gains more content (more equipment-down rows,
+            additional alarm vendors, etc.) it has room to grow into. The
+            Buildings rollup that used to live here still shows in the
+            left panel's bottom sub-section, so nothing is lost. To add a
+            new panel later, drop it inside .tv-mid-flex below BMS — the
+            flex sizing will balance the two automatically. */}
         <div className="tv-mid-flex">
           <BmsHealthPanel />
-          <BuildingsPanel
-            engineers={engineersQ.data ?? []}
-            buildings={buildingsQ.data ?? []}
-            assignments={assignmentsQ.data ?? []}
-            rounds={roundsQ.data ?? []}
-            shifts={shiftsQ.data ?? []}
-          />
+          <div className="tv-mid-placeholder" aria-hidden="true" />
         </div>
         {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
         <CoverageTvPanel
@@ -1314,20 +1312,18 @@ function BuildingsInner({ data }: { data: BuildingsRollup }) {
   );
 }
 
-function BuildingsPanel({ engineers, buildings, assignments, rounds, shifts }: {
-  engineers: EngineerRow[];
-  buildings: Building[];
-  assignments: BuildingAssignment[];
-  rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
-  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
-}) {
-  const data = useBuildingsRollup({ engineers, buildings, assignments, rounds, shifts });
-  return (
-    <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
-      <BuildingsInner data={data} />
-    </Panel>
-  );
-}
+// BuildingsPanel (the Panel-wrapped variant for the middle column) is no
+// longer rendered — the bottom middle slot is intentionally blank. The
+// shared useBuildingsRollup + BuildingsInner above still drive the left
+// panel's "Buildings · rounds + assignments" sub-section. To re-add a
+// middle-column Panel variant later:
+//   function BuildingsPanel(props) {
+//     const data = useBuildingsRollup(props);
+//     return <Panel title="Buildings · rounds + assignments" accent="#3b82f6">
+//       <BuildingsInner data={data} />
+//     </Panel>;
+//   }
+// and drop `<BuildingsPanel ... />` inside `.tv-mid-flex` below `<BmsHealthPanel />`.
 
 
 // ============================================================================
@@ -1766,9 +1762,11 @@ function TvStyles() {
         overflow: hidden;
       }
 
-      /* Middle-column flex container: BMS + Buildings, both panels sized
-         to fit their content, total height locked at the column's
-         row-span-2 footprint. Replaces the previous rigid 50/50 split. */
+      /* Middle-column flex container: BMS panel takes the full column for
+         now; the bottom slot is an invisible placeholder reserved for
+         future content. When BMS gains rows (more equipment-down items,
+         more vendors), it expands into the placeholder's space because
+         the placeholder is flex: 0 — it never claims height of its own. */
       .tv-mid-flex {
         grid-row: 1 / span 2;
         display: flex;
@@ -1779,6 +1777,13 @@ function TvStyles() {
       .tv-mid-flex > .tv-panel {
         flex: 1 1 auto;
         min-height: 0;
+      }
+      .tv-mid-placeholder {
+        flex: 0 0 0;
+        min-height: 0;
+        visibility: hidden;
+        /* Drop a new panel here and remove the visibility: hidden line
+           when ready. flex sizing balances automatically. */
       }
 
       /* Recent closes list (top 5) — every cell forced to a single line */
