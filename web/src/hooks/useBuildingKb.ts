@@ -306,6 +306,46 @@ export function useUpsertBuildingEquipment() {
   });
 }
 
+export type BuildingEquipmentCounts = {
+  total: number;       // active equipment rows for this building
+  issues: number;      // status in off_pm / down_cm / degraded / bypass
+  down_cm: number;
+  off_pm: number;
+  degraded: number;
+  bypass: number;
+};
+
+/** Per-building rollup of equipment status counts, keyed by building_id.
+ *  Single query against building_equipment + client-side group so the
+ *  /buildings index can render counts on every card without N+1. */
+export function useBuildingEquipmentCountsMap() {
+  return useQuery({
+    queryKey: ['building_equipment_counts_map'],
+    queryFn: async (): Promise<Map<string, BuildingEquipmentCounts>> => {
+      const { data, error } = await supabase
+        .from('building_equipment')
+        .select('building_id, status')
+        .eq('active', true);
+      if (error) throw error;
+      const map = new Map<string, BuildingEquipmentCounts>();
+      for (const r of (data ?? []) as { building_id: string; status: EquipmentStatus }[]) {
+        const cur = map.get(r.building_id) ?? {
+          total: 0, issues: 0,
+          down_cm: 0, off_pm: 0, degraded: 0, bypass: 0,
+        };
+        cur.total++;
+        if (r.status === 'down_cm') { cur.down_cm++;  cur.issues++; }
+        if (r.status === 'off_pm')  { cur.off_pm++;   cur.issues++; }
+        if (r.status === 'degraded'){ cur.degraded++; cur.issues++; }
+        if (r.status === 'bypass')  { cur.bypass++;   cur.issues++; }
+        map.set(r.building_id, cur);
+      }
+      return map;
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** Equipment currently in off_pm or down_cm status, joined with the
  *  parent building for compact rendering. Drives §10.1 (manager view)
  *  + the equipment-down stripe on the TV BMS alarms panel. */

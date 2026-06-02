@@ -11,6 +11,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe, useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings, useBuildingsRealtime } from '../../hooks/useBuildings';
+import {
+  useBuildingEquipmentCountsMap,
+  useBuildingEquipmentDownRealtime,
+} from '../../hooks/useBuildingKb';
 import { KbSearchBar } from '../../components/buildings/KbSearchBar';
 
 function compareByShortCode(
@@ -32,9 +36,14 @@ export default function BuildingsIndex() {
   const me = useMe();
   const canEdit = useCanAccessAdmin();
   const buildingsQ = useBuildings();
+  const countsQ    = useBuildingEquipmentCountsMap();
   useBuildingsRealtime();
+  // Counts refresh on any equipment status change so the issue tally on
+  // the cards always reflects current state.
+  useBuildingEquipmentDownRealtime();
 
   const buildings = (buildingsQ.data ?? []).slice().sort(compareByShortCode);
+  const countsMap = countsQ.data;
 
   return (
     <div className="min-h-screen t-bg">
@@ -74,7 +83,9 @@ export default function BuildingsIndex() {
             }}
           >
             {buildings.map((b) => {
-              const slug = b.short_code ?? b.code;
+              const slug   = b.short_code ?? b.code;
+              const counts = countsMap?.get(b.id);
+              const hasIssues = (counts?.issues ?? 0) > 0;
               return (
                 <Link
                   key={b.id}
@@ -85,7 +96,13 @@ export default function BuildingsIndex() {
                     display: 'block',
                     textDecoration: 'none',
                     color: 'inherit',
+                    /* Subtle left border tints to red when this building has
+                       any equipment in off-PM / down-CM / degraded / bypass.
+                       Same color logic as the §10.1 status pills. */
                     border: '1px solid var(--color-border)',
+                    borderLeft: hasIssues
+                      ? '3px solid var(--color-danger)'
+                      : '1px solid var(--color-border)',
                     transition: 'border-color 120ms, transform 80ms',
                   }}
                   onMouseEnter={(e) => {
@@ -114,6 +131,35 @@ export default function BuildingsIndex() {
                   {b.client_company && (
                     <div className="t-small t-muted">{b.client_company}</div>
                   )}
+                  {/* Per-card equipment + issue rollup. Renders even when
+                      counts are zero so the user knows the building has
+                      been catalogued; "0 equipment" is meaningful as
+                      "nothing in the KB yet — go fill it in". */}
+                  <div className="t-small t-muted mt-2" style={{ fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>
+                      {counts?.total ?? 0}
+                    </span>{' '}
+                    equipment
+                    {hasIssues && (
+                      <>
+                        <span className="mx-1" style={{ color: 'var(--color-text-muted)' }}>·</span>
+                        <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
+                          {counts!.issues}
+                        </span>{' '}
+                        issue{counts!.issues === 1 ? '' : 's'}
+                        <span className="t-muted ml-1" style={{ fontSize: '0.7rem' }}>
+                          (
+                          {[
+                            counts!.down_cm  > 0 && `${counts!.down_cm} CM`,
+                            counts!.off_pm   > 0 && `${counts!.off_pm} PM`,
+                            counts!.degraded > 0 && `${counts!.degraded} deg`,
+                            counts!.bypass   > 0 && `${counts!.bypass} byp`,
+                          ].filter(Boolean).join(' · ')}
+                          )
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </Link>
               );
             })}
