@@ -14,8 +14,10 @@ import {
   useEmailAlarmsOpen,
   useEmailPollState,
   useBmsHeartbeats,
+  useCloseEmailAlarmManual,
   type EmailAlarmOpen,
 } from '../hooks/useEmailAlarms';
+import { useCanAccessAdmin } from '../hooks/useMe';
 import { Section } from './Section';
 
 const VENDOR_LABEL: Record<string, string> = {
@@ -117,9 +119,31 @@ function VendorBreakdown({ rows }: { rows: EmailAlarmOpen[] }) {
 }
 
 function ActiveAcrossVendorsTable({ rows }: { rows: EmailAlarmOpen[] }) {
+  const canEdit  = useCanAccessAdmin();
+  const closeMut = useCloseEmailAlarmManual();
+
   if (rows.length === 0) {
     return <p className="t-text t-muted">No active alarms via any email source right now.</p>;
   }
+
+  const onManualClose = async (r: EmailAlarmOpen) => {
+    if (!r.point_ref) {
+      alert('Cannot manually close — this alarm has no point_ref to match against.');
+      return;
+    }
+    const reason = window.prompt(
+      `Manually close ${r.point_name ?? r.point_ref} at ${r.building ?? '?'}?\n\n` +
+      `Use this when the BMS didn't send a "back to normal" email even though the equipment recovered.\n\n` +
+      `Optional reason (saved in audit trail):`,
+      'BMS did not send back-to-normal email; equipment back to normal.',
+    );
+    if (reason === null) return;  // user hit Cancel
+    try {
+      await closeMut.mutateAsync({ point_ref: r.point_ref, reason: reason || undefined });
+    } catch (e) {
+      alert(`Close failed: ${(e as Error).message}`);
+    }
+  };
   return (
     <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
       <thead>
@@ -128,6 +152,7 @@ function ActiveAcrossVendorsTable({ rows }: { rows: EmailAlarmOpen[] }) {
           <th className="text-left pb-1 pr-3">Point / Building</th>
           <th className="text-left pb-1 pr-3">Class</th>
           <th className="text-left pb-1 pl-2">Latest</th>
+          {canEdit && <th className="text-right pb-1 pl-2"> </th>}
         </tr>
       </thead>
       <tbody>
@@ -157,6 +182,30 @@ function ActiveAcrossVendorsTable({ rows }: { rows: EmailAlarmOpen[] }) {
                 {fmtRelative(r.alarm_time_utc ?? r.received_at_utc)}
               </div>
             </td>
+            {canEdit && (
+              <td className="py-1 pl-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => onManualClose(r)}
+                  disabled={closeMut.isPending || !r.point_ref}
+                  className="t-small"
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 3,
+                    padding: '2px 6px',
+                    cursor: r.point_ref ? 'pointer' : 'not-allowed',
+                    color: r.point_ref ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  }}
+                  title={r.point_ref
+                    ? "Manually close (use when BMS didn't send a back-to-normal email)"
+                    : 'No point_ref — cannot manual-close this row'
+                  }
+                >
+                  Close
+                </button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

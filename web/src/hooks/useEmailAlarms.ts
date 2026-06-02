@@ -5,7 +5,7 @@
 //   v_email_alarms_by_building — counts grouped by building
 //   v_email_alarms_recent      — last 24h, newest first
 //   email_poll_state           — Task Scheduler heartbeat
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 export type EmailAlarmOpen = {
@@ -44,6 +44,28 @@ export type EmailPollState = {
   last_error: string | null;
   updated_at: string;
 };
+
+/** Manually close a BMS email alarm whose "back to normal" never arrived
+ *  (common Siemens glitch). Inserts a synthetic Quiet event so the alarm
+ *  drops out of v_email_alarms_open and a paper trail lands in
+ *  parsed_fields. Gated to admin/manager/lead server-side. */
+export function useCloseEmailAlarmManual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { point_ref: string; reason?: string }) => {
+      const { error } = await supabase.rpc('close_email_alarm_manual', {
+        p_point_ref: input.point_ref,
+        p_reason:    input.reason ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['email_alarms_open'] });
+      qc.invalidateQueries({ queryKey: ['email_alarms_by_building'] });
+      qc.invalidateQueries({ queryKey: ['email_alarms_recent'] });
+    },
+  });
+}
 
 /** All currently-active alarms (latest row per point_ref where state = Active).
  *  Pass {vendor: 'siemens'} (or any vendor slug) to scope §09 to one BMS;
