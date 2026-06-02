@@ -341,21 +341,24 @@ function WorkloadPerformancePanel({
 // history if you bring back a closes list later.
 
 function WklRow({ row }: { row: { name: string; pm14: number; major46: number } }) {
+  // <li> uses display: contents so its three children participate in the
+  // parent <ul>'s grid. The shared grid is what makes P-chips and M-chips
+  // line up vertically across rows even though the name column auto-sizes
+  // to the longest engineer name in this shift. Empty <span /> placeholders
+  // keep the grid columns intact when a row doesn't have a P or M chip.
   return (
     <li>
       <span className="tv-wkl-chip-eng">{shortName(row.name)}</span>
-      {/* Chips sit immediately after the name with a hair gap — flex
-          layout, no fixed slots. Empty rows just don't render the chip. */}
-      {row.pm14 > 0 && (
+      {row.pm14 > 0 ? (
         <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
           P <span className="tv-wkl-chip-count">{row.pm14}</span>
         </span>
-      )}
-      {row.major46 > 0 && (
+      ) : <span />}
+      {row.major46 > 0 ? (
         <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
           M <span className="tv-wkl-chip-count">{row.major46}</span>
         </span>
-      )}
+      ) : <span />}
     </li>
   );
 }
@@ -2471,26 +2474,27 @@ function TvStyles() {
         color: #64748b;
         margin-bottom: 0.15vw;
       }
-      .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.15vw; }
-      /* Flex per row — name takes content width, chips sit immediately to
-         its right with a hair gap. Trade-off vs the previous fixed-grid
-         layout: chips no longer line up vertically across rows, but no
-         visual gap between name and its own chips. */
-      .tv-wkl-chip-list li {
-        display: flex;
+      /* Grid on the PARENT ul so name / P / M columns size to the widest
+         entry in this shift and align vertically across rows. Each li uses
+         display: contents so its 3 children become direct grid items of
+         the ul. Result: name column hugs the longest name (hair gap to
+         the chip), and P + M chips line up vertically down the column. */
+      .tv-wkl-chip-list {
+        list-style: none; padding: 0; margin: 0;
+        display: grid;
+        grid-template-columns: max-content max-content max-content;
+        column-gap: 0.22vw;
+        row-gap: 0.15vw;
         align-items: center;
-        gap: 0.22vw;
-        font-size: 0.82vw;
-        min-width: 0;
-        white-space: nowrap;
+      }
+      .tv-wkl-chip-list li {
+        display: contents;
       }
       .tv-wkl-chip-eng {
         color: #e2e8f0;
         font-weight: 500;
-        flex: 0 0 auto;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 0.82vw;
+        white-space: nowrap;
       }
       .tv-wkl-chip {
         display: inline-flex;
