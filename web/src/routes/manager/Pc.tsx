@@ -11,6 +11,7 @@ import { PlantlogWeeklyTestsPanel } from '../../components/PlantlogWeeklyTestsPa
 import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
 import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
+import { EmailAlarmsHistoryPanel } from '../../components/EmailAlarmsHistoryPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
@@ -195,6 +196,7 @@ export default function ManagerPc() {
           <DeltaAlarmsPanel />
           <EmailAlarmsPanel />
           <BmsEmailAlarmsPanel />
+          <EmailAlarmsHistoryPanel />
           <EquipmentDownPanel />
           <OvertimePanel />
           <PtoPanel />

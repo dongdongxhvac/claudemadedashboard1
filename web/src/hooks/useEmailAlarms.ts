@@ -45,6 +45,47 @@ export type EmailPollState = {
   updated_at: string;
 };
 
+export type EmailAlarmHistoryRow = {
+  gmail_msg_id: string;
+  received_at_utc: string;
+  alarm_time_utc: string | null;
+  vendor: string | null;
+  building: string | null;
+  point_name: string | null;
+  point_ref: string | null;
+  alarm_state: string | null;
+  event_class: string | null;
+  event_value: string | null;
+  subject_clean: string | null;
+  original_sender: string | null;
+  is_manual_close: boolean;
+  closed_by_name: string | null;
+  manual_close_reason: string | null;
+  sourced_from_msg: string | null;
+};
+
+/** Full event log for §10.2 — every alarm-state and back-to-normal email
+ *  plus synthetic manual-close rows from 0050. Sorted newest first. */
+export function useEmailAlarmsHistory(opts?: { manualOnly?: boolean; limit?: number }) {
+  const manualOnly = opts?.manualOnly ?? false;
+  const limit      = opts?.limit ?? 100;
+  return useQuery({
+    queryKey: ['email_alarms_history', manualOnly, limit],
+    queryFn: async (): Promise<EmailAlarmHistoryRow[]> => {
+      let q = supabase
+        .from('v_email_alarms_history')
+        .select('*')
+        .order('received_at_utc', { ascending: false })
+        .limit(limit);
+      if (manualOnly) q = q.eq('is_manual_close', true);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as EmailAlarmHistoryRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Manually close a BMS email alarm whose "back to normal" never arrived
  *  (common Siemens glitch). Inserts a synthetic Quiet event so the alarm
  *  drops out of v_email_alarms_open and a paper trail lands in
@@ -63,6 +104,7 @@ export function useCloseEmailAlarmManual() {
       qc.invalidateQueries({ queryKey: ['email_alarms_open'] });
       qc.invalidateQueries({ queryKey: ['email_alarms_by_building'] });
       qc.invalidateQueries({ queryKey: ['email_alarms_recent'] });
+      qc.invalidateQueries({ queryKey: ['email_alarms_history'] });
     },
   });
 }
