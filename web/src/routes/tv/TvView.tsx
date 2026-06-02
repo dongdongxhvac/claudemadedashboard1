@@ -346,18 +346,19 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   return (
     <li>
       <span className="tv-wkl-chip-eng">{shortName(row.name)}</span>
-      <span className="tv-wkl-chips">
-        {row.pm14 > 0 && (
-          <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
-            P <span className="tv-wkl-chip-count">{row.pm14}</span>
-          </span>
-        )}
-        {row.major46 > 0 && (
-          <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
-            M <span className="tv-wkl-chip-count">{row.major46}</span>
-          </span>
-        )}
-      </span>
+      {/* P + M each get a dedicated grid slot, so chips line up vertically
+          across rows even when one row has only a P. Empty slots stay
+          empty (the <span /> reserves the cell). */}
+      {row.pm14 > 0 ? (
+        <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
+          P <span className="tv-wkl-chip-count">{row.pm14}</span>
+        </span>
+      ) : <span />}
+      {row.major46 > 0 ? (
+        <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
+          M <span className="tv-wkl-chip-count">{row.major46}</span>
+        </span>
+      ) : <span />}
     </li>
   );
 }
@@ -2350,35 +2351,33 @@ function TvStyles() {
         margin-bottom: 0.15vw;
       }
       .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.15vw; }
+      /* Grid per row so P and M chips land in the SAME column across rows
+         (a row without an M chip leaves an empty slot — keeps the M lane
+         intact for vertical scanning). Name column flexes; chip slots
+         are fixed-width and sit immediately after the name (no drift to
+         the right edge). */
       .tv-wkl-chip-list li {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 1.9vw 2.4vw;
         align-items: center;
-        gap: 0.25vw;
+        gap: 0.2vw;
         font-size: 0.82vw;
-        min-width: 0;        /* allow truncation if needed */
-        white-space: nowrap; /* keep name + chips on ONE line per engineer */
+        min-width: 0;
+        white-space: nowrap;
       }
       .tv-wkl-chip-eng {
         color: #e2e8f0;
         font-weight: 500;
-        flex: 1 1 auto;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      /* nowrap — keeps P 7 and M 19 inline next to the name, no second-row
-         wrap. The name column flexes to fill remaining width. */
-      .tv-wkl-chips {
-        display: inline-flex;
-        flex-wrap: nowrap;
-        gap: 0.18vw;
-        flex: 0 0 auto;
-      }
       .tv-wkl-chip {
         display: inline-flex;
         align-items: center;
+        justify-content: center;   /* center P 7 / M 19 inside its fixed slot */
         gap: 0.15vw;
-        padding: 0 0.3vw;
+        padding: 0 0.25vw;
         border: 1px solid #334155;
         border-radius: 4px;
         font-size: 0.72vw;
