@@ -344,19 +344,18 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
   return (
     <li>
       <span className="tv-wkl-chip-eng">{shortName(row.name)}</span>
-      {/* P + M each get a dedicated grid slot, so chips line up vertically
-          across rows even when one row has only a P. Empty slots stay
-          empty (the <span /> reserves the cell). */}
-      {row.pm14 > 0 ? (
+      {/* Chips sit immediately after the name with a hair gap — flex
+          layout, no fixed slots. Empty rows just don't render the chip. */}
+      {row.pm14 > 0 && (
         <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
           P <span className="tv-wkl-chip-count">{row.pm14}</span>
         </span>
-      ) : <span />}
-      {row.major46 > 0 ? (
+      )}
+      {row.major46 > 0 && (
         <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
           M <span className="tv-wkl-chip-count">{row.major46}</span>
         </span>
-      ) : <span />}
+      )}
     </li>
   );
 }
@@ -2473,16 +2472,14 @@ function TvStyles() {
         margin-bottom: 0.15vw;
       }
       .tv-wkl-chip-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.15vw; }
-      /* Grid per row so P and M chips land in the SAME column across rows
-         (a row without an M chip leaves an empty slot — keeps the M lane
-         intact for vertical scanning). Name column flexes; chip slots
-         are fixed-width and sit immediately after the name (no drift to
-         the right edge). */
+      /* Flex per row — name takes content width, chips sit immediately to
+         its right with a hair gap. Trade-off vs the previous fixed-grid
+         layout: chips no longer line up vertically across rows, but no
+         visual gap between name and its own chips. */
       .tv-wkl-chip-list li {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 1.9vw 2.4vw;
+        display: flex;
         align-items: center;
-        gap: 0.2vw;
+        gap: 0.22vw;
         font-size: 0.82vw;
         min-width: 0;
         white-space: nowrap;
@@ -2490,6 +2487,7 @@ function TvStyles() {
       .tv-wkl-chip-eng {
         color: #e2e8f0;
         font-weight: 500;
+        flex: 0 0 auto;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
