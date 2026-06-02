@@ -351,12 +351,12 @@ function WklRow({ row }: { row: { name: string; pm14: number; major46: number } 
       <span className="tv-wkl-chips">
         {row.pm14 > 0 && (
           <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
-            PM <span className="tv-wkl-chip-count">{row.pm14}</span>
+            P <span className="tv-wkl-chip-count">{row.pm14}</span>
           </span>
         )}
         {row.major46 > 0 && (
           <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
-            Major <span className="tv-wkl-chip-count">{row.major46}</span>
+            M <span className="tv-wkl-chip-count">{row.major46}</span>
           </span>
         )}
       </span>
@@ -2328,11 +2328,13 @@ function TvStyles() {
 
       /* Workload bottom: per-tech chip list (§03-style chips). 3 columns
          (7AM shift · 9:30AM shift · No shift). Each gets its own column
-         even when one is empty so the visual rhythm stays consistent. */
+         even when one is empty so the visual rhythm stays consistent.
+         Horizontal gap tightened so the three columns sit close, not
+         spread across the panel. */
       .tv-wkl-shift-grid {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
-        gap: 0.35vw 0.6vw;
+        gap: 0.35vw 0.25vw;
       }
       .tv-wkl-shift-col { min-width: 0; }
       .tv-wkl-shift-label {
@@ -2346,21 +2348,32 @@ function TvStyles() {
       .tv-wkl-chip-list li {
         display: flex;
         align-items: center;
-        gap: 0.35vw;
+        gap: 0.25vw;
         font-size: 0.82vw;
+        min-width: 0;        /* allow truncation if needed */
+        white-space: nowrap; /* keep name + chips on ONE line per engineer */
       }
       .tv-wkl-chip-eng {
         color: #e2e8f0;
         font-weight: 500;
-        min-width: 5vw;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* nowrap — keeps P 7 and M 19 inline next to the name, no second-row
+         wrap. The name column flexes to fill remaining width. */
+      .tv-wkl-chips {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 0.18vw;
         flex: 0 0 auto;
       }
-      .tv-wkl-chips { display: inline-flex; flex-wrap: wrap; gap: 0.25vw; }
       .tv-wkl-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.2vw;
-        padding: 0 0.4vw;
+        gap: 0.15vw;
+        padding: 0 0.3vw;
         border: 1px solid #334155;
         border-radius: 4px;
         font-size: 0.72vw;
