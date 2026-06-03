@@ -181,8 +181,17 @@ export function EquipmentDownPanel() {
                   <td
                     className="py-1 pr-3"
                     style={{
-                      maxWidth: 280, overflow: 'hidden',
-                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      maxWidth: 320,
+                      whiteSpace: 'normal',
+                      overflow: 'hidden',
+                      // 2-line wrap, then clamp with ellipsis — longer notes
+                      // ("compressor 2 of 4 down — vendor scheduled Fri AM")
+                      // fit without truncating mid-sentence.
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: 1.25,
+                      wordBreak: 'break-word',
                     }}
                     title={r.status_detail ?? ''}
                   >

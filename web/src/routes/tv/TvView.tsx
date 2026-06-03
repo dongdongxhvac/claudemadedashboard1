@@ -33,6 +33,9 @@ import {
   useAllActiveProjects,
   useAllActiveProjectsRealtime,
   EQUIPMENT_STATUS_LABELS,
+  worstStatus,
+  type IssueStatus,
+  type BuildingEquipmentStatusRow,
 } from '../../hooks/useBuildingKb';
 import {
   useOvertimePosts,
@@ -799,24 +802,71 @@ function BmsHealthPanel() {
   );
 }
 
-/** §10.x equivalent on /tv — equipment currently off_pm / down_cm, in the
- *  bottom half of the BMS alarms panel. Two-line block per item so every
- *  field surfaces without losing the shop-floor-readable font size:
- *    Line 1: building · short name · status pill · WO# · RSP · "Nd ago"
- *    Line 2: full_name + status_detail (when detail is present)
- *  Up to 5 items visible; overflow line points to §10.1 for the rest. */
+/** §10.x equivalent on /tv — equipment currently with open issues, in the
+ *  bottom half of the BMS alarms panel. After 0060 each open issue is its
+ *  own row in the view, so a single piece of equipment with 2 problems
+ *  appears twice. On the shop-floor TV we GROUP by equipment so each
+ *  asset is one line, with the worst status as the pill, a "·N" count
+ *  badge when it has more than one open issue, and the worst issue's
+ *  detail shown. Engineers should look at §10.1 on the manager dashboard
+ *  to see each WO# / RSP separately.
+ *
+ *  Two-line block per item so every field surfaces without losing the
+ *  shop-floor-readable font size:
+ *    Line 1: building · short name · status pill (+count) · WO# · RSP · "Nd ago"
+ *    Line 2: full_name + status_detail (when detail is present, ellipsis)
+ *  Up to 5 equipment visible; overflow line points to §10.1 for the rest. */
 function EquipmentDownStripe({
   eqDown,
 }: {
   eqDown: ReturnType<typeof useBuildingEquipmentDown>['data'] extends infer T ? T : never;
 }) {
   const rows = eqDown ?? [];
+
+  // Group all open issues by equipment_id. For each equipment, pick the
+  // "representative" issue = the one whose status is the worst-of-open;
+  // count drives the badge. The list stays sorted by worst severity, then
+  // most-recent-opened first.
+  type GroupedRow = {
+    equipmentId: string;
+    rep: BuildingEquipmentStatusRow;       // worst-status issue for this equipment
+    worst: IssueStatus;
+    count: number;                         // total open issues for this equipment
+  };
+  const grouped: GroupedRow[] = (() => {
+    const map = new Map<string, BuildingEquipmentStatusRow[]>();
+    for (const r of rows) {
+      const arr = map.get(r.equipment_id) ?? [];
+      arr.push(r);
+      map.set(r.equipment_id, arr);
+    }
+    const out: GroupedRow[] = [];
+    for (const [equipmentId, items] of map.entries()) {
+      const worst = worstStatus(items.map((i) => i.status)) as IssueStatus;
+      // Pick the rep = the FIRST item matching worst status; rows arrive
+      // already sorted most-recent-first within each status group.
+      const rep = items.find((i) => i.status === worst) ?? items[0];
+      out.push({ equipmentId, rep, worst, count: items.length });
+    }
+    const order: Record<IssueStatus, number> = {
+      down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
+    };
+    out.sort((a, b) => {
+      const d = (order[a.worst] ?? 99) - (order[b.worst] ?? 99);
+      if (d !== 0) return d;
+      return b.rep.last_status_change_at.localeCompare(a.rep.last_status_change_at);
+    });
+    return out;
+  })();
+
+  // Subtitle counts: one tally per status across ALL open issues — gives
+  // managers the true issue volume even though the list is equipment-rolled-up.
   const downCm   = rows.filter((r) => r.status === 'down_cm').length;
   const offPm    = rows.filter((r) => r.status === 'off_pm').length;
   const degraded = rows.filter((r) => r.status === 'degraded').length;
   const bypass   = rows.filter((r) => r.status === 'bypass').length;
-  const visible = rows.slice(0, 5);
-  const overflow = rows.length - visible.length;
+  const visible = grouped.slice(0, 5);
+  const overflow = grouped.length - visible.length;
 
   // "3d ago" / "5h ago" / "now" — same shape as other TV relative-time
   // helpers (relTime exists higher up but is private to closes-list).
@@ -864,16 +914,17 @@ function EquipmentDownStripe({
           <p className="tv-muted" style={{ fontSize: '0.78vw' }}>All catalogued equipment operational.</p>
         ) : (
           <ul className="tv-eq-down-list">
-            {visible.map((r) => {
+            {visible.map((g) => {
+              const r = g.rep;
               // Red for offline states (down_cm, off_pm), amber for "running
               // but needs attention" (degraded, bypass).
               const statusFg =
-                r.status === 'down_cm' || r.status === 'off_pm' ? '#fca5a5' : '#fbbf24';
+                g.worst === 'down_cm' || g.worst === 'off_pm' ? '#fca5a5' : '#fbbf24';
               const equipDisplay = r.short_name
                 ? `${r.short_name} · ${r.full_name}`
                 : r.full_name;
               return (
-                <li key={r.id} className="tv-eq-down-item">
+                <li key={g.equipmentId} className="tv-eq-down-item">
                   <div className="tv-eq-down-line1">
                     <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
                     <span
@@ -883,7 +934,10 @@ function EquipmentDownStripe({
                         border: `1px solid ${statusFg}`,
                       }}
                     >
-                      {EQUIPMENT_STATUS_LABELS[r.status]}
+                      {EQUIPMENT_STATUS_LABELS[g.worst]}
+                      {g.count > 1 && (
+                        <span style={{ marginLeft: '0.25vw', opacity: 0.85 }}>·{g.count}</span>
+                      )}
                     </span>
                     <span className="tv-eq-down-name">{equipDisplay}</span>
                     {r.wo_number && (
@@ -1844,14 +1898,24 @@ function TvStyles() {
          four ~15% single-cell panels, ~4% header. Content must adapt to
          the grid, not the other way around. See memory:
          feedback_tv_layout_locked.md for the full rule. */
+      /* Column widths are LOCKED at three equal thirds; row heights are
+         LOCKED at two equal halves. Only VERTICAL adaptiveness is allowed
+         (see .tv-mid-flex below) — never column-width adaptiveness. The
+         min-width: 0 on the grid + every direct child is what guarantees
+         this: without it, a long line inside (e.g. a multi-issue equipment
+         row's detail text) would force its track wider than 1fr. */
       .tv-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;  /* LOCKED */
-        grid-template-rows: 1fr 1fr;          /* LOCKED */
+        grid-template-columns: 1fr 1fr 1fr;  /* LOCKED — 3 equal thirds */
+        grid-template-rows: 1fr 1fr;          /* LOCKED — 2 equal halves */
         gap: 0.6vw;
         min-height: 0;
+        min-width: 0;
       }
+      /* Every grid item gets min-width:0 so content can't push its column
+         wider than the locked 1fr track. */
+      .tv-grid > * { min-width: 0; }
       /* LOCKED — Workload+Performance is the only row-spanning panel */
       .tv-panel-tall { grid-row: 1 / span 2; }
 
