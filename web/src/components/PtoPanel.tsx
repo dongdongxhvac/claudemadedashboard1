@@ -1711,6 +1711,72 @@ export function PtoYearLog({
 
 // ───────────────────────────── Add PTO modal
 
+/** Compact balance tile used inside AddPtoModal — one tile per PTO type.
+ *  Highlighted when its type matches the currently-selected Type dropdown.
+ *  `pending` lets us optionally show a "would leave Xh" hint so the
+ *  manager sees the consequence of the in-progress submit before saving. */
+function BalanceTile({
+  label, used, alloted, remaining, pending, active,
+}: {
+  label: string;
+  used: number;
+  alloted: number;
+  remaining: number;
+  pending: number;
+  active: boolean;
+}) {
+  // Only show the "after submit" forecast when this tile matches the
+  // selected type — otherwise it'd be misleading.
+  const afterSubmit = active ? Math.max(0, remaining - (pending || 0)) : null;
+  const wouldExceed = active && (pending || 0) > remaining;
+
+  return (
+    <div
+      style={{
+        padding: '8px 10px',
+        borderRadius: 4,
+        border: active
+          ? '1px solid var(--color-accent)'
+          : '1px solid var(--color-border)',
+        background: active ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+      }}
+    >
+      <div className="t-small t-muted uppercase tracking-wider" style={{ fontSize: '0.65rem' }}>
+        {label}
+      </div>
+      <div
+        className="t-mono"
+        style={{
+          fontSize: '1.05rem',
+          fontWeight: 700,
+          color: wouldExceed ? 'var(--color-danger)' : 'var(--color-text)',
+          lineHeight: 1.1,
+        }}
+      >
+        {remaining}h <span className="t-muted" style={{ fontSize: '0.7rem', fontWeight: 400 }}>left</span>
+      </div>
+      <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+        {used}h used · {alloted}h allotted
+      </div>
+      {afterSubmit !== null && pending > 0 && (
+        <div
+          className="t-small"
+          style={{
+            fontSize: '0.7rem',
+            marginTop: 3,
+            color: wouldExceed ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            fontWeight: wouldExceed ? 600 : 400,
+          }}
+        >
+          {wouldExceed ? '⚠ ' : '→ '}
+          after submit: <strong>{afterSubmit}h</strong>
+          {wouldExceed && <span> (over by {pending - remaining}h)</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddPtoModal({
   engineers, allRequests, presetDate, onClose,
 }: {
@@ -1759,6 +1825,21 @@ function AddPtoModal({
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
   const eng = engineers?.find((e) => e.user_id === userId);
+
+  // Per-engineer PTO balance for the live balance card that pops in once
+  // an engineer is selected. We pick the current-year row (or the most
+  // recent one if a current row doesn't exist yet for the engineer).
+  const summaryQ = usePtoSummary();
+  const currentYear = new Date().getFullYear();
+  const balance = useMemo(() => {
+    if (!userId) return null;
+    const all = (summaryQ.data ?? []).filter((s) => s.user_id === userId);
+    if (all.length === 0) return null;
+    return (
+      all.find((s) => s.year === currentYear) ??
+      all.slice().sort((a, b) => b.year - a.year)[0]
+    );
+  }, [summaryQ.data, userId, currentYear]);
 
   const cap = type === 'vacation' && userId && startsOn && endsOn
     ? checkVacationCap(allRequests, userId, startsOn, endsOn)
@@ -1845,6 +1926,52 @@ function AddPtoModal({
                 ))}
             </select>
           </label>
+
+          {/* Per-engineer balance card. Appears once an engineer is picked.
+              Each tile shows remaining vs alloted for the year; the tile
+              matching the currently-selected Type below gets an accent
+              border so the manager sees the relevant pool first. */}
+          {userId && (
+            <div className="col-span-2">
+              {summaryQ.isLoading ? (
+                <p className="t-small t-muted">Loading balance…</p>
+              ) : balance ? (
+                <div>
+                  <div className="t-small t-muted uppercase tracking-wider mb-1">
+                    Balance · {balance.year}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <BalanceTile
+                      label="Vacation"
+                      used={balance.vacation_used}
+                      alloted={balance.vacation_alloted}
+                      remaining={balance.vacation_remaining}
+                      pending={finalHours}
+                      active={type === 'vacation'}
+                    />
+                    <BalanceTile
+                      label="Sick"
+                      used={balance.sick_used}
+                      alloted={balance.sick_alloted}
+                      remaining={balance.sick_remaining}
+                      pending={finalHours}
+                      active={type === 'sick'}
+                    />
+                    <BalanceTile
+                      label="Personal"
+                      used={balance.personal_used}
+                      alloted={balance.personal_alloted}
+                      remaining={balance.personal_remaining}
+                      pending={finalHours}
+                      active={type === 'personal'}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="t-small t-muted">No balance row for this engineer yet — log the request and the balance will track once a row is seeded.</p>
+              )}
+            </div>
+          )}
 
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Type</span>
