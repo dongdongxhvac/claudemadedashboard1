@@ -1415,6 +1415,21 @@ const TV_CATEGORY_DOT: Record<OvertimeCategory, string> = {
   vendor_escort:     '#f472b6',
 };
 
+/** "TODAY", "TMRW", "in 12d" — pre-pended to the date string so an
+ *  engineer sees urgency at a glance instead of doing date math. */
+function urgencyTag(starts: string, now: Date): { text: string; tone: 'red' | 'amber' | 'muted' | null } {
+  const startD = new Date(starts);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startDay = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
+  const ms = startDay.getTime() - today.getTime();
+  const days = Math.round(ms / (24 * 3600 * 1000));
+  if (days < 0)   return { text: 'PAST',   tone: 'muted' };
+  if (days === 0) return { text: 'TODAY',  tone: 'red'   };
+  if (days === 1) return { text: 'TMRW',   tone: 'amber' };
+  if (days <= 7)  return { text: `in ${days}d`, tone: 'amber' };
+  return { text: `in ${days}d`, tone: 'muted' };
+}
+
 function fmtOvertimeWhen(starts: string, ends: string | null): string {
   const s = new Date(starts);
   // "Sat 6/6" — drop the locale comma so it fits the narrow TV column.
@@ -1619,12 +1634,27 @@ function CoverageTvPanel({
               </div>
               <ul className="tv-ot-list">
                 {visibleOt.map((p) => {
-                  const isFull = p.slots_filled >= p.slots_needed;
+                  const isFull   = p.slots_filled >= p.slots_needed;
+                  const urgency  = urgencyTag(p.starts_at, now);
+                  const cls = [
+                    'tv-ot-row',
+                    isFull && 'tv-ot-row-full',
+                    !isFull && 'tv-ot-row-open',
+                  ].filter(Boolean).join(' ');
                   return (
-                    <li key={p.id} className={isFull ? 'tv-ot-row tv-ot-row-full' : 'tv-ot-row'}>
+                    <li key={p.id} className={cls}>
                       <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
-                      <span className="tv-ot-when">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
-                      <span className="tv-ot-bld">{tvBuildingLabel(p)}</span>
+                      <span className="tv-ot-when">
+                        {urgency.tone && (
+                          <span className={`tv-ot-urgency tv-ot-urgency-${urgency.tone}`}>
+                            {urgency.text}
+                          </span>
+                        )}
+                        <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
+                      </span>
+                      <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
+                        {tvBuildingLabel(p)}
+                      </span>
                       <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
                       <span className="tv-ot-slots">
                         {p.signups.length > 0 ? (
@@ -1635,7 +1665,9 @@ function CoverageTvPanel({
                             </span>
                           ))
                         ) : (
-                          <span className="tv-ot-empty">—</span>
+                          /* Replace the empty "—" with a louder "OPEN" cue
+                             so the engineer's eye lands on unfilled slots. */
+                          <span className="tv-ot-empty-open">OPEN</span>
                         )}
                       </span>
                       <span className="tv-ot-filled">
@@ -1650,6 +1682,13 @@ function CoverageTvPanel({
                   <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
                 )}
               </ul>
+              {/* Call-to-action footer — shows whenever there's at least one
+                  open slot. Tells engineers exactly where to go. */}
+              {totalOpenSlots > 0 && (
+                <div className="tv-ot-cta">
+                  → Sign up on your phone at <strong>/engineer/me</strong>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -2623,13 +2662,17 @@ function TvStyles() {
         display: flex; flex-direction: column; gap: 0.18vw;
         min-height: 0; overflow: hidden;
       }
+      /* OT row grid: dot · when (with urgency tag) · building (wider so
+         names aren't truncated to 3 chars) · scope · slots · fraction. */
       .tv-ot-row {
         display: grid;
-        grid-template-columns: 0.6vw 6.8vw 2vw 1fr 5vw 1.5vw;
+        grid-template-columns: 0.6vw 7.6vw 3.6vw 1fr 5vw 1.8vw;
         gap: 0.35vw;
         align-items: baseline;
         font-size: 0.78vw;
         line-height: 1.2;
+        padding: 0.12vw 0.25vw;
+        border-radius: 3px;
       }
       .tv-ot-row > span {
         white-space: nowrap;
@@ -2637,13 +2680,39 @@ function TvStyles() {
         text-overflow: ellipsis;
         min-width: 0;
       }
-      .tv-ot-row-full { opacity: 0.55; }
+      /* Filled rows: dim, no decoration — they're informational only. */
+      .tv-ot-row-full { opacity: 0.45; }
+      /* Open rows: amber tint + left border + slightly heavier text so an
+         engineer at the door spots the available slots instantly. */
+      .tv-ot-row-open {
+        background: rgba(251, 191, 36, 0.07);
+        border-left: 2px solid #fbbf24;
+        padding-left: 0.25vw;
+      }
       .tv-ot-when {
         color: #cbd5e1;
         font-variant-numeric: tabular-nums;
+        display: inline-flex; align-items: baseline; gap: 0.25vw;
+        min-width: 0;
       }
+      .tv-ot-when-text { overflow: hidden; text-overflow: ellipsis; }
+      /* Urgency pill: "TODAY" red, "TMRW" amber, "in Nd" muted-amber, far-
+         future muted-grey. Pulled from urgencyTag() in TS. */
+      .tv-ot-urgency {
+        font-size: 0.6vw;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 0 0.3vw;
+        border-radius: 3px;
+        text-transform: uppercase;
+        flex: 0 0 auto;
+      }
+      .tv-ot-urgency-red   { background: rgba(239, 68, 68, 0.25);  color: #fca5a5; }
+      .tv-ot-urgency-amber { background: rgba(251, 191, 36, 0.22); color: #fbbf24; }
+      .tv-ot-urgency-muted { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; }
       .tv-ot-bld {
-        color: #94a3b8;
+        color: #cbd5e1;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
       }
       .tv-ot-scope { color: #f1f5f9; }
@@ -2651,6 +2720,32 @@ function TvStyles() {
         color: #cbd5e1;
         font-size: 0.72vw;
         text-align: right;
+      }
+      /* Empty-slots cue replaces the meek "—" dash with a louder OPEN
+         pill so the eye lands on action-needed rows immediately. */
+      .tv-ot-empty-open {
+        font-size: 0.62vw;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: #fbbf24;
+        background: rgba(251, 191, 36, 0.15);
+        padding: 0 0.35vw;
+        border-radius: 3px;
+        border: 1px solid rgba(251, 191, 36, 0.45);
+      }
+      .tv-ot-cta {
+        margin-top: 0.4vw;
+        padding: 0.25vw 0.5vw;
+        font-size: 0.78vw;
+        color: #fde68a;
+        background: rgba(251, 191, 36, 0.08);
+        border: 1px solid rgba(251, 191, 36, 0.35);
+        border-radius: 3px;
+        text-align: center;
+      }
+      .tv-ot-cta strong {
+        color: #fbbf24;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       .tv-ot-name { color: #e2e8f0; }
       .tv-ot-empty { color: #475569; font-style: italic; }
