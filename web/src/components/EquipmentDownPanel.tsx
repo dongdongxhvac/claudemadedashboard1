@@ -1,22 +1,22 @@
-// §10.1 — Equipment currently off-PM or down-CM across all buildings.
+// §10.1 — Equipment with open issues across all buildings.
 //
-// Sits directly under §10 BMS email alarms on the manager view. Reads
-// from v_building_equipment_status which only returns equipment with
-// status in ('off_pm','down_cm'). Empty when nothing is down — collapses
-// nicely.
+// After 0060: one row per OPEN equipment_issues row, so a single piece of
+// equipment with two open problems shows up twice. The subtitle counts
+// reflect issues, not equipment.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
+  useCloseEquipmentIssue,
   EQUIPMENT_STATUS_LABELS,
-  type EquipmentStatus,
+  type IssueStatus,
 } from '../hooks/useBuildingKb';
+import { useCanAccessAdmin } from '../hooks/useMe';
 import { Section } from './Section';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
-  // YYYY-MM-DD → "May 30"
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
@@ -24,7 +24,6 @@ function fmtDate(iso: string | null): string {
   });
 }
 
-/** "3d ago", "5h ago", "now" — for the last-status-change column. */
 function relTime(utcIso: string): string {
   const ms = Date.now() - new Date(utcIso).getTime();
   const mins = Math.round(ms / 60_000);
@@ -36,15 +35,13 @@ function relTime(utcIso: string): string {
   return `${days}d ago`;
 }
 
-function statusPillColor(s: EquipmentStatus): { bg: string; fg: string } {
-  // Red — offline (down_cm worst, off_pm intentional).
+function statusPillColor(s: IssueStatus): { bg: string; fg: string } {
   if (s === 'down_cm') {
     return { bg: 'var(--color-danger)', fg: 'white' };
   }
   if (s === 'off_pm') {
     return { bg: 'rgba(239, 68, 68, 0.18)', fg: 'var(--color-danger)' };
   }
-  // Amber — running but needs attention.
   if (s === 'degraded' || s === 'bypass') {
     return { bg: 'rgba(217, 119, 6, 0.18)', fg: 'var(--color-warn, #d97706)' };
   }
@@ -54,14 +51,15 @@ function statusPillColor(s: EquipmentStatus): { bg: string; fg: string } {
 export function EquipmentDownPanel() {
   useBuildingEquipmentDownRealtime();
   const rowsQ = useBuildingEquipmentDown();
+  const close = useCloseEquipmentIssue();
+  const canEdit = useCanAccessAdmin();
   const rows = rowsQ.data ?? [];
 
   // Sort: down_cm first (most urgent), then off_pm, then degraded/bypass.
-  // Within each group, most-recently-changed first.
+  // Within each group, most-recently-opened first.
   const sorted = useMemo(() => {
-    const order: Record<EquipmentStatus, number> = {
+    const order: Record<IssueStatus, number> = {
       down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
-      operational: 4, standby_auto: 5, defaulted: 6,
     };
     return [...rows].sort((a, b) => {
       const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
@@ -109,7 +107,7 @@ export function EquipmentDownPanel() {
       )}
       <br />
       <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>
-        equipment off-PM, down-CM, degraded, or in bypass · auto-clears when status flips to operational / standby auto
+        one row per open issue · equipment with two open problems appears twice · close from the building detail or the row's Close button
       </span>
     </span>
   );
@@ -125,7 +123,7 @@ export function EquipmentDownPanel() {
         <p className="t-text t-danger">Error: {(rowsQ.error as Error).message}</p>
       ) : rows.length === 0 ? (
         <p className="t-text t-muted">
-          All catalogued equipment is operational or on standby auto.
+          No open equipment issues across catalogued buildings.
         </p>
       ) : (
         <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
@@ -139,7 +137,8 @@ export function EquipmentDownPanel() {
               <th className="text-left pb-1 pr-3">WO #</th>
               <th className="text-left pb-1 pr-3">RSP</th>
               <th className="text-left pb-1 pr-3">Detail</th>
-              <th className="text-right pb-1 pl-3">Last change</th>
+              <th className="text-right pb-1 pl-3">Opened</th>
+              {canEdit && <th className="text-right pb-1 pl-3">{/* close */}</th>}
             </tr>
           </thead>
           <tbody>
@@ -195,6 +194,28 @@ export function EquipmentDownPanel() {
                   >
                     {relTime(r.last_status_change_at)}
                   </td>
+                  {canEdit && (
+                    <td className="text-right pl-3">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const label = `${r.short_name ?? r.full_name} — ${EQUIPMENT_STATUS_LABELS[r.status]}`;
+                          if (!confirm(`Close issue: ${label}?`)) return;
+                          await close.mutateAsync({ id: r.id, equipment_id: r.equipment_id });
+                        }}
+                        className="t-small"
+                        style={{
+                          background: 'none', border: '1px solid var(--color-border)',
+                          borderRadius: 4, padding: '2px 8px',
+                          color: 'var(--color-ok, #10b981)',
+                          cursor: 'pointer',
+                        }}
+                        title="Mark this issue resolved"
+                      >
+                        Close
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

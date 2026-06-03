@@ -67,18 +67,29 @@ export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
   electrical:     'Electrical',
 };
 
+/** Equipment-row "headline" statuses. After 0060, the attention statuses
+ *  (off_pm / down_cm / degraded / bypass) live on equipment_issues — one
+ *  piece of equipment can have several open at once. The headline status
+ *  on building_equipment is just the engineer-set baseline for when there
+ *  are no open issues. */
 export const EQUIPMENT_STATUSES = [
   'operational',
   'standby_auto',
   'defaulted',
-  'degraded',
-  'bypass',
-  'off_pm',
-  'down_cm',
 ] as const;
 export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number];
 
-export const EQUIPMENT_STATUS_LABELS: Record<EquipmentStatus, string> = {
+/** Attention statuses — used on equipment_issues rows. Equipment with one
+ *  or more of these open shows up on §10.1 + /tv equipment stripe. */
+export const ISSUE_STATUSES = ['off_pm','down_cm','degraded','bypass'] as const;
+export type IssueStatus = (typeof ISSUE_STATUSES)[number];
+
+/** Combined enum — used by the rendering helpers below (tone / pill / label).
+ *  An equipment row's "effective" status is worst-of-open-issues if any
+ *  open, else its headline status. */
+export type EffectiveEquipmentStatus = EquipmentStatus | IssueStatus;
+
+export const EQUIPMENT_STATUS_LABELS: Record<EffectiveEquipmentStatus, string> = {
   operational:  'Operational',
   standby_auto: 'Standby auto',
   defaulted:    'Defaulted',
@@ -91,20 +102,35 @@ export const EQUIPMENT_STATUS_LABELS: Record<EquipmentStatus, string> = {
 /** Color band for the equipment row.
  *   good — running normally (green)
  *   warn — running but needs attention (amber): defaulted, degraded, bypass
- *   bad  — offline (red): off_pm, down_cm
- *  Drives row tint + status pill color + §10.1 / TV alarm panel inclusion. */
-export function equipmentStatusTone(s: EquipmentStatus): 'good' | 'warn' | 'bad' {
+ *   bad  — offline (red): off_pm, down_cm */
+export function equipmentStatusTone(s: EffectiveEquipmentStatus): 'good' | 'warn' | 'bad' {
   if (s === 'operational' || s === 'standby_auto') return 'good';
   if (s === 'defaulted' || s === 'degraded' || s === 'bypass') return 'warn';
   return 'bad';   // off_pm, down_cm
 }
 
-/** True when the status requires the engineer to fill in detail / date /
- *  WO# / RSP. Triggered for anything non-good. Defaulted is the one
- *  exception — it's a BMS sensor state that doesn't always need an
- *  immediate writeup; left as soft-trigger (form can still ask). */
-export function equipmentStatusNeedsDetail(s: EquipmentStatus): boolean {
-  return s === 'off_pm' || s === 'down_cm' || s === 'degraded' || s === 'bypass';
+/** Severity rank — higher = worse. Used to compute worst-of-open issues
+ *  for an equipment row's effective headline. */
+const STATUS_SEVERITY: Record<EffectiveEquipmentStatus, number> = {
+  operational: 0,
+  standby_auto: 1,
+  defaulted: 2,
+  bypass: 3,
+  degraded: 4,
+  off_pm: 5,
+  down_cm: 6,
+};
+
+/** Pick the worst (most severe) of a set of statuses. Returns undefined for
+ *  empty input. */
+export function worstStatus(
+  statuses: ReadonlyArray<EffectiveEquipmentStatus>,
+): EffectiveEquipmentStatus | undefined {
+  let best: EffectiveEquipmentStatus | undefined;
+  for (const s of statuses) {
+    if (best === undefined || STATUS_SEVERITY[s] > STATUS_SEVERITY[best]) best = s;
+  }
+  return best;
 }
 
 export type BuildingEquipment = {
@@ -118,12 +144,8 @@ export type BuildingEquipment = {
   common_issues: string | null;
   troubleshooting: string | null;
   photo_url: string | null;
-  status: EquipmentStatus;
-  status_detail: string | null;
-  status_date: string | null;     // YYYY-MM-DD
-  wo_number: string | null;
-  rsp: string | null;
-  last_status_change_at: string;  // timestamptz
+  status: EquipmentStatus;              // headline only — actual problems live in equipment_issues
+  last_status_change_at: string;        // timestamptz
   active: boolean;
   sort_order: number;
   created_at: string;
@@ -131,15 +153,36 @@ export type BuildingEquipment = {
   updated_by: string | null;
 };
 
+/** One open or closed issue tracked against a piece of equipment.
+ *  A given equipment row may have multiple open issues at once
+ *  (e.g. boiler with electrical fault AND a separate freeze stat fault). */
+export type EquipmentIssue = {
+  id: string;
+  equipment_id: string;
+  status: IssueStatus;
+  detail: string | null;
+  status_date: string | null;      // YYYY-MM-DD
+  wo_number: string | null;
+  rsp: string | null;
+  sort_order: number;
+  closed_at: string | null;        // null = open
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+/** Row shape from v_building_equipment_status — one row per OPEN issue,
+ *  joined to equipment + building. `id` is the issue id. */
 export type BuildingEquipmentStatusRow = {
   id: string;
+  equipment_id: string;
   building_id: string;
   building_short_code: string | null;
   building_name: string;
   full_name: string;
   short_name: string | null;
   category: EquipmentCategory | null;
-  status: EquipmentStatus;
+  status: IssueStatus;
   status_detail: string | null;
   status_date: string | null;
   wo_number: string | null;
@@ -252,6 +295,14 @@ export function useBuildingKbRealtime(buildingId: string | null | undefined) {
         { event: '*', schema: 'public', table: 'building_equipment', filter: `building_id=eq.${buildingId}` },
         () => qc.invalidateQueries({ queryKey: equipmentKey(buildingId) }),
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'equipment_issues' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['equipment_issues_by_building', buildingId] });
+          qc.invalidateQueries({ queryKey: ['equipment_issues'] });
+        },
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [qc, buildingId]);
@@ -308,36 +359,43 @@ export function useUpsertBuildingEquipment() {
 
 export type BuildingEquipmentCounts = {
   total: number;       // active equipment rows for this building
-  issues: number;      // status in off_pm / down_cm / degraded / bypass
+  issues: number;      // open equipment_issues rows for this building
   down_cm: number;
   off_pm: number;
   degraded: number;
   bypass: number;
 };
 
-/** Per-building rollup of equipment status counts, keyed by building_id.
- *  Single query against building_equipment + client-side group so the
- *  /buildings index can render counts on every card without N+1. */
+/** Per-building rollup of equipment + open-issue counts, keyed by
+ *  building_id. Two queries (equipment for total, view for open issues by
+ *  status) then merged client-side — keeps the /buildings index N+0. */
 export function useBuildingEquipmentCountsMap() {
   return useQuery({
     queryKey: ['building_equipment_counts_map'],
     queryFn: async (): Promise<Map<string, BuildingEquipmentCounts>> => {
-      const { data, error } = await supabase
-        .from('building_equipment')
-        .select('building_id, status')
-        .eq('active', true);
-      if (error) throw error;
+      const [eqRes, issRes] = await Promise.all([
+        supabase.from('building_equipment').select('building_id').eq('active', true),
+        supabase.from('v_building_equipment_status').select('building_id, status'),
+      ]);
+      if (eqRes.error) throw eqRes.error;
+      if (issRes.error) throw issRes.error;
       const map = new Map<string, BuildingEquipmentCounts>();
-      for (const r of (data ?? []) as { building_id: string; status: EquipmentStatus }[]) {
-        const cur = map.get(r.building_id) ?? {
-          total: 0, issues: 0,
-          down_cm: 0, off_pm: 0, degraded: 0, bypass: 0,
-        };
+      const blank = () => ({
+        total: 0, issues: 0,
+        down_cm: 0, off_pm: 0, degraded: 0, bypass: 0,
+      });
+      for (const r of (eqRes.data ?? []) as { building_id: string }[]) {
+        const cur = map.get(r.building_id) ?? blank();
         cur.total++;
-        if (r.status === 'down_cm') { cur.down_cm++;  cur.issues++; }
-        if (r.status === 'off_pm')  { cur.off_pm++;   cur.issues++; }
-        if (r.status === 'degraded'){ cur.degraded++; cur.issues++; }
-        if (r.status === 'bypass')  { cur.bypass++;   cur.issues++; }
+        map.set(r.building_id, cur);
+      }
+      for (const r of (issRes.data ?? []) as { building_id: string; status: IssueStatus }[]) {
+        const cur = map.get(r.building_id) ?? blank();
+        cur.issues++;
+        if (r.status === 'down_cm')  cur.down_cm++;
+        if (r.status === 'off_pm')   cur.off_pm++;
+        if (r.status === 'degraded') cur.degraded++;
+        if (r.status === 'bypass')   cur.bypass++;
         map.set(r.building_id, cur);
       }
       return map;
@@ -364,8 +422,9 @@ export function useBuildingEquipmentDown() {
   });
 }
 
-/** Realtime: invalidate the equipment-down list whenever ANY building_equipment
- *  row changes (status updates can drop rows in/out of the view). */
+/** Realtime: invalidate the equipment-down list whenever an equipment_issues
+ *  row changes (open/close/edit drops rows in/out of the view) OR an
+ *  equipment row's active flag flips. */
 export function useBuildingEquipmentDownRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
@@ -373,8 +432,19 @@ export function useBuildingEquipmentDownRealtime() {
       .channel(`be-down-${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'equipment_issues' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
+          qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
+        },
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'building_equipment' },
-        () => qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
+          qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
+        },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -394,6 +464,129 @@ export function useDeleteBuildingEquipment() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: equipmentKey(vars.building_id) });
+    },
+  });
+}
+
+// ----- Equipment issues --------------------------------------------------
+
+const issuesKey = (equipmentId: string) => ['equipment_issues', equipmentId];
+
+/** Fetch all OPEN issues for one piece of equipment, sorted by sort_order
+ *  then most-recent-first. Closed issues are surfaced separately if needed. */
+export function useEquipmentIssues(equipmentId: string | null | undefined) {
+  return useQuery({
+    queryKey: issuesKey(equipmentId ?? ''),
+    queryFn: async (): Promise<EquipmentIssue[]> => {
+      if (!equipmentId) return [];
+      const { data, error } = await supabase
+        .from('equipment_issues')
+        .select('*')
+        .eq('equipment_id', equipmentId)
+        .is('closed_at', null)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as EquipmentIssue[];
+    },
+    staleTime: 30_000,
+    enabled: !!equipmentId,
+  });
+}
+
+/** Fetch open issues for ALL equipment in a building (one query), grouped
+ *  by equipment_id client-side. Lets EquipmentList render N issues per
+ *  card without N round-trips. */
+export function useBuildingOpenIssues(buildingId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['equipment_issues_by_building', buildingId ?? ''],
+    queryFn: async (): Promise<Map<string, EquipmentIssue[]>> => {
+      if (!buildingId) return new Map();
+      const { data, error } = await supabase
+        .from('equipment_issues')
+        .select('*, building_equipment!inner(building_id)')
+        .eq('building_equipment.building_id', buildingId)
+        .is('closed_at', null)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map = new Map<string, EquipmentIssue[]>();
+      for (const r of (data ?? []) as EquipmentIssue[]) {
+        const arr = map.get(r.equipment_id) ?? [];
+        arr.push(r);
+        map.set(r.equipment_id, arr);
+      }
+      return map;
+    },
+    staleTime: 30_000,
+    enabled: !!buildingId,
+  });
+}
+
+/** Insert OR update one issue row. Pass id to update, omit to insert. */
+export function useUpsertEquipmentIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<EquipmentIssue> & { equipment_id: string; status: IssueStatus },
+    ) => {
+      const row = { ...input, updated_at: new Date().toISOString() };
+      const { data, error } = await supabase
+        .from('equipment_issues')
+        .upsert(row, { onConflict: 'id' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as EquipmentIssue;
+    },
+    onSuccess: (saved) => {
+      qc.invalidateQueries({ queryKey: issuesKey(saved.equipment_id) });
+      qc.invalidateQueries({ queryKey: ['equipment_issues_by_building'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
+    },
+  });
+}
+
+/** Mark an issue as closed — stamps closed_at = now. The view drops it from
+ *  v_building_equipment_status, so §10.1 / TV stripe auto-update. */
+export function useCloseEquipmentIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; equipment_id: string }) => {
+      const { error } = await supabase
+        .from('equipment_issues')
+        .update({ closed_at: new Date().toISOString() })
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: issuesKey(vars.equipment_id) });
+      qc.invalidateQueries({ queryKey: ['equipment_issues_by_building'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
+    },
+  });
+}
+
+/** Hard delete — for issues created by mistake. Closed issues should usually
+ *  stay around for history; this is the "I never should have made this row"
+ *  escape hatch. */
+export function useDeleteEquipmentIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; equipment_id: string }) => {
+      const { error } = await supabase
+        .from('equipment_issues')
+        .delete()
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: issuesKey(vars.equipment_id) });
+      qc.invalidateQueries({ queryKey: ['equipment_issues_by_building'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
     },
   });
 }

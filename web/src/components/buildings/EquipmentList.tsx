@@ -1,26 +1,34 @@
 // Structured equipment list for one building. Read-only for engineers /
-// managers / clients; full CRUD for admin/lead via EquipmentForm.
+// managers / clients; full CRUD for admin/lead via EquipmentForm + IssueForm.
 //
-// Layout: each equipment is its own card with the 4 free-form fields
-// laid out top-down. Card border + status pill color reflect the current
-// status — green/standby = good, defaulted = amber, off-PM/down-CM = red.
-// The down-status cards also surface status detail / WO# / RSP so an
-// engineer in the field sees the gap at a glance without expanding.
+// After 0060: each equipment card shows
+//   * the equipment's headline status (operational / standby auto / defaulted)
+//     OR — if any issues are open — the worst open-issue status
+//   * a stacked list of open issues (one row per problem) with per-issue
+//     Edit / Close / Remove + a per-card "+ Add issue" button
 import { useState } from 'react';
 import { useCanAccessAdmin } from '../../hooks/useMe';
 import {
   useBuildingEquipment,
   useDeleteBuildingEquipment,
+  useBuildingOpenIssues,
+  useCloseEquipmentIssue,
+  useDeleteEquipmentIssue,
   EQUIPMENT_CATEGORY_LABELS,
   EQUIPMENT_STATUS_LABELS,
   equipmentStatusTone,
+  worstStatus,
   type BuildingEquipment,
+  type EquipmentIssue,
+  type EffectiveEquipmentStatus,
 } from '../../hooks/useBuildingKb';
 import { EquipmentForm } from './EquipmentForm';
+import { IssueForm } from './IssueForm';
 
 export function EquipmentList({ buildingId }: { buildingId: string }) {
   const canEdit = useCanAccessAdmin();
   const eqQ = useBuildingEquipment(buildingId);
+  const issQ = useBuildingOpenIssues(buildingId);
   const del = useDeleteBuildingEquipment();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
@@ -33,6 +41,7 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
   }
 
   const rows = eqQ.data ?? [];
+  const issuesByEq = issQ.data ?? new Map<string, EquipmentIssue[]>();
 
   return (
     <div>
@@ -75,6 +84,7 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
           <EquipmentCard
             key={eq.id}
             eq={eq}
+            issues={issuesByEq.get(eq.id) ?? []}
             canEdit={canEdit}
             onEdit={() => setEditingId(eq.id)}
             onDelete={async () => {
@@ -117,18 +127,26 @@ function statusColors(tone: 'good' | 'warn' | 'bad'): {
 
 function EquipmentCard({
   eq,
+  issues,
   canEdit,
   onEdit,
   onDelete,
 }: {
   eq: BuildingEquipment;
+  issues: EquipmentIssue[];
   canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const tone   = equipmentStatusTone(eq.status);
+  // Effective headline = worst of open issues, else the equipment's baseline
+  // status (operational / standby_auto / defaulted).
+  const effective: EffectiveEquipmentStatus =
+    worstStatus(issues.map((i) => i.status)) ?? eq.status;
+  const tone = equipmentStatusTone(effective);
   const colors = statusColors(tone);
-  const isDown = tone === 'bad';
+
+  const [addingIssue, setAddingIssue] = useState(false);
+  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
 
   return (
     <div
@@ -170,7 +188,10 @@ function EquipmentCard({
             }}
             title={`Last change: ${new Date(eq.last_status_change_at).toLocaleString()}`}
           >
-            {EQUIPMENT_STATUS_LABELS[eq.status]}
+            {EQUIPMENT_STATUS_LABELS[effective]}
+            {issues.length > 1 && (
+              <span style={{ marginLeft: 6, opacity: 0.85 }}>· {issues.length}</span>
+            )}
           </span>
         </div>
         {canEdit && (
@@ -198,43 +219,49 @@ function EquipmentCard({
         )}
       </div>
 
-      {/* Down-state surfaces status_detail / date / WO# / RSP up top so the
-          engineer doesn't have to expand a hidden section. */}
-      {isDown && (eq.status_detail || eq.status_date || eq.wo_number || eq.rsp) && (
-        <div
-          className="grid gap-2"
-          style={{
-            padding: 10, borderRadius: 4,
-            background: 'rgba(239, 68, 68, 0.10)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            gridTemplateColumns: 'minmax(160px, 1fr) minmax(120px, auto) minmax(120px, auto) minmax(140px, auto)',
-          }}
-        >
-          {eq.status_detail && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <PillLabel label="Detail" />
-              <div className="t-text" style={{ whiteSpace: 'pre-wrap' }}>{eq.status_detail}</div>
-            </div>
-          )}
-          {eq.status_date && (
-            <div>
-              <PillLabel label="Date" />
-              <div className="t-text">{eq.status_date}</div>
-            </div>
-          )}
-          {eq.wo_number && (
-            <div>
-              <PillLabel label="WO #" />
-              <div className="t-text t-mono">{eq.wo_number}</div>
-            </div>
-          )}
-          {eq.rsp && (
-            <div>
-              <PillLabel label="RSP" />
-              <div className="t-text">{eq.rsp}</div>
-            </div>
+      {/* Open issues list — each row carries its own detail / date / WO / RSP. */}
+      {issues.length > 0 && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {issues.map((iss) =>
+            editingIssueId === iss.id ? (
+              <IssueForm
+                key={iss.id}
+                equipmentId={eq.id}
+                existing={iss}
+                onClose={() => setEditingIssueId(null)}
+              />
+            ) : (
+              <IssueRow
+                key={iss.id}
+                issue={iss}
+                canEdit={canEdit}
+                onEdit={() => setEditingIssueId(iss.id)}
+              />
+            ),
           )}
         </div>
+      )}
+
+      {canEdit && !addingIssue && (
+        <button
+          type="button"
+          onClick={() => setAddingIssue(true)}
+          className="t-small"
+          style={{
+            background: 'none', border: '1px dashed var(--color-border)',
+            borderRadius: 4, padding: '6px 10px',
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer', justifySelf: 'start',
+          }}
+        >
+          + Add issue
+        </button>
+      )}
+      {addingIssue && (
+        <IssueForm
+          equipmentId={eq.id}
+          onClose={() => setAddingIssue(false)}
+        />
       )}
 
       {eq.photo_url && (
@@ -270,11 +297,120 @@ function EquipmentCard({
   );
 }
 
-function PillLabel({ label }: { label: string }) {
+function IssueRow({
+  issue,
+  canEdit,
+  onEdit,
+}: {
+  issue: EquipmentIssue;
+  canEdit: boolean;
+  onEdit: () => void;
+}) {
+  const close = useCloseEquipmentIssue();
+  const del = useDeleteEquipmentIssue();
+  const tone = equipmentStatusTone(issue.status);
+  const accent =
+    tone === 'bad' ? 'var(--color-danger)' : 'var(--color-warn, #d97706)';
+
+  return (
+    <div
+      className="grid gap-2"
+      style={{
+        padding: 10, borderRadius: 4,
+        background: tone === 'bad'
+          ? 'rgba(239, 68, 68, 0.10)'
+          : 'rgba(217, 119, 6, 0.10)',
+        border: `1px solid ${accent}33`,
+        gridTemplateColumns: 'minmax(160px, 1fr) minmax(120px, auto) minmax(120px, auto) minmax(140px, auto) min-content',
+        alignItems: 'start',
+      }}
+    >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <span
+          className="t-small uppercase tracking-wider"
+          style={{
+            padding: '2px 8px', borderRadius: 4,
+            fontSize: '0.65rem', fontWeight: 700,
+            background: accent, color: 'white',
+          }}
+        >
+          {EQUIPMENT_STATUS_LABELS[issue.status]}
+        </span>
+        {canEdit && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="t-small t-accent"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm(`Close this issue? (${EQUIPMENT_STATUS_LABELS[issue.status]} — "${issue.detail ?? ''}")`)) return;
+                await close.mutateAsync({ id: issue.id, equipment_id: issue.equipment_id });
+              }}
+              className="t-small"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--color-ok, #10b981)',
+              }}
+              title="Mark this issue resolved"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Permanently remove this issue? (use Close to mark resolved instead — Remove is for issues entered by mistake.)')) return;
+                await del.mutateAsync({ id: issue.id, equipment_id: issue.equipment_id });
+              }}
+              className="t-small"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--color-danger)',
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+      {issue.detail && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <PillLabel label="Detail" color={accent} />
+          <div className="t-text" style={{ whiteSpace: 'pre-wrap' }}>{issue.detail}</div>
+        </div>
+      )}
+      {issue.status_date && (
+        <div>
+          <PillLabel label="Date" color={accent} />
+          <div className="t-text">{issue.status_date}</div>
+        </div>
+      )}
+      {issue.wo_number && (
+        <div>
+          <PillLabel label="WO #" color={accent} />
+          <div className="t-text t-mono">{issue.wo_number}</div>
+        </div>
+      )}
+      {issue.rsp && (
+        <div>
+          <PillLabel label="RSP" color={accent} />
+          <div className="t-text">{issue.rsp}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PillLabel({ label, color }: { label: string; color: string }) {
   return (
     <div
       className="t-small uppercase tracking-wider"
-      style={{ fontSize: '0.6rem', color: 'var(--color-danger)' }}
+      style={{ fontSize: '0.6rem', color }}
     >
       {label}
     </div>

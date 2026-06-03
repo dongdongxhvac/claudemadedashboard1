@@ -1,15 +1,8 @@
 // Inline form for adding or editing one piece of building equipment.
-// Used by EquipmentList — slides open on "Add equipment" or row "Edit".
-//
-// Fields split into two visual sections:
-//   1. Identity / catalog  (full_name, short_name, category, location,
-//      parts, common issues, troubleshooting, photo)
-//   2. Status workflow     (status dropdown + conditional popup with
-//      status_detail / status_date / wo_number / rsp when the status is
-//      off_pm or down_cm)
-//
-// The DB trigger auto-bumps last_status_change_at whenever status changes,
-// so the React side doesn't have to compute it.
+// After 0060: status is just the "headline" baseline (operational / standby
+// auto / defaulted). Active problems (off-PM / down-CM / degraded / bypass)
+// live as equipment_issues child rows and are managed via IssueForm from
+// the EquipmentList card.
 import { useState } from 'react';
 import {
   useUpsertBuildingEquipment,
@@ -19,15 +12,10 @@ import {
   EQUIPMENT_STATUSES,
   EQUIPMENT_STATUS_LABELS,
   equipmentStatusTone,
-  equipmentStatusNeedsDetail,
   type BuildingEquipment,
   type EquipmentCategory,
   type EquipmentStatus,
 } from '../../hooks/useBuildingKb';
-
-function todayLocalISO(): string {
-  return new Date().toLocaleDateString('en-CA');
-}
 
 export function EquipmentForm({
   buildingId,
@@ -52,23 +40,11 @@ export function EquipmentForm({
   const [photoFile, setPhotoFile]           = useState<File | null>(null);
   const [removePhoto, setRemovePhoto]       = useState(false);
   const [uploading, setUploading]           = useState(false);
-
-  // Status workflow state — the conditional popup auto-shows when needed.
   const [status, setStatus]                 = useState<EquipmentStatus>(
     existing?.status ?? 'operational',
   );
-  const [statusDetail, setStatusDetail]     = useState(existing?.status_detail ?? '');
-  const [statusDate, setStatusDate]         = useState<string>(
-    existing?.status_date ?? todayLocalISO(),
-  );
-  const [woNumber, setWoNumber]             = useState(existing?.wo_number ?? '');
-  const [rsp, setRsp]                       = useState(existing?.rsp ?? '');
 
   const [error, setError] = useState<string | null>(null);
-
-  // Detail block opens for any "needs attention" status (off_pm, down_cm,
-  // degraded, bypass) — defaulted is left soft per the helper's spec.
-  const showStatusDetail = equipmentStatusNeedsDetail(status);
   const tone = equipmentStatusTone(status);
 
   async function submit(e: React.FormEvent) {
@@ -78,13 +54,7 @@ export function EquipmentForm({
       setError('Full name is required.');
       return;
     }
-    if (showStatusDetail && !statusDetail.trim()) {
-      setError(`Status detail is required when status is ${EQUIPMENT_STATUS_LABELS[status]}.`);
-      return;
-    }
     try {
-      // Step 1: upsert the row (the DB trigger auto-stamps
-      // last_status_change_at when status actually changes).
       const saved = await upsert.mutateAsync({
         id: existing?.id,
         building_id: buildingId,
@@ -98,15 +68,8 @@ export function EquipmentForm({
         photo_url: removePhoto ? null : existing?.photo_url ?? null,
         sort_order: existing?.sort_order ?? 0,
         status,
-        // Clear the status-detail bundle when status goes back to a
-        // healthy state, so old WO# / RSP don't linger on a green row.
-        status_detail: showStatusDetail ? (statusDetail.trim() || null) : null,
-        status_date:   showStatusDetail ? statusDate : null,
-        wo_number:     showStatusDetail ? (woNumber.trim() || null) : null,
-        rsp:           showStatusDetail ? (rsp.trim() || null) : null,
       });
 
-      // Step 2: if a new photo was picked, upload + second-pass update.
       if (photoFile) {
         setUploading(true);
         try {
@@ -127,8 +90,6 @@ export function EquipmentForm({
     }
   }
 
-  // Border accent for the form ties the visual to current status tone so
-  // the manager sees the consequence of their dropdown choice live.
   const formAccent =
     tone === 'bad' ? 'var(--color-danger)' :
     tone === 'warn' ? 'var(--color-warn, #d97706)' :
@@ -261,16 +222,14 @@ export function EquipmentForm({
         </div>
       </Field>
 
-      {/* ──────────────── Status workflow ──────────────── */}
-
       <div
         className="t-small uppercase tracking-wider"
         style={{ color: formAccent, marginTop: 4 }}
       >
-        Status
+        Headline status
       </div>
 
-      <Field label="Current status">
+      <Field label="Status" hint="problems (off-PM, down-CM, degraded, bypass) are added separately from the equipment card">
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
@@ -282,68 +241,7 @@ export function EquipmentForm({
         </select>
       </Field>
 
-      {showStatusDetail && (
-        <div
-          style={{
-            display: 'grid', gap: 10,
-            padding: 12,
-            borderRadius: 4,
-            border: `1px solid var(--color-danger)`,
-            background: 'rgba(239, 68, 68, 0.06)',
-          }}
-        >
-          <div className="t-small uppercase tracking-wider" style={{ color: 'var(--color-danger)' }}>
-            {EQUIPMENT_STATUS_LABELS[status]} — required details
-          </div>
-
-          <Field label="Status detail (required)" hint="what's wrong / what's being done">
-            <textarea
-              value={statusDetail}
-              onChange={(e) => setStatusDetail(e.target.value)}
-              rows={2}
-              style={{ ...inputStyle, resize: 'vertical' }}
-              required
-            />
-          </Field>
-
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
-            <Field label={
-              status === 'off_pm'   ? 'Date of off-PM' :
-              status === 'down_cm'  ? 'Date of down-CM' :
-              status === 'degraded' ? 'Date noticed' :
-              status === 'bypass'   ? 'Date bypassed' :
-              'Date'
-            }>
-              <input
-                type="date"
-                value={statusDate}
-                onChange={(e) => setStatusDate(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="WO #">
-              <input
-                type="text"
-                value={woNumber}
-                onChange={(e) => setWoNumber(e.target.value)}
-                placeholder='e.g. "PM-1234", "CM-5678"'
-                style={inputStyle}
-              />
-            </Field>
-          </div>
-
-          <Field label="RSP (responsible party)" hint="who's owning this — engineer / vendor / contractor">
-            <input
-              type="text"
-              value={rsp}
-              onChange={(e) => setRsp(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-        </div>
-      )}
-
-      {!showStatusDetail && existing?.last_status_change_at && (
+      {existing?.last_status_change_at && (
         <div className="t-small t-muted" style={{ marginTop: -4 }}>
           Last status change: <strong>{new Date(existing.last_status_change_at).toLocaleString()}</strong>
         </div>
