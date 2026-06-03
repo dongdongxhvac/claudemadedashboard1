@@ -11,7 +11,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
-  checkVacationCap, PTO_TYPE_LABELS,
+  checkVacationCap, PTO_TYPE_LABELS, ptoTypeLabel,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
@@ -431,7 +431,7 @@ function PendingRow({
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div className="t-text">
           <strong>{req.user_full_name ?? '?'}</strong>
-          <span className="t-muted"> · {PTO_TYPE_LABELS[req.type]}</span>
+          <span className="t-muted"> · {ptoTypeLabel(req.type)}</span>
           <span className="t-muted"> · {fmtRange(req.starts_on, req.ends_on)} ({req.days}d / {req.hours}h)</span>
         </div>
         <div className="t-small t-muted">
@@ -590,7 +590,7 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
             }}
           >
             <strong style={{ minWidth: 130 }}>{r.user_full_name ?? '?'}</strong>
-            <span className="t-muted" style={{ minWidth: 70 }}>{PTO_TYPE_LABELS[r.type]}</span>
+            <span className="t-muted" style={{ minWidth: 70 }}>{ptoTypeLabel(r.type)}</span>
             <span className="t-mono">{fmtRange(r.starts_on, r.ends_on)} <span className="t-muted">({r.days}d · {r.hours}h)</span></span>
             {r.reason && <span className="t-muted">· {r.reason}</span>}
             {r.cap_override && (
@@ -883,7 +883,7 @@ function DayChip({
     : 'rgba(34,197,94,0.08)';
   const border   = out ? PTO_TYPE_COLOR[pto!.type] : '#10b981';
   const tipBase  = out
-    ? `${engineer.full_name} · ${PTO_TYPE_LABELS[pto!.type]}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
+    ? `${engineer.full_name} · ${ptoTypeLabel(pto!.type)}${pto!.ends_on !== dateIso ? ` (returns ${fmtMd(pto!.ends_on)})` : ''}${pto!.reason ? ' · ' + pto!.reason : ''}`
     : `${engineer.full_name} working ${dayLabel} — click to log PTO`;
   const tip = partial && label ? `${tipBase} · ${label}` : tipBase;
   return (
@@ -1082,11 +1082,12 @@ function QuickPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal hidden from the picker per ops decision (not
-                  offered). Legacy rows that already have type='personal'
-                  still render their label via PTO_TYPE_LABELS elsewhere. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
-                .filter(([k]) => k !== 'personal')
+              {/* Personal is hidden because we stripped its entry from
+                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
+                  with type='personal' render via ptoTypeLabel() elsewhere
+                  — they fall back to the raw "personal" string. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
+                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
                 .map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
@@ -1670,7 +1671,7 @@ export function PtoYearLog({
   );
   const summaryLine = (Object.keys(totals) as PtoType[])
     .sort()
-    .map((t) => `${PTO_TYPE_LABELS[t]} ${totals[t]!.toFixed(2).replace(/\.00$/, '')}h`)
+    .map((t) => `${ptoTypeLabel(t)} ${totals[t]!.toFixed(2).replace(/\.00$/, '')}h`)
     .join(' · ');
   return (
     <div>
@@ -1699,7 +1700,7 @@ export function PtoYearLog({
               ].filter(Boolean).join(' · ') || undefined}
             >
               <span className="t-mono" style={{ minWidth: 90 }}>{fmtRange(r.starts_on, r.ends_on)}</span>
-              <span style={{ minWidth: 72 }}>{PTO_TYPE_LABELS[r.type as PtoType]}</span>
+              <span style={{ minWidth: 72 }}>{ptoTypeLabel(r.type as PtoType)}</span>
               <span className="t-mono">{Number(r.hours)}h</span>
               <span
                 className="px-1 py-0.5 rounded uppercase tracking-wide"
@@ -2016,11 +2017,12 @@ function AddPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal hidden from the picker per ops decision (not
-                  offered). Legacy rows that already have type='personal'
-                  still render their label via PTO_TYPE_LABELS elsewhere. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
-                .filter(([k]) => k !== 'personal')
+              {/* Personal is hidden because we stripped its entry from
+                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
+                  with type='personal' render via ptoTypeLabel() elsewhere
+                  — they fall back to the raw "personal" string. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
+                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
                 .map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
@@ -2318,11 +2320,12 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal hidden from the picker per ops decision (not
-                  offered). Legacy rows that already have type='personal'
-                  still render their label via PTO_TYPE_LABELS elsewhere. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
-                .filter(([k]) => k !== 'personal')
+              {/* Personal is hidden because we stripped its entry from
+                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
+                  with type='personal' render via ptoTypeLabel() elsewhere
+                  — they fall back to the raw "personal" string. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
+                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
                 .map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}

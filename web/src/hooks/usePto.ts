@@ -16,14 +16,25 @@ import { supabase } from '../lib/supabase';
 export type PtoType   = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'holiday' | 'unpaid';
 export type PtoStatus = 'pending'  | 'approved' | 'denied' | 'cancelled';
 
-export const PTO_TYPE_LABELS: Record<PtoType, string> = {
+/** Friendly labels for PTO types. Partial because "personal" was removed
+ *  from the offering — legacy rows with type='personal' fall through to
+ *  the raw string via ptoTypeLabel() below. The PtoType union still
+ *  includes 'personal' so the DB schema (and any historical row) stays
+ *  valid; just no human-friendly label rendered. */
+export const PTO_TYPE_LABELS: Partial<Record<PtoType, string>> = {
   vacation: 'Vacation',
   sick: 'Sick',
-  personal: 'Personal',
   bereavement: 'Bereavement',
   holiday: 'Holiday',
   unpaid: 'Unpaid',
 };
+
+/** Look up a friendly label for a PtoType, falling back to the raw type
+ *  string when there's no entry (e.g. legacy 'personal' rows). */
+export function ptoTypeLabel(t: PtoType | null | undefined): string {
+  if (!t) return '—';
+  return PTO_TYPE_LABELS[t] ?? t;
+}
 
 export type PtoRequestSource =
   | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'team'
