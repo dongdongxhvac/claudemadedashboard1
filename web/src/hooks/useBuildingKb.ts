@@ -155,7 +155,9 @@ export type BuildingEquipment = {
 
 /** One open or closed issue tracked against a piece of equipment.
  *  A given equipment row may have multiple open issues at once
- *  (e.g. boiler with electrical fault AND a separate freeze stat fault). */
+ *  (e.g. boiler with electrical fault AND a separate freeze stat fault).
+ *  When the issue is closed, `resolution` MUST be filled (DB CHECK
+ *  constraint) — closing without an explanation isn't allowed. */
 export type EquipmentIssue = {
   id: string;
   equipment_id: string;
@@ -166,6 +168,8 @@ export type EquipmentIssue = {
   rsp: string | null;
   sort_order: number;
   closed_at: string | null;        // null = open
+  resolution: string | null;       // required when closed_at is set
+  closed_by: string | null;        // users.id of who closed it
   created_at: string;
   updated_at: string;
   updated_by: string | null;
@@ -548,15 +552,39 @@ export function useUpsertEquipmentIssue() {
   });
 }
 
-/** Mark an issue as closed — stamps closed_at = now. The view drops it from
- *  v_building_equipment_status, so §10.1 / TV stripe auto-update. */
+/** Mark an issue as closed — stamps closed_at + resolution + closed_by.
+ *  Resolution is REQUIRED (enforced both client-side here and via DB
+ *  CHECK constraint). The view drops the row from v_building_equipment_status,
+ *  so §10.1 / TV stripe auto-update. */
 export function useCloseEquipmentIssue() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; equipment_id: string }) => {
+    mutationFn: async (input: {
+      id: string;
+      equipment_id: string;
+      resolution: string;
+    }) => {
+      const text = input.resolution.trim();
+      if (!text) throw new Error('Resolution is required when closing an issue.');
+      // Stamp closed_by from the caller's users row id, mirroring the
+      // pattern used by useInsertVendorVisit.
+      const { data: auth } = await supabase.auth.getUser();
+      let closedBy: string | null = null;
+      if (auth.user) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', auth.user.id)
+          .maybeSingle();
+        closedBy = u?.id ?? null;
+      }
       const { error } = await supabase
         .from('equipment_issues')
-        .update({ closed_at: new Date().toISOString() })
+        .update({
+          closed_at: new Date().toISOString(),
+          resolution: text,
+          closed_by: closedBy,
+        })
         .eq('id', input.id);
       if (error) throw error;
     },

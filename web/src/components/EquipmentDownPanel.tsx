@@ -3,16 +3,17 @@
 // After 0060: one row per OPEN equipment_issues row, so a single piece of
 // equipment with two open problems shows up twice. The subtitle counts
 // reflect issues, not equipment.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
-  useCloseEquipmentIssue,
   EQUIPMENT_STATUS_LABELS,
+  type BuildingEquipmentStatusRow,
   type IssueStatus,
 } from '../hooks/useBuildingKb';
 import { useCanAccessAdmin } from '../hooks/useMe';
+import { IssueCloseDialog } from './buildings/IssueCloseDialog';
 import { Section } from './Section';
 
 function fmtDate(iso: string | null): string {
@@ -51,8 +52,8 @@ function statusPillColor(s: IssueStatus): { bg: string; fg: string } {
 export function EquipmentDownPanel() {
   useBuildingEquipmentDownRealtime();
   const rowsQ = useBuildingEquipmentDown();
-  const close = useCloseEquipmentIssue();
   const canEdit = useCanAccessAdmin();
+  const [closingRow, setClosingRow] = useState<BuildingEquipmentStatusRow | null>(null);
   const rows = rowsQ.data ?? [];
 
   // Sort: down_cm first (most urgent), then off_pm, then degraded/bypass.
@@ -207,11 +208,7 @@ export function EquipmentDownPanel() {
                     <td className="text-right pl-3">
                       <button
                         type="button"
-                        onClick={async () => {
-                          const label = `${r.short_name ?? r.full_name} — ${EQUIPMENT_STATUS_LABELS[r.status]}`;
-                          if (!confirm(`Close issue: ${label}?`)) return;
-                          await close.mutateAsync({ id: r.id, equipment_id: r.equipment_id });
-                        }}
+                        onClick={() => setClosingRow(r)}
                         className="t-small"
                         style={{
                           background: 'none', border: '1px solid var(--color-border)',
@@ -219,7 +216,7 @@ export function EquipmentDownPanel() {
                           color: 'var(--color-ok, #10b981)',
                           cursor: 'pointer',
                         }}
-                        title="Mark this issue resolved"
+                        title="Mark this issue resolved — opens a dialog to record how it was fixed"
                       >
                         Close
                       </button>
@@ -230,6 +227,21 @@ export function EquipmentDownPanel() {
             })}
           </tbody>
         </table>
+      )}
+      {closingRow && (
+        <IssueCloseDialog
+          ctx={{
+            id: closingRow.id,
+            equipment_id: closingRow.equipment_id,
+            status: closingRow.status,
+            detail: closingRow.status_detail,
+            equipment_label: closingRow.short_name
+              ? `${closingRow.short_name} · ${closingRow.full_name}`
+              : closingRow.full_name,
+            building_label: closingRow.building_short_code ?? closingRow.building_name,
+          }}
+          onClose={() => setClosingRow(null)}
+        />
       )}
     </Section>
   );

@@ -12,7 +12,6 @@ import {
   useBuildingEquipment,
   useDeleteBuildingEquipment,
   useBuildingOpenIssues,
-  useCloseEquipmentIssue,
   useDeleteEquipmentIssue,
   EQUIPMENT_CATEGORY_LABELS,
   EQUIPMENT_STATUS_LABELS,
@@ -24,6 +23,7 @@ import {
 } from '../../hooks/useBuildingKb';
 import { EquipmentForm } from './EquipmentForm';
 import { IssueForm } from './IssueForm';
+import { IssueCloseDialog } from './IssueCloseDialog';
 
 export function EquipmentList({ buildingId }: { buildingId: string }) {
   const canEdit = useCanAccessAdmin();
@@ -147,6 +147,7 @@ function EquipmentCard({
 
   const [addingIssue, setAddingIssue] = useState(false);
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+  const [closingIssue, setClosingIssue] = useState<EquipmentIssue | null>(null);
 
   return (
     <div
@@ -236,10 +237,26 @@ function EquipmentCard({
                 issue={iss}
                 canEdit={canEdit}
                 onEdit={() => setEditingIssueId(iss.id)}
+                onClose={() => setClosingIssue(iss)}
               />
             ),
           )}
         </div>
+      )}
+
+      {closingIssue && (
+        <IssueCloseDialog
+          ctx={{
+            id: closingIssue.id,
+            equipment_id: closingIssue.equipment_id,
+            status: closingIssue.status,
+            detail: closingIssue.detail,
+            equipment_label: eq.short_name
+              ? `${eq.short_name} · ${eq.full_name}`
+              : eq.full_name,
+          }}
+          onClose={() => setClosingIssue(null)}
+        />
       )}
 
       {canEdit && !addingIssue && (
@@ -301,12 +318,13 @@ function IssueRow({
   issue,
   canEdit,
   onEdit,
+  onClose,
 }: {
   issue: EquipmentIssue;
   canEdit: boolean;
   onEdit: () => void;
+  onClose: () => void;
 }) {
-  const close = useCloseEquipmentIssue();
   const del = useDeleteEquipmentIssue();
   const tone = equipmentStatusTone(issue.status);
   const accent =
@@ -348,16 +366,13 @@ function IssueRow({
             </button>
             <button
               type="button"
-              onClick={async () => {
-                if (!confirm(`Close this issue? (${EQUIPMENT_STATUS_LABELS[issue.status]} — "${issue.detail ?? ''}")`)) return;
-                await close.mutateAsync({ id: issue.id, equipment_id: issue.equipment_id });
-              }}
+              onClick={onClose}
               className="t-small"
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: 'var(--color-ok, #10b981)',
               }}
-              title="Mark this issue resolved"
+              title="Mark this issue resolved — opens a dialog to record how it was fixed"
             >
               Close
             </button>
