@@ -958,6 +958,19 @@ function QuickPtoModal({
   const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false);
   const [err, setErr]                 = useState<string | null>(null);
 
+  // Live balance card — same as AddPtoModal. Engineer is locked here so
+  // we always know who to look up.
+  const summaryQ = usePtoSummary();
+  const currentYear = new Date().getFullYear();
+  const balance = useMemo(() => {
+    const all = (summaryQ.data ?? []).filter((s) => s.user_id === engineer.user_id);
+    if (all.length === 0) return null;
+    return (
+      all.find((s) => s.year === currentYear) ??
+      all.slice().sort((a, b) => b.year - a.year)[0]
+    );
+  }, [summaryQ.data, engineer.user_id, currentYear]);
+
   // Auto-adjust hours when partial-day window changes — unless the manager
   // already typed a custom value, in which case respect it.
   useEffect(() => {
@@ -1031,6 +1044,41 @@ function QuickPtoModal({
         <p className="t-small t-muted mb-3">
           <strong>{engineer.full_name}</strong> · {dayLabel}
         </p>
+
+        {/* Live balance — engineer is locked so the card always shows. */}
+        {balance && (
+          <div className="mb-3">
+            <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: '0.65rem' }}>
+              Balance · {balance.year}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <BalanceTile
+                label="Vacation"
+                used={balance.vacation_used}
+                alloted={balance.vacation_alloted}
+                remaining={balance.vacation_remaining}
+                pending={Number(hours) || 0}
+                active={type === 'vacation'}
+              />
+              <BalanceTile
+                label="Sick"
+                used={balance.sick_used}
+                alloted={balance.sick_alloted}
+                remaining={balance.sick_remaining}
+                pending={Number(hours) || 0}
+                active={type === 'sick'}
+              />
+              <BalanceTile
+                label="Personal"
+                used={balance.personal_used}
+                alloted={balance.personal_alloted}
+                remaining={balance.personal_remaining}
+                pending={Number(hours) || 0}
+                active={type === 'personal'}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
@@ -2176,6 +2224,18 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
   const [outUntil, setOutUntil]         = useState<string>((request.out_until ?? '').slice(0, 5));
   const [err, setErr]                   = useState<string | null>(null);
 
+  // Live balance for this engineer (same card as Add and Quick modals).
+  const summaryQ = usePtoSummary();
+  const currentYear = new Date().getFullYear();
+  const balance = useMemo(() => {
+    const all = (summaryQ.data ?? []).filter((s) => s.user_id === request.user_id);
+    if (all.length === 0) return null;
+    return (
+      all.find((s) => s.year === currentYear) ??
+      all.slice().sort((a, b) => b.year - a.year)[0]
+    );
+  }, [summaryQ.data, request.user_id, currentYear]);
+
   const onSave = async () => {
     setErr(null);
     if (endsOn < startsOn) { setErr('End date can\'t be before start date.'); return; }
@@ -2226,6 +2286,46 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
         <p className="t-small t-muted mb-3">
           Editing <strong>{request.user_full_name ?? '?'}</strong>'s entry. Engineer is locked — use Delete + Add PTO if you need to reassign to a different engineer.
         </p>
+
+        {/* Live balance for this engineer. NOTE: "pending" here is the
+            edited Hours value; the forecast already factors in the
+            CURRENT request's hours via balance.X_used, so subtracting
+            edited hours below would double-count. To keep it honest
+            we pass 0 — the manager edits the hours field directly and
+            can see the impact by comparing remaining vs the new hours. */}
+        {balance && (
+          <div className="mb-3">
+            <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: '0.65rem' }}>
+              Balance · {balance.year}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <BalanceTile
+                label="Vacation"
+                used={balance.vacation_used}
+                alloted={balance.vacation_alloted}
+                remaining={balance.vacation_remaining}
+                pending={0}
+                active={type === 'vacation'}
+              />
+              <BalanceTile
+                label="Sick"
+                used={balance.sick_used}
+                alloted={balance.sick_alloted}
+                remaining={balance.sick_remaining}
+                pending={0}
+                active={type === 'sick'}
+              />
+              <BalanceTile
+                label="Personal"
+                used={balance.personal_used}
+                alloted={balance.personal_alloted}
+                remaining={balance.personal_remaining}
+                pending={0}
+                active={type === 'personal'}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
