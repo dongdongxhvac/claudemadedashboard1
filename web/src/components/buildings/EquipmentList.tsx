@@ -13,14 +13,17 @@ import {
   useDeleteBuildingEquipment,
   useBuildingOpenIssues,
   useDeleteEquipmentIssue,
+  useRemoveLoto,
   EQUIPMENT_CATEGORY_LABELS,
   EQUIPMENT_STATUS_LABELS,
   equipmentStatusTone,
   worstStatus,
+  isLotoActive,
   type BuildingEquipment,
   type EquipmentIssue,
   type EffectiveEquipmentStatus,
 } from '../../hooks/useBuildingKb';
+import { useEngineers } from '../../hooks/useEngineers';
 import { EquipmentForm } from './EquipmentForm';
 import { IssueForm } from './IssueForm';
 import { IssueCloseDialog } from './IssueCloseDialog';
@@ -189,9 +192,13 @@ function EquipmentCard({
   const colors = statusColors(tone);
   const isSubComponent = !!eq.parent_equipment_id;
 
+  const engineersQ = useEngineers();
   const [addingIssue, setAddingIssue] = useState(false);
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
   const [closingIssue, setClosingIssue] = useState<EquipmentIssue | null>(null);
+  const closingApplierName = closingIssue?.loto_applied_by
+    ? engineersQ.data?.find((e) => e.user_id === closingIssue.loto_applied_by)?.full_name ?? null
+    : null;
 
   return (
     <div
@@ -327,6 +334,9 @@ function EquipmentCard({
             equipment_label: eq.short_name
               ? `${eq.short_name} · ${eq.full_name}`
               : eq.full_name,
+            loto_applied_at: closingIssue.loto_applied_at,
+            loto_removed_at: closingIssue.loto_removed_at,
+            loto_applied_by_name: closingApplierName,
           }}
           onClose={() => setClosingIssue(null)}
         />
@@ -399,9 +409,16 @@ function IssueRow({
   onClose: () => void;
 }) {
   const del = useDeleteEquipmentIssue();
+  const removeLoto = useRemoveLoto();
+  const engineersQ = useEngineers();
   const tone = equipmentStatusTone(issue.status);
   const accent =
     tone === 'bad' ? 'var(--color-danger)' : 'var(--color-warn, #d97706)';
+
+  const lotoActive = isLotoActive(issue);
+  const lotoApplierName = issue.loto_applied_by
+    ? engineersQ.data?.find((e) => e.user_id === issue.loto_applied_by)?.full_name ?? null
+    : null;
 
   return (
     <div
@@ -416,19 +433,45 @@ function IssueRow({
         alignItems: 'start',
       }}
     >
-      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <span
-          className="t-small uppercase tracking-wider"
-          style={{
-            padding: '2px 8px', borderRadius: 4,
-            fontSize: '0.65rem', fontWeight: 700,
-            background: accent, color: 'white',
-          }}
-        >
-          {EQUIPMENT_STATUS_LABELS[issue.status]}
-        </span>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className="t-small uppercase tracking-wider"
+            style={{
+              padding: '2px 8px', borderRadius: 4,
+              fontSize: '0.65rem', fontWeight: 700,
+              background: accent, color: 'white',
+            }}
+          >
+            {EQUIPMENT_STATUS_LABELS[issue.status]}
+          </span>
+          {lotoActive && (
+            <span
+              className="t-small uppercase tracking-wider"
+              style={{
+                padding: '2px 8px', borderRadius: 4,
+                fontSize: '0.65rem', fontWeight: 700,
+                background: 'var(--color-danger)',
+                color: 'white',
+                letterSpacing: '0.08em',
+              }}
+              title={
+                issue.loto_applied_at
+                  ? `LOTO applied ${new Date(issue.loto_applied_at).toLocaleString()}${lotoApplierName ? ' by ' + lotoApplierName : ''}`
+                  : 'LOTO active'
+              }
+            >
+              🔒 LOTO {lotoApplierName ? `· ${lotoApplierName.split(' ')[0]}` : ''}
+            </span>
+          )}
+          {issue.wo_created_by && (
+            <span className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+              WO by {issue.wo_created_by}
+            </span>
+          )}
+        </div>
         {canEdit && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               type="button"
               onClick={onEdit}
@@ -437,6 +480,23 @@ function IssueRow({
             >
               Edit
             </button>
+            {lotoActive && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm(`Mark LOTO removed on this issue? (Stamps you + now as the remover. The issue itself stays open — use Close to also resolve it.)`)) return;
+                  await removeLoto.mutateAsync({ id: issue.id, equipment_id: issue.equipment_id });
+                }}
+                className="t-small"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--color-warn, #d97706)',
+                }}
+                title="Lock physically pulled but issue stays open (e.g. waiting on parts)"
+              >
+                Remove LOTO
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

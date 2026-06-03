@@ -25,6 +25,11 @@ export type IssueCloseContext = {
   detail: string | null;
   equipment_label: string;        // for the dialog header ("HV1 · MAU-boiler")
   building_label?: string;        // optional bldg short_code/name
+  /** If non-null AND loto_removed_at is null, LOTO is still active and
+   *  the dialog shows the lockout safety prompt. */
+  loto_applied_at?: string | null;
+  loto_applied_by_name?: string | null;
+  loto_removed_at?: string | null;
 };
 
 export function IssueCloseDialog({
@@ -38,6 +43,13 @@ export function IssueCloseDialog({
   const [resolution, setResolution] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const lotoActive = !!ctx.loto_applied_at && !ctx.loto_removed_at;
+  // "remove" — engineer is physically removing the lock right now
+  // "already" — the lock was removed externally (rare; older state not yet updated)
+  // null     — engineer hasn't decided yet; submit is blocked
+  const [lotoChoice, setLotoChoice] =
+    useState<'remove' | 'already' | null>(lotoActive ? null : 'already');
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -45,11 +57,19 @@ export function IssueCloseDialog({
       setError('A resolution note is required — describe what fixed it.');
       return;
     }
+    if (lotoActive && lotoChoice === null) {
+      setError('LOTO is still applied — pick one of the two options below before closing.');
+      return;
+    }
     try {
       await close.mutateAsync({
         id: ctx.id,
         equipment_id: ctx.equipment_id,
         resolution: resolution.trim(),
+        // Only stamp the loto_removed fields if engineer picks "remove now".
+        // "already" path leaves the LOTO state untouched — managers can
+        // backfill it via the equipment detail view later if needed.
+        removeLoto: lotoActive && lotoChoice === 'remove',
       });
       onClose();
     } catch (err) {
@@ -130,6 +150,65 @@ export function IssueCloseDialog({
             style={{ ...inputStyle, resize: 'vertical' }}
           />
         </Field>
+
+        {lotoActive && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 4,
+              border: '1px solid var(--color-danger)',
+              background: 'rgba(239, 68, 68, 0.08)',
+              display: 'grid', gap: 8,
+            }}
+          >
+            <div className="t-small uppercase tracking-wider" style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
+              🔒 LOTO still applied
+            </div>
+            <div className="t-text" style={{ fontSize: '0.85rem' }}>
+              Lock was placed{' '}
+              {ctx.loto_applied_at && (
+                <strong>{new Date(ctx.loto_applied_at).toLocaleString()}</strong>
+              )}
+              {ctx.loto_applied_by_name && (
+                <>
+                  {' by '}
+                  <strong>{ctx.loto_applied_by_name}</strong>
+                </>
+              )}
+              . Closing this issue requires accounting for the lock.
+            </div>
+            <label className="t-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="loto-choice"
+                checked={lotoChoice === 'remove'}
+                onChange={() => setLotoChoice('remove')}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <strong>Remove LOTO now</strong>
+                <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
+                  — I&apos;m physically pulling the lock right now (stamps you + now as the remover)
+                </span>
+              </span>
+            </label>
+            <label className="t-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="loto-choice"
+                checked={lotoChoice === 'already'}
+                onChange={() => setLotoChoice('already')}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <strong>Already removed externally</strong>
+                <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
+                  — someone took the lock off but didn&apos;t update the record. Close issue but leave LOTO state alone; a manager can backfill it.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {error && (
           <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>

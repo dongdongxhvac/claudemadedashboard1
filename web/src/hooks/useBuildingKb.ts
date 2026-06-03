@@ -186,7 +186,11 @@ export function collectDescendantIds(
  *  A given equipment row may have multiple open issues at once
  *  (e.g. boiler with electrical fault AND a separate freeze stat fault).
  *  When the issue is closed, `resolution` MUST be filled (DB CHECK
- *  constraint) — closing without an explanation isn't allowed. */
+ *  constraint) — closing without an explanation isn't allowed.
+ *
+ *  LOTO (Lockout/Tagout) fields are paired: applied_at + applied_by
+ *  together or both null; same for removed_at + removed_by. DB CHECK
+ *  enforces the pairing and ordering. */
 export type EquipmentIssue = {
   id: string;
   equipment_id: string;
@@ -194,15 +198,26 @@ export type EquipmentIssue = {
   detail: string | null;
   status_date: string | null;      // YYYY-MM-DD
   wo_number: string | null;
+  wo_created_by: string | null;    // free text — engineer name OR vendor
   rsp: string | null;
   sort_order: number;
   closed_at: string | null;        // null = open
   resolution: string | null;       // required when closed_at is set
   closed_by: string | null;        // users.id of who closed it
+  loto_applied_at: string | null;
+  loto_applied_by: string | null;  // users.id — must be authorized employee
+  loto_removed_at: string | null;
+  loto_removed_by: string | null;
   created_at: string;
   updated_at: string;
   updated_by: string | null;
 };
+
+/** True when LOTO is currently applied to this issue (applied but not
+ *  yet removed). UI shows a 🔒 badge. */
+export function isLotoActive(i: Pick<EquipmentIssue, 'loto_applied_at' | 'loto_removed_at'>): boolean {
+  return !!i.loto_applied_at && !i.loto_removed_at;
+}
 
 /** Row shape from v_building_equipment_status — one row per OPEN issue,
  *  joined to equipment + building. `id` is the issue id. */
@@ -219,7 +234,12 @@ export type BuildingEquipmentStatusRow = {
   status_detail: string | null;
   status_date: string | null;
   wo_number: string | null;
+  wo_created_by: string | null;
   rsp: string | null;
+  loto_applied_at: string | null;
+  loto_applied_by: string | null;
+  loto_applied_by_name: string | null;   // joined from users for display
+  loto_removed_at: string | null;
   last_status_change_at: string;
 };
 
@@ -584,7 +604,12 @@ export function useUpsertEquipmentIssue() {
 /** Mark an issue as closed — stamps closed_at + resolution + closed_by.
  *  Resolution is REQUIRED (enforced both client-side here and via DB
  *  CHECK constraint). The view drops the row from v_building_equipment_status,
- *  so §10.1 / TV stripe auto-update. */
+ *  so §10.1 / TV stripe auto-update.
+ *
+ *  If `removeLoto` is true, also stamps loto_removed_at/by as part of the
+ *  same UPDATE — used when the engineer confirms in the close dialog that
+ *  they're physically pulling the lock now. If false (LOTO was already
+ *  removed earlier or never applied), LOTO fields are untouched. */
 export function useCloseEquipmentIssue() {
   const qc = useQueryClient();
   return useMutation({
@@ -592,6 +617,7 @@ export function useCloseEquipmentIssue() {
       id: string;
       equipment_id: string;
       resolution: string;
+      removeLoto?: boolean;
     }) => {
       const text = input.resolution.trim();
       if (!text) throw new Error('Resolution is required when closing an issue.');
@@ -607,13 +633,18 @@ export function useCloseEquipmentIssue() {
           .maybeSingle();
         closedBy = u?.id ?? null;
       }
+      const update: Record<string, unknown> = {
+        closed_at: new Date().toISOString(),
+        resolution: text,
+        closed_by: closedBy,
+      };
+      if (input.removeLoto) {
+        update.loto_removed_at = new Date().toISOString();
+        update.loto_removed_by = closedBy;
+      }
       const { error } = await supabase
         .from('equipment_issues')
-        .update({
-          closed_at: new Date().toISOString(),
-          resolution: text,
-          closed_by: closedBy,
-        })
+        .update(update)
         .eq('id', input.id);
       if (error) throw error;
     },
@@ -622,6 +653,39 @@ export function useCloseEquipmentIssue() {
       qc.invalidateQueries({ queryKey: ['equipment_issues_by_building'] });
       qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
       qc.invalidateQueries({ queryKey: ['building_equipment_counts_map'] });
+    },
+  });
+}
+
+/** Standalone "remove LOTO without closing the issue" mutation.
+ *  Useful when LOTO comes off but work isn't done (e.g. waiting on parts). */
+export function useRemoveLoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; equipment_id: string }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      let removedBy: string | null = null;
+      if (auth.user) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', auth.user.id)
+          .maybeSingle();
+        removedBy = u?.id ?? null;
+      }
+      const { error } = await supabase
+        .from('equipment_issues')
+        .update({
+          loto_removed_at: new Date().toISOString(),
+          loto_removed_by: removedBy,
+        })
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: issuesKey(vars.equipment_id) });
+      qc.invalidateQueries({ queryKey: ['equipment_issues_by_building'] });
+      qc.invalidateQueries({ queryKey: ['building_equipment_status_down'] });
     },
   });
 }

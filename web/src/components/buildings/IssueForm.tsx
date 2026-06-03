@@ -1,7 +1,12 @@
 // Inline form for adding or editing one equipment_issues row. Opened from
 // the EquipmentCard "+ Add issue" button or from an existing issue's "Edit"
-// link. Mirrors the visual shape of the old EquipmentForm's status detail
-// popup (red-tinted block) so the UX feels continuous.
+// link.
+//
+// Two collapsible disclosures keep the simple case compact:
+//   * "WO / RSP details" — the WO #, who created it, responsible party
+//   * "LOTO" — when a lockout/tagout was applied + by which engineer.
+//     LOTO removal happens via the close dialog or an explicit "Remove
+//     LOTO" button on the issue row.
 import { useState } from 'react';
 import {
   useUpsertEquipmentIssue,
@@ -10,6 +15,7 @@ import {
   type EquipmentIssue,
   type IssueStatus,
 } from '../../hooks/useBuildingKb';
+import { useEngineers } from '../../hooks/useEngineers';
 
 function todayLocalISO(): string {
   return new Date().toLocaleDateString('en-CA');
@@ -25,20 +31,40 @@ export function IssueForm({
   onClose: () => void;
 }) {
   const upsert = useUpsertEquipmentIssue();
-  const [status, setStatus]       = useState<IssueStatus>(existing?.status ?? 'down_cm');
-  const [detail, setDetail]       = useState(existing?.detail ?? '');
-  const [statusDate, setStatusDate] = useState<string>(
+  const engineersQ = useEngineers();
+
+  const [status, setStatus]             = useState<IssueStatus>(existing?.status ?? 'down_cm');
+  const [detail, setDetail]             = useState(existing?.detail ?? '');
+  const [statusDate, setStatusDate]     = useState<string>(
     existing?.status_date ?? todayLocalISO(),
   );
-  const [woNumber, setWoNumber]   = useState(existing?.wo_number ?? '');
-  const [rsp, setRsp]             = useState(existing?.rsp ?? '');
-  const [error, setError]         = useState<string | null>(null);
+  const [woNumber, setWoNumber]         = useState(existing?.wo_number ?? '');
+  const [woCreatedBy, setWoCreatedBy]   = useState(existing?.wo_created_by ?? '');
+  const [rsp, setRsp]                   = useState(existing?.rsp ?? '');
+  // LOTO state — only stamped if engineer opens the disclosure and
+  // explicitly marks it applied. Empty by default.
+  const [lotoApplied, setLotoApplied]   = useState(!!existing?.loto_applied_at);
+  const [lotoApplyAt, setLotoApplyAt]   = useState<string>(
+    existing?.loto_applied_at
+      ? new Date(existing.loto_applied_at).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+  );
+  const [lotoApplyBy, setLotoApplyBy]   = useState(existing?.loto_applied_by ?? '');
+  const [showWoDetails, setShowWoDetails] = useState(
+    !!(existing?.wo_number || existing?.wo_created_by || existing?.rsp),
+  );
+  const [showLoto, setShowLoto]         = useState(!!existing?.loto_applied_at);
+  const [error, setError]               = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!detail.trim()) {
       setError('Detail is required — what is wrong / what is being done.');
+      return;
+    }
+    if (lotoApplied && !lotoApplyBy) {
+      setError('LOTO requires the engineer who applied it — pick from the list.');
       return;
     }
     try {
@@ -49,14 +75,19 @@ export function IssueForm({
         detail: detail.trim(),
         status_date: statusDate || null,
         wo_number: woNumber.trim() || null,
+        wo_created_by: woCreatedBy.trim() || null,
         rsp: rsp.trim() || null,
         sort_order: existing?.sort_order ?? 0,
+        loto_applied_at: lotoApplied ? new Date(lotoApplyAt).toISOString() : null,
+        loto_applied_by: lotoApplied ? lotoApplyBy : null,
       });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
     }
   }
+
+  const engineers = engineersQ.data ?? [];
 
   return (
     <form
@@ -97,40 +128,122 @@ export function IssueForm({
         />
       </Field>
 
-      <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
-        <Field label={
-          status === 'off_pm'   ? 'Date of off-PM' :
-          status === 'down_cm'  ? 'Date of down-CM' :
-          status === 'degraded' ? 'Date noticed' :
-          status === 'bypass'   ? 'Date bypassed' :
-          'Date'
-        }>
-          <input
-            type="date"
-            value={statusDate}
-            onChange={(e) => setStatusDate(e.target.value)}
-            style={inputStyle}
-          />
-        </Field>
-        <Field label="WO #">
-          <input
-            type="text"
-            value={woNumber}
-            onChange={(e) => setWoNumber(e.target.value)}
-            placeholder='e.g. "PM-1234", "CM-5678"'
-            style={inputStyle}
-          />
-        </Field>
-      </div>
-
-      <Field label="RSP (responsible party)" hint="who's owning this — engineer / vendor / contractor">
+      <Field label={
+        status === 'off_pm'   ? 'Date of off-PM' :
+        status === 'down_cm'  ? 'Date of down-CM' :
+        status === 'degraded' ? 'Date noticed' :
+        status === 'bypass'   ? 'Date bypassed' :
+        'Date'
+      }>
         <input
-          type="text"
-          value={rsp}
-          onChange={(e) => setRsp(e.target.value)}
-          style={inputStyle}
+          type="date"
+          value={statusDate}
+          onChange={(e) => setStatusDate(e.target.value)}
+          style={{ ...inputStyle, maxWidth: 180 }}
         />
       </Field>
+
+      {/* ──────────────── WO / RSP disclosure ──────────────── */}
+      <button
+        type="button"
+        onClick={() => setShowWoDetails((v) => !v)}
+        style={discloseBtn}
+      >
+        <span>{showWoDetails ? '▼' : '▶'}</span> WO / RSP details
+        {!showWoDetails && (woNumber || woCreatedBy || rsp) && (
+          <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+            ({[woNumber && `WO ${woNumber}`, woCreatedBy, rsp].filter(Boolean).join(' · ')})
+          </span>
+        )}
+      </button>
+      {showWoDetails && (
+        <div style={discloseBody}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
+            <Field label="WO #">
+              <input
+                type="text"
+                value={woNumber}
+                onChange={(e) => setWoNumber(e.target.value)}
+                placeholder='e.g. "PM-1234", "CM-5678"'
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="WO created by" hint="engineer name or vendor (e.g. CWS)">
+              <input
+                type="text"
+                value={woCreatedBy}
+                onChange={(e) => setWoCreatedBy(e.target.value)}
+                placeholder='e.g. "Don", "CWS"'
+                style={inputStyle}
+              />
+            </Field>
+          </div>
+          <Field label="RSP (responsible party)" hint="who's owning this — engineer / vendor / contractor">
+            <input
+              type="text"
+              value={rsp}
+              onChange={(e) => setRsp(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* ──────────────── LOTO disclosure ──────────────── */}
+      <button
+        type="button"
+        onClick={() => setShowLoto((v) => !v)}
+        style={discloseBtn}
+      >
+        <span>{showLoto ? '▼' : '▶'}</span> LOTO (Lockout/Tagout)
+        {!showLoto && lotoApplied && (
+          <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--color-danger)' }}>
+            🔒 LOTO ON
+          </span>
+        )}
+      </button>
+      {showLoto && (
+        <div style={discloseBody}>
+          <label className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={lotoApplied}
+              onChange={(e) => setLotoApplied(e.target.checked)}
+            />
+            LOTO applied — equipment is locked and tagged out
+          </label>
+          {lotoApplied && (
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(160px,1fr)' }}>
+              <Field label="Applied at">
+                <input
+                  type="datetime-local"
+                  value={lotoApplyAt}
+                  onChange={(e) => setLotoApplyAt(e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+              <Field label="Applied by (required)" hint="engineer who placed the lock">
+                <select
+                  value={lotoApplyBy}
+                  onChange={(e) => setLotoApplyBy(e.target.value)}
+                  style={inputStyle}
+                  required
+                >
+                  <option value="">— pick engineer —</option>
+                  {engineers.map((e) => (
+                    <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+          {existing?.loto_removed_at && (
+            <div className="t-small t-muted">
+              Removed at {new Date(existing.loto_removed_at).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
@@ -192,4 +305,20 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--color-card)',
   color: 'var(--color-text)',
   font: 'inherit',
+};
+
+const discloseBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6,
+  padding: '4px 0',
+  background: 'none', border: 'none', cursor: 'pointer',
+  font: 'inherit', color: 'var(--color-text)',
+  fontSize: '0.85rem',
+  textAlign: 'left',
+};
+
+const discloseBody: React.CSSProperties = {
+  display: 'grid', gap: 8,
+  padding: '8px 0 0 16px',
+  borderLeft: '2px solid var(--color-border-soft, rgba(0,0,0,0.1))',
+  marginLeft: 4,
 };
