@@ -15,12 +15,15 @@ const KIND_LABEL: Record<KbSearchHit['kind'], string> = {
   equipment: 'equipment',
   part:      'part',
   section:   'note',
+  issue:     'past fix',
 };
 
 const KIND_COLOR: Record<KbSearchHit['kind'], string> = {
   equipment: 'var(--color-text)',
   part:      'var(--color-accent)',
   section:   'var(--color-text-muted)',
+  // Green tint — "this problem has been solved before, here's how"
+  issue:     'var(--color-ok, #10b981)',
 };
 
 function highlight(text: string | null, q: string): React.ReactNode {

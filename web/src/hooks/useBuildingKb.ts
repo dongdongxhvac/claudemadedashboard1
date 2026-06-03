@@ -231,7 +231,7 @@ export type KbSearchHit = {
   building_id: string;
   building_short_code: string | null;
   building_name: string;
-  kind: 'equipment' | 'part' | 'section';
+  kind: 'equipment' | 'part' | 'section' | 'issue';
   entity_id: string | null;
   title: string;
   body: string | null;
