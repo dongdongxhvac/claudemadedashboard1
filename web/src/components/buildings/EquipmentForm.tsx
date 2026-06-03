@@ -3,10 +3,12 @@
 // auto / defaulted). Active problems (off-PM / down-CM / degraded / bypass)
 // live as equipment_issues child rows and are managed via IssueForm from
 // the EquipmentList card.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
+  useBuildingEquipment,
   useUpsertBuildingEquipment,
   uploadEquipmentPhoto,
+  collectDescendantIds,
   EQUIPMENT_CATEGORIES,
   EQUIPMENT_CATEGORY_LABELS,
   EQUIPMENT_STATUSES,
@@ -27,12 +29,36 @@ export function EquipmentForm({
   onClose: () => void;
 }) {
   const upsert = useUpsertBuildingEquipment();
+  const eqQ = useBuildingEquipment(buildingId);
 
   const [fullName, setFullName]             = useState(existing?.full_name ?? '');
   const [shortName, setShortName]           = useState(existing?.short_name ?? '');
+  const [parentId, setParentId]             = useState<string | ''>(
+    existing?.parent_equipment_id ?? '',
+  );
   const [category, setCategory]             = useState<EquipmentCategory | ''>(
     existing?.category ?? '',
   );
+
+  // Parent dropdown options: every active piece of equipment in this
+  // building EXCEPT self and self's descendants (cycle prevention).
+  const parentOptions = useMemo(() => {
+    const all = eqQ.data ?? [];
+    const excluded = new Set<string>();
+    if (existing?.id) {
+      excluded.add(existing.id);
+      for (const d of collectDescendantIds(all, existing.id)) excluded.add(d);
+    }
+    return all
+      .filter((e) => !excluded.has(e.id))
+      .sort((a, b) => {
+        // Top-level first, then alpha by name
+        const aTop = a.parent_equipment_id ? 1 : 0;
+        const bTop = b.parent_equipment_id ? 1 : 0;
+        if (aTop !== bTop) return aTop - bTop;
+        return a.full_name.localeCompare(b.full_name);
+      });
+  }, [eqQ.data, existing?.id]);
   const [locationNote, setLocationNote]     = useState(existing?.location_note ?? '');
   const [partsNotes, setPartsNotes]         = useState(existing?.parts_notes ?? '');
   const [commonIssues, setCommonIssues]     = useState(existing?.common_issues ?? '');
@@ -58,6 +84,7 @@ export function EquipmentForm({
       const saved = await upsert.mutateAsync({
         id: existing?.id,
         building_id: buildingId,
+        parent_equipment_id: parentId || null,
         full_name: fullName.trim(),
         short_name: shortName.trim() || null,
         category: category || null,
@@ -140,6 +167,25 @@ export function EquipmentForm({
           <option value="">— pick —</option>
           {EQUIPMENT_CATEGORIES.map((c) => (
             <option key={c} value={c}>{EQUIPMENT_CATEGORY_LABELS[c]}</option>
+          ))}
+        </select>
+      </Field>
+
+      <Field
+        label="Component of (optional)"
+        hint='leave blank if this is a top-level asset. Pick a parent if this is a sub-component (e.g. "Compressor 2" → "Chiller 1").'
+      >
+        <select
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          style={inputStyle}
+        >
+          <option value="">— top-level (no parent) —</option>
+          {parentOptions.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.short_name ? `${e.short_name} · ${e.full_name}` : e.full_name}
+              {e.parent_equipment_id ? ' (sub-component)' : ''}
+            </option>
           ))}
         </select>
       </Field>

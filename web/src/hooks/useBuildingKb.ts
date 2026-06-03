@@ -136,6 +136,7 @@ export function worstStatus(
 export type BuildingEquipment = {
   id: string;
   building_id: string;
+  parent_equipment_id: string | null;   // null = top-level; non-null = sub-component
   full_name: string;
   short_name: string | null;
   category: EquipmentCategory | null;
@@ -152,6 +153,34 @@ export type BuildingEquipment = {
   updated_at: string;
   updated_by: string | null;
 };
+
+/** Walk a flat equipment list and return the set of descendant ids for a
+ *  given root id. Used by the parent-picker to exclude cycles, and by the
+ *  rollup logic to count children's issues against a parent. */
+export function collectDescendantIds(
+  equipment: ReadonlyArray<Pick<BuildingEquipment, 'id' | 'parent_equipment_id'>>,
+  rootId: string,
+): Set<string> {
+  const childrenByParent = new Map<string, string[]>();
+  for (const e of equipment) {
+    if (!e.parent_equipment_id) continue;
+    const arr = childrenByParent.get(e.parent_equipment_id) ?? [];
+    arr.push(e.id);
+    childrenByParent.set(e.parent_equipment_id, arr);
+  }
+  const out = new Set<string>();
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    for (const childId of childrenByParent.get(id) ?? []) {
+      if (!out.has(childId)) {
+        out.add(childId);
+        stack.push(childId);
+      }
+    }
+  }
+  return out;
+}
 
 /** One open or closed issue tracked against a piece of equipment.
  *  A given equipment row may have multiple open issues at once

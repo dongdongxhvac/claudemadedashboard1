@@ -43,6 +43,59 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
   const rows = eqQ.data ?? [];
   const issuesByEq = issQ.data ?? new Map<string, EquipmentIssue[]>();
 
+  // Group children by parent_equipment_id so the renderer can indent them
+  // under their parent card.
+  const childrenByParent = new Map<string, BuildingEquipment[]>();
+  for (const eq of rows) {
+    if (!eq.parent_equipment_id) continue;
+    const arr = childrenByParent.get(eq.parent_equipment_id) ?? [];
+    arr.push(eq);
+    childrenByParent.set(eq.parent_equipment_id, arr);
+  }
+  // Top-level rows = those whose parent isn't in the current building's
+  // active equipment list (either truly top-level, or orphaned because
+  // parent was soft-deleted — show them as top-level either way).
+  const idSet = new Set(rows.map((r) => r.id));
+  const topLevel = rows.filter(
+    (eq) => !eq.parent_equipment_id || !idSet.has(eq.parent_equipment_id),
+  );
+
+  const renderCard = (eq: BuildingEquipment, depth: number) => {
+    if (editingId === eq.id) {
+      return (
+        <div key={eq.id} style={{ marginLeft: depth * 24 }}>
+          <EquipmentForm
+            buildingId={buildingId}
+            existing={eq}
+            onClose={() => setEditingId(null)}
+          />
+        </div>
+      );
+    }
+    const children = childrenByParent.get(eq.id) ?? [];
+    // Roll up children's open issues into the parent's effective status —
+    // own issues stay primary on the card; child issues feed the "worst-of"
+    // computation only.
+    const childIssues = children.flatMap((c) => issuesByEq.get(c.id) ?? []);
+    return (
+      <div key={eq.id} style={{ marginLeft: depth * 24 }}>
+        <EquipmentCard
+          eq={eq}
+          issues={issuesByEq.get(eq.id) ?? []}
+          childIssues={childIssues}
+          childCount={children.length}
+          canEdit={canEdit}
+          onEdit={() => setEditingId(eq.id)}
+          onDelete={async () => {
+            if (!confirm(`Remove ${eq.full_name}? (Soft delete — can be restored.)`)) return;
+            await del.mutateAsync({ id: eq.id, building_id: eq.building_id });
+          }}
+        />
+        {children.map((c) => renderCard(c, depth + 1))}
+      </div>
+    );
+  };
+
   return (
     <div>
       {canEdit && !addingNew && !editingId && (
@@ -72,28 +125,7 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
         </p>
       )}
 
-      {rows.map((eq) =>
-        editingId === eq.id ? (
-          <EquipmentForm
-            key={eq.id}
-            buildingId={buildingId}
-            existing={eq}
-            onClose={() => setEditingId(null)}
-          />
-        ) : (
-          <EquipmentCard
-            key={eq.id}
-            eq={eq}
-            issues={issuesByEq.get(eq.id) ?? []}
-            canEdit={canEdit}
-            onEdit={() => setEditingId(eq.id)}
-            onDelete={async () => {
-              if (!confirm(`Remove ${eq.full_name}? (Soft delete — can be restored.)`)) return;
-              await del.mutateAsync({ id: eq.id, building_id: eq.building_id });
-            }}
-          />
-        ),
-      )}
+      {topLevel.map((eq) => renderCard(eq, 0))}
     </div>
   );
 }
@@ -128,22 +160,34 @@ function statusColors(tone: 'good' | 'warn' | 'bad'): {
 function EquipmentCard({
   eq,
   issues,
+  childIssues,
+  childCount,
   canEdit,
   onEdit,
   onDelete,
 }: {
   eq: BuildingEquipment;
   issues: EquipmentIssue[];
+  /** Open issues across all descendants — feeds the parent's rollup
+   *  status only; not rendered on this card (each child card renders
+   *  its own issues). */
+  childIssues: EquipmentIssue[];
+  /** Total descendant count, for the "N sub-components" badge. */
+  childCount: number;
   canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  // Effective headline = worst of open issues, else the equipment's baseline
-  // status (operational / standby_auto / defaulted).
+  // Effective headline = worst of (own open issues + descendants' open
+  // issues), else the equipment's baseline status (operational /
+  // standby_auto / defaulted). This way a chiller appears DEGRADED if
+  // any of its compressors are degraded, even if the chiller itself has
+  // no open issues on its row.
   const effective: EffectiveEquipmentStatus =
-    worstStatus(issues.map((i) => i.status)) ?? eq.status;
+    worstStatus([...issues, ...childIssues].map((i) => i.status)) ?? eq.status;
   const tone = equipmentStatusTone(effective);
   const colors = statusColors(tone);
+  const isSubComponent = !!eq.parent_equipment_id;
 
   const [addingIssue, setAddingIssue] = useState(false);
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
@@ -187,13 +231,42 @@ function EquipmentCard({
               fontSize: '0.65rem', fontWeight: 700,
               background: colors.pillBg, color: colors.pillFg,
             }}
-            title={`Last change: ${new Date(eq.last_status_change_at).toLocaleString()}`}
+            title={`Last change: ${new Date(eq.last_status_change_at).toLocaleString()}${
+              childIssues.length > 0 ? ` · includes ${childIssues.length} sub-component issue${childIssues.length === 1 ? '' : 's'}` : ''
+            }`}
           >
             {EQUIPMENT_STATUS_LABELS[effective]}
             {issues.length > 1 && (
               <span style={{ marginLeft: 6, opacity: 0.85 }}>· {issues.length}</span>
             )}
+            {childIssues.length > 0 && (
+              <span style={{ marginLeft: 6, opacity: 0.85 }}>
+                · {childIssues.length} sub
+              </span>
+            )}
           </span>
+          {childCount > 0 && (
+            <span
+              className="t-small t-muted"
+              style={{ fontSize: '0.7rem' }}
+              title={`${childCount} sub-component${childCount === 1 ? '' : 's'} catalogued`}
+            >
+              {childCount} sub-component{childCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {isSubComponent && (
+            <span
+              className="t-small t-muted uppercase tracking-wider"
+              style={{
+                padding: '1px 6px', borderRadius: 4,
+                border: '1px dashed var(--color-border)',
+                fontSize: '0.6rem',
+              }}
+              title="This is a sub-component of another piece of equipment"
+            >
+              sub
+            </span>
+          )}
         </div>
         {canEdit && (
           <div className="flex gap-2">
