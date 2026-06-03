@@ -1045,13 +1045,14 @@ function QuickPtoModal({
           <strong>{engineer.full_name}</strong> · {dayLabel}
         </p>
 
-        {/* Live balance — engineer is locked so the card always shows. */}
+        {/* Live balance — engineer is locked so the card always shows.
+            Personal removed per ops decision (not offered). */}
         {balance && (
           <div className="mb-3">
             <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: '0.65rem' }}>
               Balance · {balance.year}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <BalanceTile
                 label="Vacation"
                 used={balance.vacation_used}
@@ -1068,14 +1069,6 @@ function QuickPtoModal({
                 pending={Number(hours) || 0}
                 active={type === 'sick'}
               />
-              <BalanceTile
-                label="Personal"
-                used={balance.personal_used}
-                alloted={balance.personal_alloted}
-                remaining={balance.personal_remaining}
-                pending={Number(hours) || 0}
-                active={type === 'personal'}
-              />
             </div>
           </div>
         )}
@@ -1089,9 +1082,14 @@ function QuickPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][]).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+              {/* Personal hidden from the picker per ops decision (not
+                  offered). Legacy rows that already have type='personal'
+                  still render their label via PTO_TYPE_LABELS elsewhere. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
+                .filter(([k]) => k !== 'personal')
+                .map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
             </select>
           </label>
 
@@ -1976,9 +1974,8 @@ function AddPtoModal({
           </label>
 
           {/* Per-engineer balance card. Appears once an engineer is picked.
-              Each tile shows remaining vs alloted for the year; the tile
-              matching the currently-selected Type below gets an accent
-              border so the manager sees the relevant pool first. */}
+              Personal type removed per ops decision (not offered) — tile
+              and dropdown option both gone, grid drops to 2 cols. */}
           {userId && (
             <div className="col-span-2">
               {summaryQ.isLoading ? (
@@ -1988,7 +1985,7 @@ function AddPtoModal({
                   <div className="t-small t-muted uppercase tracking-wider mb-1">
                     Balance · {balance.year}
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <BalanceTile
                       label="Vacation"
                       used={balance.vacation_used}
@@ -2005,14 +2002,6 @@ function AddPtoModal({
                       pending={finalHours}
                       active={type === 'sick'}
                     />
-                    <BalanceTile
-                      label="Personal"
-                      used={balance.personal_used}
-                      alloted={balance.personal_alloted}
-                      remaining={balance.personal_remaining}
-                      pending={finalHours}
-                      active={type === 'personal'}
-                    />
                   </div>
                 </div>
               ) : (
@@ -2027,9 +2016,14 @@ function AddPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][]).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+              {/* Personal hidden from the picker per ops decision (not
+                  offered). Legacy rows that already have type='personal'
+                  still render their label via PTO_TYPE_LABELS elsewhere. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
+                .filter(([k]) => k !== 'personal')
+                .map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
             </select>
           </label>
 
@@ -2287,18 +2281,16 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
           Editing <strong>{request.user_full_name ?? '?'}</strong>'s entry. Engineer is locked — use Delete + Add PTO if you need to reassign to a different engineer.
         </p>
 
-        {/* Live balance for this engineer. NOTE: "pending" here is the
-            edited Hours value; the forecast already factors in the
-            CURRENT request's hours via balance.X_used, so subtracting
-            edited hours below would double-count. To keep it honest
-            we pass 0 — the manager edits the hours field directly and
-            can see the impact by comparing remaining vs the new hours. */}
+        {/* Live balance for this engineer. NOTE: passing pending=0 so the
+            forecast doesn't double-count the CURRENT request's hours
+            (those are already inside balance.X_used). Personal removed
+            per ops decision (not offered). */}
         {balance && (
           <div className="mb-3">
             <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontSize: '0.65rem' }}>
               Balance · {balance.year}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <BalanceTile
                 label="Vacation"
                 used={balance.vacation_used}
@@ -2315,14 +2307,6 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
                 pending={0}
                 active={type === 'sick'}
               />
-              <BalanceTile
-                label="Personal"
-                used={balance.personal_used}
-                alloted={balance.personal_alloted}
-                remaining={balance.personal_remaining}
-                pending={0}
-                active={type === 'personal'}
-              />
             </div>
           </div>
         )}
@@ -2334,9 +2318,14 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][]).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+              {/* Personal hidden from the picker per ops decision (not
+                  offered). Legacy rows that already have type='personal'
+                  still render their label via PTO_TYPE_LABELS elsewhere. */}
+              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string][])
+                .filter(([k]) => k !== 'personal')
+                .map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
             </select>
           </label>
 
