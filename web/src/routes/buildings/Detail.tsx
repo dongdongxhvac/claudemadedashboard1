@@ -1,9 +1,17 @@
 // /buildings/:short_code — one building's knowledge-base detail page.
 //
-// Tab navigation across categories. Each tab shows either a SectionEditor
-// (free-form text) or the EquipmentList (structured). Sticky tab strip
-// stays visible while the section content scrolls so a field engineer
-// can swipe between Mechanical and Troubleshooting fast.
+// Layout per user direction 2026-06-04:
+//   * Sticky header at the top with building name + short_code + address.
+//     ALWAYS visible while the user scrolls — prevents accidentally
+//     editing equipment under the wrong building (a real risk when
+//     swapping between buildings in adjacent tabs).
+//   * Four primary tabs: Equipment, Vendor Log, Inventory, SOP.
+//   * SOP tab rolls up the seven free-form note sections (Overview,
+//     Mechanical, Control, Electrical, Plumbing, Access, Troubleshooting)
+//     under one tab with sub-tabs inside, keeping the top strip narrow.
+//
+// Projects panel removed from this page (data preserved; surfaced on
+// the manager dashboard + TV view).
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
@@ -20,42 +28,27 @@ import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
 import { PartsPanel } from '../../components/buildings/PartsPanel';
 import { VendorVisitsPanel } from '../../components/buildings/VendorVisitsPanel';
-import { ProjectsPanel } from '../../components/buildings/ProjectsPanel';
 
-// Tab order: Overview → Vendor Log → Projects → Equipment → Inventory →
-// 4 system categories → Access → Troubleshooting. Vendor Log + Projects
-// cluster as the "operational logs" group; Equipment + Inventory are the
-// "catalog" group; the rest are free-form sections.
-type Tab =
-  | 'overview'
-  | 'vendors'
-  | 'projects'
-  | 'equipment'
-  | 'inventory'
-  | 'mechanical'
-  | 'control'
-  | 'electrical'
-  | 'plumbing'
-  | 'access'
-  | 'troubleshooting';
+type Tab = 'equipment' | 'vendors' | 'inventory' | 'sop';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'overview',        label: SECTION_LABELS.overview },
-  { key: 'vendors',         label: 'Vendor Log' },
-  { key: 'projects',        label: 'Projects' },
-  { key: 'equipment',       label: 'Equipment' },
-  { key: 'inventory',       label: 'Inventory' },
-  { key: 'mechanical',      label: SECTION_LABELS.mechanical },
-  { key: 'control',         label: SECTION_LABELS.control },
-  { key: 'electrical',      label: SECTION_LABELS.electrical },
-  { key: 'plumbing',        label: SECTION_LABELS.plumbing },
-  { key: 'access',          label: SECTION_LABELS.access },
-  { key: 'troubleshooting', label: SECTION_LABELS.troubleshooting },
+  { key: 'equipment', label: 'Equipment' },
+  { key: 'vendors',   label: 'Vendor Log' },
+  { key: 'inventory', label: 'Inventory' },
+  { key: 'sop',       label: 'SOP' },
 ];
 
-const SECTION_TAB_KEYS: SectionKey[] = [
-  'overview', 'mechanical', 'control', 'electrical', 'plumbing',
-  'access', 'troubleshooting',
+// Sub-tab order inside the SOP tab. Overview comes first (general building
+// notes), then the system-specific operational notes, then access +
+// troubleshooting at the end.
+const SOP_SECTION_KEYS: SectionKey[] = [
+  'overview',
+  'mechanical',
+  'control',
+  'electrical',
+  'plumbing',
+  'access',
+  'troubleshooting',
 ];
 
 export default function BuildingDetail() {
@@ -63,7 +56,8 @@ export default function BuildingDetail() {
   const { signOut } = useAuth();
   const me = useMe();
   const buildingsQ = useBuildings();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('equipment');
+  const [sopSection, setSopSection] = useState<SectionKey>('overview');
 
   const building = useMemo(() => {
     if (!buildingsQ.data) return undefined;
@@ -84,8 +78,6 @@ export default function BuildingDetail() {
   if (buildingsQ.isLoading || me.isLoading) {
     return <p className="t-text t-muted p-6">Loading…</p>;
   }
-
-  // No building matched the URL slug — bounce to the index.
   if (!building) {
     return <Navigate to="/buildings" replace />;
   }
@@ -93,37 +85,13 @@ export default function BuildingDetail() {
   const sectionByKey = new Map(
     (sectionsQ.data ?? []).map((n) => [n.section_key, n]),
   );
-
-  // Equipment-count badge on the Equipment tab so people see at a glance
-  // whether this building has any structured records yet.
   const eqCount = equipmentQ.data?.length ?? 0;
 
   return (
     <div className="min-h-screen t-bg">
-      {/* slim header */}
-      <header
-        className="border-b"
-        style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
-      >
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-baseline justify-between gap-3 flex-wrap">
-          <div>
-            <div className="t-small t-muted">
-              <Link to="/buildings" className="t-accent hover:underline">← All buildings</Link>
-            </div>
-            <h1 className="t-section-title mt-1">{building.name}</h1>
-            {building.address && (
-              <p className="t-small t-muted">{building.address}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/manager" className="t-small t-accent hover:underline">Dashboard</Link>
-            <span className="t-small t-muted">{me.data?.email}</span>
-            <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
-          </div>
-        </div>
-      </header>
-
-      {/* sticky tab strip */}
+      {/* Sticky header + tab strip as one block so building identity stays
+          locked in view even when the user scrolls deep into a long
+          equipment list. */}
       <div
         style={{
           position: 'sticky',
@@ -131,10 +99,76 @@ export default function BuildingDetail() {
           zIndex: 5,
           background: 'var(--color-card)',
           borderBottom: '1px solid var(--color-border)',
-          overflowX: 'auto',
+          boxShadow: '0 1px 0 var(--color-border-soft, rgba(0,0,0,0.04))',
         }}
       >
-        <div className="max-w-5xl mx-auto px-4">
+        {/* Building identity row */}
+        <div className="max-w-5xl mx-auto px-4 py-2 flex items-baseline justify-between gap-3 flex-wrap">
+          <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+              <Link to="/buildings" className="t-accent hover:underline">
+                ← All buildings
+              </Link>
+            </div>
+            <div
+              className="flex items-baseline gap-2 flex-wrap"
+              style={{ marginTop: 2 }}
+            >
+              {building.short_code && (
+                <span
+                  className="t-mono"
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: 'var(--color-accent)',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {building.short_code}
+                </span>
+              )}
+              <h1
+                className="t-section-title"
+                style={{ fontSize: '1.05rem', margin: 0 }}
+              >
+                {building.name}
+              </h1>
+              {building.address && (
+                <span
+                  className="t-small t-muted"
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  · {building.address}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3" style={{ flex: '0 0 auto' }}>
+            <Link
+              to="/manager"
+              className="t-small t-accent hover:underline"
+              style={{ fontSize: '0.75rem' }}
+            >
+              Dashboard
+            </Link>
+            <span className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+              {me.data?.email}
+            </span>
+            <button
+              onClick={signOut}
+              className="t-small t-accent hover:underline"
+              style={{ fontSize: '0.75rem' }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Primary tab strip — 4 tabs only */}
+        <div className="max-w-5xl mx-auto px-4" style={{ overflowX: 'auto' }}>
           <div className="flex gap-1" style={{ minWidth: 'max-content' }}>
             {TABS.map((t) => {
               const isActive = tab === t.key;
@@ -146,7 +180,7 @@ export default function BuildingDetail() {
                   onClick={() => setTab(t.key)}
                   className="t-small"
                   style={{
-                    padding: '10px 14px',
+                    padding: '8px 14px',
                     background: 'transparent',
                     border: 'none',
                     borderBottom: isActive
@@ -156,6 +190,7 @@ export default function BuildingDetail() {
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     fontWeight: isActive ? 600 : 400,
+                    fontSize: '0.85rem',
                   }}
                 >
                   {t.label}
@@ -174,22 +209,53 @@ export default function BuildingDetail() {
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
-        {tab === 'equipment' ? (
-          <EquipmentList buildingId={building.id} />
-        ) : tab === 'inventory' ? (
-          <PartsPanel buildingId={building.id} />
-        ) : tab === 'vendors' ? (
-          <VendorVisitsPanel buildingId={building.id} />
-        ) : tab === 'projects' ? (
-          <ProjectsPanel buildingId={building.id} />
-        ) : SECTION_TAB_KEYS.includes(tab as SectionKey) ? (
-          <SectionEditor
-            buildingId={building.id}
-            sectionKey={tab as SectionKey}
-            note={sectionByKey.get(tab as SectionKey)}
-          />
-        ) : null}
+      <main className="max-w-5xl mx-auto px-4 py-4">
+        {tab === 'equipment' && <EquipmentList buildingId={building.id} />}
+        {tab === 'inventory' && <PartsPanel buildingId={building.id} />}
+        {tab === 'vendors' && <VendorVisitsPanel buildingId={building.id} />}
+        {tab === 'sop' && (
+          <div>
+            {/* SOP sub-tab strip — chooses which free-form note to edit. */}
+            <div
+              className="flex gap-1 flex-wrap"
+              style={{
+                marginBottom: 14,
+                borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))',
+                paddingBottom: 4,
+              }}
+            >
+              {SOP_SECTION_KEYS.map((k) => {
+                const isActive = sopSection === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setSopSection(k)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 3,
+                      border: '1px solid',
+                      borderColor: isActive ? 'var(--color-accent)' : 'transparent',
+                      background: isActive ? 'rgba(99, 102, 241, 0.06)' : 'transparent',
+                      color: isActive ? 'var(--color-text)' : 'var(--color-text-muted)',
+                      cursor: 'pointer',
+                      fontSize: '0.78rem',
+                      fontWeight: isActive ? 600 : 400,
+                      font: 'inherit',
+                    }}
+                  >
+                    {SECTION_LABELS[k]}
+                  </button>
+                );
+              })}
+            </div>
+            <SectionEditor
+              buildingId={building.id}
+              sectionKey={sopSection}
+              note={sectionByKey.get(sopSection)}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
