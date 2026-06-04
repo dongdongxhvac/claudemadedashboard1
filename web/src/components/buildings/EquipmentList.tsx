@@ -24,6 +24,7 @@ import {
   equipmentStatusTone,
   worstStatus,
   isLotoActive,
+  lotoTypeLabel,
   type BuildingEquipment,
   type EquipmentCategory,
   type EquipmentIssue,
@@ -344,6 +345,7 @@ export function EquipmentList({
             equipment_label: closingIssue.equipment.short_name
               ? `${closingIssue.equipment.short_name} · ${closingIssue.equipment.full_name}`
               : closingIssue.equipment.full_name,
+            loto_type: closingIssue.issue.loto_type,
             loto_applied_at: closingIssue.issue.loto_applied_at,
             loto_removed_at: closingIssue.issue.loto_removed_at,
             loto_applied_by_name: closingApplierName,
@@ -932,11 +934,11 @@ function IssueRow({
               }}
               title={
                 issue.loto_applied_at
-                  ? `LOTO / ISO applied ${issue.loto_applied_at}${lotoApplierName ? ' by ' + lotoApplierName : ''}`
-                  : 'LOTO / ISO active'
+                  ? `${lotoTypeLabel(issue.loto_type)} applied ${issue.loto_applied_at}${lotoApplierName ? ' by ' + lotoApplierName : ''}`
+                  : `${lotoTypeLabel(issue.loto_type)} active`
               }
             >
-              🔒 LOTO/ISO {lotoApplierName ? `· ${lotoApplierName.split(' ')[0]}` : ''}
+              🔒 {lotoTypeLabel(issue.loto_type)} {lotoApplierName ? `· ${lotoApplierName.split(' ')[0]}` : ''}
             </span>
           )}
           {issue.status_date && (

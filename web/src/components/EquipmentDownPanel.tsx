@@ -9,6 +9,7 @@ import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
   EQUIPMENT_STATUS_LABELS,
+  lotoTypeLabel,
   type BuildingEquipmentStatusRow,
   type IssueStatus,
 } from '../hooks/useBuildingKb';
@@ -137,7 +138,7 @@ export function EquipmentDownPanel() {
               <th className="text-left pb-1 pr-3">Date</th>
               <th className="text-left pb-1 pr-3">WO #</th>
               <th className="text-left pb-1 pr-3">RSP</th>
-              <th className="text-center pb-1 pr-3" title="LOTO / ISO active">🔒</th>
+              <th className="text-center pb-1 pr-3" title="LOTO or ISO active">🔒</th>
               <th className="text-left pb-1 pr-3">Detail</th>
               <th className="text-right pb-1 pl-3">Opened</th>
               {canEdit && <th className="text-right pb-1 pl-3">{/* close */}</th>}
@@ -183,10 +184,15 @@ export function EquipmentDownPanel() {
                   <td className="py-1 pr-3 text-center">
                     {r.loto_applied_at && !r.loto_removed_at ? (
                       <span
-                        title={`LOTO / ISO applied ${r.loto_applied_at}${r.loto_applied_by_name ? ' by ' + r.loto_applied_by_name : ''}`}
-                        style={{ color: 'var(--color-danger)', fontWeight: 700 }}
+                        title={`${lotoTypeLabel(r.loto_type)} applied ${r.loto_applied_at}${r.loto_applied_by_name ? ' by ' + r.loto_applied_by_name : ''}`}
+                        style={{
+                          color: 'var(--color-danger)',
+                          fontWeight: 700,
+                          fontSize: '0.7rem',
+                          whiteSpace: 'nowrap',
+                        }}
                       >
-                        🔒
+                        🔒 {lotoTypeLabel(r.loto_type)}
                       </span>
                     ) : (
                       <span className="t-muted">—</span>
@@ -252,6 +258,7 @@ export function EquipmentDownPanel() {
               ? `${closingRow.short_name} · ${closingRow.full_name}`
               : closingRow.full_name,
             building_label: closingRow.building_short_code ?? closingRow.building_name,
+            loto_type: closingRow.loto_type,
             loto_applied_at: closingRow.loto_applied_at,
             loto_applied_by_name: closingRow.loto_applied_by_name,
             loto_removed_at: closingRow.loto_removed_at,

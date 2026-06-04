@@ -32,6 +32,7 @@ import {
   useAllActiveProjects,
   useAllActiveProjectsRealtime,
   EQUIPMENT_STATUS_LABELS,
+  lotoTypeLabel,
   type IssueStatus,
   type BuildingEquipmentStatusRow,
 } from '../../hooks/useBuildingKb';
@@ -890,11 +891,11 @@ function EquipmentDownStripe({
                       <span
                         className="tv-eq-down-loto"
                         title={
-                          `LOTO / ISO applied ${r.loto_applied_at}` +
+                          `${lotoTypeLabel(r.loto_type)} applied ${r.loto_applied_at}` +
                           (r.loto_applied_by_name ? ` by ${r.loto_applied_by_name}` : '')
                         }
                       >
-                        🔒
+                        🔒 {lotoTypeLabel(r.loto_type)}
                         {r.loto_applied_by_name && (
                           <span style={{ marginLeft: '0.2vw' }}>
                             {r.loto_applied_by_name.split(' ')[0]}

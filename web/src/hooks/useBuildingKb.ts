@@ -80,6 +80,23 @@ export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number];
 export const ISSUE_STATUSES = ['off_pm','down_cm','degraded','bypass'] as const;
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
+/** Isolation type. LOTO = lockout-tagout (electrical disconnect + padlock
+ *  + tag). ISO = mechanical isolation (valve closed, line drained, etc.).
+ *  Every isolation event is one or the other; this drives the LOTO/ISO
+ *  dropdown in IssueForm + the inline badge label. */
+export const LOTO_TYPES = ['loto', 'iso'] as const;
+export type LotoType = (typeof LOTO_TYPES)[number];
+
+export const LOTO_TYPE_LABELS: Record<LotoType, string> = {
+  loto: 'LOTO',
+  iso:  'ISO',
+};
+
+export function lotoTypeLabel(t: LotoType | null | undefined): string {
+  if (!t) return 'LOTO/ISO';
+  return LOTO_TYPE_LABELS[t];
+}
+
 /** Combined enum — used by the rendering helpers below (tone / pill / label).
  *  An equipment row's "effective" status is worst-of-open-issues if any
  *  open, else its headline status. */
@@ -199,8 +216,10 @@ export type EquipmentIssue = {
   closed_at: string | null;        // null = open
   resolution: string | null;       // required when closed_at is set
   closed_by: string | null;        // users.id of who closed it
-  // LOTO / ISO (Lockout-Tagout OR mechanical isolation) — dates only,
-  // no time precision. "by who + when" is the safety record.
+  // LOTO (Lockout-Tagout — electrical) OR ISO (mechanical isolation).
+  // Every isolation event is either one or the other, not both. Dates
+  // only, no time precision. "type + by who + when" is the safety record.
+  loto_type: LotoType | null;      // required whenever loto_applied_at is set
   loto_applied_at: string | null;  // YYYY-MM-DD
   loto_applied_by: string | null;  // users.id — must be authorized employee
   loto_removed_at: string | null;  // YYYY-MM-DD
@@ -232,6 +251,7 @@ export type BuildingEquipmentStatusRow = {
   status_date: string | null;
   wo_number: string | null;
   rsp: string | null;
+  loto_type: LotoType | null;
   loto_applied_at: string | null;        // YYYY-MM-DD
   loto_applied_by: string | null;
   loto_applied_by_name: string | null;   // joined from users for display

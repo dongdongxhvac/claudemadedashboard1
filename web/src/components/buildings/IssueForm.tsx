@@ -12,8 +12,11 @@ import {
   useUpsertEquipmentIssue,
   ISSUE_STATUSES,
   EQUIPMENT_STATUS_LABELS,
+  LOTO_TYPES,
+  LOTO_TYPE_LABELS,
   type EquipmentIssue,
   type IssueStatus,
+  type LotoType,
 } from '../../hooks/useBuildingKb';
 import { useEngineers } from '../../hooks/useEngineers';
 
@@ -48,13 +51,17 @@ export function IssueForm({
   );
   const [woNumber, setWoNumber]         = useState(existing?.wo_number ?? '');
   const [rsp, setRsp]                   = useState(existing?.rsp ?? '');
-  // LOTO / ISO state — date-only ("by who + when day"). Engineer opens
-  // the disclosure and ticks "Applied" to stamp.
-  const [lotoApplied, setLotoApplied]   = useState(!!existing?.loto_applied_at);
+  // LOTO / ISO state — date-only ("type + by who + when day"). Engineer
+  // picks LOTO or ISO from the dropdown; "Applied" is implied once a
+  // type is chosen + date + applier are filled.
+  const [lotoType, setLotoType]         = useState<LotoType | ''>(
+    existing?.loto_type ?? '',
+  );
   const [lotoApplyAt, setLotoApplyAt]   = useState<string>(
     existing?.loto_applied_at ?? todayLocalISO(),
   );
   const [lotoApplyBy, setLotoApplyBy]   = useState(existing?.loto_applied_by ?? '');
+  const lotoApplied = !!lotoType;
   const [showWoDetails, setShowWoDetails] = useState(
     !!(existing?.wo_number || existing?.rsp),
   );
@@ -82,6 +89,7 @@ export function IssueForm({
         wo_number: woNumber.trim() || null,
         rsp: rsp.trim() || null,
         sort_order: existing?.sort_order ?? 0,
+        loto_type: lotoApplied ? (lotoType as LotoType) : null,
         loto_applied_at: lotoApplied ? lotoApplyAt : null,
         loto_applied_by: lotoApplied ? lotoApplyBy : null,
       });
@@ -234,45 +242,55 @@ export function IssueForm({
         <span>{showLoto ? '▼' : '▶'}</span> LOTO / ISO
         {!showLoto && lotoApplied && (
           <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--color-danger)' }}>
-            🔒 ON
+            🔒 {LOTO_TYPE_LABELS[lotoType as LotoType]} ON
           </span>
         )}
       </button>
       {showLoto && (
         <div style={discloseBody}>
-          <label className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={lotoApplied}
-              onChange={(e) => setLotoApplied(e.target.checked)}
-            />
-            LOTO / ISO applied — equipment is locked or isolated
-          </label>
-          {lotoApplied && (
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(160px,1fr)' }}>
-              <Field label="Date">
-                <input
-                  type="date"
-                  value={lotoApplyAt}
-                  onChange={(e) => setLotoApplyAt(e.target.value)}
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="By (required)" hint="engineer who placed the lock / isolation">
-                <select
-                  value={lotoApplyBy}
-                  onChange={(e) => setLotoApplyBy(e.target.value)}
-                  style={inputStyle}
-                  required
-                >
-                  <option value="">— pick engineer —</option>
-                  {engineers.map((e) => (
-                    <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          )}
+          <div
+            className="grid gap-2"
+            style={{ gridTemplateColumns: 'minmax(110px,140px) minmax(120px,1fr) minmax(140px,1fr)' }}
+          >
+            <Field
+              label="Type"
+              hint="pick one — leave blank for none"
+            >
+              <select
+                value={lotoType}
+                onChange={(e) => setLotoType(e.target.value as LotoType | '')}
+                style={inputStyle}
+              >
+                <option value="">— none —</option>
+                {LOTO_TYPES.map((t) => (
+                  <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Date" hint={lotoApplied ? '' : 'required when type is set'}>
+              <input
+                type="date"
+                value={lotoApplyAt}
+                onChange={(e) => setLotoApplyAt(e.target.value)}
+                style={inputStyle}
+                disabled={!lotoApplied}
+              />
+            </Field>
+            <Field label="By" hint={lotoApplied ? 'engineer who placed it' : ''}>
+              <select
+                value={lotoApplyBy}
+                onChange={(e) => setLotoApplyBy(e.target.value)}
+                style={inputStyle}
+                required={lotoApplied}
+                disabled={!lotoApplied}
+              >
+                <option value="">— pick engineer —</option>
+                {engineers.map((e) => (
+                  <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
           {existing?.loto_removed_at && (
             <div className="t-small t-muted">
               Removed {existing.loto_removed_at}

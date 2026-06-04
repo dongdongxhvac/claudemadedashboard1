@@ -15,7 +15,9 @@ import { useState } from 'react';
 import {
   useCloseEquipmentIssue,
   EQUIPMENT_STATUS_LABELS,
+  lotoTypeLabel,
   type IssueStatus,
+  type LotoType,
 } from '../../hooks/useBuildingKb';
 
 export type IssueCloseContext = {
@@ -25,8 +27,8 @@ export type IssueCloseContext = {
   detail: string | null;
   equipment_label: string;        // for the dialog header ("HV1 · MAU-boiler")
   building_label?: string;        // optional bldg short_code/name
-  /** If non-null AND loto_removed_at is null, LOTO is still active and
-   *  the dialog shows the lockout safety prompt. */
+  /** If non-null AND loto_removed_at is null, LOTO/ISO is still active. */
+  loto_type?: LotoType | null;
   loto_applied_at?: string | null;
   loto_applied_by_name?: string | null;
   loto_removed_at?: string | null;
@@ -162,7 +164,7 @@ export function IssueCloseDialog({
             }}
           >
             <div className="t-small uppercase tracking-wider" style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
-              🔒 LOTO / ISO still applied
+              🔒 {lotoTypeLabel(ctx.loto_type)} still applied
             </div>
             <div className="t-text" style={{ fontSize: '0.85rem' }}>
               Applied{' '}
@@ -175,7 +177,7 @@ export function IssueCloseDialog({
                   <strong>{ctx.loto_applied_by_name}</strong>
                 </>
               )}
-              . Closing this issue requires accounting for the lock / isolation.
+              . Closing this issue requires accounting for the {lotoTypeLabel(ctx.loto_type)}.
             </div>
             <label className="t-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
               <input
@@ -186,9 +188,9 @@ export function IssueCloseDialog({
                 style={{ marginTop: 3 }}
               />
               <span>
-                <strong>Remove LOTO / ISO now</strong>
+                <strong>Remove {lotoTypeLabel(ctx.loto_type)} now</strong>
                 <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                  — I&apos;m physically pulling the lock / isolation right now (stamps you + today)
+                  — I&apos;m physically pulling the {ctx.loto_type === 'iso' ? 'isolation' : 'lock'} right now (stamps you + today)
                 </span>
               </span>
             </label>
@@ -203,7 +205,7 @@ export function IssueCloseDialog({
               <span>
                 <strong>Already removed externally</strong>
                 <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                  — someone took the lock / isolation off but didn&apos;t update the record. Close issue but leave state alone; a manager can backfill.
+                  — someone took it off but didn&apos;t update the record. Close issue but leave state alone; a manager can backfill.
                 </span>
               </span>
             </label>
