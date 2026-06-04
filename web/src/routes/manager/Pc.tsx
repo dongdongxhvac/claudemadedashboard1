@@ -14,6 +14,7 @@ import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { EmailAlarmsHistoryPanel } from '../../components/EmailAlarmsHistoryPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
 import { PtoPanel } from '../../components/PtoPanel';
+import { CoverageForecastPanel } from '../../components/CoverageForecastPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
 import { EquipmentDownPanel } from '../../components/EquipmentDownPanel';
 import { JumpNav } from '../../components/JumpNav';
@@ -187,6 +188,7 @@ export default function ManagerPc() {
         )}
 
         <div className="space-y-3 pt-2">
+          <CoverageForecastPanel />
           <DueNowList />
           <DueThisMonth />
           <OpenPmsBreakdown />
