@@ -80,11 +80,11 @@ export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number];
 export const ISSUE_STATUSES = ['off_pm','down_cm','degraded','bypass'] as const;
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
-/** Isolation taxonomy. Every issue gets exactly one of these; default 'na'.
- *   rloto  — Red LOTO   (full energized lockout-tagout, red lock + tag)
- *   gloto  — Green LOTO (out-of-service tag, de-energized first)
- *   isoto  — Isolation + tagout (mechanical: valve closed, line drained)
- *   na     — Not applicable (no isolation required for this issue) */
+/** Isolation taxonomy at UPark. Every issue gets exactly one; default 'na'.
+ *   rloto  — rLOTO: red lock
+ *   gloto  — gLOTO: green lock
+ *   isoto  — ISOTO: tag (tagout, no lock)
+ *   na     — N/A:   no lock */
 export const LOTO_TYPES = ['rloto', 'gloto', 'isoto', 'na'] as const;
 export type LotoType = (typeof LOTO_TYPES)[number];
 

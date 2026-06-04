@@ -260,7 +260,7 @@ export function IssueForm({
           >
             <Field
               label="Type"
-              hint="rLOTO = red lock / gLOTO = green tag / ISOTO = mechanical / N/A = none"
+              hint="rLOTO = red lock · gLOTO = green lock · ISOTO = tag · N/A = no lock"
             >
               <select
                 value={lotoType}
