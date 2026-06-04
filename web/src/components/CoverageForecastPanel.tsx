@@ -53,13 +53,15 @@ export function CoverageForecastPanel() {
     [engineersQ.data],
   );
 
-  // 3 calendar days starting at today.
+  // Today + next 2 WORK days (Mon–Fri only). UPark regular hours are
+  // Mon–Fri so weekends are skipped — Saturday won't appear unless
+  // today happens to be Saturday (today is always included).
   const days: DayCol[] = useMemo(() => {
     const ptoRows = ptoQ.data ?? [];
     const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const out: DayCol[] = [];
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const pushDay = (d: Date, label: string) => {
       const iso = localIso(d);
       const dow = d.getDay();
       const isWeekend = dow === 0 || dow === 6;
@@ -69,18 +71,27 @@ export function CoverageForecastPanel() {
       const partialCount = outRows.filter(isPartialDay).length;
       const fullDayCount = outRows.length - partialCount;
       out.push({
-        iso,
-        label:
-          i === 0 ? 'today' :
-          i === 1 ? 'tmrw'  :
-          d.toLocaleDateString(undefined, { weekday: 'short' }),
+        iso, label,
         monthDay: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
-        isWeekend,
-        outRows,
-        fullDayCount,
-        partialCount,
+        isWeekend, outRows, fullDayCount, partialCount,
         inCount: Math.max(0, totalEngineers - fullDayCount),
       });
+    };
+    pushDay(today, 'today');
+    const cursor = new Date(today);
+    while (out.length < 3) {
+      cursor.setDate(cursor.getDate() + 1);
+      const dow = cursor.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const daysAhead = Math.round(
+        (cursor.getTime() - today.getTime()) / 86_400_000,
+      );
+      pushDay(
+        cursor,
+        daysAhead === 1
+          ? 'tmrw'
+          : cursor.toLocaleDateString(undefined, { weekday: 'short' }).toLowerCase(),
+      );
     }
     return out;
   }, [ptoQ.data, totalEngineers]);

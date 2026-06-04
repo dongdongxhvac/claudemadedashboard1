@@ -1524,10 +1524,12 @@ function CoverageTvPanel({
     [engineers],
   );
 
-  // 3-day attendance preview: today + next 2 days. Each row collects the
-  // PTO rows that span the day. Partial-day rows DON'T subtract from the
-  // headcount (engineer is in for part of the day) but get a separate
-  // tally + a time-range label on the chip.
+  // 3-day attendance preview: today + next 2 WORK days. UPark works
+  // Mon–Fri, so Saturday/Sunday are skipped. Today is always included
+  // (even if it's a weekend) — managers still want a glance at any
+  // weekend coverage / on-call situation. Partial-day rows DON'T
+  // subtract from the headcount (engineer is in for part of the day)
+  // but get a separate tally + a time-range label on the chip.
   const days = useMemo(() => {
     const out: Array<{
       iso: string;
@@ -1538,8 +1540,8 @@ function CoverageTvPanel({
       partialCount: number;
       inCount: number;
     }> = [];
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const pushDay = (d: Date, label: string) => {
       const iso = localISODate(d);
       const outRows = pto.filter(
         (r) => r.status === 'approved' && r.starts_on <= iso && r.ends_on >= iso,
@@ -1548,16 +1550,33 @@ function CoverageTvPanel({
       const fullDayCount = outRows.length - partialCount;
       out.push({
         iso,
-        label:
-          i === 0 ? 'today' :
-          i === 1 ? 'tmrw'  :
-          d.toLocaleDateString(undefined, { weekday: 'short' }),
+        label,
         monthDay: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
         outRows,
         fullDayCount,
         partialCount,
         inCount: Math.max(0, totalEngineers - fullDayCount),
       });
+    };
+    // Day 0 — today, always included.
+    pushDay(today, 'today');
+    // Day 1, 2 — next two work days (skip Sat/Sun). Label "tmrw" only if
+    // the work day actually is tomorrow (Thu → Fri); otherwise use the
+    // weekday name (Fri → Mon, not "tmrw").
+    const cursor = new Date(today);
+    while (out.length < 3) {
+      cursor.setDate(cursor.getDate() + 1);
+      const dow = cursor.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const daysAhead = Math.round(
+        (cursor.getTime() - today.getTime()) / 86_400_000,
+      );
+      pushDay(
+        cursor,
+        daysAhead === 1
+          ? 'tmrw'
+          : cursor.toLocaleDateString(undefined, { weekday: 'short' }).toLowerCase(),
+      );
     }
     return out;
   }, [pto, now, totalEngineers]);
