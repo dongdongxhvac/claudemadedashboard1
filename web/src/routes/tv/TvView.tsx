@@ -25,7 +25,6 @@ import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/u
 import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
-import { useDeltaAlarmsCurrent, useDeltaPollState } from '../../hooks/useDeltaAlarms';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import {
   useBuildingEquipmentDown,
@@ -577,15 +576,17 @@ function usFederalHolidays(year: number): string[] {
 }
 
 // ============================================================================
-// BMS health panel — tri-stripe stack consolidating §08 + §09 + §10
+// BMS health panel — heartbeats + email alarms (§09 + §10) in one stripe.
 // ============================================================================
 //
-// Three horizontal bands inside one TV cell:
-//   §08 Delta direct  — active count · unacked · feed live/STALE
-//   §09 Heartbeats    — per-vendor dot row (Siemens · Delta · 730/750 · PA …)
-//   §10 Email alarms  — active count · per-vendor breakdown
+// Two content rows inside one TV cell:
+//   Row 1: §09 Heartbeats   — per-vendor dot row (Siemens / Delta / 730/750 / PA …)
+//   Row 2: §10 Email alarms — active count + per-vendor breakdown
 //
-// All three feeds also drive the manager dashboard panels with the same names.
+// §08 Delta direct was retired from this panel 2026-06-04 — heartbeats already
+// covers "is Delta talking to us?" from a different angle. The manager
+// dashboard still has §08 if active-alarm counts are needed.
+//
 // Heartbeat staleness rule (weekday-aware) is copied from EmailAlarmsPanel —
 // keep them in sync if the rule changes.
 
@@ -632,25 +633,10 @@ function tvMinutesAgo(utcIso: string | null): number | null {
 }
 
 function BmsHealthPanel() {
-  const deltaCurrentQ = useDeltaAlarmsCurrent();
-  const deltaStateQ   = useDeltaPollState();
   const hbQ           = useBmsHeartbeats();
   const emailOpenQ    = useEmailAlarmsOpen();
   const emailStateQ   = useEmailPollState();
   const eqDownQ       = useBuildingEquipmentDown();
-
-  // §08 — Delta direct
-  const delta = useMemo(() => {
-    const all = deltaCurrentQ.data ?? [];
-    const active = all.filter((r) => r.to_state && r.to_state.toLowerCase() !== 'normal');
-    const unacked = all.filter((r) => r.latest_acked === false).length;
-    return { active: active.length, total: all.length, unacked };
-  }, [deltaCurrentQ.data]);
-  const deltaSyncMin = tvMinutesAgo(deltaStateQ.data?.last_full_sync_at ?? null);
-  const deltaFeedStale =
-    !deltaStateQ.data ||
-    deltaStateQ.data.session_status !== 'ok' ||
-    (deltaSyncMin !== null && deltaSyncMin > 15);
 
   // §09 — Heartbeats
   const hbRows = hbQ.data ?? [];
@@ -679,64 +665,39 @@ function BmsHealthPanel() {
   return (
     <section className="tv-panel tv-bms-panel" style={{ borderTopColor: '#dc2626' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">BMS · alarms + heartbeats</h2>
+        <h2 className="tv-panel-title">BMS · heartbeats + email alarms</h2>
         <div className="tv-panel-meta">
-          <span className={deltaFeedStale ? 'tv-bms-feed-stale' : 'tv-bms-feed-live'}>
-            Delta {deltaFeedStale ? 'STALE' : 'live'}
-          </span>
-          <span className="tv-crew-meta-sep" style={{ margin: '0 0.3vw' }}>·</span>
           <span className={emailFeedStale ? 'tv-bms-feed-stale' : 'tv-bms-feed-live'}>
             Email {emailFeedStale ? 'STALE' : 'live'}
           </span>
         </div>
       </div>
       <div className="tv-panel-body tv-bms-body">
-        {/* Stripe 1: §08 Delta direct */}
+        {/* Combined §09 + §10 stripe — heartbeats on row 1, email alarms
+            on row 2. Single header carries both per-row meta indicators. */}
         <div className="tv-bms-stripe">
           <div className="tv-bms-stripe-head">
-            <span className="tv-bms-stripe-tag">§08</span>
-            <span className="tv-bms-stripe-label">Delta direct</span>
-          </div>
-          <div className="tv-bms-stripe-row">
-            <span
-              className="tv-bms-bignum"
-              style={{ color: delta.active > 0 ? '#fca5a5' : '#94a3b8' }}
-            >
-              {delta.active}
-            </span>
-            <span className="tv-bms-bignum-label">active</span>
-            {delta.unacked > 0 && (
-              <span className="tv-bms-secondary">
-                <span className="tv-bms-num" style={{ color: '#fbbf24' }}>{delta.unacked}</span>
-                {' '}unacked
-              </span>
-            )}
-            <span className="tv-bms-secondary tv-bms-secondary-end">
-              {delta.total} open total
-            </span>
-          </div>
-        </div>
-
-        <div className="tv-bms-divider" />
-
-        {/* Stripe 2: §09 Heartbeats */}
-        <div className="tv-bms-stripe">
-          <div className="tv-bms-stripe-head">
-            <span className="tv-bms-stripe-tag">§09</span>
-            <span className="tv-bms-stripe-label">Heartbeats</span>
+            <span className="tv-bms-stripe-tag">§09+10</span>
+            <span className="tv-bms-stripe-label">Heartbeats / Email alarms</span>
             <span className="tv-bms-stripe-meta">
               {hbAggr.total > 0 ? (
                 <>
                   <span style={{ color: hbAggr.stale === 0 ? '#34d399' : '#f8fafc', fontWeight: 700 }}>
                     {hbAggr.live}/{hbAggr.total}
-                  </span> live
+                  </span> hb
                   {hbAggr.stale > 0 && (
                     <span style={{ color: '#fca5a5', marginLeft: '0.4vw' }}>· {hbAggr.stale} stale</span>
                   )}
                 </>
               ) : '—'}
+              <span style={{ color: '#475569', margin: '0 0.4vw' }}>·</span>
+              <span style={{ color: emailRows.length > 0 ? '#fca5a5' : '#34d399', fontWeight: 700 }}>
+                {emailRows.length}
+              </span>{' '}
+              <span style={{ color: '#94a3b8' }}>email</span>
             </span>
           </div>
+          {/* Row 1: heartbeats dot row */}
           {hbRows.length === 0 ? (
             <p className="tv-muted" style={{ fontSize: '0.78vw' }}>No heartbeats yet.</p>
           ) : (
@@ -758,39 +719,33 @@ function BmsHealthPanel() {
               })}
             </ul>
           )}
-        </div>
-
-        <div className="tv-bms-divider" />
-
-        {/* Stripe 3: §10 Email alarms */}
-        <div className="tv-bms-stripe">
-          <div className="tv-bms-stripe-head">
-            <span className="tv-bms-stripe-tag">§10</span>
-            <span className="tv-bms-stripe-label">Email alarms</span>
-            <span className="tv-bms-stripe-meta">
-              {emailByVendor.length} vendor{emailByVendor.length === 1 ? '' : 's'}
-            </span>
-          </div>
-          <div className="tv-bms-stripe-row">
-            <span
-              className="tv-bms-bignum"
-              style={{ color: emailRows.length > 0 ? '#fca5a5' : '#94a3b8' }}
-            >
-              {emailRows.length}
-            </span>
-            <span className="tv-bms-bignum-label">active</span>
-          </div>
-          {emailByVendor.length > 0 && (
-            <div className="tv-bms-vendor-line">
-              {emailByVendor.map(([v, n], i) => (
-                <span key={v} className="tv-bms-vendor-item">
-                  {i > 0 && <span className="tv-bms-vendor-sep">·</span>}
-                  <span className="tv-bms-vendor-name">{shortVendor(v)}</span>
-                  <span className="tv-bms-vendor-count">{n}</span>
+          {/* Row 2: email alarms — "0 active" or count + vendor breakdown */}
+          <div
+            className="tv-bms-vendor-line"
+            style={{ marginTop: '0.15vw' }}
+          >
+            {emailRows.length === 0 ? (
+              <span className="tv-muted" style={{ fontSize: '0.78vw' }}>
+                No active email alarms.
+              </span>
+            ) : (
+              <>
+                <span
+                  className="tv-bms-vendor-item"
+                  style={{ fontWeight: 700, color: '#fca5a5' }}
+                >
+                  {emailRows.length} active
                 </span>
-              ))}
-            </div>
-          )}
+                {emailByVendor.map(([v, n]) => (
+                  <span key={v} className="tv-bms-vendor-item">
+                    <span className="tv-bms-vendor-sep">·</span>
+                    <span className="tv-bms-vendor-name">{shortVendor(v)}</span>
+                    <span className="tv-bms-vendor-count">{n}</span>
+                  </span>
+                ))}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Equipment-down stripe — bottom half of the BMS panel. Surfaces
