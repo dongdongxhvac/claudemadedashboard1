@@ -28,14 +28,16 @@ import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
 import { PartsPanel } from '../../components/buildings/PartsPanel';
 import { VendorVisitsPanel } from '../../components/buildings/VendorVisitsPanel';
+import { ProjectsPanel } from '../../components/buildings/ProjectsPanel';
 
-type Tab = 'equipment' | 'vendors' | 'inventory' | 'sop';
+type Tab = 'equipment' | 'vendors' | 'inventory' | 'sop' | 'projects';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'equipment', label: 'Equipment' },
   { key: 'vendors',   label: 'Vendor Log' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'sop',       label: 'SOP' },
+  { key: 'projects',  label: 'Projects' },
 ];
 
 // Sub-tab order inside the SOP tab. Overview comes first (general building
@@ -213,6 +215,7 @@ export default function BuildingDetail() {
         {tab === 'equipment' && <EquipmentList buildingId={building.id} />}
         {tab === 'inventory' && <PartsPanel buildingId={building.id} />}
         {tab === 'vendors' && <VendorVisitsPanel buildingId={building.id} />}
+        {tab === 'projects' && <ProjectsPanel buildingId={building.id} />}
         {tab === 'sop' && (
           <div>
             {/* SOP sub-tab strip — chooses which free-form note to edit. */}
