@@ -127,16 +127,24 @@ export function EquipmentForm({
       onSubmit={submit}
       className="t-card"
       style={{
-        padding: 16, marginBottom: 12, display: 'grid', gap: 10,
+        padding: 12,
+        marginBottom: 10,
+        display: 'grid',
+        gap: 6,
         borderLeft: `3px solid ${formAccent}`,
+        maxWidth: 720,
       }}
     >
-      <div className="t-small t-muted uppercase tracking-wider">
+      <div
+        className="t-small t-muted uppercase tracking-wider"
+        style={{ fontSize: '0.65rem', letterSpacing: '0.1em' }}
+      >
         {existing ? 'Edit equipment' : 'Add equipment'}
       </div>
 
-      <div className="grid gap-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
-        <Field label="Full name (required)" hint='e.g. "Hot Water Pump 3", "Chiller 1"'>
+      {/* Row 1: identity (full name + short) */}
+      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 6 }}>
+        <Field label="Full name *" hint='"Hot Water Pump 3", "Chiller 1"'>
           <input
             type="text"
             value={fullName}
@@ -146,51 +154,51 @@ export function EquipmentForm({
             style={inputStyle}
           />
         </Field>
-
-        <Field label="Short name" hint='e.g. "HWP-3", "CH-1"'>
+        <Field label="Short name" hint='"HWP-3", "CH-1"'>
           <input
             type="text"
             value={shortName}
             onChange={(e) => setShortName(e.target.value)}
-            placeholder=""
             style={inputStyle}
           />
         </Field>
       </div>
 
-      <Field label="Category">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value as EquipmentCategory | '')}
-          style={inputStyle}
+      {/* Row 2: category + parent */}
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <Field label="Category">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as EquipmentCategory | '')}
+            style={inputStyle}
+          >
+            <option value="">— pick —</option>
+            {EQUIPMENT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{EQUIPMENT_CATEGORY_LABELS[c]}</option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Component of"
+          hint="leave blank if top-level; pick a parent for sub-components"
         >
-          <option value="">— pick —</option>
-          {EQUIPMENT_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{EQUIPMENT_CATEGORY_LABELS[c]}</option>
-          ))}
-        </select>
-      </Field>
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">— top-level —</option>
+            {parentOptions.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.short_name ? `${e.short_name} · ${e.full_name}` : e.full_name}
+                {e.parent_equipment_id ? ' (sub)' : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
 
-      <Field
-        label="Component of (optional)"
-        hint='leave blank if this is a top-level asset. Pick a parent if this is a sub-component (e.g. "Compressor 2" → "Chiller 1").'
-      >
-        <select
-          value={parentId}
-          onChange={(e) => setParentId(e.target.value)}
-          style={inputStyle}
-        >
-          <option value="">— top-level (no parent) —</option>
-          {parentOptions.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.short_name ? `${e.short_name} · ${e.full_name}` : e.full_name}
-              {e.parent_equipment_id ? ' (sub-component)' : ''}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Location" hint='e.g. "Penthouse, west wall" or "B1 Mech Room"'>
+      <Field label="Location" hint='"Penthouse, west wall" / "B1 Mech Room"'>
         <input
           type="text"
           value={locationNote}
@@ -199,97 +207,114 @@ export function EquipmentForm({
         />
       </Field>
 
-      <Field label="Parts / consumables" hint="filter sizes, belt numbers, oil types">
-        <textarea
-          value={partsNotes}
-          onChange={(e) => setPartsNotes(e.target.value)}
-          rows={3}
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-      </Field>
+      {/* KB textareas — 2-col grid on PC, stacks naturally on narrow */}
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}
+      >
+        <Field label="Parts / consumables" hint="filter / belt / oil">
+          <textarea
+            value={partsNotes}
+            onChange={(e) => setPartsNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
+          />
+        </Field>
+        <Field label="Common issues">
+          <textarea
+            value={commonIssues}
+            onChange={(e) => setCommonIssues(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
+          />
+        </Field>
+      </div>
 
-      <Field label="Common issues">
-        <textarea
-          value={commonIssues}
-          onChange={(e) => setCommonIssues(e.target.value)}
-          rows={3}
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-      </Field>
-
-      <Field label="Troubleshooting" hint="what to check first if this is down">
+      <Field label="Troubleshooting" hint="what to check first if down">
         <textarea
           value={troubleshooting}
           onChange={(e) => setTroubleshooting(e.target.value)}
-          rows={3}
-          style={{ ...inputStyle, resize: 'vertical' }}
+          rows={2}
+          style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
         />
       </Field>
 
-      <Field label="Photo (optional)" hint="JPEG / PNG / WebP / HEIC, up to 10 MB">
-        <div style={{ display: 'grid', gap: 8 }}>
-          {existing?.photo_url && !removePhoto && !photoFile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <img
-                src={existing.photo_url}
-                alt={existing.full_name}
-                style={{ maxHeight: 120, maxWidth: 200, borderRadius: 4, border: '1px solid var(--color-border)' }}
-              />
-              <button
-                type="button"
-                onClick={() => setRemovePhoto(true)}
-                className="t-small"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--color-danger)',
-                }}
-              >
-                Remove photo
-              </button>
-            </div>
-          )}
-          {photoFile && (
-            <div className="t-small t-muted">New photo selected: {photoFile.name}</div>
-          )}
-          {removePhoto && !photoFile && (
-            <div className="t-small" style={{ color: 'var(--color-warn, #d97706)' }}>
-              Photo will be removed on save.
-            </div>
-          )}
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setPhotoFile(f);
-              if (f) setRemovePhoto(false);
-            }}
-          />
-        </div>
-      </Field>
-
+      {/* Photo + status on one row to save vertical */}
       <div
-        className="t-small uppercase tracking-wider"
-        style={{ color: formAccent, marginTop: 4 }}
+        className="grid"
+        style={{ gridTemplateColumns: '1fr 1fr', gap: 6, alignItems: 'start' }}
       >
-        Headline status
+        <Field label="Photo" hint="JPEG / PNG / WebP / HEIC, ≤10 MB · backup for new hires">
+          <div style={{ display: 'grid', gap: 4 }}>
+            {existing?.photo_url && !removePhoto && !photoFile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img
+                  src={existing.photo_url}
+                  alt={existing.full_name}
+                  style={{
+                    maxHeight: 60,
+                    maxWidth: 100,
+                    borderRadius: 4,
+                    border: '1px solid var(--color-border)',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setRemovePhoto(true)}
+                  className="t-small"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--color-danger)',
+                    fontSize: '0.7rem',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+            {photoFile && (
+              <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+                New: {photoFile.name}
+              </div>
+            )}
+            {removePhoto && !photoFile && (
+              <div className="t-small" style={{ color: 'var(--color-warn, #d97706)', fontSize: '0.7rem' }}>
+                Photo will be removed.
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                setPhotoFile(f);
+                if (f) setRemovePhoto(false);
+              }}
+              style={{ fontSize: '0.75rem' }}
+            />
+          </div>
+        </Field>
+        <Field
+          label="Headline status"
+          hint="problems (off-PM / down-CM / DEG / BYP) live in issues, not here"
+        >
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
+            style={{ ...inputStyle, borderColor: formAccent }}
+          >
+            {EQUIPMENT_STATUSES.map((s) => (
+              <option key={s} value={s}>{EQUIPMENT_STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </Field>
       </div>
 
-      <Field label="Status" hint="problems (off-PM, down-CM, degraded, bypass) are added separately from the equipment card">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
-          style={{ ...inputStyle, borderColor: formAccent }}
-        >
-          {EQUIPMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>{EQUIPMENT_STATUS_LABELS[s]}</option>
-          ))}
-        </select>
-      </Field>
-
       {existing?.last_status_change_at && (
-        <div className="t-small t-muted" style={{ marginTop: -4 }}>
-          Last status change: <strong>{new Date(existing.last_status_change_at).toLocaleString()}</strong>
+        <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+          Last status change: {new Date(existing.last_status_change_at).toLocaleString()}
         </div>
       )}
 
@@ -297,25 +322,31 @@ export function EquipmentForm({
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2" style={{ marginTop: 2 }}>
         <button
           type="submit"
           disabled={upsert.isPending || uploading}
           className="t-small t-accent"
           style={{
-            padding: '8px 14px', border: '1px solid var(--color-accent)',
-            borderRadius: 4, background: 'var(--color-card)',
+            padding: '6px 12px',
+            border: '1px solid var(--color-accent)',
+            borderRadius: 4,
+            background: 'var(--color-card)',
+            fontSize: '0.8rem',
           }}
         >
-          {uploading ? 'Uploading…' : upsert.isPending ? 'Saving…' : existing ? 'Save changes' : 'Add equipment'}
+          {uploading ? 'Uploading…' : upsert.isPending ? 'Saving…' : existing ? 'Save' : 'Add'}
         </button>
         <button
           type="button"
           onClick={onClose}
           className="t-small t-muted"
           style={{
-            padding: '8px 14px', border: '1px solid var(--color-border)',
-            borderRadius: 4, background: 'transparent',
+            padding: '6px 12px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            background: 'transparent',
+            fontSize: '0.8rem',
           }}
         >
           Cancel
@@ -336,9 +367,24 @@ function Field({
 }) {
   return (
     <label style={{ display: 'block' }}>
-      <div className="t-small" style={{ color: 'var(--color-text)', marginBottom: 4 }}>
+      <div
+        className="t-small"
+        style={{
+          color: 'var(--color-text)',
+          marginBottom: 2,
+          fontSize: '0.72rem',
+          lineHeight: 1.2,
+        }}
+      >
         {label}
-        {hint && <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>{hint}</span>}
+        {hint && (
+          <span
+            className="t-muted ml-2"
+            style={{ fontSize: '0.65rem' }}
+          >
+            {hint}
+          </span>
+        )}
       </div>
       {children}
     </label>
@@ -347,10 +393,11 @@ function Field({
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: 8,
+  padding: '6px 8px',
   borderRadius: 4,
   border: '1px solid var(--color-border)',
   background: 'var(--color-card)',
   color: 'var(--color-text)',
   font: 'inherit',
+  fontSize: '0.85rem',
 };

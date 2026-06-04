@@ -89,53 +89,59 @@ export function IssueForm({
     <form
       onSubmit={submit}
       style={{
-        display: 'grid', gap: 10,
-        padding: 12,
+        display: 'grid', gap: 6,
+        padding: 10,
         borderRadius: 4,
-        border: `1px solid var(--color-danger)`,
+        border: '1px solid var(--color-danger)',
         background: 'rgba(239, 68, 68, 0.06)',
-        marginBottom: 8,
+        marginBottom: 6,
+        maxWidth: 720,
       }}
     >
-      <div className="t-small uppercase tracking-wider" style={{ color: 'var(--color-danger)' }}>
+      <div
+        className="t-small uppercase tracking-wider"
+        style={{ color: 'var(--color-danger)', fontSize: '0.65rem', letterSpacing: '0.1em' }}
+      >
         {existing ? 'Edit issue' : 'New issue'}
       </div>
 
-      <Field label="Status">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as IssueStatus)}
-          style={inputStyle}
-        >
-          {ISSUE_STATUSES.map((s) => (
-            <option key={s} value={s}>{EQUIPMENT_STATUS_LABELS[s]}</option>
-          ))}
-        </select>
-      </Field>
+      {/* Status + Date on one row */}
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <Field label="Status">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as IssueStatus)}
+            style={inputStyle}
+          >
+            {ISSUE_STATUSES.map((s) => (
+              <option key={s} value={s}>{EQUIPMENT_STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label={
+          status === 'off_pm'   ? 'Date of off-PM' :
+          status === 'down_cm'  ? 'Date of down-CM' :
+          status === 'degraded' ? 'Date noticed' :
+          status === 'bypass'   ? 'Date bypassed' :
+          'Date'
+        }>
+          <input
+            type="date"
+            value={statusDate}
+            onChange={(e) => setStatusDate(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+      </div>
 
-      <Field label="Detail (required)" hint="what's wrong / what's being done">
+      <Field label="Detail *" hint="what's wrong / what's being done">
         <textarea
           value={detail}
           onChange={(e) => setDetail(e.target.value)}
           rows={2}
           autoFocus
           required
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-      </Field>
-
-      <Field label={
-        status === 'off_pm'   ? 'Date of off-PM' :
-        status === 'down_cm'  ? 'Date of down-CM' :
-        status === 'degraded' ? 'Date noticed' :
-        status === 'bypass'   ? 'Date bypassed' :
-        'Date'
-      }>
-        <input
-          type="date"
-          value={statusDate}
-          onChange={(e) => setStatusDate(e.target.value)}
-          style={{ ...inputStyle, maxWidth: 180 }}
+          style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
         />
       </Field>
 
@@ -236,25 +242,31 @@ export function IssueForm({
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2" style={{ marginTop: 2 }}>
         <button
           type="submit"
           disabled={upsert.isPending}
           className="t-small t-accent"
           style={{
-            padding: '6px 12px', border: '1px solid var(--color-accent)',
-            borderRadius: 4, background: 'var(--color-card)',
+            padding: '5px 12px',
+            border: '1px solid var(--color-accent)',
+            borderRadius: 4,
+            background: 'var(--color-card)',
+            fontSize: '0.8rem',
           }}
         >
-          {upsert.isPending ? 'Saving…' : existing ? 'Save changes' : 'Add issue'}
+          {upsert.isPending ? 'Saving…' : existing ? 'Save' : 'Add issue'}
         </button>
         <button
           type="button"
           onClick={onClose}
           className="t-small t-muted"
           style={{
-            padding: '6px 12px', border: '1px solid var(--color-border)',
-            borderRadius: 4, background: 'transparent',
+            padding: '5px 12px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            background: 'transparent',
+            fontSize: '0.8rem',
           }}
         >
           Cancel
@@ -275,9 +287,24 @@ function Field({
 }) {
   return (
     <label style={{ display: 'block' }}>
-      <div className="t-small" style={{ color: 'var(--color-text)', marginBottom: 4 }}>
+      <div
+        className="t-small"
+        style={{
+          color: 'var(--color-text)',
+          marginBottom: 2,
+          fontSize: '0.72rem',
+          lineHeight: 1.2,
+        }}
+      >
         {label}
-        {hint && <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>{hint}</span>}
+        {hint && (
+          <span
+            className="t-muted ml-2"
+            style={{ fontSize: '0.65rem' }}
+          >
+            {hint}
+          </span>
+        )}
       </div>
       {children}
     </label>
@@ -286,26 +313,27 @@ function Field({
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: 8,
+  padding: '6px 8px',
   borderRadius: 4,
   border: '1px solid var(--color-border)',
   background: 'var(--color-card)',
   color: 'var(--color-text)',
   font: 'inherit',
+  fontSize: '0.85rem',
 };
 
 const discloseBtn: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6,
-  padding: '4px 0',
+  padding: '2px 0',
   background: 'none', border: 'none', cursor: 'pointer',
   font: 'inherit', color: 'var(--color-text)',
-  fontSize: '0.85rem',
+  fontSize: '0.75rem',
   textAlign: 'left',
 };
 
 const discloseBody: React.CSSProperties = {
-  display: 'grid', gap: 8,
-  padding: '8px 0 0 16px',
+  display: 'grid', gap: 6,
+  padding: '4px 0 0 12px',
   borderLeft: '2px solid var(--color-border-soft, rgba(0,0,0,0.1))',
   marginLeft: 4,
 };
