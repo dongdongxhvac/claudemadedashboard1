@@ -80,20 +80,32 @@ export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number];
 export const ISSUE_STATUSES = ['off_pm','down_cm','degraded','bypass'] as const;
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
-/** Isolation type. LOTO = lockout-tagout (electrical disconnect + padlock
- *  + tag). ISO = mechanical isolation (valve closed, line drained, etc.).
- *  Every isolation event is one or the other; this drives the LOTO/ISO
- *  dropdown in IssueForm + the inline badge label. */
-export const LOTO_TYPES = ['loto', 'iso'] as const;
+/** Isolation taxonomy. Every issue gets exactly one of these; default 'na'.
+ *   rloto  — Red LOTO   (full energized lockout-tagout, red lock + tag)
+ *   gloto  — Green LOTO (out-of-service tag, de-energized first)
+ *   isoto  — Isolation + tagout (mechanical: valve closed, line drained)
+ *   na     — Not applicable (no isolation required for this issue) */
+export const LOTO_TYPES = ['rloto', 'gloto', 'isoto', 'na'] as const;
 export type LotoType = (typeof LOTO_TYPES)[number];
 
+/** Subset that means "isolation is actively in place". These require
+ *  loto_applied_at + loto_applied_by per DB CHECK. */
+export const ACTIVE_LOTO_TYPES = ['rloto', 'gloto', 'isoto'] as const;
+export type ActiveLotoType = (typeof ACTIVE_LOTO_TYPES)[number];
+
+export function isActiveLotoType(t: LotoType): t is ActiveLotoType {
+  return t !== 'na';
+}
+
 export const LOTO_TYPE_LABELS: Record<LotoType, string> = {
-  loto: 'LOTO',
-  iso:  'ISO',
+  rloto: 'rLOTO',
+  gloto: 'gLOTO',
+  isoto: 'ISOTO',
+  na:    'N/A',
 };
 
 export function lotoTypeLabel(t: LotoType | null | undefined): string {
-  if (!t) return 'LOTO/ISO';
+  if (!t) return 'N/A';
   return LOTO_TYPE_LABELS[t];
 }
 
@@ -229,9 +241,14 @@ export type EquipmentIssue = {
   updated_by: string | null;
 };
 
-/** True when LOTO is currently applied to this issue (applied but not
- *  yet removed). UI shows a 🔒 badge. */
-export function isLotoActive(i: Pick<EquipmentIssue, 'loto_applied_at' | 'loto_removed_at'>): boolean {
+/** True when an active LOTO/ISO type is in place (applied but not yet
+ *  removed). The type-driven CHECK guarantees that 'na' rows never have
+ *  applied_at set, so checking applied_at + removed_at is sufficient,
+ *  but we accept loto_type for callers that want to short-circuit. */
+export function isLotoActive(
+  i: Pick<EquipmentIssue, 'loto_applied_at' | 'loto_removed_at' | 'loto_type'>,
+): boolean {
+  if (i.loto_type === 'na') return false;
   return !!i.loto_applied_at && !i.loto_removed_at;
 }
 

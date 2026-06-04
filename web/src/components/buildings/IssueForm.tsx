@@ -51,17 +51,18 @@ export function IssueForm({
   );
   const [woNumber, setWoNumber]         = useState(existing?.wo_number ?? '');
   const [rsp, setRsp]                   = useState(existing?.rsp ?? '');
-  // LOTO / ISO state — date-only ("type + by who + when day"). Engineer
-  // picks LOTO or ISO from the dropdown; "Applied" is implied once a
-  // type is chosen + date + applier are filled.
-  const [lotoType, setLotoType]         = useState<LotoType | ''>(
-    existing?.loto_type ?? '',
+  // LOTO / ISO state — type is the gate. Picking rLOTO / gLOTO / ISOTO
+  // implies the isolation is active and requires Date + By. Picking N/A
+  // means no isolation needed (the safety record still positively says
+  // "I thought about it"). Default is N/A.
+  const [lotoType, setLotoType]         = useState<LotoType>(
+    existing?.loto_type ?? 'na',
   );
   const [lotoApplyAt, setLotoApplyAt]   = useState<string>(
     existing?.loto_applied_at ?? todayLocalISO(),
   );
   const [lotoApplyBy, setLotoApplyBy]   = useState(existing?.loto_applied_by ?? '');
-  const lotoApplied = !!lotoType;
+  const lotoApplied = lotoType !== 'na';
   const [showWoDetails, setShowWoDetails] = useState(
     !!(existing?.wo_number || existing?.rsp),
   );
@@ -76,7 +77,7 @@ export function IssueForm({
       return;
     }
     if (lotoApplied && !lotoApplyBy) {
-      setError('LOTO / ISO requires the engineer who applied it — pick from the list.');
+      setError(`${LOTO_TYPE_LABELS[lotoType]} requires the engineer who applied it — pick from the list.`);
       return;
     }
     try {
@@ -89,7 +90,7 @@ export function IssueForm({
         wo_number: woNumber.trim() || null,
         rsp: rsp.trim() || null,
         sort_order: existing?.sort_order ?? 0,
-        loto_type: lotoApplied ? (lotoType as LotoType) : null,
+        loto_type: lotoType,
         loto_applied_at: lotoApplied ? lotoApplyAt : null,
         loto_applied_by: lotoApplied ? lotoApplyBy : null,
       });
@@ -239,35 +240,39 @@ export function IssueForm({
         onClick={() => setShowLoto((v) => !v)}
         style={discloseBtn}
       >
-        <span>{showLoto ? '▼' : '▶'}</span> LOTO / ISO
-        {!showLoto && lotoApplied && (
-          <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--color-danger)' }}>
-            🔒 {LOTO_TYPE_LABELS[lotoType as LotoType]} ON
-          </span>
-        )}
+        <span>{showLoto ? '▼' : '▶'}</span> Isolation:
+        <span
+          style={{
+            marginLeft: 4,
+            fontSize: '0.72rem',
+            fontWeight: 600,
+            color: lotoApplied ? 'var(--color-danger)' : 'var(--color-text-muted)',
+          }}
+        >
+          {lotoApplied ? `🔒 ${LOTO_TYPE_LABELS[lotoType]}` : LOTO_TYPE_LABELS[lotoType]}
+        </span>
       </button>
       {showLoto && (
         <div style={discloseBody}>
           <div
             className="grid gap-2"
-            style={{ gridTemplateColumns: 'minmax(110px,140px) minmax(120px,1fr) minmax(140px,1fr)' }}
+            style={{ gridTemplateColumns: 'minmax(110px,160px) minmax(120px,1fr) minmax(140px,1fr)' }}
           >
             <Field
               label="Type"
-              hint="pick one — leave blank for none"
+              hint="rLOTO = red lock / gLOTO = green tag / ISOTO = mechanical / N/A = none"
             >
               <select
                 value={lotoType}
-                onChange={(e) => setLotoType(e.target.value as LotoType | '')}
+                onChange={(e) => setLotoType(e.target.value as LotoType)}
                 style={inputStyle}
               >
-                <option value="">— none —</option>
                 {LOTO_TYPES.map((t) => (
                   <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Date" hint={lotoApplied ? '' : 'required when type is set'}>
+            <Field label="Date" hint={lotoApplied ? '' : '— N/A —'}>
               <input
                 type="date"
                 value={lotoApplyAt}
@@ -276,7 +281,7 @@ export function IssueForm({
                 disabled={!lotoApplied}
               />
             </Field>
-            <Field label="By" hint={lotoApplied ? 'engineer who placed it' : ''}>
+            <Field label="By" hint={lotoApplied ? 'engineer who placed it' : '— N/A —'}>
               <select
                 value={lotoApplyBy}
                 onChange={(e) => setLotoApplyBy(e.target.value)}

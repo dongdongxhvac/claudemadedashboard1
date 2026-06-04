@@ -190,7 +190,7 @@ export function IssueCloseDialog({
               <span>
                 <strong>Remove {lotoTypeLabel(ctx.loto_type)} now</strong>
                 <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                  — I&apos;m physically pulling the {ctx.loto_type === 'iso' ? 'isolation' : 'lock'} right now (stamps you + today)
+                  — I&apos;m physically pulling the {ctx.loto_type === 'isoto' ? 'isolation' : 'lock / tag'} right now (stamps you + today)
                 </span>
               </span>
             </label>
