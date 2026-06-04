@@ -773,16 +773,30 @@ function EquipmentDownStripe({
 }) {
   const rows = eqDown ?? [];
 
-  // Sort: down_cm → off_pm → degraded → bypass; within each, most-recent
-  // first. NO grouping by equipment — every open issue gets its own row
-  // so two faults on one piece of equipment appear as two lines.
+  // Sort: status severity (down_cm → off_pm → degraded → bypass), then
+  // building (75 → 88 → 300 → 26LD → …), then most-recent within a tie.
+  // Building sort extracts leading digits so numeric short_codes sort
+  // numerically; alpha-prefixed codes ("26LD") fall after pure numerics
+  // of the same prefix value. NO grouping by equipment — every open
+  // issue gets its own row.
   const sortedRows: BuildingEquipmentStatusRow[] = (() => {
     const order: Record<IssueStatus, number> = {
       down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
     };
+    const buildingKey = (r: BuildingEquipmentStatusRow): [number, string] => {
+      const code = r.building_short_code ?? r.building_name ?? '';
+      const m = code.match(/^(\d+)/);
+      const num = m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+      return [num, code];
+    };
     return [...rows].sort((a, b) => {
       const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
       if (d !== 0) return d;
+      const [an, as] = buildingKey(a);
+      const [bn, bs] = buildingKey(b);
+      if (an !== bn) return an - bn;
+      const sd = as.localeCompare(bs);
+      if (sd !== 0) return sd;
       return b.last_status_change_at.localeCompare(a.last_status_change_at);
     });
   })();
@@ -872,6 +886,22 @@ function EquipmentDownStripe({
                       {EQUIPMENT_STATUS_LABELS[r.status]}
                     </span>
                     <span className="tv-eq-down-name">{equipDisplay}</span>
+                    {r.loto_applied_at && !r.loto_removed_at && (
+                      <span
+                        className="tv-eq-down-loto"
+                        title={
+                          `LOTO / ISO applied ${r.loto_applied_at}` +
+                          (r.loto_applied_by_name ? ` by ${r.loto_applied_by_name}` : '')
+                        }
+                      >
+                        🔒
+                        {r.loto_applied_by_name && (
+                          <span style={{ marginLeft: '0.2vw' }}>
+                            {r.loto_applied_by_name.split(' ')[0]}
+                          </span>
+                        )}
+                      </span>
+                    )}
                     {r.wo_number && (
                       <span className="tv-eq-down-wo">{r.wo_number}</span>
                     )}
@@ -2364,6 +2394,16 @@ function TvStyles() {
       }
       .tv-eq-down-rsp {
         color: #94a3b8; flex: 0 0 auto;
+      }
+      .tv-eq-down-loto {
+        color: #fca5a5;
+        font-weight: 700;
+        font-size: 0.7vw;
+        padding: 0 0.25vw;
+        border: 1px solid #ef4444;
+        border-radius: 2px;
+        flex: 0 0 auto;
+        letter-spacing: 0.04em;
       }
       .tv-eq-down-age {
         color: #64748b; font-size: 0.7vw;
