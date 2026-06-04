@@ -43,7 +43,17 @@ function categoryLabel(k: CategoryKey): string {
   return EQUIPMENT_CATEGORY_LABELS[k];
 }
 
-export function EquipmentList({ buildingId }: { buildingId: string }) {
+export function EquipmentList({
+  buildingId,
+  buildingShortCode,
+  buildingName,
+}: {
+  buildingId: string;
+  /** Short_code badge for safety labels ("Add equipment to [75]"). */
+  buildingShortCode?: string;
+  /** Full building name, used in form headers. */
+  buildingName?: string;
+}) {
   const canEdit = useCanAccessAdmin();
   const eqQ = useBuildingEquipment(buildingId);
   const issQ = useBuildingOpenIssues(buildingId);
@@ -197,15 +207,35 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
             borderRadius: 4,
             background: 'var(--color-card)',
             marginBottom: 12,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
           + Add equipment
+          {buildingShortCode && (
+            <span
+              className="t-mono"
+              style={{
+                padding: '1px 6px',
+                borderRadius: 3,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '0.7rem',
+              }}
+            >
+              to {buildingShortCode}
+            </span>
+          )}
         </button>
       )}
 
       {addingNew && (
         <EquipmentForm
           buildingId={buildingId}
+          buildingShortCode={buildingShortCode}
+          buildingName={buildingName}
           onClose={() => setAddingNew(false)}
         />
       )}
@@ -289,10 +319,13 @@ export function EquipmentList({ buildingId }: { buildingId: string }) {
                     setEditingIssueId,
                     onCloseIssue: (issue, equipment) => setClosingIssue({ issue, equipment }),
                     onDeleteEquipment: async (eq) => {
-                      if (!confirm(`Remove ${eq.full_name}? (Soft delete — can be restored.)`)) return;
+                      const where = buildingShortCode ? ` from [${buildingShortCode}]` : '';
+                      if (!confirm(`Remove ${eq.full_name}${where}? (Soft delete — can be restored.)`)) return;
                       await del.mutateAsync({ id: eq.id, building_id: eq.building_id });
                     },
                     buildingId,
+                    buildingShortCode,
+                    buildingName,
                   }),
                 )}
               </div>
@@ -346,6 +379,8 @@ type RenderArgs = {
   onCloseIssue: (i: EquipmentIssue, eq: BuildingEquipment) => void;
   onDeleteEquipment: (eq: BuildingEquipment) => void;
   buildingId: string;
+  buildingShortCode?: string;
+  buildingName?: string;
 };
 
 function renderEquipmentTree(args: RenderArgs): React.ReactNode {
@@ -356,6 +391,7 @@ function renderEquipmentTree(args: RenderArgs): React.ReactNode {
     addingIssueFor, setAddingIssueFor,
     editingIssueId, setEditingIssueId,
     onCloseIssue, onDeleteEquipment, buildingId,
+    buildingShortCode, buildingName,
   } = args;
 
   const children = childrenByParent.get(eq.id) ?? [];
@@ -381,6 +417,8 @@ function renderEquipmentTree(args: RenderArgs): React.ReactNode {
         <div style={{ padding: 10, paddingLeft: 10 + depth * 24 }}>
           <EquipmentForm
             buildingId={buildingId}
+            buildingShortCode={buildingShortCode}
+            buildingName={buildingName}
             existing={eq}
             onClose={() => setEditingId(null)}
           />
@@ -413,6 +451,8 @@ function renderEquipmentTree(args: RenderArgs): React.ReactNode {
               onStartEditIssue={(id) => setEditingIssueId(id)}
               onCancelEditIssue={() => setEditingIssueId(null)}
               onCloseIssue={(i) => onCloseIssue(i, eq)}
+              buildingShortCode={buildingShortCode}
+              buildingName={buildingName}
             />
           )}
         </>
@@ -668,6 +708,8 @@ function EquipmentExpandedDetail({
   onStartEditIssue,
   onCancelEditIssue,
   onCloseIssue,
+  buildingShortCode,
+  buildingName,
 }: {
   eq: BuildingEquipment;
   depth: number;
@@ -680,7 +722,12 @@ function EquipmentExpandedDetail({
   onStartEditIssue: (id: string) => void;
   onCancelEditIssue: () => void;
   onCloseIssue: (i: EquipmentIssue) => void;
+  buildingShortCode?: string;
+  buildingName?: string;
 }) {
+  const equipmentLabel = eq.short_name
+    ? `${eq.short_name} · ${eq.full_name}`
+    : eq.full_name;
   return (
     <div
       style={{
@@ -700,6 +747,9 @@ function EquipmentExpandedDetail({
               <IssueForm
                 key={iss.id}
                 equipmentId={eq.id}
+                equipmentLabel={equipmentLabel}
+                buildingShortCode={buildingShortCode}
+                buildingName={buildingName}
                 existing={iss}
                 onClose={onCancelEditIssue}
               />
@@ -729,13 +779,37 @@ function EquipmentExpandedDetail({
             cursor: 'pointer',
             justifySelf: 'start',
             fontSize: '0.75rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
           }}
         >
-          + Add issue
+          + Add issue to {equipmentLabel}
+          {buildingShortCode && (
+            <span
+              className="t-mono"
+              style={{
+                padding: '0 5px',
+                borderRadius: 2,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+              }}
+            >
+              {buildingShortCode}
+            </span>
+          )}
         </button>
       )}
       {addingIssue && (
-        <IssueForm equipmentId={eq.id} onClose={onCancelAddIssue} />
+        <IssueForm
+          equipmentId={eq.id}
+          equipmentLabel={equipmentLabel}
+          buildingShortCode={buildingShortCode}
+          buildingName={buildingName}
+          onClose={onCancelAddIssue}
+        />
       )}
 
       {/* KB fields — only render if present. Two-column on PC. */}

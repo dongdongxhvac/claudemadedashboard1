@@ -12,7 +12,7 @@
 //
 // Projects panel removed from this page (data preserved; surfaced on
 // the manager dashboard + TV view).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
@@ -76,6 +76,19 @@ export default function BuildingDetail() {
   useBuildingKbRealtime(building?.id);
   const sectionsQ = useBuildingSections(building?.id);
   const equipmentQ = useBuildingEquipment(building?.id);
+
+  // Browser tab title — short_code first so a row of pinned tabs reads
+  // "[75]" "[88]" "[300]" at a glance. Prevents the "wait, which tab is
+  // 75?" mistake when working multiple buildings in parallel.
+  useEffect(() => {
+    if (!building) return;
+    const prev = document.title;
+    const code = building.short_code ?? building.code;
+    document.title = `[${code}] ${building.name} — UPark`;
+    return () => {
+      document.title = prev;
+    };
+  }, [building]);
 
   if (buildingsQ.isLoading || me.isLoading) {
     return <p className="t-text t-muted p-6">Loading…</p>;
@@ -212,7 +225,13 @@ export default function BuildingDetail() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-4">
-        {tab === 'equipment' && <EquipmentList buildingId={building.id} />}
+        {tab === 'equipment' && (
+          <EquipmentList
+            buildingId={building.id}
+            buildingShortCode={building.short_code ?? building.code}
+            buildingName={building.name}
+          />
+        )}
         {tab === 'inventory' && <PartsPanel buildingId={building.id} />}
         {tab === 'vendors' && <VendorVisitsPanel buildingId={building.id} />}
         {tab === 'projects' && <ProjectsPanel buildingId={building.id} />}

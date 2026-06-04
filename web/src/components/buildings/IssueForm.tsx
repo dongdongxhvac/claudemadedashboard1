@@ -23,10 +23,18 @@ function todayLocalISO(): string {
 
 export function IssueForm({
   equipmentId,
+  equipmentLabel,
+  buildingShortCode,
+  buildingName,
   existing,
   onClose,
 }: {
   equipmentId: string;
+  /** "AHU1.1a" or "HV1 · MAU-boiler" — shown in header so engineer
+   *  confirms they're attaching the issue to the right equipment. */
+  equipmentLabel?: string;
+  buildingShortCode?: string;
+  buildingName?: string;
   existing?: EquipmentIssue;
   onClose: () => void;
 }) {
@@ -99,10 +107,45 @@ export function IssueForm({
       }}
     >
       <div
-        className="t-small uppercase tracking-wider"
-        style={{ color: 'var(--color-danger)', fontSize: '0.65rem', letterSpacing: '0.1em' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
       >
-        {existing ? 'Edit issue' : 'New issue'}
+        <span
+          className="t-small uppercase tracking-wider"
+          style={{ color: 'var(--color-danger)', fontSize: '0.65rem', letterSpacing: '0.1em' }}
+        >
+          {existing ? 'Edit issue' : 'New issue'}
+        </span>
+        {equipmentLabel && (
+          <>
+            <span className="t-muted" style={{ fontSize: '0.7rem' }}>on</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+              {equipmentLabel}
+            </span>
+          </>
+        )}
+        {buildingShortCode && (
+          <>
+            <span className="t-muted" style={{ fontSize: '0.7rem' }}>at</span>
+            <span
+              className="t-mono"
+              style={{
+                padding: '1px 7px',
+                borderRadius: 3,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+              }}
+            >
+              {buildingShortCode}
+            </span>
+            {buildingName && (
+              <span className="t-muted" style={{ fontSize: '0.7rem' }}>
+                {buildingName}
+              </span>
+            )}
+          </>
+        )}
       </div>
 
       {/* Status + Date on one row */}
@@ -253,9 +296,27 @@ export function IssueForm({
             borderRadius: 4,
             background: 'var(--color-card)',
             fontSize: '0.8rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
           }}
         >
-          {upsert.isPending ? 'Saving…' : existing ? 'Save' : 'Add issue'}
+          {upsert.isPending ? 'Saving…' : existing ? 'Save changes' : 'Add issue'}
+          {!upsert.isPending && buildingShortCode && (
+            <span
+              className="t-mono"
+              style={{
+                padding: '0 5px',
+                borderRadius: 2,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+              }}
+            >
+              {existing ? 'in' : 'to'} {buildingShortCode}
+            </span>
+          )}
         </button>
         <button
           type="button"

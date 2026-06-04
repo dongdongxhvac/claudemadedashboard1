@@ -21,10 +21,15 @@ import {
 
 export function EquipmentForm({
   buildingId,
+  buildingShortCode,
+  buildingName,
   existing,
   onClose,
 }: {
   buildingId: string;
+  /** For the "in [75] Building Name" safety label in the header / save button. */
+  buildingShortCode?: string;
+  buildingName?: string;
   existing?: BuildingEquipment;
   onClose: () => void;
 }) {
@@ -136,10 +141,39 @@ export function EquipmentForm({
       }}
     >
       <div
-        className="t-small t-muted uppercase tracking-wider"
-        style={{ fontSize: '0.65rem', letterSpacing: '0.1em' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
       >
-        {existing ? 'Edit equipment' : 'Add equipment'}
+        <span
+          className="t-small t-muted uppercase tracking-wider"
+          style={{ fontSize: '0.65rem', letterSpacing: '0.1em' }}
+        >
+          {existing ? 'Edit equipment' : 'Add equipment'}
+        </span>
+        {buildingShortCode && (
+          <>
+            <span className="t-muted" style={{ fontSize: '0.7rem' }}>
+              {existing ? 'in' : 'to'}
+            </span>
+            <span
+              className="t-mono"
+              style={{
+                padding: '1px 7px',
+                borderRadius: 3,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+              }}
+            >
+              {buildingShortCode}
+            </span>
+            {buildingName && (
+              <span className="t-muted" style={{ fontSize: '0.7rem' }}>
+                {buildingName}
+              </span>
+            )}
+          </>
+        )}
       </div>
 
       {/* Row 1: identity (full name + short) */}
@@ -333,9 +367,31 @@ export function EquipmentForm({
             borderRadius: 4,
             background: 'var(--color-card)',
             fontSize: '0.8rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
           }}
         >
-          {uploading ? 'Uploading…' : upsert.isPending ? 'Saving…' : existing ? 'Save' : 'Add'}
+          {uploading
+            ? 'Uploading…'
+            : upsert.isPending
+            ? 'Saving…'
+            : existing ? 'Save changes' : 'Add equipment'}
+          {!uploading && !upsert.isPending && buildingShortCode && (
+            <span
+              className="t-mono"
+              style={{
+                padding: '0 5px',
+                borderRadius: 2,
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+              }}
+            >
+              {existing ? 'in' : 'to'} {buildingShortCode}
+            </span>
+          )}
         </button>
         <button
           type="button"
