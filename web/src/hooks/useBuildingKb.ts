@@ -313,7 +313,9 @@ export type KbSearchHit = {
   building_id: string;
   building_short_code: string | null;
   building_name: string;
-  kind: 'equipment' | 'part' | 'section' | 'issue';
+  /** equipment/part/section = catalog; issue = past fix (closed with
+   *  resolution); open_issue = active work currently assigned. */
+  kind: 'equipment' | 'part' | 'section' | 'issue' | 'open_issue';
   entity_id: string | null;
   title: string;
   body: string | null;

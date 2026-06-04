@@ -12,18 +12,21 @@ import { Link } from 'react-router-dom';
 import { useKbSearch, type KbSearchHit } from '../../hooks/useBuildingKb';
 
 const KIND_LABEL: Record<KbSearchHit['kind'], string> = {
-  equipment: 'equipment',
-  part:      'part',
-  section:   'note',
-  issue:     'past fix',
+  equipment:  'equipment',
+  part:       'part',
+  section:    'note',
+  issue:      'past fix',
+  open_issue: 'open',
 };
 
 const KIND_COLOR: Record<KbSearchHit['kind'], string> = {
-  equipment: 'var(--color-text)',
-  part:      'var(--color-accent)',
-  section:   'var(--color-text-muted)',
-  // Green tint — "this problem has been solved before, here's how"
-  issue:     'var(--color-ok, #10b981)',
+  equipment:  'var(--color-text)',
+  part:       'var(--color-accent)',
+  section:    'var(--color-text-muted)',
+  // Green — solved before
+  issue:      'var(--color-ok, #10b981)',
+  // Red — active work right now
+  open_issue: 'var(--color-danger)',
 };
 
 function highlight(text: string | null, q: string): React.ReactNode {
