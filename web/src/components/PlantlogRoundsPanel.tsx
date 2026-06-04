@@ -16,6 +16,8 @@ import {
   usePlantlogUserDailySpan,
   usePlantlogUserBuildingDailyVisits,
   usePlantlogUserMap,
+  usePlantlogTodayCompliance,
+  type PlantlogComplianceWindow,
   type PlantlogUserDailySpan,
   type PlantlogUserBuildingVisit,
 } from '../hooks/usePlantlog';
@@ -178,7 +180,8 @@ export function PlantlogRoundsPanel() {
   const err = bdQ.error || ubdQ.error || spanQ.error || visitsQ.error;
 
   const subtitle = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
+      <ComplianceChips />
       <span className="t-small t-muted">
         {matrix.grandTotal.toLocaleString()} entries · {matrix.buildingTotals.length} bldgs · {perUser.length} engineers
       </span>
@@ -440,5 +443,70 @@ function BuildingVisitsBreakdown({ rows }: { rows: PlantlogUserBuildingVisit[] }
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ComplianceChips — AM/PM heartbeat shown in the §06 subtitle.
+// Hidden on weekends. Pre-deadline = amber pending; post-deadline = green
+// when fully synced, red when any building is missing. Tooltip lists the
+// missing buildings so a manager can chase them down without scrolling.
+// ---------------------------------------------------------------------------
+
+function ComplianceChips() {
+  const q = usePlantlogTodayCompliance();
+  if (q.isLoading || !q.data) return null;
+  if (q.data.isWeekend) return null;
+  return (
+    <div className="flex gap-1" style={{ flexShrink: 0 }}>
+      <ComplianceChip w={q.data.am} label="AM" />
+      <ComplianceChip w={q.data.pm} label="PM" />
+    </div>
+  );
+}
+
+function ComplianceChip({ w, label }: { w: PlantlogComplianceWindow; label: string }) {
+  let bg: string;
+  let fg: string;
+  let txt: string;
+  let title: string;
+  const total = w.expected.length;
+  const ok = w.synced.length;
+
+  if (!w.deadlinePassed) {
+    // Pre-deadline — pending; show progress (X/N) in amber.
+    bg = 'rgba(217,119,6,0.15)';
+    fg = 'var(--color-warn, #d97706)';
+    txt = `${label} ${ok}/${total}`;
+    title = `${label} window — deadline ${w.deadlineLabel} ET. ${ok}/${total} buildings synced so far. ${w.missing.length} pending: ${w.missing.join(', ') || 'none'}`;
+  } else if (w.missing.length === 0) {
+    // Post-deadline, fully synced — green.
+    bg = 'rgba(16,185,129,0.15)';
+    fg = 'var(--color-ok, #10b981)';
+    txt = `${label} ✓ ${total}/${total}`;
+    title = `${label} window — all ${total} buildings synced by ${w.deadlineLabel} ET. Email alert NOT triggered.`;
+  } else {
+    // Post-deadline, missing — red.
+    bg = 'rgba(239,68,68,0.15)';
+    fg = 'var(--color-danger)';
+    txt = `${label} ✗ ${ok}/${total}`;
+    title = `${label} window — deadline ${w.deadlineLabel} ET PASSED. ${w.missing.length} building(s) missing: ${w.missing.join(', ')}. Email alert sent to jie.lao@cwservices.com.`;
+  }
+  return (
+    <span
+      title={title}
+      style={{
+        padding: '2px 8px',
+        borderRadius: 10,
+        background: bg,
+        color: fg,
+        fontWeight: 700,
+        fontSize: '0.7rem',
+        letterSpacing: '0.04em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {txt}
+    </span>
   );
 }

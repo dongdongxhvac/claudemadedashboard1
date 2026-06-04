@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))
 from supabase_client import get_client  # noqa: E402
 from plantlog_session import login, SessionError  # noqa: E402
 from plantlog_building_attribution import attribute_and_persist  # noqa: E402
+from plantlog_compliance import run_compliance_checks  # noqa: E402
 
 BASE_URL = os.environ.get("PLANTLOG_BASE_URL", "https://cwservices-bmrupark.plantlog.com").rstrip("/")
 GQL_PATH = "/plantlog/api"
@@ -397,6 +398,14 @@ def main() -> int:
         print(f"[ok] building attribution: {diag}")
     except Exception as e:
         print(f"WARN: building attribution failed: {e}", file=sys.stderr)
+
+    # Compliance check + deadline alert. Runs every poll, but the dedupe
+    # table makes sure we only email ONCE per missed AM/PM deadline per
+    # day. Failure here is non-fatal — the next hourly run will retry.
+    try:
+        run_compliance_checks(client)
+    except Exception as e:
+        print(f"WARN: compliance check failed: {e}", file=sys.stderr)
 
     return 0 if overall_ok else 1
 

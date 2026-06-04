@@ -2,6 +2,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
+/** Short_code starts (or street-name prefixes) the user wants excluded
+ *  from §06 compliance checks. Building names like "20 Sidney St" /
+ *  "80 Landsdowne St" / "55 Franklin St" don't have plant log rounds. */
+const EXCLUDED_LEADING_NUMBERS = new Set(['20', '55', '80']);
+
+function leadingDigits(s: string): string {
+  let out = '';
+  for (const ch of s.trim()) {
+    if (ch >= '0' && ch <= '9') out += ch;
+    else break;
+  }
+  return out;
+}
+
+function isExcludedBuilding(building: string | null): boolean {
+  if (!building) return true;
+  return EXCLUDED_LEADING_NUMBERS.has(leadingDigits(building));
+}
+
 export type PlantlogBuildingDay = {
   building: string;
   et_day: string;     // YYYY-MM-DD (ET-anchored)
@@ -14,6 +33,117 @@ export type PlantlogUserBuildingDay = {
   et_day: string;
   entries: number;
 };
+
+// ---------------------------------------------------------------------------
+// §06 AM / PM compliance heartbeat
+// ---------------------------------------------------------------------------
+
+export type PlantlogComplianceWindow = {
+  key: 'am' | 'pm';
+  /** "10:30 AM" / "5:55 PM" — pretty label for the chip tooltip. */
+  deadlineLabel: string;
+  /** Whether the deadline has already passed in ET today. */
+  deadlinePassed: boolean;
+  /** Buildings expected today (after exclusion list). */
+  expected: string[];
+  /** Buildings with at least one log entry today before the deadline. */
+  synced: string[];
+  /** Expected minus synced — what's late or missing. */
+  missing: string[];
+};
+
+export type PlantlogComplianceState = {
+  isWeekend: boolean;
+  /** AM = 7am crew rounds, must be in by 10:30 AM ET. */
+  am: PlantlogComplianceWindow;
+  /** PM = 9:30am crew rounds, must be in by 5:55 PM ET. */
+  pm: PlantlogComplianceWindow;
+};
+
+/** Today's plantlog compliance — drives the §06 AM/PM heartbeat chips.
+ *  Reads raw plantlog_log_records for today only (small set) so we can
+ *  filter by performed_at_local <= deadline. Hidden on weekends. */
+export function usePlantlogTodayCompliance() {
+  return useQuery({
+    queryKey: ['plantlog_today_compliance'],
+    queryFn: async (): Promise<PlantlogComplianceState> => {
+      // Anchor on Eastern Time — UPark schedule.
+      const etNow = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+      );
+      const dow = etNow.getDay();   // 0=Sun..6=Sat
+      const isWeekend = dow === 0 || dow === 6;
+      const etDay = etNow.toLocaleDateString('en-CA');  // YYYY-MM-DD
+
+      // Expected = distinct buildings seen in last 30d (excluding 20/55/80).
+      // Done as a separate query so adding a new building to plantlog
+      // doesn't require a code change.
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const sinceStr = since.toISOString().slice(0, 10);
+      const [expRes, todayRes] = await Promise.all([
+        supabase
+          .from('plantlog_log_records')
+          .select('building_inferred')
+          .gte('performed_on', sinceStr)
+          .limit(50_000),
+        supabase
+          .from('plantlog_log_records')
+          .select('building_inferred, performed_at_local')
+          .eq('performed_on', etDay)
+          .limit(10_000),
+      ]);
+      if (expRes.error) throw expRes.error;
+      if (todayRes.error) throw todayRes.error;
+
+      const expectedSet = new Set<string>();
+      for (const r of (expRes.data ?? []) as { building_inferred: string | null }[]) {
+        const b = r.building_inferred;
+        if (b && !isExcludedBuilding(b)) expectedSet.add(b);
+      }
+      const expected = Array.from(expectedSet).sort();
+
+      const buildWindow = (
+        key: 'am' | 'pm',
+        deadlineHHMM: string,
+        deadlineLabel: string,
+      ): PlantlogComplianceWindow => {
+        const synced = new Set<string>();
+        for (const r of (todayRes.data ?? []) as { building_inferred: string | null; performed_at_local: string | null }[]) {
+          const b = r.building_inferred;
+          const t = r.performed_at_local;
+          if (!b || !t) continue;
+          if (isExcludedBuilding(b)) continue;
+          // PostgREST returns 'HH:MM:SS'. Compare as zero-padded string.
+          if (String(t).slice(0, 8) <= deadlineHHMM) synced.add(b);
+        }
+        const syncedList = expected.filter((b) => synced.has(b));
+        const missing = expected.filter((b) => !synced.has(b));
+        const [hh, mm] = deadlineHHMM.split(':').map(Number);
+        const cur = etNow.getHours() * 60 + etNow.getMinutes();
+        const deadlineMin = hh * 60 + mm;
+        return {
+          key,
+          deadlineLabel,
+          deadlinePassed: cur >= deadlineMin,
+          expected,
+          synced: syncedList,
+          missing,
+        };
+      };
+
+      return {
+        isWeekend,
+        am: buildWindow('am', '10:30:00', '10:30 AM'),
+        pm: buildWindow('pm', '17:55:00', '5:55 PM'),
+      };
+    },
+    // Refresh once a minute — deadlines are 30-min granularity and the
+    // hourly poller refreshes the data underneath.
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
 
 /** Per-building daily entry counts. */
 export function usePlantlogBuildingDaily(daysBack: number = 14) {
