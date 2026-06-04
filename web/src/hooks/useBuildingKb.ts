@@ -44,12 +44,10 @@ export const EQUIPMENT_CATEGORIES = [
   'chiller_plant',
   'boiler_plant',
   'ahu',
-  'compressed_air',
-  'vacuum_air',
+  'vcair',
   'rodi',
   'plumbing',
-  'control',
-  'electrical',
+  'bms',
 ] as const;
 export type EquipmentCategory = (typeof EQUIPMENT_CATEGORIES)[number];
 
@@ -58,13 +56,11 @@ export type EquipmentCategory = (typeof EQUIPMENT_CATEGORIES)[number];
 export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
   chiller_plant:  'Chiller plant',
   boiler_plant:   'Boiler plant',
-  ahu:            'AHU',
-  compressed_air: 'cAIR',
-  vacuum_air:     'vAir',
+  ahu:            'AHU / GEF',
+  vcair:          'vcAIR',
   rodi:           'RODI',
   plumbing:       'Plumbing',
-  control:        'Control',
-  electrical:     'Electrical',
+  bms:            'BMS',
 };
 
 /** Equipment-row "headline" statuses. After 0060, the attention statuses
