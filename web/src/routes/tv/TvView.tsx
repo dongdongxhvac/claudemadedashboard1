@@ -32,7 +32,6 @@ import {
   useAllActiveProjects,
   useAllActiveProjectsRealtime,
   EQUIPMENT_STATUS_LABELS,
-  worstStatus,
   type IssueStatus,
   type BuildingEquipmentStatusRow,
 } from '../../hooks/useBuildingKb';
@@ -757,20 +756,16 @@ function BmsHealthPanel() {
   );
 }
 
-/** §10.x equivalent on /tv — equipment currently with open issues, in the
- *  bottom half of the BMS alarms panel. After 0060 each open issue is its
- *  own row in the view, so a single piece of equipment with 2 problems
- *  appears twice. On the shop-floor TV we GROUP by equipment so each
- *  asset is one line, with the worst status as the pill, a "·N" count
- *  badge when it has more than one open issue, and the worst issue's
- *  detail shown. Engineers should look at §10.1 on the manager dashboard
- *  to see each WO# / RSP separately.
+/** §10.x equivalent on /tv — open equipment_issues in the bottom half of
+ *  the BMS alarms panel. After 2026-06-04: ONE ROW PER ISSUE (not grouped
+ *  by equipment), sorted down_cm → off_pm → degraded → bypass and then
+ *  most-recent-first within each status group. Up to 10 visible. The
+ *  "+N more" overflow indicator lives on the header row next to the
+ *  status counts so we don't burn a list slot on it.
  *
- *  Two-line block per item so every field surfaces without losing the
- *  shop-floor-readable font size:
- *    Line 1: building · short name · status pill (+count) · WO# · RSP · "Nd ago"
- *    Line 2: full_name + status_detail (when detail is present, ellipsis)
- *  Up to 5 equipment visible; overflow line points to §10.1 for the rest. */
+ *  Two-line block per item:
+ *    Line 1: building · short name · status pill · WO# · RSP · "Nd ago"
+ *    Line 2: full_name + status_detail (when detail is present, ellipsis) */
 function EquipmentDownStripe({
   eqDown,
 }: {
@@ -778,53 +773,29 @@ function EquipmentDownStripe({
 }) {
   const rows = eqDown ?? [];
 
-  // Group all open issues by equipment_id. For each equipment, pick the
-  // "representative" issue = the one whose status is the worst-of-open;
-  // count drives the badge. The list stays sorted by worst severity, then
-  // most-recent-opened first.
-  type GroupedRow = {
-    equipmentId: string;
-    rep: BuildingEquipmentStatusRow;       // worst-status issue for this equipment
-    worst: IssueStatus;
-    count: number;                         // total open issues for this equipment
-  };
-  const grouped: GroupedRow[] = (() => {
-    const map = new Map<string, BuildingEquipmentStatusRow[]>();
-    for (const r of rows) {
-      const arr = map.get(r.equipment_id) ?? [];
-      arr.push(r);
-      map.set(r.equipment_id, arr);
-    }
-    const out: GroupedRow[] = [];
-    for (const [equipmentId, items] of map.entries()) {
-      const worst = worstStatus(items.map((i) => i.status)) as IssueStatus;
-      // Pick the rep = the FIRST item matching worst status; rows arrive
-      // already sorted most-recent-first within each status group.
-      const rep = items.find((i) => i.status === worst) ?? items[0];
-      out.push({ equipmentId, rep, worst, count: items.length });
-    }
+  // Sort: down_cm → off_pm → degraded → bypass; within each, most-recent
+  // first. NO grouping by equipment — every open issue gets its own row
+  // so two faults on one piece of equipment appear as two lines.
+  const sortedRows: BuildingEquipmentStatusRow[] = (() => {
     const order: Record<IssueStatus, number> = {
       down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
     };
-    out.sort((a, b) => {
-      const d = (order[a.worst] ?? 99) - (order[b.worst] ?? 99);
+    return [...rows].sort((a, b) => {
+      const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
       if (d !== 0) return d;
-      return b.rep.last_status_change_at.localeCompare(a.rep.last_status_change_at);
+      return b.last_status_change_at.localeCompare(a.last_status_change_at);
     });
-    return out;
   })();
 
-  // Subtitle counts: one tally per status across ALL open issues — gives
-  // managers the true issue volume even though the list is equipment-rolled-up.
   const downCm   = rows.filter((r) => r.status === 'down_cm').length;
   const offPm    = rows.filter((r) => r.status === 'off_pm').length;
   const degraded = rows.filter((r) => r.status === 'degraded').length;
   const bypass   = rows.filter((r) => r.status === 'bypass').length;
-  const visible = grouped.slice(0, 5);
-  const overflow = grouped.length - visible.length;
+  const VISIBLE_CAP = 10;
+  const visible = sortedRows.slice(0, VISIBLE_CAP);
+  const overflow = sortedRows.length - visible.length;
 
-  // "3d ago" / "5h ago" / "now" — same shape as other TV relative-time
-  // helpers (relTime exists higher up but is private to closes-list).
+  // "3d ago" / "5h ago" / "now"
   const rel = (utcIso: string): string => {
     const ms = Date.now() - new Date(utcIso).getTime();
     const mins = Math.round(ms / 60_000);
@@ -861,6 +832,17 @@ function EquipmentDownStripe({
                 {bypass > 0 && (
                   <span style={{ color: '#fbbf24' }}>{bypass} byp</span>
                 )}
+                {overflow > 0 && (
+                  <>
+                    <span style={{ color: '#475569' }}> · </span>
+                    <span
+                      style={{ color: '#94a3b8' }}
+                      title="See §10.1 on the manager dashboard for the full list"
+                    >
+                      +{overflow} more
+                    </span>
+                  </>
+                )}
               </>
             )}
           </span>
@@ -869,17 +851,15 @@ function EquipmentDownStripe({
           <p className="tv-muted" style={{ fontSize: '0.78vw' }}>All catalogued equipment operational.</p>
         ) : (
           <ul className="tv-eq-down-list">
-            {visible.map((g) => {
-              const r = g.rep;
-              // Red for offline states (down_cm, off_pm), amber for "running
-              // but needs attention" (degraded, bypass).
+            {visible.map((r) => {
+              // Red for offline states, amber for "running but degraded".
               const statusFg =
-                g.worst === 'down_cm' || g.worst === 'off_pm' ? '#fca5a5' : '#fbbf24';
+                r.status === 'down_cm' || r.status === 'off_pm' ? '#fca5a5' : '#fbbf24';
               const equipDisplay = r.short_name
                 ? `${r.short_name} · ${r.full_name}`
                 : r.full_name;
               return (
-                <li key={g.equipmentId} className="tv-eq-down-item">
+                <li key={r.id} className="tv-eq-down-item">
                   <div className="tv-eq-down-line1">
                     <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
                     <span
@@ -889,10 +869,7 @@ function EquipmentDownStripe({
                         border: `1px solid ${statusFg}`,
                       }}
                     >
-                      {EQUIPMENT_STATUS_LABELS[g.worst]}
-                      {g.count > 1 && (
-                        <span style={{ marginLeft: '0.25vw', opacity: 0.85 }}>·{g.count}</span>
-                      )}
+                      {EQUIPMENT_STATUS_LABELS[r.status]}
                     </span>
                     <span className="tv-eq-down-name">{equipDisplay}</span>
                     {r.wo_number && (
@@ -916,9 +893,6 @@ function EquipmentDownStripe({
                 </li>
               );
             })}
-            {overflow > 0 && (
-              <li className="tv-eq-down-overflow">+{overflow} more — see §10.1 on manager dashboard</li>
-            )}
           </ul>
         )}
       </div>
