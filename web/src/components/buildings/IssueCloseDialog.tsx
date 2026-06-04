@@ -162,12 +162,12 @@ export function IssueCloseDialog({
             }}
           >
             <div className="t-small uppercase tracking-wider" style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
-              🔒 LOTO still applied
+              🔒 LOTO / ISO still applied
             </div>
             <div className="t-text" style={{ fontSize: '0.85rem' }}>
-              Lock was placed{' '}
+              Applied{' '}
               {ctx.loto_applied_at && (
-                <strong>{new Date(ctx.loto_applied_at).toLocaleString()}</strong>
+                <strong>{ctx.loto_applied_at}</strong>
               )}
               {ctx.loto_applied_by_name && (
                 <>
@@ -175,7 +175,7 @@ export function IssueCloseDialog({
                   <strong>{ctx.loto_applied_by_name}</strong>
                 </>
               )}
-              . Closing this issue requires accounting for the lock.
+              . Closing this issue requires accounting for the lock / isolation.
             </div>
             <label className="t-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
               <input
@@ -186,9 +186,9 @@ export function IssueCloseDialog({
                 style={{ marginTop: 3 }}
               />
               <span>
-                <strong>Remove LOTO now</strong>
+                <strong>Remove LOTO / ISO now</strong>
                 <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                  — I&apos;m physically pulling the lock right now (stamps you + now as the remover)
+                  — I&apos;m physically pulling the lock / isolation right now (stamps you + today)
                 </span>
               </span>
             </label>
@@ -203,7 +203,7 @@ export function IssueCloseDialog({
               <span>
                 <strong>Already removed externally</strong>
                 <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                  — someone took the lock off but didn&apos;t update the record. Close issue but leave LOTO state alone; a manager can backfill it.
+                  — someone took the lock / isolation off but didn&apos;t update the record. Close issue but leave state alone; a manager can backfill.
                 </span>
               </span>
             </label>

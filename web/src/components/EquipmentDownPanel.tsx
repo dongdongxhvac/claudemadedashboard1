@@ -137,7 +137,7 @@ export function EquipmentDownPanel() {
               <th className="text-left pb-1 pr-3">Date</th>
               <th className="text-left pb-1 pr-3">WO #</th>
               <th className="text-left pb-1 pr-3">RSP</th>
-              <th className="text-center pb-1 pr-3" title="LOTO active">🔒</th>
+              <th className="text-center pb-1 pr-3" title="LOTO / ISO active">🔒</th>
               <th className="text-left pb-1 pr-3">Detail</th>
               <th className="text-right pb-1 pl-3">Opened</th>
               {canEdit && <th className="text-right pb-1 pl-3">{/* close */}</th>}
@@ -183,7 +183,7 @@ export function EquipmentDownPanel() {
                   <td className="py-1 pr-3 text-center">
                     {r.loto_applied_at && !r.loto_removed_at ? (
                       <span
-                        title={`LOTO applied ${new Date(r.loto_applied_at).toLocaleString()}${r.loto_applied_by_name ? ' by ' + r.loto_applied_by_name : ''}`}
+                        title={`LOTO / ISO applied ${r.loto_applied_at}${r.loto_applied_by_name ? ' by ' + r.loto_applied_by_name : ''}`}
                         style={{ color: 'var(--color-danger)', fontWeight: 700 }}
                       >
                         🔒

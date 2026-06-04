@@ -198,15 +198,16 @@ export type EquipmentIssue = {
   detail: string | null;
   status_date: string | null;      // YYYY-MM-DD
   wo_number: string | null;
-  wo_created_by: string | null;    // free text — engineer name OR vendor
   rsp: string | null;
   sort_order: number;
   closed_at: string | null;        // null = open
   resolution: string | null;       // required when closed_at is set
   closed_by: string | null;        // users.id of who closed it
-  loto_applied_at: string | null;
+  // LOTO / ISO (Lockout-Tagout OR mechanical isolation) — dates only,
+  // no time precision. "by who + when" is the safety record.
+  loto_applied_at: string | null;  // YYYY-MM-DD
   loto_applied_by: string | null;  // users.id — must be authorized employee
-  loto_removed_at: string | null;
+  loto_removed_at: string | null;  // YYYY-MM-DD
   loto_removed_by: string | null;
   created_at: string;
   updated_at: string;
@@ -234,12 +235,11 @@ export type BuildingEquipmentStatusRow = {
   status_detail: string | null;
   status_date: string | null;
   wo_number: string | null;
-  wo_created_by: string | null;
   rsp: string | null;
-  loto_applied_at: string | null;
+  loto_applied_at: string | null;        // YYYY-MM-DD
   loto_applied_by: string | null;
   loto_applied_by_name: string | null;   // joined from users for display
-  loto_removed_at: string | null;
+  loto_removed_at: string | null;        // YYYY-MM-DD
   last_status_change_at: string;
 };
 
@@ -639,7 +639,8 @@ export function useCloseEquipmentIssue() {
         closed_by: closedBy,
       };
       if (input.removeLoto) {
-        update.loto_removed_at = new Date().toISOString();
+        // LOTO is date-only after migration 0066 — strip to YYYY-MM-DD.
+        update.loto_removed_at = new Date().toLocaleDateString('en-CA');
         update.loto_removed_by = closedBy;
       }
       const { error } = await supabase
@@ -676,7 +677,7 @@ export function useRemoveLoto() {
       const { error } = await supabase
         .from('equipment_issues')
         .update({
-          loto_removed_at: new Date().toISOString(),
+          loto_removed_at: new Date().toLocaleDateString('en-CA'),
           loto_removed_by: removedBy,
         })
         .eq('id', input.id);

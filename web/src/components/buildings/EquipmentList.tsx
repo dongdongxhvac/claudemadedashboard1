@@ -457,16 +457,11 @@ function IssueRow({
               }}
               title={
                 issue.loto_applied_at
-                  ? `LOTO applied ${new Date(issue.loto_applied_at).toLocaleString()}${lotoApplierName ? ' by ' + lotoApplierName : ''}`
-                  : 'LOTO active'
+                  ? `LOTO / ISO applied ${issue.loto_applied_at}${lotoApplierName ? ' by ' + lotoApplierName : ''}`
+                  : 'LOTO / ISO active'
               }
             >
-              🔒 LOTO {lotoApplierName ? `· ${lotoApplierName.split(' ')[0]}` : ''}
-            </span>
-          )}
-          {issue.wo_created_by && (
-            <span className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
-              WO by {issue.wo_created_by}
+              🔒 LOTO/ISO {lotoApplierName ? `· ${lotoApplierName.split(' ')[0]}` : ''}
             </span>
           )}
         </div>
@@ -484,7 +479,7 @@ function IssueRow({
               <button
                 type="button"
                 onClick={async () => {
-                  if (!confirm(`Mark LOTO removed on this issue? (Stamps you + now as the remover. The issue itself stays open — use Close to also resolve it.)`)) return;
+                  if (!confirm('Mark LOTO / ISO removed on this issue? (Stamps you + today as the remover. The issue itself stays open — use Close to also resolve it.)')) return;
                   await removeLoto.mutateAsync({ id: issue.id, equipment_id: issue.equipment_id });
                 }}
                 className="t-small"
@@ -492,9 +487,9 @@ function IssueRow({
                   background: 'none', border: 'none', cursor: 'pointer',
                   color: 'var(--color-warn, #d97706)',
                 }}
-                title="Lock physically pulled but issue stays open (e.g. waiting on parts)"
+                title="Lock / isolation removed but issue stays open (e.g. waiting on parts)"
               >
-                Remove LOTO
+                Remove LOTO/ISO
               </button>
             )}
             <button

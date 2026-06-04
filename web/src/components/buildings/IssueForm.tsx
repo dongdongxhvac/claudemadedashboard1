@@ -39,19 +39,16 @@ export function IssueForm({
     existing?.status_date ?? todayLocalISO(),
   );
   const [woNumber, setWoNumber]         = useState(existing?.wo_number ?? '');
-  const [woCreatedBy, setWoCreatedBy]   = useState(existing?.wo_created_by ?? '');
   const [rsp, setRsp]                   = useState(existing?.rsp ?? '');
-  // LOTO state — only stamped if engineer opens the disclosure and
-  // explicitly marks it applied. Empty by default.
+  // LOTO / ISO state — date-only ("by who + when day"). Engineer opens
+  // the disclosure and ticks "Applied" to stamp.
   const [lotoApplied, setLotoApplied]   = useState(!!existing?.loto_applied_at);
   const [lotoApplyAt, setLotoApplyAt]   = useState<string>(
-    existing?.loto_applied_at
-      ? new Date(existing.loto_applied_at).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
+    existing?.loto_applied_at ?? todayLocalISO(),
   );
   const [lotoApplyBy, setLotoApplyBy]   = useState(existing?.loto_applied_by ?? '');
   const [showWoDetails, setShowWoDetails] = useState(
-    !!(existing?.wo_number || existing?.wo_created_by || existing?.rsp),
+    !!(existing?.wo_number || existing?.rsp),
   );
   const [showLoto, setShowLoto]         = useState(!!existing?.loto_applied_at);
   const [error, setError]               = useState<string | null>(null);
@@ -64,7 +61,7 @@ export function IssueForm({
       return;
     }
     if (lotoApplied && !lotoApplyBy) {
-      setError('LOTO requires the engineer who applied it — pick from the list.');
+      setError('LOTO / ISO requires the engineer who applied it — pick from the list.');
       return;
     }
     try {
@@ -75,10 +72,9 @@ export function IssueForm({
         detail: detail.trim(),
         status_date: statusDate || null,
         wo_number: woNumber.trim() || null,
-        wo_created_by: woCreatedBy.trim() || null,
         rsp: rsp.trim() || null,
         sort_order: existing?.sort_order ?? 0,
-        loto_applied_at: lotoApplied ? new Date(lotoApplyAt).toISOString() : null,
+        loto_applied_at: lotoApplied ? lotoApplyAt : null,
         loto_applied_by: lotoApplied ? lotoApplyBy : null,
       });
       onClose();
@@ -143,23 +139,23 @@ export function IssueForm({
         />
       </Field>
 
-      {/* ──────────────── WO / RSP disclosure ──────────────── */}
+      {/* ──────────────── WO # / RSP disclosure ──────────────── */}
       <button
         type="button"
         onClick={() => setShowWoDetails((v) => !v)}
         style={discloseBtn}
       >
-        <span>{showWoDetails ? '▼' : '▶'}</span> WO / RSP details
-        {!showWoDetails && (woNumber || woCreatedBy || rsp) && (
+        <span>{showWoDetails ? '▼' : '▶'}</span> WO # / RSP
+        {!showWoDetails && (woNumber || rsp) && (
           <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
-            ({[woNumber && `WO ${woNumber}`, woCreatedBy, rsp].filter(Boolean).join(' · ')})
+            ({[woNumber && `WO ${woNumber}`, rsp].filter(Boolean).join(' · ')})
           </span>
         )}
       </button>
       {showWoDetails && (
         <div style={discloseBody}>
           <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
-            <Field label="WO #">
+            <Field label="WO #" hint="pointer to the COVE work order">
               <input
                 type="text"
                 value={woNumber}
@@ -168,37 +164,28 @@ export function IssueForm({
                 style={inputStyle}
               />
             </Field>
-            <Field label="WO created by" hint="engineer name or vendor (e.g. CWS)">
+            <Field label="RSP (responsible party)" hint="engineer / vendor / contractor">
               <input
                 type="text"
-                value={woCreatedBy}
-                onChange={(e) => setWoCreatedBy(e.target.value)}
-                placeholder='e.g. "Don", "CWS"'
+                value={rsp}
+                onChange={(e) => setRsp(e.target.value)}
                 style={inputStyle}
               />
             </Field>
           </div>
-          <Field label="RSP (responsible party)" hint="who's owning this — engineer / vendor / contractor">
-            <input
-              type="text"
-              value={rsp}
-              onChange={(e) => setRsp(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
         </div>
       )}
 
-      {/* ──────────────── LOTO disclosure ──────────────── */}
+      {/* ──────────────── LOTO / ISO disclosure ──────────────── */}
       <button
         type="button"
         onClick={() => setShowLoto((v) => !v)}
         style={discloseBtn}
       >
-        <span>{showLoto ? '▼' : '▶'}</span> LOTO (Lockout/Tagout)
+        <span>{showLoto ? '▼' : '▶'}</span> LOTO / ISO
         {!showLoto && lotoApplied && (
           <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--color-danger)' }}>
-            🔒 LOTO ON
+            🔒 ON
           </span>
         )}
       </button>
@@ -210,19 +197,19 @@ export function IssueForm({
               checked={lotoApplied}
               onChange={(e) => setLotoApplied(e.target.checked)}
             />
-            LOTO applied — equipment is locked and tagged out
+            LOTO / ISO applied — equipment is locked or isolated
           </label>
           {lotoApplied && (
             <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(160px,1fr)' }}>
-              <Field label="Applied at">
+              <Field label="Date">
                 <input
-                  type="datetime-local"
+                  type="date"
                   value={lotoApplyAt}
                   onChange={(e) => setLotoApplyAt(e.target.value)}
                   style={inputStyle}
                 />
               </Field>
-              <Field label="Applied by (required)" hint="engineer who placed the lock">
+              <Field label="By (required)" hint="engineer who placed the lock / isolation">
                 <select
                   value={lotoApplyBy}
                   onChange={(e) => setLotoApplyBy(e.target.value)}
@@ -239,7 +226,7 @@ export function IssueForm({
           )}
           {existing?.loto_removed_at && (
             <div className="t-small t-muted">
-              Removed at {new Date(existing.loto_removed_at).toLocaleString()}
+              Removed {existing.loto_removed_at}
             </div>
           )}
         </div>
