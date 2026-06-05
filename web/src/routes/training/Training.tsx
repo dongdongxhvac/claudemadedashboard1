@@ -18,9 +18,13 @@ import {
 // schema. Layout mirrors the Admin/Manager chrome; sections are the shared
 // collapsible <Section> primitive — no shared code is modified.
 
+// Order matters: Binney St first because it's the brand-new site we're
+// building out. UPark already has its 14 buildings + ~5 of 12 techs seeded,
+// so it's rendered as a compact summary by default ("minor" presence) and
+// can be expanded only when reference is needed.
 const SITE_META = [
-  { code: 'upark',  label: 'UPark',     buildings: 14, techs: 12 },
-  { code: 'binney', label: 'Binney St', buildings: 28, techs: 19 },
+  { code: 'binney', label: 'Binney St', buildings: 28, techs: 19, minor: false },
+  { code: 'upark',  label: 'UPark',     buildings: 14, techs: 12, minor: true  },
 ] as const;
 
 // ---- draft column definitions (the "templates" the user is shaping) --------
@@ -122,6 +126,23 @@ function BuildingList({ ready, loading, rows }: { ready: boolean; loading: boole
   );
 }
 
+/** Compact one-line render for "minor" sites — data already lives elsewhere
+ *  in the app, so we don't duplicate the list here; just show the count and
+ *  link out to where the full view lives. */
+function MinorSummary({
+  ready, count, total, noun, linkTo, linkLabel,
+}: { ready: boolean; count: number; total: number; noun: string; linkTo: string; linkLabel: string }) {
+  if (!ready) return <p className="t-small t-muted">Pending migration 0072 + roster import.</p>;
+  return (
+    <div className="flex items-center justify-between" style={{ padding: '4px 2px' }}>
+      <span className="t-small t-muted">
+        {count} of {total} {noun} already loaded — for reference.
+      </span>
+      <Link to={linkTo} className="t-small t-accent hover:underline">{linkLabel}</Link>
+    </div>
+  );
+}
+
 function TechList({ ready, loading, rows }: { ready: boolean; loading: boolean; rows: TrainingTech[] }) {
   if (!ready) return <p className="t-small t-muted">Pending migration 0072 + roster import.</p>;
   if (loading) return <p className="t-small t-muted">Loading…</p>;
@@ -203,10 +224,21 @@ export default function Training() {
               key={`b-${m.code}`}
               collapsible
               id={`sec-buildings-${m.code}`}
-              title={`Buildings · ${m.label}`}
+              title={`Buildings · ${m.label}${m.minor ? ' (reference)' : ''}`}
               subtitle={ready ? `${list.length} of ${m.buildings}` : 'pending 0072'}
             >
-              <BuildingList ready={ready} loading={bldgsQ.isLoading} rows={list} />
+              {m.minor ? (
+                <MinorSummary
+                  ready={ready}
+                  count={list.length}
+                  total={m.buildings}
+                  noun="buildings"
+                  linkTo="/buildings"
+                  linkLabel="View full list →"
+                />
+              ) : (
+                <BuildingList ready={ready} loading={bldgsQ.isLoading} rows={list} />
+              )}
             </Section>
           );
         })}
@@ -219,10 +251,21 @@ export default function Training() {
               key={`r-${m.code}`}
               collapsible
               id={`sec-roster-${m.code}`}
-              title={`Roster · ${m.label}`}
+              title={`Roster · ${m.label}${m.minor ? ' (reference)' : ''}`}
               subtitle={ready ? `${list.length} of ${m.techs} techs` : 'pending 0072'}
             >
-              <TechList ready={ready} loading={rosterQ.isLoading} rows={list} />
+              {m.minor ? (
+                <MinorSummary
+                  ready={ready}
+                  count={list.length}
+                  total={m.techs}
+                  noun="techs"
+                  linkTo="/manager"
+                  linkLabel="View on dashboard →"
+                />
+              ) : (
+                <TechList ready={ready} loading={rosterQ.isLoading} rows={list} />
+              )}
             </Section>
           );
         })}
