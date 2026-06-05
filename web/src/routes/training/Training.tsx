@@ -2,21 +2,28 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { Section } from '../../components/Section';
+import { useBuildingEquipmentCountsMap } from '../../hooks/useBuildingKb';
 import {
   useSites, useTrainingBuildings, useTrainingRoster,
   type TrainingBuilding, type TrainingTech,
 } from '../../hooks/useTraining';
 import {
+  useTrainingCuration, useSaveTrainingCuration, toggleId,
+} from '../../hooks/useTrainingCuration';
+import { CurationPicker } from './CurationPicker';
+import { TrainingBuildingPanel } from './TrainingBuildingPanel';
+import { TrainingTechPanel } from './TrainingTechPanel';
+import {
   DraftTable, DraftBadge, DraftBody, useLocalDraft, makeRow,
   type DraftColumn, type DraftRow,
 } from './draftTable';
 
-// COVE · Training view — a poll/mirror dashboard for the Technical Training &
-// Support Supervisor. The two Buildings + two Roster sections MIRROR existing
-// dashboard data (read-only, grouped by site). The five template sections are
-// local-only DRAFTS so the supervisor can shape structure before we lock the
-// schema. Layout mirrors the Admin/Manager chrome; sections are the shared
-// collapsible <Section> primitive — no shared code is modified.
+// COVE · Training view — a curated, editable pane over real building + user data.
+//   * Curated buildings/techs MIRROR canonical data and edit through the SAME
+//     hooks as the Building / Admin views, so edits land in all places live.
+//   * The picker (users.preferences.training) chooses the partial subset shown.
+//   * SOP + skill RECORDS are prototyped as entity-anchored drafts (localStorage)
+//     until their schema is locked. Layout mirrors the Admin/Manager chrome.
 
 // Order matters: Binney St first because it's the brand-new site we're
 // building out. UPark already has its 14 buildings + ~5 of 12 techs seeded,
@@ -27,7 +34,7 @@ const SITE_META = [
   { code: 'upark',  label: 'UPark',     buildings: 14, techs: 12, minor: true  },
 ] as const;
 
-// ---- draft column definitions (the "templates" the user is shaping) --------
+// ---- draft column definitions (global template prototypes) -----------------
 
 const ONBOARDING_COLS: DraftColumn[] = [
   { key: 'phase',   label: 'Phase',       width: '22%', placeholder: 'Week 1 · Safety' },
@@ -176,11 +183,29 @@ export default function Training() {
   const ready = sitesQ.isSuccess && sitesQ.data.length > 0;
   const bldgsQ = useTrainingBuildings(ready);
   const rosterQ = useTrainingRoster(ready);
+  const countsQ = useBuildingEquipmentCountsMap();
+
+  const { curation } = useTrainingCuration();
+  const saveCuration = useSaveTrainingCuration();
+  const showSec = (k: string) => curation.visibleSections.includes(k);
 
   const siteByCode = useMemo(
     () => new Map((sitesQ.data ?? []).map((s) => [s.code, s])),
     [sitesQ.data],
   );
+
+  // Curated subsets (real rows filtered to the saved pins).
+  const curatedBuildings = (bldgsQ.data ?? []).filter((b) => curation.pinnedBuildingIds.includes(b.id));
+  const curatedTechs = (rosterQ.data ?? []).filter((t) => curation.pinnedTechIds.includes(t.user_id));
+
+  // Inline equipment pin toggle — spreads the latest curation so it never
+  // clobbers the picker's building/tech/section fields.
+  const onToggleEquipmentPin = (equipmentId: string) => {
+    saveCuration.mutate({
+      ...curation,
+      pinnedEquipmentIds: toggleId(curation.pinnedEquipmentIds, equipmentId),
+    });
+  };
 
   const [onboarding, setOnboarding] = useLocalDraft('onboarding', seedOnboarding);
   const [sopTemplate, setSopTemplate] = useLocalDraft('sop_template', seedSop);
@@ -211,12 +236,62 @@ export default function Training() {
             <p className="t-text">
               <b>Two-site data not wired yet.</b> Apply migration <code>0072_training_sites_foundation.sql</code> and run{' '}
               <code>watcher/import_training_roster.py</code> to populate the UPark / Binney St building &amp; roster
-              sections below. The five template sections work right now — enter sample data to shape them.
+              sections. The picker &amp; template sections work right now.
             </p>
           </div>
         )}
 
-        {SITE_META.map((m) => {
+        <CurationPicker ready={ready} />
+
+        {/* Curated buildings — live + editable, single-source with the Building view. */}
+        {showSec('buildings') && (
+          curatedBuildings.length === 0 ? (
+            <div className="t-card"><p className="t-small t-muted">No buildings picked yet — choose some in “Choose what to show” to mirror their equipment + SOP here.</p></div>
+          ) : (
+            curatedBuildings.map((b) => {
+              const counts = countsQ.data?.get(b.id);
+              return (
+                <Section
+                  key={`tb-${b.id}`}
+                  collapsible
+                  id={`sec-train-bldg-${b.id}`}
+                  title={`${b.short_code ?? b.code} · ${b.name}`}
+                  subtitle={counts ? `${counts.total} equipment${counts.issues ? ` · ${counts.issues} open` : ''}` : undefined}
+                >
+                  <TrainingBuildingPanel
+                    buildingId={b.id}
+                    shortCode={b.short_code ?? b.code}
+                    name={b.name}
+                    pinnedEquipmentIds={curation.pinnedEquipmentIds}
+                    onToggleEquipmentPin={onToggleEquipmentPin}
+                  />
+                </Section>
+              );
+            })
+          )
+        )}
+
+        {/* Curated techs — profile edits sync to Admin; skill records are drafts. */}
+        {showSec('roster') && (
+          curatedTechs.length === 0 ? (
+            <div className="t-card"><p className="t-small t-muted">No techs picked yet — choose some in “Choose what to show” to track their skills + history here.</p></div>
+          ) : (
+            curatedTechs.map((t) => (
+              <Section
+                key={`tt-${t.user_id}`}
+                collapsible
+                id={`sec-train-tech-${t.user_id}`}
+                title={t.full_name}
+                subtitle={t.discipline ? `${t.discipline} · L${t.level}` : `L${t.level}`}
+              >
+                <TrainingTechPanel tech={t} />
+              </Section>
+            ))
+          )
+        )}
+
+        {/* Site mirrors (read-only overview). */}
+        {showSec('mirrors') && SITE_META.map((m) => {
           const site = siteByCode.get(m.code);
           const list = (bldgsQ.data ?? []).filter((b) => site && b.site_id === site.id);
           return (
@@ -243,7 +318,7 @@ export default function Training() {
           );
         })}
 
-        {SITE_META.map((m) => {
+        {showSec('mirrors') && SITE_META.map((m) => {
           const site = siteByCode.get(m.code);
           const list = (rosterQ.data ?? []).filter((t) => site && t.home_site_id === site.id);
           return (
@@ -270,35 +345,40 @@ export default function Training() {
           );
         })}
 
-        <Section collapsible id="sec-onboarding" title="Onboarding Training" subtitle={<DraftBadge />}>
-          <DraftBody intro="New-hire curriculum: ordered items by phase, each with a type and a sign-off owner.">
-            <DraftTable columns={ONBOARDING_COLS} rows={onboarding} onChange={setOnboarding} addLabel="Add onboarding item" />
-          </DraftBody>
-        </Section>
+        {/* Global template prototypes. */}
+        {showSec('drafts') && (
+          <>
+            <Section collapsible id="sec-onboarding" title="Onboarding Training" subtitle={<DraftBadge />}>
+              <DraftBody intro="New-hire curriculum: ordered items by phase, each with a type and a sign-off owner.">
+                <DraftTable columns={ONBOARDING_COLS} rows={onboarding} onChange={setOnboarding} addLabel="Add onboarding item" />
+              </DraftBody>
+            </Section>
 
-        <Section collapsible id="sec-sop-template" title="SOP Template" subtitle={<DraftBadge />}>
-          <DraftBody intro="The shape of an equipment SOP, organized by the four facets — PM / Reset / Support / Knowledge.">
-            <DraftTable columns={SOP_COLS} rows={sopTemplate} onChange={setSopTemplate} addLabel="Add template field" />
-          </DraftBody>
-        </Section>
+            <Section collapsible id="sec-sop-template" title="SOP Template" subtitle={<DraftBadge />}>
+              <DraftBody intro="The shape of an equipment SOP, organized by the four facets — PM / Reset / Support / Knowledge.">
+                <DraftTable columns={SOP_COLS} rows={sopTemplate} onChange={setSopTemplate} addLabel="Add template field" />
+              </DraftBody>
+            </Section>
 
-        <Section collapsible id="sec-competency-catalog" title="Competency Catalog" subtitle={<DraftBadge />}>
-          <DraftBody intro="The catalog of trainable competencies. Facets list which of PM / Reset / Support / Knowledge apply.">
-            <DraftTable columns={CATALOG_COLS} rows={catalog} onChange={setCatalog} addLabel="Add competency" />
-          </DraftBody>
-        </Section>
+            <Section collapsible id="sec-competency-catalog" title="Competency Catalog" subtitle={<DraftBadge />}>
+              <DraftBody intro="The catalog of trainable competencies. Facets list which of PM / Reset / Support / Knowledge apply.">
+                <DraftTable columns={CATALOG_COLS} rows={catalog} onChange={setCatalog} addLabel="Add competency" />
+              </DraftBody>
+            </Section>
 
-        <Section collapsible id="sec-curriculums" title="Curriculums" subtitle={<DraftBadge />}>
-          <DraftBody intro="Named bundles of courses, competencies, and certs targeted at a role or discipline.">
-            <DraftTable columns={CURRICULUM_COLS} rows={curricula} onChange={setCurricula} addLabel="Add curriculum item" />
-          </DraftBody>
-        </Section>
+            <Section collapsible id="sec-curriculums" title="Curriculums" subtitle={<DraftBadge />}>
+              <DraftBody intro="Named bundles of courses, competencies, and certs targeted at a role or discipline.">
+                <DraftTable columns={CURRICULUM_COLS} rows={curricula} onChange={setCurricula} addLabel="Add curriculum item" />
+              </DraftBody>
+            </Section>
 
-        <Section collapsible id="sec-requirements-matrix" title="Requirements Matrix" subtitle={<DraftBadge />}>
-          <DraftBody intro="What competency level / cert is required, by scope (role, discipline, building rule, on-call).">
-            <DraftTable columns={REQUIREMENTS_COLS} rows={requirements} onChange={setRequirements} addLabel="Add requirement" />
-          </DraftBody>
-        </Section>
+            <Section collapsible id="sec-requirements-matrix" title="Requirements Matrix" subtitle={<DraftBadge />}>
+              <DraftBody intro="What competency level / cert is required, by scope (role, discipline, building rule, on-call).">
+                <DraftTable columns={REQUIREMENTS_COLS} rows={requirements} onChange={setRequirements} addLabel="Add requirement" />
+              </DraftBody>
+            </Section>
+          </>
+        )}
       </main>
     </div>
   );

@@ -48,12 +48,17 @@ export function EquipmentList({
   buildingId,
   buildingShortCode,
   buildingName,
+  onlyEquipmentIds,
 }: {
   buildingId: string;
   /** Short_code badge for safety labels ("Add equipment to [75]"). */
   buildingShortCode?: string;
   /** Full building name, used in form headers. */
   buildingName?: string;
+  /** Optional display filter (Training-view "focus assets"). When set and
+   *  non-empty, only these equipment ids render. Undefined = show all — the
+   *  Building view never passes it, so its behavior is unchanged. */
+  onlyEquipmentIds?: string[];
 }) {
   const canEdit = useCanAccessAdmin();
   const eqQ = useBuildingEquipment(buildingId);
@@ -74,7 +79,11 @@ export function EquipmentList({
   // Section collapse/expand state — initialized below from auto-expand rule.
   const [collapsedCats, setCollapsedCats] = useState<Set<CategoryKey> | null>(null);
 
-  const rows = eqQ.data ?? [];
+  const allRows = eqQ.data ?? [];
+  const rows =
+    onlyEquipmentIds && onlyEquipmentIds.length > 0
+      ? allRows.filter((r) => onlyEquipmentIds.includes(r.id))
+      : allRows;
   const issuesByEq = issQ.data ?? new Map<string, EquipmentIssue[]>();
 
   // Build the tree: top-level equipment grouped by category; children
