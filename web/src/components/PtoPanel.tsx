@@ -2504,6 +2504,35 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
             <p className="t-small t-muted mt-1">Used: {summary.vacation_used}h</p>
+            <details className="mt-1">
+              <summary className="t-small t-muted cursor-pointer" style={{ fontSize: '0.7rem' }}>
+                Vacation entitlement schedule (by length of service)
+              </summary>
+              <table className="t-small t-mono mt-1" style={{ borderCollapse: 'collapse', fontSize: '0.7rem' }}>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">After probation – &lt;3 yrs</td>
+                    <td className="text-right py-0.5">2 wks</td>
+                    <td className="pl-2 py-0.5 t-muted">80h</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">3 yrs – &lt;8 yrs</td>
+                    <td className="text-right py-0.5">3 wks</td>
+                    <td className="pl-2 py-0.5 t-muted">120h</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">8 yrs – &lt;18 yrs</td>
+                    <td className="text-right py-0.5">4 wks</td>
+                    <td className="pl-2 py-0.5 t-muted">160h</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 py-0.5 t-muted">18+ yrs</td>
+                    <td className="text-right py-0.5">5 wks</td>
+                    <td className="pl-2 py-0.5 t-muted">200h</td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
           </label>
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Sick alloted</span>
@@ -2511,6 +2540,35 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
             <p className="t-small t-muted mt-1">Used: {summary.sick_used}h</p>
+            <details className="mt-1">
+              <summary className="t-small t-muted cursor-pointer" style={{ fontSize: '0.7rem' }}>
+                Sick day schedule (first-year accrual by length of service)
+              </summary>
+              <table className="t-small t-mono mt-1" style={{ borderCollapse: 'collapse', fontSize: '0.7rem' }}>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">&lt;3 months</td>
+                    <td className="text-right py-0.5">0 days</td>
+                    <td className="pl-2 py-0.5 t-muted">0h</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">3 – &lt;6 months</td>
+                    <td className="text-right py-0.5">2 days</td>
+                    <td className="pl-2 py-0.5 t-muted">16h</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">6 – &lt;9 months</td>
+                    <td className="text-right py-0.5">3 days</td>
+                    <td className="pl-2 py-0.5 t-muted">24h</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 py-0.5 t-muted">9 – &lt;12 months</td>
+                    <td className="text-right py-0.5">4 days</td>
+                    <td className="pl-2 py-0.5 t-muted">32h</td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
           </label>
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Personal alloted</span>
