@@ -1,0 +1,4 @@
+full_name,site_code,email,role,discipline,level,title,hiring_date,cmms_assignee_name,plantlog_username,primary_building_code
+Jane Doe,binney,jane.doe@cwservices.com,engineer,M,3,Building Engineer,2024-03-01,Jane Doe,jdoe,BIN-100
+John Roe,binney,,engineer,E,2,,,,,BIN-150
+Sam Park,upark,,engineer,BMS,4,Lead Engineer,2021-09-15,Sam Park,spark,UP-75

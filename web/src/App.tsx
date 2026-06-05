@@ -11,6 +11,7 @@ import EngineerShiftTv from './routes/engineer/ShiftTv';
 import TvView from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
+import Training from './routes/training/Training';
 import { useMe } from './hooks/useMe';
 
 /** Reset scroll to the top on every route change. Without this, navigating
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/tv" element={<Protected><TvView /></Protected>} />
         <Route path="/buildings" element={<Protected><BuildingsIndex /></Protected>} />
         <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
+        <Route path="/training" element={<Protected><RequireManagerArea><Training /></RequireManagerArea></Protected>} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
       </Routes>
