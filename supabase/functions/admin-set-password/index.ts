@@ -77,8 +77,52 @@ Deno.serve(async (req) => {
   if (!targetRow.email) return json(400, { error: "target user has no email — set one in User Profiles first" });
 
   let auth_user_id = targetRow.auth_user_id;
+
+  // 3a) If public.users has no auth_user_id link, check whether an
+  //     auth.users row already exists for this email. This is the drift
+  //     case: a user signed in via magic link earlier (creating an
+  //     auth row), but the link to public.users was never persisted (or
+  //     got cleared). Without this lookup, createUser below would 422
+  //     with "A user with this email address has already been registered."
   if (!auth_user_id) {
-    // Create an auth user with this email + password in one shot.
+    // Service-role can query auth schema directly via the admin REST API.
+    // listUsers supports a per-page email filter via the JS client.
+    type ExistingAuthRow = { id: string; email: string | null };
+    let existing: ExistingAuthRow | null = null;
+    try {
+      // The JS client's admin.listUsers doesn't accept a simple
+      // {email: ...} filter pre-v2 of GoTrue; do a small page scan and
+      // match case-insensitively. We expect <500 auth users so 1 page
+      // of 1000 is plenty.
+      const { data: list, error: listErr } = await admin.auth.admin.listUsers({
+        page: 1, perPage: 1000,
+      });
+      if (listErr) return json(500, { error: `auth lookup failed: ${listErr.message}` });
+      const wanted = (targetRow.email ?? "").trim().toLowerCase();
+      const found = (list?.users ?? []).find(
+        (u) => (u.email ?? "").trim().toLowerCase() === wanted,
+      );
+      if (found) existing = { id: found.id, email: found.email ?? null };
+    } catch (e) {
+      return json(500, { error: `auth lookup threw: ${e instanceof Error ? e.message : String(e)}` });
+    }
+
+    if (existing) {
+      // Drift case — auth row already exists. Link it + set the password.
+      auth_user_id = existing.id;
+      const { error: linkErr } = await admin
+        .from("users")
+        .update({ auth_user_id, updated_at: new Date().toISOString() })
+        .eq("id", target_user_id);
+      if (linkErr) return json(500, { error: `link drifted auth user failed: ${linkErr.message}` });
+      const { error: updErr } = await admin.auth.admin.updateUserById(auth_user_id, {
+        password: new_password,
+      });
+      if (updErr) return json(500, { error: `password update on relinked auth user failed: ${updErr.message}` });
+      return json(200, { ok: true, created_auth_user: false, relinked: true });
+    }
+
+    // No existing auth row — create one with this email + password.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: targetRow.email,
       password: new_password,
@@ -96,7 +140,7 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, created_auth_user: true });
   }
 
-  // Existing auth user — just update the password.
+  // Existing linked auth user — just update the password.
   const { error: updErr } = await admin.auth.admin.updateUserById(auth_user_id, {
     password: new_password,
   });
