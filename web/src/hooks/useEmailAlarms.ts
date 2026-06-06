@@ -264,6 +264,39 @@ export function useFlappingEmailAlarms() {
   });
 }
 
+export type FlappingHistoryRow = {
+  vendor: string;
+  point_ref: string;
+  point_name: string | null;
+  building_resolved: string | null;
+  et_hour: string;             // ET hour bucket (ISO ts of the hour start)
+  event_count: number;
+  transition_count: number;
+  first_seen: string;
+  last_seen: string;
+  latest_state: string;
+};
+
+/** Past flapping incidents — one row per (point × ET hour) where 2+
+ *  state transitions happened. Trailing daysBack window over the last
+ *  30 days max (view caps it). */
+export function useFlappingHistory(daysBack: 1 | 7 | 30 = 7) {
+  return useQuery({
+    queryKey: ['email_alarms_flapping_history', daysBack],
+    queryFn: async (): Promise<FlappingHistoryRow[]> => {
+      const since = new Date(Date.now() - daysBack * 86_400_000);
+      const { data, error } = await supabase
+        .from('v_email_alarms_flapping_history')
+        .select('*')
+        .gte('et_hour', since.toISOString())
+        .order('et_hour', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as FlappingHistoryRow[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** Poller heartbeat — feeds the panel's "feed live/stale" indicator. */
 export function useEmailPollState() {
   return useQuery({

@@ -19,7 +19,9 @@ import { useMemo, useState } from 'react';
 import {
   useEmailAlarmsInWindow,
   useEmailAlarmsHistory,
+  useFlappingHistory,
   type EmailAlarmHistoryRow,
+  type FlappingHistoryRow,
 } from '../hooks/useEmailAlarms';
 import { Section } from './Section';
 
@@ -255,7 +257,7 @@ export function EmailAlarmsHistoryPanel() {
               collapsed by default so the stat cards / leaderboard below
               are still the first thing the eye lands on after expanding
               the panel. */}
-          <details className="mb-4">
+          <details className="mb-3">
             <summary
               className="t-small t-muted uppercase tracking-wider"
               style={{ cursor: 'pointer', userSelect: 'none' }}
@@ -264,6 +266,19 @@ export function EmailAlarmsHistoryPanel() {
             </summary>
             <div className="mt-2">
               <RecentEventsLog />
+            </div>
+          </details>
+
+          {/* Past flapping (history). Collapsed by default. */}
+          <details className="mb-4">
+            <summary
+              className="t-small t-muted uppercase tracking-wider"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              ▸ Past flapping (point × hour, last 7d / 30d)
+            </summary>
+            <div className="mt-2">
+              <FlappingHistorySection />
             </div>
           </details>
 
@@ -567,4 +582,200 @@ function FilterPill({
       {label}
     </button>
   );
+}
+
+// ---------------------------------------------------------------------------
+// FlappingHistorySection — past flapping incidents (point × ET hour) from
+// v_email_alarms_flapping_history. Window pills choose the trailing range.
+// Top "by point" rollup answers "which point flaps most?"; the detail
+// table below shows the individual hour buckets.
+// ---------------------------------------------------------------------------
+
+function FlappingHistorySection() {
+  const [daysBack, setDaysBack] = useState<1 | 7 | 30>(7);
+  const q = useFlappingHistory(daysBack);
+  const rows = q.data ?? [];
+
+  const byPoint = useMemo(() => {
+    const m = new Map<string, {
+      vendor: string;
+      point_ref: string;
+      point_name: string | null;
+      building_resolved: string | null;
+      incidents: number;
+      total_transitions: number;
+      total_events: number;
+      last_seen: string;
+    }>();
+    for (const r of rows) {
+      const k = `${r.vendor}|${r.point_ref}`;
+      const cur = m.get(k);
+      if (!cur) {
+        m.set(k, {
+          vendor: r.vendor,
+          point_ref: r.point_ref,
+          point_name: r.point_name,
+          building_resolved: r.building_resolved,
+          incidents: 1,
+          total_transitions: r.transition_count,
+          total_events: r.event_count,
+          last_seen: r.last_seen,
+        });
+      } else {
+        cur.incidents += 1;
+        cur.total_transitions += r.transition_count;
+        cur.total_events += r.event_count;
+        if (r.last_seen > cur.last_seen) cur.last_seen = r.last_seen;
+      }
+    }
+    return Array.from(m.values()).sort(
+      (a, b) => b.total_transitions - a.total_transitions,
+    );
+  }, [rows]);
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+        <span className="t-small t-muted uppercase tracking-wider">Window</span>
+        {([1, 7, 30] as const).map((d) => (
+          <FilterPill
+            key={d}
+            label={d === 1 ? '24h' : `${d}d`}
+            active={daysBack === d}
+            onClick={() => setDaysBack(d)}
+          />
+        ))}
+        <span className="t-small t-muted ml-auto">
+          {rows.length === 0
+            ? 'no flapping in this window'
+            : `${rows.length} incident${rows.length === 1 ? '' : 's'} across ${byPoint.length} point${byPoint.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      {q.isLoading ? (
+        <p className="t-small t-muted">Loading…</p>
+      ) : q.error ? (
+        <p className="t-text t-danger">Error: {(q.error as Error).message}</p>
+      ) : rows.length === 0 ? (
+        <p className="t-small t-muted">No 2+ transition hours in the selected window.</p>
+      ) : (
+        <>
+          {/* By-point rollup */}
+          <div className="t-small t-muted uppercase tracking-wider mb-1 mt-2" style={{ fontSize: '0.65rem' }}>
+            By point
+          </div>
+          <table className="t-mono t-small w-full mb-3" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr className="t-muted">
+                <th className="text-left pb-1 pr-3">Bldg</th>
+                <th className="text-left pb-1 pr-3">Point</th>
+                <th className="text-left pb-1 pr-3">Vendor</th>
+                <th className="text-right pb-1 px-2" title="Distinct ET hour buckets where this point flapped">
+                  Incidents
+                </th>
+                <th className="text-right pb-1 px-2" title="Sum of state transitions across all incidents">
+                  Toggles
+                </th>
+                <th className="text-right pb-1 pl-3">Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byPoint.slice(0, 12).map((p) => (
+                <tr
+                  key={`${p.vendor}|${p.point_ref}`}
+                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
+                >
+                  <td className="py-1 pr-3 t-mono">{p.building_resolved ?? '—'}</td>
+                  <td className="py-1 pr-3" style={{ color: 'var(--color-text)' }}>
+                    {p.point_ref}
+                    {p.point_name && p.point_name !== p.point_ref && (
+                      <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>{p.point_name}</span>
+                    )}
+                  </td>
+                  <td className="py-1 pr-3 t-muted">{p.vendor}</td>
+                  <td
+                    className="text-right px-2 py-1"
+                    style={{ color: 'var(--color-warn, #d97706)', fontWeight: 600 }}
+                  >
+                    {p.incidents}
+                  </td>
+                  <td className="text-right px-2 py-1 font-semibold">{p.total_transitions}</td>
+                  <td className="text-right pl-3 t-muted">{fmtRelative(p.last_seen)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {byPoint.length > 12 && (
+            <p className="t-small t-muted mb-2">
+              Showing top 12 of {byPoint.length} points by total toggles.
+            </p>
+          )}
+
+          {/* Detail timeline */}
+          <div className="t-small t-muted uppercase tracking-wider mb-1 mt-2" style={{ fontSize: '0.65rem' }}>
+            Incidents (most recent first)
+          </div>
+          <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr className="t-muted">
+                <th className="text-left pb-1 pr-3">When (ET)</th>
+                <th className="text-left pb-1 pr-3">Bldg</th>
+                <th className="text-left pb-1 pr-3">Point</th>
+                <th className="text-left pb-1 pr-3">Vendor</th>
+                <th className="text-right pb-1 px-2">Events</th>
+                <th className="text-right pb-1 px-2">Toggles</th>
+                <th className="text-right pb-1 pl-3">Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 50).map((r: FlappingHistoryRow) => (
+                <tr
+                  key={`${r.vendor}|${r.point_ref}|${r.et_hour}`}
+                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
+                >
+                  <td className="py-1 pr-3 t-muted">{fmtHourLocalEt(r.et_hour)}</td>
+                  <td className="py-1 pr-3 t-mono">{r.building_resolved ?? '—'}</td>
+                  <td className="py-1 pr-3" style={{ color: 'var(--color-text)' }}>{r.point_ref}</td>
+                  <td className="py-1 pr-3 t-muted">{r.vendor}</td>
+                  <td className="text-right px-2 py-1">{r.event_count}</td>
+                  <td
+                    className="text-right px-2 py-1 font-semibold"
+                    style={{ color: 'var(--color-warn, #d97706)' }}
+                  >
+                    {r.transition_count}
+                  </td>
+                  <td
+                    className="text-right pl-3"
+                    style={{
+                      color: r.latest_state === 'Active'
+                        ? 'var(--color-danger)'
+                        : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {r.latest_state}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rows.length > 50 && (
+            <p className="t-small t-muted mt-2">Showing top 50 of {rows.length} incidents.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Pretty-print an ET-hour timestamp like "Jun 6 · 14:00 ET". The view
+ *  returns date_trunc('hour', ts at time zone 'America/New_York') which
+ *  is a TIMESTAMP WITHOUT TIME ZONE in ET wall time; we render it
+ *  directly without re-applying TZ math. */
+function fmtHourLocalEt(iso: string): string {
+  // Strip the trailing Z/offset if present and parse as ET wall time.
+  const d = new Date(iso.replace(/Z$/, ''));
+  const mo = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  return `${mo} ${day} · ${hh}:00`;
 }
