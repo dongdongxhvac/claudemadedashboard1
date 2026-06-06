@@ -6,7 +6,7 @@ import {
   DraftTable, DraftBadge, DraftBody, useLocalDraft, makeRow,
   type DraftColumn, type DraftRow,
 } from './draftTable';
-import { FACET_HINT, draftKey } from './trainingSections';
+import { FACET_HINT, BASIC_SKILLS, draftKey } from './trainingSections';
 import { ProblemAxisLegend } from './ProblemAxisLegend';
 
 // Per-tech panel for the Training view.
@@ -34,6 +34,17 @@ const PROBLEM_PROF_COLS: DraftColumn[] = [
 const seedProblemProf = (): DraftRow[] => [
   makeRow({ problem: 'e.g. Reset VFD after fault', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '1', rule: '2', last: '', times: '4' }),
 ];
+
+// Foundational trade competence — the five basic skills, scored 0-4 per tech.
+const BASIC_SKILL_COLS: DraftColumn[] = [
+  { key: 'skill', label: 'Basic skill', width: '24%' },
+  { key: 'level', label: 'Level', width: '14%', placeholder: '0-4' },
+  { key: 'note', label: 'Notes / evidence', width: '62%', placeholder: 'e.g. EPA 608 · prior HVAC role · weak on ladder logic' },
+];
+
+// Seeded with the fixed five so every tech starts with the same rows to score.
+const seedBasics = (): DraftRow[] =>
+  BASIC_SKILLS.map((s) => makeRow({ skill: s, level: '', note: '' }));
 
 const COMPETENCY_COLS: DraftColumn[] = [
   { key: 'equipment', label: 'Equipment', width: '18%' },
@@ -67,9 +78,10 @@ const SIGNOFF_COLS: DraftColumn[] = [
   { key: 'date', label: 'Date', width: '30%' },
 ];
 
-type SkillTab = 'problems' | 'competency' | 'certs' | 'courses' | 'signoffs';
+type SkillTab = 'problems' | 'basics' | 'competency' | 'certs' | 'courses' | 'signoffs';
 const SKILL_TABS: { key: SkillTab; label: string }[] = [
   { key: 'problems', label: 'Problem proficiency' },
+  { key: 'basics', label: 'Basic skills' },
   { key: 'competency', label: 'Competency' },
   { key: 'certs', label: 'Certifications' },
   { key: 'courses', label: 'Courses' },
@@ -88,6 +100,7 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
   const [tab, setTab] = useState<SkillTab>('problems');
 
   const [problems, setProblems] = useLocalDraft(draftKey.techProblems(tech.user_id), seedProblemProf);
+  const [basics, setBasics] = useLocalDraft(draftKey.techBasics(tech.user_id), seedBasics);
   const [competency, setCompetency] = useLocalDraft(draftKey.techCompetency(tech.user_id), () => []);
   const [certs, setCerts] = useLocalDraft(draftKey.techCerts(tech.user_id), () => []);
   const [courses, setCourses] = useLocalDraft(draftKey.techCourses(tech.user_id), () => []);
@@ -179,6 +192,11 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
         <DraftBody intro="How well this tech handles each real-world problem — scored 0-4 for memory, technical, and rule-of-thumb. A low score points to how to coach: drill the SOP, hands-on with a lead, or shadow them on a no-disruption job.">
           <ProblemAxisLegend />
           <DraftTable columns={PROBLEM_PROF_COLS} rows={problems} onChange={setProblems} addLabel="Add problem proficiency" />
+        </DraftBody>
+      )}
+      {tab === 'basics' && (
+        <DraftBody intro="Foundational trade competence (0-4) across the five basic skills — the substrate beneath problem proficiency. A weak basic skill explains struggles on the problems that draw on it.">
+          <DraftTable columns={BASIC_SKILL_COLS} rows={basics} onChange={setBasics} addLabel="Add basic skill" />
         </DraftBody>
       )}
       {tab === 'competency' && (

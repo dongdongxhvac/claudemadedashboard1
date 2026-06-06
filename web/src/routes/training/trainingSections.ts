@@ -41,6 +41,14 @@ export const PROBLEM_TYPE_META: { key: ProblemType; label: string; blurb: string
   { key: 'rule_of_thumb', label: 'Rule of thumb', blurb: 'finish the PM/repair with no operation interruption and no alarms / limit alarms.' },
 ];
 
+/** Basic trade-skill knowledge — the foundational competence axes, scored per
+ *  tech (0-4) across ALL five (a tech has some level in each, not just one
+ *  primary discipline). This is the substrate beneath per-problem proficiency: a
+ *  weak basic skill explains why a tech struggles with the problems that draw on
+ *  it. Distinct from engineer_profiles.discipline (a single primary M/E/P/BMS/FLS). */
+export const BASIC_SKILLS = ['electrical', 'refrigeration', 'mechanical', 'control', 'plumbing'] as const;
+export type BasicSkill = (typeof BASIC_SKILLS)[number];
+
 // localStorage draft keys, ANCHORED to a real entity id. Passed to useLocalDraft
 // (which prefixes `cove.training.draft:`). Anchoring to the real id is what makes
 // locking a format later a mechanical import rather than re-entry.
@@ -49,6 +57,7 @@ export const draftKey = {
   equipmentProblems: (equipmentId: string) => `problems:equipment:${equipmentId}`,
   techCompetency: (techId: string) => `skill:competency:${techId}`,
   techProblems: (techId: string) => `problems:tech:${techId}`,
+  techBasics: (techId: string) => `skill:basics:${techId}`,
   techCerts: (techId: string) => `skill:certs:${techId}`,
   techCourses: (techId: string) => `skill:courses:${techId}`,
   techSignoffs: (techId: string) => `skill:signoffs:${techId}`,
