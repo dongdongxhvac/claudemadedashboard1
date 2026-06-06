@@ -251,6 +251,22 @@ export function EmailAlarmsHistoryPanel() {
             ))}
           </div>
 
+          {/* Chronological log — moved to top per user direction. Stays
+              collapsed by default so the stat cards / leaderboard below
+              are still the first thing the eye lands on after expanding
+              the panel. */}
+          <details className="mb-4">
+            <summary
+              className="t-small t-muted uppercase tracking-wider"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              ▸ Recent events (chronological log)
+            </summary>
+            <div className="mt-2">
+              <RecentEventsLog />
+            </div>
+          </details>
+
           {/* Stat cards */}
           <div
             className="grid gap-2 mb-4"
@@ -353,19 +369,6 @@ export function EmailAlarmsHistoryPanel() {
               )}
             </div>
           )}
-
-          {/* Chronological log (collapsed by default) */}
-          <details className="mt-5">
-            <summary
-              className="t-small t-muted uppercase tracking-wider"
-              style={{ cursor: 'pointer', userSelect: 'none' }}
-            >
-              ▸ Recent events (chronological log)
-            </summary>
-            <div className="mt-2">
-              <RecentEventsLog />
-            </div>
-          </details>
         </>
       )}
     </Section>
