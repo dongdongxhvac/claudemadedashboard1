@@ -15,7 +15,9 @@ import {
   useEmailPollState,
   useBmsHeartbeats,
   useCloseEmailAlarmManual,
+  useFlappingEmailAlarms,
   type EmailAlarmOpen,
+  type FlappingAlarm,
 } from '../hooks/useEmailAlarms';
 import { useCanAccessAdmin } from '../hooks/useMe';
 import { Section } from './Section';
@@ -280,17 +282,157 @@ export function BmsEmailAlarmsPanel() {
       {openQ.error ? (
         <p className="t-text t-danger">Error: {(openQ.error as Error).message}</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <div className="t-small t-muted uppercase tracking-wider mb-2">By vendor</div>
-            <VendorBreakdown rows={openQ.data ?? []} />
+        <>
+          {/* Flapping detection — spans full width, sits above the
+              by-vendor + currently-active two-column row because it's the
+              loudest "needs attention" signal in the panel. */}
+          <FlappingSection />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="t-small t-muted uppercase tracking-wider mb-2">By vendor</div>
+              <VendorBreakdown rows={openQ.data ?? []} />
+            </div>
+            <div>
+              <div className="t-small t-muted uppercase tracking-wider mb-2">Currently active (all vendors)</div>
+              <ActiveAcrossVendorsTable rows={openQ.data ?? []} />
+            </div>
           </div>
-          <div>
-            <div className="t-small t-muted uppercase tracking-wider mb-2">Currently active (all vendors)</div>
-            <ActiveAcrossVendorsTable rows={openQ.data ?? []} />
-          </div>
-        </div>
+        </>
       )}
     </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FlappingSection — points whose state has changed 2+ times in the trailing
+// 20 minutes. The BMS auto-resolves each cycle so they look "closed" but
+// it's really one chattering alarm — surfaces it for manual review.
+// ---------------------------------------------------------------------------
+
+function FlappingSection() {
+  const flapQ = useFlappingEmailAlarms();
+  const closeMut = useCloseEmailAlarmManual();
+  const canClose = useCanAccessAdmin();
+  const rows = flapQ.data ?? [];
+
+  if (flapQ.isLoading) return null;
+  if (rows.length === 0) return null;
+
+  return (
+    <div
+      className="mb-4"
+      style={{
+        padding: '10px 12px',
+        borderRadius: 4,
+        border: '1px solid rgba(217,119,6,0.4)',
+        background: 'rgba(217,119,6,0.06)',
+      }}
+    >
+      <div
+        className="t-small uppercase tracking-wider mb-2"
+        style={{ color: 'var(--color-warn, #d97706)', fontWeight: 700 }}
+      >
+        ⚡ Flapping — needs review ({rows.length})
+        <span className="t-muted ml-2" style={{ fontWeight: 400, fontSize: '0.7rem' }}>
+          same point toggled 2+ times in last 20 min · BMS auto-closes each cycle so it slips past
+        </span>
+      </div>
+      <table
+        className="t-mono t-small w-full"
+        style={{ borderCollapse: 'collapse' }}
+      >
+        <thead>
+          <tr className="t-muted">
+            <th className="text-left pb-1 pr-3">Bldg</th>
+            <th className="text-left pb-1 pr-3">Point</th>
+            <th className="text-left pb-1 pr-3">Vendor</th>
+            <th className="text-right pb-1 px-2" title="State changes in trailing 20 min">
+              Toggles
+            </th>
+            <th className="text-right pb-1 px-2">Latest</th>
+            <th className="text-right pb-1 pl-3">Last seen</th>
+            <th className="text-right pb-1 pl-3">{/* Close */}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: FlappingAlarm) => (
+            <tr
+              key={`${r.vendor}|${r.point_ref}`}
+              style={{ borderTop: '1px solid var(--color-border-soft)' }}
+            >
+              <td className="py-1 pr-3 t-mono">
+                {r.building_resolved ?? '—'}
+              </td>
+              <td className="py-1 pr-3" style={{ color: 'var(--color-text)' }}>
+                {r.point_ref}
+                {r.point_name && r.point_name !== r.point_ref && (
+                  <span className="t-muted ml-2" style={{ fontSize: '0.7rem' }}>
+                    {r.point_name}
+                  </span>
+                )}
+              </td>
+              <td className="py-1 pr-3 t-muted">
+                {VENDOR_LABEL[r.vendor] ?? r.vendor}
+              </td>
+              <td
+                className="text-right px-2 py-1 font-semibold"
+                style={{ color: 'var(--color-warn, #d97706)' }}
+                title={`${r.event_count} events, ${r.transition_count} state transitions`}
+              >
+                {r.transition_count}
+              </td>
+              <td
+                className="text-right px-2 py-1"
+                style={{
+                  color: r.latest_state === 'Active'
+                    ? 'var(--color-danger)'
+                    : 'var(--color-text-muted)',
+                }}
+              >
+                {r.latest_state}
+              </td>
+              <td className="text-right pl-3 t-muted" title={r.last_seen}>
+                {fmtRelative(r.last_seen)}
+              </td>
+              <td className="text-right pl-3">
+                {canClose && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const reason = prompt(
+                        `Mark this flapping point as reviewed?\n\n  ${r.point_ref} @ ${r.building_resolved ?? r.vendor}\n  ${r.transition_count} toggles in last 20 min\n\nOptional reason:`,
+                        '',
+                      );
+                      if (reason === null) return;
+                      try {
+                        await closeMut.mutateAsync({
+                          point_ref: r.point_ref,
+                          reason: reason.trim() || 'flapping — manager reviewed',
+                        });
+                      } catch (e) {
+                        alert((e as Error).message);
+                      }
+                    }}
+                    className="t-small"
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                      color: 'var(--color-ok, #10b981)',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                    }}
+                    title="Stamps a synthetic Quiet with manual_close=true so the flap detection ignores this point until it cycles again"
+                  >
+                    Reviewed
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

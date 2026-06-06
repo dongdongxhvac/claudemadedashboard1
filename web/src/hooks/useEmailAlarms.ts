@@ -229,6 +229,41 @@ export function useBmsHeartbeats() {
   });
 }
 
+export type FlappingAlarm = {
+  vendor: string;
+  point_ref: string;
+  point_name: string | null;
+  building_resolved: string | null;
+  event_count: number;
+  transition_count: number;
+  first_seen: string;
+  last_seen: string;
+  latest_state: string;
+  acknowledged: boolean;
+};
+
+/** Points whose alarm state has changed 2+ times in the trailing 20 min.
+ *  Excludes those whose most-recent event in the window is a manual close
+ *  (manager already acknowledged). Drives the "FLAPPING — needs review"
+ *  sub-section in §10. */
+export function useFlappingEmailAlarms() {
+  return useQuery({
+    queryKey: ['email_alarms_flapping'],
+    queryFn: async (): Promise<FlappingAlarm[]> => {
+      const { data, error } = await supabase
+        .from('v_email_alarms_flapping')
+        .select('*')
+        .order('last_seen', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as FlappingAlarm[];
+    },
+    // Tighter cadence than the standard panels — flapping windows are 20
+    // min so a once-a-minute refresh keeps the list current.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
 /** Poller heartbeat — feeds the panel's "feed live/stale" indicator. */
 export function useEmailPollState() {
   return useQuery({
