@@ -217,6 +217,32 @@ function MonthlyMeterTable({
 }) {
   // Sub-header reminds the user of the rule even when no rows exist yet.
   const todayDay = etMonthDay(new Date()).day;
+  // Split: rows done THIS month go in the main table; rows whose
+  // last-done is in a prior month (or older) become a pending list. The
+  // user can still see what needs to be done without 8+ stale rows
+  // crowding the panel.
+  const [doneRows, pendingRows] = (() => {
+    const done: typeof rows = [];
+    const pending: typeof rows = [];
+    for (const r of rows) {
+      const s = monthlyComplianceStatus(r.last_done_utc);
+      if (s === 'fresh' || s === 'late') done.push(r);
+      else pending.push(r);
+    }
+    return [done, pending];
+  })();
+
+  // Pending-list helper: compact "Log @ Building" labels for the
+  // summary line. Group by log_name so 8 buildings under "Monthly DEP
+  // Log" don't shout the log type 8 times.
+  const pendingByLog = new Map<string, string[]>();
+  for (const r of pendingRows) {
+    const k = stripLogPrefix(r.log_name);
+    const arr = pendingByLog.get(k) ?? [];
+    arr.push(r.building ?? '—');
+    pendingByLog.set(k, arr);
+  }
+
   return (
     <div className="mb-5">
       <div className="t-small t-muted uppercase tracking-wider mb-2">
@@ -225,9 +251,50 @@ function MonthlyMeterTable({
           — due days 1-6 of the month (today is day {todayDay})
         </span>
       </div>
-      {rows.length === 0 ? (
+
+      {/* Pending summary — surfaces what hasn't been done this month
+          without burning rows in the main table. Collapsible if it
+          gets long. */}
+      {pendingRows.length > 0 && (
+        <details
+          className="mb-2"
+          open={pendingRows.length <= 6}
+          style={{
+            padding: '6px 10px',
+            borderRadius: 4,
+            border: '1px solid rgba(217,119,6,0.3)',
+            background: 'rgba(217,119,6,0.06)',
+          }}
+        >
+          <summary
+            className="t-small cursor-pointer"
+            style={{
+              color: monthlyStatusColor(todayDay <= 6 ? 'pending' : 'overdue'),
+              fontWeight: 600,
+            }}
+          >
+            {todayDay <= 6 ? '⏳' : '⚠'} {pendingRows.length} not yet done this month
+            {pendingRows.length > 6 && ' — click to expand'}
+          </summary>
+          <div className="mt-2" style={{ display: 'grid', gap: 4 }}>
+            {Array.from(pendingByLog.entries()).map(([log, blds]) => (
+              <div key={log} className="t-small">
+                <span className="t-mono">{log}</span>
+                <span className="t-muted"> · </span>
+                <span className="t-muted">{blds.join(', ')}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {doneRows.length === 0 && pendingRows.length === 0 ? (
         <p className="t-text t-muted">
           No monthly activities ingested yet. (Polling runs hourly 7 AM-7 PM.)
+        </p>
+      ) : doneRows.length === 0 ? (
+        <p className="t-small t-muted">
+          Nothing done this month yet — see pending list above.
         </p>
       ) : (
         <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
@@ -241,7 +308,7 @@ function MonthlyMeterTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {doneRows.map((r) => {
               const s = monthlyComplianceStatus(r.last_done_utc);
               const c = monthlyStatusColor(s);
               const badge = monthlyStatusBadge(s);
