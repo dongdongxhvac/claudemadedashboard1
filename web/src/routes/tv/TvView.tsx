@@ -26,6 +26,7 @@ import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type Bui
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
+import { usePlantlogPollHeartbeat } from '../../hooks/usePlantlog';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -595,6 +596,15 @@ function usFederalHolidays(year: number): string[] {
  *  duplicated rather than imported to keep the TV view standalone. */
 function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
   if (vendor === 'power_automate') return hoursSince > 2.5;
+  // Plantlog poller runs hourly between 7am-7pm ET. Outside business
+  // hours we tolerate a longer gap; during business hours a missed
+  // poll is flagged after 2.5h.
+  if (vendor === 'plantlog') {
+    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const hour = etNow.getHours();
+    const inBusinessHours = hour >= 7 && hour < 19;
+    return inBusinessHours ? hoursSince > 2.5 : hoursSince > 14;
+  }
   const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const dow = etNow.getDay();
   const hour = etNow.getHours();
@@ -614,6 +624,7 @@ const BMS_VENDOR_SHORT: Record<string, string> = {
   northeasttech_730_750: '730/750',
   northeast:             'NE Tech',
   power_automate:        'PA',
+  plantlog:              'Plantlog',
 };
 function shortVendor(slug: string | null | undefined): string {
   if (!slug) return '—';
@@ -634,12 +645,26 @@ function tvMinutesAgo(utcIso: string | null): number | null {
 
 function BmsHealthPanel() {
   const hbQ           = useBmsHeartbeats();
+  const plantlogHbQ   = usePlantlogPollHeartbeat();
   const emailOpenQ    = useEmailAlarmsOpen();
   const emailStateQ   = useEmailPollState();
   const eqDownQ       = useBuildingEquipmentDown();
 
-  // §09 — Heartbeats
-  const hbRows = hbQ.data ?? [];
+  // §09 — Heartbeats. BMS vendors come from v_bms_heartbeat_latest;
+  // plantlog poll heartbeat is synthesized from ingestion_log and joins
+  // the dot row as one more "vendor". Shop-floor engineers see "is the
+  // whole pipeline alive?" at a glance — BMS, PA, AND plantlog.
+  const hbRows = useMemo(() => {
+    const bms = hbQ.data ?? [];
+    const plantlog = plantlogHbQ.data;
+    const merged: { vendor: string; hours_since: number }[] = bms.map((r) => ({
+      vendor: r.vendor, hours_since: r.hours_since,
+    }));
+    if (plantlog?.last_ok_utc && plantlog.hours_since !== null) {
+      merged.push({ vendor: 'plantlog', hours_since: plantlog.hours_since });
+    }
+    return merged;
+  }, [hbQ.data, plantlogHbQ.data]);
   const hbAggr = useMemo(() => {
     const total = hbRows.length;
     const stale = hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length;

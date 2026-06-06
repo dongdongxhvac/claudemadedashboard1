@@ -145,6 +145,41 @@ export function usePlantlogTodayCompliance() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Plantlog poller heartbeat — last successful sync time, for the BMS strip
+// on /tv and the §06 panel meta indicator.
+// ---------------------------------------------------------------------------
+
+export type PlantlogPollHeartbeat = {
+  /** UTC timestamp of the last successful plantlog_records ingestion. */
+  last_ok_utc: string | null;
+  hours_since: number | null;
+};
+
+/** Latest successful plantlog poll timestamp. Drives the /tv heartbeat dot
+ *  for plantlog alongside the BMS vendors. */
+export function usePlantlogPollHeartbeat() {
+  return useQuery({
+    queryKey: ['plantlog_poll_heartbeat'],
+    queryFn: async (): Promise<PlantlogPollHeartbeat> => {
+      const { data, error } = await supabase
+        .from('ingestion_log')
+        .select('at')
+        .eq('kind', 'plantlog_records')
+        .eq('status', 'ok')
+        .order('at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = (data ?? [])[0] as { at: string } | undefined;
+      if (!row?.at) return { last_ok_utc: null, hours_since: null };
+      const hours = (Date.now() - new Date(row.at).getTime()) / 3_600_000;
+      return { last_ok_utc: row.at, hours_since: hours };
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
 /** Per-building daily entry counts. */
 export function usePlantlogBuildingDaily(daysBack: number = 14) {
   return useQuery({
