@@ -13,24 +13,26 @@ import { FACET_HINT, draftKey } from './trainingSections';
 //   mutation (keys ['engineers'] / ['users_all']), so changes show up in the
 //   Admin / Users view. We also invalidate ['training','roster'] so this view's
 //   own roster mirror refreshes.
-//   DRAFT: skill records — per-problem proficiency (memory/technical/logic level),
-//   plus competency / certs / courses / sign-offs — are localStorage-only, keyed
-//   by the tech id, until we lock the schema.
+//   DRAFT: skill records — per-problem proficiency (memory / technical / logic /
+//   rule-of-thumb level), plus competency / certs / courses / sign-offs — are
+//   localStorage-only, keyed by the tech id, until we lock the schema.
 
 // The headline: a tech's proficiency per real-world PROBLEM, scored separately
-// for each skill type so a gap points straight at how to coach.
+// for each of the 4 skill types so a gap points straight at how to coach.
+//   Logic = can reason to root cause from scratch. Rule = has the gut shortcut.
 const PROBLEM_PROF_COLS: DraftColumn[] = [
-  { key: 'problem', label: 'Problem', width: '28%', placeholder: 'Chiller low-flow trip' },
-  { key: 'equipment', label: 'Where', width: '18%', placeholder: 'Bldg 75 · CH-2' },
-  { key: 'mem', label: 'Memory', width: '11%', placeholder: '0-4' },
-  { key: 'tech', label: 'Technical', width: '11%', placeholder: '0-4' },
-  { key: 'logic', label: 'Logic', width: '11%', placeholder: '0-4' },
+  { key: 'problem', label: 'Problem', width: '23%', placeholder: 'Chiller low-flow trip' },
+  { key: 'equipment', label: 'Where', width: '15%', placeholder: 'Bldg 75 · CH-2' },
+  { key: 'mem', label: 'Memory', width: '9%', placeholder: '0-4' },
+  { key: 'tech', label: 'Technical', width: '9%', placeholder: '0-4' },
+  { key: 'logic', label: 'Logic', width: '9%', placeholder: '0-4' },
+  { key: 'rule', label: 'Rule of thumb', width: '12%', placeholder: '0-4' },
   { key: 'last', label: 'Last', width: '11%' },
-  { key: 'times', label: 'Times', width: '10%', placeholder: '#' },
+  { key: 'times', label: 'Times', width: '8%', placeholder: '#' },
 ];
 
 const seedProblemProf = (): DraftRow[] => [
-  makeRow({ problem: 'e.g. Chiller low-flow trip', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '2', logic: '2', last: '', times: '4' }),
+  makeRow({ problem: 'e.g. Chiller low-flow trip', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '2', logic: '2', rule: '1', last: '', times: '4' }),
 ];
 
 const COMPETENCY_COLS: DraftColumn[] = [
@@ -174,7 +176,7 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
       </div>
 
       {tab === 'problems' && (
-        <DraftBody intro="How well this tech handles each real-world problem — scored separately for memory, technical, and logic. A low score points straight at how to coach: drill it, hands-on it, or walk the diagnosis.">
+        <DraftBody intro="How well this tech handles each real-world problem — scored separately for memory, technical, logic, and rule-of-thumb. A low score points to how to coach: drill it, hands-on it, walk the diagnosis, or pass on the gut shortcut.">
           <DraftTable columns={PROBLEM_PROF_COLS} rows={problems} onChange={setProblems} addLabel="Add problem proficiency" />
         </DraftBody>
       )}

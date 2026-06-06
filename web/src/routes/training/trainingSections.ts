@@ -25,8 +25,9 @@ export const FACET_HINT = FACETS.join(' / ');
 /** Problem-based training: each real-world problem demands one or more of these
  *  cognitive types. A tech's proficiency is tracked per problem × per type, so a
  *  gap points straight at how to coach: memory → drill, technical → hands-on,
- *  logic → walk through the diagnosis. */
-export const PROBLEM_TYPES = ['memory', 'technical', 'logic'] as const;
+ *  logic → walk the diagnosis, rule_of_thumb → pass on the gut shortcut.
+ *  (logic = reason it out from scratch; rule_of_thumb = the learned shortcut.) */
+export const PROBLEM_TYPES = ['memory', 'technical', 'logic', 'rule_of_thumb'] as const;
 export type ProblemType = (typeof PROBLEM_TYPES)[number];
 
 // localStorage draft keys, ANCHORED to a real entity id. Passed to useLocalDraft

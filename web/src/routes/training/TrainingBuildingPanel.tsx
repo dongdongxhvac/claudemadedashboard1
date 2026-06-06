@@ -36,15 +36,18 @@ const EQUIPMENT_SOP_COLS: DraftColumn[] = [
   { key: 'frequency', label: 'Freq', width: '14%', placeholder: 'monthly / annual' },
 ];
 
-// Real-world problem library for one asset. mem/tech/logic = which skill the
-// problem demands (the per-tech LEVEL on each lives in the tech panel).
+// Real-world problem library for one asset. The 4 skill flags = which skills the
+// problem demands (the per-tech LEVEL on each lives in the tech panel):
+//   Mem = recall · Tech = hands-on · Logic = reason to root cause ·
+//   Rule = rule-of-thumb shortcut from experience.
 const PROBLEM_COLS: DraftColumn[] = [
-  { key: 'problem', label: 'Problem', width: '22%', placeholder: 'Trips on low CHW flow at winter startup' },
-  { key: 'symptom', label: 'Symptom / trigger', width: '17%', placeholder: 'low-flow alarm; chiller faults' },
-  { key: 'solution', label: 'Solution / SOP', width: '27%' },
+  { key: 'problem', label: 'Problem', width: '21%', placeholder: 'Trips on low CHW flow at winter startup' },
+  { key: 'symptom', label: 'Symptom / trigger', width: '16%', placeholder: 'low-flow alarm; chiller faults' },
+  { key: 'solution', label: 'Solution / SOP', width: '25%' },
   { key: 'mem', label: 'Mem', width: '6%', placeholder: 'Y' },
   { key: 'tech', label: 'Tech', width: '6%', placeholder: 'Y' },
   { key: 'logic', label: 'Logic', width: '6%', placeholder: 'Y' },
+  { key: 'rule', label: 'Rule', width: '6%', placeholder: 'Y' },
   { key: 'source', label: 'Source', width: '10%', placeholder: 'history / anticipated' },
 ];
 
@@ -52,8 +55,8 @@ const seedProblems = (): DraftRow[] => [
   makeRow({
     problem: 'e.g. Trips on low CHW flow at winter startup',
     symptom: 'Low-flow alarm; chiller faults out',
-    solution: 'Clear strainer; verify flow switch; confirm min-flow bypass open',
-    mem: 'Y', tech: 'Y', logic: 'Y', source: 'history',
+    solution: 'Clear strainer; verify flow switch; confirm min-flow bypass open. Rule of thumb: winter + just-started => check strainer first.',
+    mem: 'Y', tech: 'Y', logic: 'Y', rule: 'Y', source: 'history',
   }),
 ];
 
@@ -241,7 +244,7 @@ export function TrainingBuildingPanel({
       )}
 
       {tab === 'problems' && (
-        <DraftBody intro="Real-world problems for this asset — building- & equipment-specific. Tag each with the skill it demands (Mem / Tech / Logic); the per-tech level on each lives in the tech panel. Draft now; will merge with logged issue history when locked.">
+        <DraftBody intro="Real-world problems for this asset — building- & equipment-specific. Tag each with the skills it demands (Mem / Tech / Logic / Rule-of-thumb); the per-tech level on each lives in the tech panel. Draft now; will merge with logged issue history when locked.">
           {draftEqId
             ? <EquipmentProblems key={draftEqId} equipmentId={draftEqId} />
             : <p className="t-small t-muted">Pick an asset above to list its real-world problems.</p>}
