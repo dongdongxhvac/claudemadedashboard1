@@ -102,13 +102,13 @@ export function IssueForm({
     <form
       onSubmit={submit}
       style={{
-        display: 'grid', gap: 6,
-        padding: 10,
-        borderRadius: 4,
+        display: 'grid', gap: 8,
+        padding: 12,
+        borderRadius: 6,
         border: '1px solid var(--color-danger)',
         background: 'rgba(239, 68, 68, 0.06)',
         marginBottom: 6,
-        maxWidth: 720,
+        maxWidth: 640,
       }}
     >
       <div
@@ -189,7 +189,12 @@ export function IssueForm({
           rows={2}
           autoFocus
           required
-          style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
+          style={{
+            ...inputStyle,
+            resize: 'vertical',
+            minHeight: 44,
+            maxHeight: 120,
+          }}
         />
       </Field>
 
@@ -214,54 +219,80 @@ export function IssueForm({
         </Field>
       </div>
 
-      {/* Isolation — always visible. Type is the gate; Date/By disable when N/A. */}
+      {/* Isolation block — own card so it visually groups Type / Date / By
+          and the hint banner sits above all three. Type is the gate;
+          Date and By disable when N/A. */}
       <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: 'minmax(110px,160px) minmax(120px,1fr) minmax(140px,1fr)' }}
+        style={{
+          padding: 8,
+          borderRadius: 4,
+          background: 'rgba(0,0,0,0.03)',
+          border: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))',
+          display: 'grid',
+          gap: 6,
+        }}
       >
-        <Field
-          label="Isolation"
-          hint="rLOTO = red lock · gLOTO = green lock · ISOTO = tag · N/A = no lock"
+        <div
+          className="t-small"
+          style={{
+            fontSize: '0.72rem',
+            color: 'var(--color-text)',
+            lineHeight: 1.2,
+          }}
         >
-          <select
-            value={lotoType}
-            onChange={(e) => setLotoType(e.target.value as LotoType)}
-            style={inputStyle}
-          >
-            {LOTO_TYPES.map((t) => (
-              <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Date" hint={lotoApplied ? '' : '— N/A —'}>
-          <input
-            type="date"
-            value={lotoApplyAt}
-            onChange={(e) => setLotoApplyAt(e.target.value)}
-            style={inputStyle}
-            disabled={!lotoApplied}
-          />
-        </Field>
-        <Field label="By" hint={lotoApplied ? 'engineer who placed it' : '— N/A —'}>
-          <select
-            value={lotoApplyBy}
-            onChange={(e) => setLotoApplyBy(e.target.value)}
-            style={inputStyle}
-            required={lotoApplied}
-            disabled={!lotoApplied}
-          >
-            <option value="">— pick engineer —</option>
-            {engineers.map((e) => (
-              <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      {existing?.loto_removed_at && (
-        <div className="t-small t-muted">
-          Removed {existing.loto_removed_at}
+          Isolation
+          <span className="t-muted ml-2" style={{ fontSize: '0.65rem' }}>
+            rLOTO = red lock · gLOTO = green lock · ISOTO = tag · N/A = no lock
+          </span>
         </div>
-      )}
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: '110px 1fr 1.4fr', gap: 6 }}
+        >
+          <FieldNoLabel>
+            <select
+              value={lotoType}
+              onChange={(e) => setLotoType(e.target.value as LotoType)}
+              style={inputStyle}
+              aria-label="Isolation type"
+            >
+              {LOTO_TYPES.map((t) => (
+                <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+          </FieldNoLabel>
+          <FieldNoLabel>
+            <input
+              type="date"
+              value={lotoApplyAt}
+              onChange={(e) => setLotoApplyAt(e.target.value)}
+              style={inputStyle}
+              disabled={!lotoApplied}
+              aria-label="Isolation date"
+            />
+          </FieldNoLabel>
+          <FieldNoLabel>
+            <select
+              value={lotoApplyBy}
+              onChange={(e) => setLotoApplyBy(e.target.value)}
+              style={inputStyle}
+              required={lotoApplied}
+              disabled={!lotoApplied}
+              aria-label="Isolation applied by"
+            >
+              <option value="">— pick engineer —</option>
+              {engineers.map((e) => (
+                <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+              ))}
+            </select>
+          </FieldNoLabel>
+        </div>
+        {existing?.loto_removed_at && (
+          <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+            Removed {existing.loto_removed_at}
+          </div>
+        )}
+      </div>
 
       {error && (
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
@@ -317,6 +348,13 @@ export function IssueForm({
       </div>
     </form>
   );
+}
+
+/** Bare-input wrapper for the Isolation row — the section header above
+ *  already labels the whole group, so the three controls don't need
+ *  individual <label> tags. Keeps vertical rhythm consistent. */
+function FieldNoLabel({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
 }
 
 function Field({

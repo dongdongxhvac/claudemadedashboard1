@@ -795,7 +795,18 @@ function EquipmentExpandedDetail({
             gap: 5,
           }}
         >
-          + Add issue to {equipmentLabel}
+          <span
+            style={{
+              color: 'var(--color-danger)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              lineHeight: 1,
+            }}
+            aria-hidden="true"
+          >
+            +
+          </span>
+          Add issue to {equipmentLabel}
           {buildingShortCode && (
             <span
               className="t-mono"
