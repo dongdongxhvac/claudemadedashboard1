@@ -63,10 +63,6 @@ export function IssueForm({
   );
   const [lotoApplyBy, setLotoApplyBy]   = useState(existing?.loto_applied_by ?? '');
   const lotoApplied = lotoType !== 'na';
-  const [showWoDetails, setShowWoDetails] = useState(
-    !!(existing?.wo_number || existing?.rsp),
-  );
-  const [showLoto, setShowLoto]         = useState(!!existing?.loto_applied_at);
   const [error, setError]               = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -197,110 +193,73 @@ export function IssueForm({
         />
       </Field>
 
-      {/* ──────────────── WO # / RSP disclosure ──────────────── */}
-      <button
-        type="button"
-        onClick={() => setShowWoDetails((v) => !v)}
-        style={discloseBtn}
-      >
-        <span>{showWoDetails ? '▼' : '▶'}</span> WO # / RSP
-        {!showWoDetails && (woNumber || rsp) && (
-          <span className="t-muted" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
-            ({[woNumber && `WO ${woNumber}`, rsp].filter(Boolean).join(' · ')})
-          </span>
-        )}
-      </button>
-      {showWoDetails && (
-        <div style={discloseBody}>
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
-            <Field label="WO #" hint="pointer to the COVE work order">
-              <input
-                type="text"
-                value={woNumber}
-                onChange={(e) => setWoNumber(e.target.value)}
-                placeholder='e.g. "PM-1234", "CM-5678"'
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="RSP (responsible party)" hint="engineer / vendor / contractor">
-              <input
-                type="text"
-                value={rsp}
-                onChange={(e) => setRsp(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-          </div>
-        </div>
-      )}
+      {/* WO # + RSP — always visible (no disclosure). */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(140px,1fr) minmax(140px,1fr)' }}>
+        <Field label="WO #" hint="pointer to the COVE work order">
+          <input
+            type="text"
+            value={woNumber}
+            onChange={(e) => setWoNumber(e.target.value)}
+            placeholder='e.g. "PM-1234", "CM-5678"'
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="RSP (responsible party)" hint="engineer / vendor / contractor">
+          <input
+            type="text"
+            value={rsp}
+            onChange={(e) => setRsp(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+      </div>
 
-      {/* ──────────────── LOTO / ISO disclosure ──────────────── */}
-      <button
-        type="button"
-        onClick={() => setShowLoto((v) => !v)}
-        style={discloseBtn}
+      {/* Isolation — always visible. Type is the gate; Date/By disable when N/A. */}
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: 'minmax(110px,160px) minmax(120px,1fr) minmax(140px,1fr)' }}
       >
-        <span>{showLoto ? '▼' : '▶'}</span> Isolation:
-        <span
-          style={{
-            marginLeft: 4,
-            fontSize: '0.72rem',
-            fontWeight: 600,
-            color: lotoApplied ? 'var(--color-danger)' : 'var(--color-text-muted)',
-          }}
+        <Field
+          label="Isolation"
+          hint="rLOTO = red lock · gLOTO = green lock · ISOTO = tag · N/A = no lock"
         >
-          {lotoApplied ? `🔒 ${LOTO_TYPE_LABELS[lotoType]}` : LOTO_TYPE_LABELS[lotoType]}
-        </span>
-      </button>
-      {showLoto && (
-        <div style={discloseBody}>
-          <div
-            className="grid gap-2"
-            style={{ gridTemplateColumns: 'minmax(110px,160px) minmax(120px,1fr) minmax(140px,1fr)' }}
+          <select
+            value={lotoType}
+            onChange={(e) => setLotoType(e.target.value as LotoType)}
+            style={inputStyle}
           >
-            <Field
-              label="Type"
-              hint="rLOTO = red lock · gLOTO = green lock · ISOTO = tag · N/A = no lock"
-            >
-              <select
-                value={lotoType}
-                onChange={(e) => setLotoType(e.target.value as LotoType)}
-                style={inputStyle}
-              >
-                {LOTO_TYPES.map((t) => (
-                  <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Date" hint={lotoApplied ? '' : '— N/A —'}>
-              <input
-                type="date"
-                value={lotoApplyAt}
-                onChange={(e) => setLotoApplyAt(e.target.value)}
-                style={inputStyle}
-                disabled={!lotoApplied}
-              />
-            </Field>
-            <Field label="By" hint={lotoApplied ? 'engineer who placed it' : '— N/A —'}>
-              <select
-                value={lotoApplyBy}
-                onChange={(e) => setLotoApplyBy(e.target.value)}
-                style={inputStyle}
-                required={lotoApplied}
-                disabled={!lotoApplied}
-              >
-                <option value="">— pick engineer —</option>
-                {engineers.map((e) => (
-                  <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          {existing?.loto_removed_at && (
-            <div className="t-small t-muted">
-              Removed {existing.loto_removed_at}
-            </div>
-          )}
+            {LOTO_TYPES.map((t) => (
+              <option key={t} value={t}>{LOTO_TYPE_LABELS[t]}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Date" hint={lotoApplied ? '' : '— N/A —'}>
+          <input
+            type="date"
+            value={lotoApplyAt}
+            onChange={(e) => setLotoApplyAt(e.target.value)}
+            style={inputStyle}
+            disabled={!lotoApplied}
+          />
+        </Field>
+        <Field label="By" hint={lotoApplied ? 'engineer who placed it' : '— N/A —'}>
+          <select
+            value={lotoApplyBy}
+            onChange={(e) => setLotoApplyBy(e.target.value)}
+            style={inputStyle}
+            required={lotoApplied}
+            disabled={!lotoApplied}
+          >
+            <option value="">— pick engineer —</option>
+            {engineers.map((e) => (
+              <option key={e.user_id} value={e.user_id}>{e.full_name}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {existing?.loto_removed_at && (
+        <div className="t-small t-muted">
+          Removed {existing.loto_removed_at}
         </div>
       )}
 
@@ -406,18 +365,3 @@ const inputStyle: React.CSSProperties = {
   fontSize: '0.85rem',
 };
 
-const discloseBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6,
-  padding: '2px 0',
-  background: 'none', border: 'none', cursor: 'pointer',
-  font: 'inherit', color: 'var(--color-text)',
-  fontSize: '0.75rem',
-  textAlign: 'left',
-};
-
-const discloseBody: React.CSSProperties = {
-  display: 'grid', gap: 6,
-  padding: '4px 0 0 12px',
-  borderLeft: '2px solid var(--color-border-soft, rgba(0,0,0,0.1))',
-  marginLeft: 4,
-};
