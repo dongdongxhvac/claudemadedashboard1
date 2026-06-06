@@ -259,7 +259,7 @@ export function PtoPanel() {
   );
 
   return (
-    <Section collapsible title="§12 PTO coverage" subtitle={subtitle} loading={requestsQ.isLoading}>
+    <Section collapsible title="§12 PTO & Staffing" subtitle={subtitle} loading={requestsQ.isLoading}>
       {requestsQ.error ? (
         <p className="t-text t-danger">Error: {(requestsQ.error as Error).message}</p>
       ) : (
