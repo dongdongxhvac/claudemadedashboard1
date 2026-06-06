@@ -26,7 +26,7 @@ import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type Bui
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
-import { usePlantlogPollHeartbeat } from '../../hooks/usePlantlog';
+import { usePlantlogTodayCompliance } from '../../hooks/usePlantlog';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -596,15 +596,6 @@ function usFederalHolidays(year: number): string[] {
  *  duplicated rather than imported to keep the TV view standalone. */
 function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
   if (vendor === 'power_automate') return hoursSince > 2.5;
-  // Plantlog poller runs hourly between 7am-7pm ET. Outside business
-  // hours we tolerate a longer gap; during business hours a missed
-  // poll is flagged after 2.5h.
-  if (vendor === 'plantlog') {
-    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const hour = etNow.getHours();
-    const inBusinessHours = hour >= 7 && hour < 19;
-    return inBusinessHours ? hoursSince > 2.5 : hoursSince > 14;
-  }
   const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const dow = etNow.getDay();
   const hour = etNow.getHours();
@@ -624,7 +615,6 @@ const BMS_VENDOR_SHORT: Record<string, string> = {
   northeasttech_730_750: '730/750',
   northeast:             'NE Tech',
   power_automate:        'PA',
-  plantlog:              'Plantlog',
 };
 function shortVendor(slug: string | null | undefined): string {
   if (!slug) return '—';
@@ -643,31 +633,72 @@ function tvMinutesAgo(utcIso: string | null): number | null {
   return Math.floor((Date.now() - new Date(utcIso).getTime()) / 60_000);
 }
 
+/** Unified heartbeat row for the §09 dot list.
+ *  BMS dots come from v_bms_heartbeat_latest (one per vendor); plantlog
+ *  uses the AM/PM compliance windows from §06's rule (one dot per
+ *  window). Each row carries a stale flag + custom label so the renderer
+ *  doesn't have to know about the source. */
+type HbDot = {
+  key: string;          // unique React key
+  label: string;        // shown next to the dot ("Delta·Tkd", "PL·AM 14/14 ✓")
+  ageLabel: string;     // shown muted on the right ("11h", "10:30")
+  stale: boolean;
+};
+
 function BmsHealthPanel() {
   const hbQ           = useBmsHeartbeats();
-  const plantlogHbQ   = usePlantlogPollHeartbeat();
+  const plantlogCompQ = usePlantlogTodayCompliance();
   const emailOpenQ    = useEmailAlarmsOpen();
   const emailStateQ   = useEmailPollState();
   const eqDownQ       = useBuildingEquipmentDown();
 
-  // §09 — Heartbeats. BMS vendors come from v_bms_heartbeat_latest;
-  // plantlog poll heartbeat is synthesized from ingestion_log and joins
-  // the dot row as one more "vendor". Shop-floor engineers see "is the
-  // whole pipeline alive?" at a glance — BMS, PA, AND plantlog.
-  const hbRows = useMemo(() => {
-    const bms = hbQ.data ?? [];
-    const plantlog = plantlogHbQ.data;
-    const merged: { vendor: string; hours_since: number }[] = bms.map((r) => ({
-      vendor: r.vendor, hours_since: r.hours_since,
-    }));
-    if (plantlog?.last_ok_utc && plantlog.hours_since !== null) {
-      merged.push({ vendor: 'plantlog', hours_since: plantlog.hours_since });
+  // §09 — Heartbeats. BMS vendors + 2 Plantlog windows (AM/PM) folded
+  // into one dot row. Plantlog dots match the §06 chips: pre-deadline
+  // green pending, post-deadline green ✓ or red ✗ with X/N count.
+  const hbRows: HbDot[] = useMemo(() => {
+    const out: HbDot[] = [];
+    for (const r of (hbQ.data ?? [])) {
+      out.push({
+        key: `bms:${r.vendor}`,
+        label: shortVendor(r.vendor),
+        ageLabel: fmtAge(r.hours_since),
+        stale: isHeartbeatStale(r.vendor, r.hours_since),
+      });
     }
-    return merged;
-  }, [hbQ.data, plantlogHbQ.data]);
+    // Plantlog AM + PM windows. Hidden on weekends entirely.
+    const plc = plantlogCompQ.data;
+    if (plc && !plc.isWeekend) {
+      const winDot = (w: typeof plc.am, code: 'AM' | 'PM', deadlineHHMM: string): HbDot => {
+        const total = w.expected.length;
+        const ok = w.synced.length;
+        let label: string;
+        let stale: boolean;
+        if (!w.deadlinePassed) {
+          // Pre-deadline pending: not stale, no check mark.
+          label = `PL·${code} ${ok}/${total}`;
+          stale = false;
+        } else if (w.missing.length === 0) {
+          label = `PL·${code} ✓ ${total}/${total}`;
+          stale = false;
+        } else {
+          label = `PL·${code} ✗ ${ok}/${total}`;
+          stale = true;
+        }
+        return {
+          key: `plantlog:${code}`,
+          label,
+          ageLabel: deadlineHHMM,
+          stale,
+        };
+      };
+      out.push(winDot(plc.am, 'AM', '10:30'));
+      out.push(winDot(plc.pm, 'PM', '17:55'));
+    }
+    return out;
+  }, [hbQ.data, plantlogCompQ.data]);
   const hbAggr = useMemo(() => {
     const total = hbRows.length;
-    const stale = hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length;
+    const stale = hbRows.filter((r) => r.stale).length;
     return { total, stale, live: total - stale };
   }, [hbRows]);
 
@@ -727,21 +758,18 @@ function BmsHealthPanel() {
             <p className="tv-muted" style={{ fontSize: '0.78vw' }}>No heartbeats yet.</p>
           ) : (
             <ul className="tv-bms-hb-list">
-              {hbRows.map((r) => {
-                const stale = isHeartbeatStale(r.vendor, r.hours_since);
-                return (
-                  <li key={r.vendor}>
-                    <span className={`tv-bms-hb-dot ${stale ? 'stale' : 'live'}`} />
-                    <span className="tv-bms-hb-name">{shortVendor(r.vendor)}</span>
-                    <span
-                      className="tv-bms-hb-age"
-                      style={{ color: stale ? '#fca5a5' : '#94a3b8' }}
-                    >
-                      {fmtAge(r.hours_since)}
-                    </span>
-                  </li>
-                );
-              })}
+              {hbRows.map((r) => (
+                <li key={r.key}>
+                  <span className={`tv-bms-hb-dot ${r.stale ? 'stale' : 'live'}`} />
+                  <span className="tv-bms-hb-name">{r.label}</span>
+                  <span
+                    className="tv-bms-hb-age"
+                    style={{ color: r.stale ? '#fca5a5' : '#94a3b8' }}
+                  >
+                    {r.ageLabel}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
           {/* Row 2: email alarms — "0 active" or count + vendor breakdown */}
