@@ -3,8 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateEngineerProfile, DISCIPLINES, type Discipline } from '../../hooks/useEngineers';
 import type { TrainingTech } from '../../hooks/useTraining';
 import {
-  DraftTable, DraftBadge, DraftBody, useLocalDraft,
-  type DraftColumn,
+  DraftTable, DraftBadge, DraftBody, useLocalDraft, makeRow,
+  type DraftColumn, type DraftRow,
 } from './draftTable';
 import { FACET_HINT, draftKey } from './trainingSections';
 
@@ -13,8 +13,25 @@ import { FACET_HINT, draftKey } from './trainingSections';
 //   mutation (keys ['engineers'] / ['users_all']), so changes show up in the
 //   Admin / Users view. We also invalidate ['training','roster'] so this view's
 //   own roster mirror refreshes.
-//   DRAFT: skill records (competency w/ task + times, certs, courses, sign-offs)
-//   are localStorage-only, keyed by the tech id, until we lock the schema.
+//   DRAFT: skill records — per-problem proficiency (memory/technical/logic level),
+//   plus competency / certs / courses / sign-offs — are localStorage-only, keyed
+//   by the tech id, until we lock the schema.
+
+// The headline: a tech's proficiency per real-world PROBLEM, scored separately
+// for each skill type so a gap points straight at how to coach.
+const PROBLEM_PROF_COLS: DraftColumn[] = [
+  { key: 'problem', label: 'Problem', width: '28%', placeholder: 'Chiller low-flow trip' },
+  { key: 'equipment', label: 'Where', width: '18%', placeholder: 'Bldg 75 · CH-2' },
+  { key: 'mem', label: 'Memory', width: '11%', placeholder: '0-4' },
+  { key: 'tech', label: 'Technical', width: '11%', placeholder: '0-4' },
+  { key: 'logic', label: 'Logic', width: '11%', placeholder: '0-4' },
+  { key: 'last', label: 'Last', width: '11%' },
+  { key: 'times', label: 'Times', width: '10%', placeholder: '#' },
+];
+
+const seedProblemProf = (): DraftRow[] => [
+  makeRow({ problem: 'e.g. Chiller low-flow trip', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '2', logic: '2', last: '', times: '4' }),
+];
 
 const COMPETENCY_COLS: DraftColumn[] = [
   { key: 'equipment', label: 'Equipment', width: '18%' },
@@ -48,8 +65,9 @@ const SIGNOFF_COLS: DraftColumn[] = [
   { key: 'date', label: 'Date', width: '30%' },
 ];
 
-type SkillTab = 'competency' | 'certs' | 'courses' | 'signoffs';
+type SkillTab = 'problems' | 'competency' | 'certs' | 'courses' | 'signoffs';
 const SKILL_TABS: { key: SkillTab; label: string }[] = [
+  { key: 'problems', label: 'Problem proficiency' },
   { key: 'competency', label: 'Competency' },
   { key: 'certs', label: 'Certifications' },
   { key: 'courses', label: 'Courses' },
@@ -65,8 +83,9 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
   const [discipline, setDiscipline] = useState<Discipline | ''>((tech.discipline as Discipline) ?? '');
   const [level, setLevel] = useState(String(tech.level ?? 1));
 
-  const [tab, setTab] = useState<SkillTab>('competency');
+  const [tab, setTab] = useState<SkillTab>('problems');
 
+  const [problems, setProblems] = useLocalDraft(draftKey.techProblems(tech.user_id), seedProblemProf);
   const [competency, setCompetency] = useLocalDraft(draftKey.techCompetency(tech.user_id), () => []);
   const [certs, setCerts] = useLocalDraft(draftKey.techCerts(tech.user_id), () => []);
   const [courses, setCourses] = useLocalDraft(draftKey.techCourses(tech.user_id), () => []);
@@ -154,8 +173,13 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
         <DraftBadge />
       </div>
 
+      {tab === 'problems' && (
+        <DraftBody intro="How well this tech handles each real-world problem — scored separately for memory, technical, and logic. A low score points straight at how to coach: drill it, hands-on it, or walk the diagnosis.">
+          <DraftTable columns={PROBLEM_PROF_COLS} rows={problems} onChange={setProblems} addLabel="Add problem proficiency" />
+        </DraftBody>
+      )}
       {tab === 'competency' && (
-        <DraftBody intro="tech × equipment × task × facet → level + times performed.">
+        <DraftBody intro="Routine-work competency: tech × equipment × task × facet → level + times performed.">
           <DraftTable columns={COMPETENCY_COLS} rows={competency} onChange={setCompetency} addLabel="Add competency row" />
         </DraftBody>
       )}

@@ -231,6 +231,18 @@ export default function Training() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+        <div className="t-card" style={{ background: 'var(--color-card-elevated, rgba(99,102,241,0.04))' }}>
+          <p className="t-small" style={{ lineHeight: 1.5 }}>
+            <b className="t-text">What this page is.</b>{' '}
+            Use <b>Choose what to show</b> to pick the buildings &amp; techs you're training on.
+            Each <b>building</b> shows its real equipment &amp; SOP — editing here also updates the Buildings page.
+            Each <b>tech</b> shows skills you can grade. The goal: training built around real-world{' '}
+            <b>problems</b> (per building, per equipment), with each tech scored on what the problem demands —{' '}
+            🧠 <b>memory</b>, 🔧 <b>technical</b>, or 🧩 <b>logic</b>.{' '}
+            <span className="t-muted">Items marked <b>DRAFT</b> save in your browser while we shape the format; live items save to the database.</span>
+          </p>
+        </div>
+
         {!ready && (
           <div className="t-card" style={{ borderColor: 'var(--color-warn, #d4a017)' }}>
             <p className="t-text">

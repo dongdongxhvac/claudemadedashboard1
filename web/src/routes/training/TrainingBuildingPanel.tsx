@@ -9,8 +9,8 @@ import {
 import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
 import {
-  DraftTable, DraftBadge, DraftBody, useLocalDraft,
-  type DraftColumn,
+  DraftTable, DraftBadge, DraftBody, useLocalDraft, makeRow,
+  type DraftColumn, type DraftRow,
 } from './draftTable';
 import { SOP_SECTION_KEYS, FACET_HINT, draftKey } from './trainingSections';
 
@@ -24,8 +24,9 @@ import { SOP_SECTION_KEYS, FACET_HINT, draftKey } from './trainingSections';
 // ['building_equipment', id] / ['building_section_notes', id], so an edit here
 // and an edit on /buildings/:code refresh each other automatically.
 //
-// DRAFT (prototype): the per-equipment faceted SOP is localStorage-only, keyed
-// by the real equipment id, until we lock the SOP schema.
+// DRAFT (prototype): the per-equipment faceted SOP + the real-world problem
+// library are localStorage-only, keyed by the real equipment id, until we lock
+// their schema.
 
 const EQUIPMENT_SOP_COLS: DraftColumn[] = [
   { key: 'facet', label: 'Facet', width: '13%', placeholder: FACET_HINT },
@@ -35,12 +36,34 @@ const EQUIPMENT_SOP_COLS: DraftColumn[] = [
   { key: 'frequency', label: 'Freq', width: '14%', placeholder: 'monthly / annual' },
 ];
 
-type Tab = 'equipment' | 'sop' | 'eqsop';
+// Real-world problem library for one asset. mem/tech/logic = which skill the
+// problem demands (the per-tech LEVEL on each lives in the tech panel).
+const PROBLEM_COLS: DraftColumn[] = [
+  { key: 'problem', label: 'Problem', width: '22%', placeholder: 'Trips on low CHW flow at winter startup' },
+  { key: 'symptom', label: 'Symptom / trigger', width: '17%', placeholder: 'low-flow alarm; chiller faults' },
+  { key: 'solution', label: 'Solution / SOP', width: '27%' },
+  { key: 'mem', label: 'Mem', width: '6%', placeholder: 'Y' },
+  { key: 'tech', label: 'Tech', width: '6%', placeholder: 'Y' },
+  { key: 'logic', label: 'Logic', width: '6%', placeholder: 'Y' },
+  { key: 'source', label: 'Source', width: '10%', placeholder: 'history / anticipated' },
+];
+
+const seedProblems = (): DraftRow[] => [
+  makeRow({
+    problem: 'e.g. Trips on low CHW flow at winter startup',
+    symptom: 'Low-flow alarm; chiller faults out',
+    solution: 'Clear strainer; verify flow switch; confirm min-flow bypass open',
+    mem: 'Y', tech: 'Y', logic: 'Y', source: 'history',
+  }),
+];
+
+type Tab = 'equipment' | 'sop' | 'eqsop' | 'problems';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'equipment', label: 'Equipment (live)' },
   { key: 'sop', label: 'Building SOP (live)' },
   { key: 'eqsop', label: 'Equipment SOP (draft)' },
+  { key: 'problems', label: 'Problems (draft)' },
 ];
 
 export function TrainingBuildingPanel({
@@ -79,6 +102,8 @@ export function TrainingBuildingPanel({
 
   const eqLabel = (e: { short_name: string | null; full_name: string }) =>
     e.short_name ? `${e.short_name} · ${e.full_name}` : e.full_name;
+
+  const needsAsset = tab === 'eqsop' || tab === 'problems';
 
   return (
     <div>
@@ -188,42 +213,57 @@ export function TrainingBuildingPanel({
         </div>
       )}
 
+      {/* Shared asset selector for the two per-equipment draft tabs. */}
+      {needsAsset && (
+        <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
+          <span className="t-small t-muted">Asset:</span>
+          <select
+            value={draftEqId}
+            onChange={(e) => setDraftEqId(e.target.value)}
+            className="t-text"
+            style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-card)' }}
+          >
+            <option value="">— pick equipment —</option>
+            {equipment.map((e) => (
+              <option key={e.id} value={e.id}>{eqLabel(e)}</option>
+            ))}
+          </select>
+          <DraftBadge />
+        </div>
+      )}
+
       {tab === 'eqsop' && (
         <DraftBody intro="Prototype an equipment SOP, sectioned by the four facets. Draft only (saved in this browser, keyed to the asset) until we lock the SOP schema.">
-          <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
-            <span className="t-small t-muted">Asset:</span>
-            <select
-              value={draftEqId}
-              onChange={(e) => setDraftEqId(e.target.value)}
-              className="t-text"
-              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-card)' }}
-            >
-              <option value="">— pick equipment —</option>
-              {equipment.map((e) => (
-                <option key={e.id} value={e.id}>{eqLabel(e)}</option>
-              ))}
-            </select>
-            <DraftBadge />
-          </div>
           {draftEqId
             ? <EquipmentSopDraft key={draftEqId} equipmentId={draftEqId} />
-            : <p className="t-small t-muted">Pick an asset to draft its SOP.</p>}
+            : <p className="t-small t-muted">Pick an asset above to draft its SOP.</p>}
+        </DraftBody>
+      )}
+
+      {tab === 'problems' && (
+        <DraftBody intro="Real-world problems for this asset — building- & equipment-specific. Tag each with the skill it demands (Mem / Tech / Logic); the per-tech level on each lives in the tech panel. Draft now; will merge with logged issue history when locked.">
+          {draftEqId
+            ? <EquipmentProblems key={draftEqId} equipmentId={draftEqId} />
+            : <p className="t-small t-muted">Pick an asset above to list its real-world problems.</p>}
         </DraftBody>
       )}
     </div>
   );
 }
 
-// Separate component so the per-equipment localStorage draft hook has a stable
+// Separate components so each per-equipment localStorage draft hook has a stable
 // key (remounts via `key={draftEqId}` when the asset changes).
+
 function EquipmentSopDraft({ equipmentId }: { equipmentId: string }) {
   const [rows, setRows] = useLocalDraft(draftKey.equipmentSop(equipmentId), () => []);
   return (
-    <DraftTable
-      columns={EQUIPMENT_SOP_COLS}
-      rows={rows}
-      onChange={setRows}
-      addLabel="Add SOP line"
-    />
+    <DraftTable columns={EQUIPMENT_SOP_COLS} rows={rows} onChange={setRows} addLabel="Add SOP line" />
+  );
+}
+
+function EquipmentProblems({ equipmentId }: { equipmentId: string }) {
+  const [rows, setRows] = useLocalDraft(draftKey.equipmentProblems(equipmentId), seedProblems);
+  return (
+    <DraftTable columns={PROBLEM_COLS} rows={rows} onChange={setRows} addLabel="Add problem" />
   );
 }
