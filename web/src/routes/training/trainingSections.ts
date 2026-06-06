@@ -22,13 +22,24 @@ export const FACETS = ['PM', 'Reset', 'Support', 'Knowledge'] as const;
 export type Facet = (typeof FACETS)[number];
 export const FACET_HINT = FACETS.join(' / ');
 
-/** Problem-based training: each real-world problem demands one or more of these
- *  cognitive types. A tech's proficiency is tracked per problem × per type, so a
- *  gap points straight at how to coach: memory → drill, technical → hands-on,
- *  logic → walk the diagnosis, rule_of_thumb → pass on the gut shortcut.
- *  (logic = reason it out from scratch; rule_of_thumb = the learned shortcut.) */
-export const PROBLEM_TYPES = ['memory', 'technical', 'logic', 'rule_of_thumb'] as const;
+/** Problem-based training axes — the supervisor's own definitions:
+ *   memory        = just follow the SOP from memory; no diagnosis or special skill
+ *                   (isolate sand filters, switch chillers, generator / load-bank /
+ *                   water-treatment test, reset AHU or VFD, on-call SOP).
+ *   technical     = hands-on skill AND troubleshooting (pump/motor rebuild,
+ *                   actuator replacement, diagnosing why a VFD or freezestat tripped).
+ *   rule_of_thumb = finish the PM/repair with NO operation interruption and NO
+ *                   alarm / limit alarm — the experienced touch.
+ *  A problem is tagged with the axes it demands; a tech's proficiency is scored
+ *  per problem × per axis (0-4), so a gap points straight at how to coach. */
+export const PROBLEM_TYPES = ['memory', 'technical', 'rule_of_thumb'] as const;
 export type ProblemType = (typeof PROBLEM_TYPES)[number];
+
+export const PROBLEM_TYPE_META: { key: ProblemType; label: string; blurb: string }[] = [
+  { key: 'memory', label: 'Memory', blurb: 'follow the SOP from memory — no diagnosis or special skill (isolate sand filters, switch chillers, generator / load-bank / water test, reset AHU or VFD, on-call SOP).' },
+  { key: 'technical', label: 'Technical', blurb: 'hands-on skill + troubleshooting (pump/motor rebuild, actuator swap, diagnosing why a VFD or freezestat tripped).' },
+  { key: 'rule_of_thumb', label: 'Rule of thumb', blurb: 'finish the PM/repair with no operation interruption and no alarms / limit alarms.' },
+];
 
 // localStorage draft keys, ANCHORED to a real entity id. Passed to useLocalDraft
 // (which prefixes `cove.training.draft:`). Anchoring to the real id is what makes

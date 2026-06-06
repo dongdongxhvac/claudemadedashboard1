@@ -13,6 +13,7 @@ import {
   type DraftColumn, type DraftRow,
 } from './draftTable';
 import { SOP_SECTION_KEYS, FACET_HINT, draftKey } from './trainingSections';
+import { ProblemAxisLegend } from './ProblemAxisLegend';
 
 // Lazy per-building panel for the Training view. Mounted only when its outer
 // collapsible <Section> is expanded (Section unmounts children while collapsed),
@@ -36,27 +37,32 @@ const EQUIPMENT_SOP_COLS: DraftColumn[] = [
   { key: 'frequency', label: 'Freq', width: '14%', placeholder: 'monthly / annual' },
 ];
 
-// Real-world problem library for one asset. The 4 skill flags = which skills the
+// Real-world problem library for one asset. The 3 skill flags = which skills the
 // problem demands (the per-tech LEVEL on each lives in the tech panel):
-//   Mem = recall · Tech = hands-on · Logic = reason to root cause ·
-//   Rule = rule-of-thumb shortcut from experience.
+//   Mem = follow SOP from memory · Tech = hands-on skill + troubleshooting ·
+//   Rule = finish with no operation interruption / no alarms.
 const PROBLEM_COLS: DraftColumn[] = [
-  { key: 'problem', label: 'Problem', width: '21%', placeholder: 'Trips on low CHW flow at winter startup' },
-  { key: 'symptom', label: 'Symptom / trigger', width: '16%', placeholder: 'low-flow alarm; chiller faults' },
-  { key: 'solution', label: 'Solution / SOP', width: '25%' },
-  { key: 'mem', label: 'Mem', width: '6%', placeholder: 'Y' },
-  { key: 'tech', label: 'Tech', width: '6%', placeholder: 'Y' },
-  { key: 'logic', label: 'Logic', width: '6%', placeholder: 'Y' },
-  { key: 'rule', label: 'Rule', width: '6%', placeholder: 'Y' },
-  { key: 'source', label: 'Source', width: '10%', placeholder: 'history / anticipated' },
+  { key: 'problem', label: 'Problem', width: '22%', placeholder: 'Reset VFD after fault' },
+  { key: 'symptom', label: 'Symptom / trigger', width: '18%', placeholder: 'fault shown; equipment stopped' },
+  { key: 'solution', label: 'Solution / SOP', width: '28%' },
+  { key: 'mem', label: 'Mem', width: '7%', placeholder: 'Y' },
+  { key: 'tech', label: 'Tech', width: '7%', placeholder: 'Y' },
+  { key: 'rule', label: 'Rule', width: '7%', placeholder: 'Y' },
+  { key: 'source', label: 'Source', width: '11%', placeholder: 'history / anticipated' },
 ];
 
 const seedProblems = (): DraftRow[] => [
   makeRow({
-    problem: 'e.g. Trips on low CHW flow at winter startup',
-    symptom: 'Low-flow alarm; chiller faults out',
-    solution: 'Clear strainer; verify flow switch; confirm min-flow bypass open. Rule of thumb: winter + just-started => check strainer first.',
-    mem: 'Y', tech: 'Y', logic: 'Y', rule: 'Y', source: 'history',
+    problem: 'e.g. Reset VFD after a fault',
+    symptom: 'VFD shows fault; fan / pump stopped',
+    solution: 'Follow reset SOP: clear fault, confirm cause cleared, restart per sequence',
+    mem: 'Y', tech: '', rule: 'Y', source: 'history',
+  }),
+  makeRow({
+    problem: 'e.g. VFD keeps tripping — find why',
+    symptom: 'Repeated overcurrent / overtemp trips',
+    solution: 'Diagnose: motor amps vs FLA, load, params, cooling. No-disruption: work on bypass so the space stays served.',
+    mem: '', tech: 'Y', rule: 'Y', source: 'history',
   }),
 ];
 
@@ -244,7 +250,8 @@ export function TrainingBuildingPanel({
       )}
 
       {tab === 'problems' && (
-        <DraftBody intro="Real-world problems for this asset — building- & equipment-specific. Tag each with the skills it demands (Mem / Tech / Logic / Rule-of-thumb); the per-tech level on each lives in the tech panel. Draft now; will merge with logged issue history when locked.">
+        <DraftBody intro="Real-world problems for this asset — building- & equipment-specific. Tag each with the skills it demands (Mem / Tech / Rule); the per-tech level on each lives in the tech panel. Draft now; will merge with logged issue history when locked.">
+          <ProblemAxisLegend />
           {draftEqId
             ? <EquipmentProblems key={draftEqId} equipmentId={draftEqId} />
             : <p className="t-small t-muted">Pick an asset above to list its real-world problems.</p>}

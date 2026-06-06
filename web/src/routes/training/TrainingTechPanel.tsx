@@ -7,32 +7,32 @@ import {
   type DraftColumn, type DraftRow,
 } from './draftTable';
 import { FACET_HINT, draftKey } from './trainingSections';
+import { ProblemAxisLegend } from './ProblemAxisLegend';
 
 // Per-tech panel for the Training view.
 //   REAL: a few profile fields edit through the canonical useUpdateEngineerProfile
 //   mutation (keys ['engineers'] / ['users_all']), so changes show up in the
 //   Admin / Users view. We also invalidate ['training','roster'] so this view's
 //   own roster mirror refreshes.
-//   DRAFT: skill records — per-problem proficiency (memory / technical / logic /
+//   DRAFT: skill records — per-problem proficiency (memory / technical /
 //   rule-of-thumb level), plus competency / certs / courses / sign-offs — are
 //   localStorage-only, keyed by the tech id, until we lock the schema.
 
 // The headline: a tech's proficiency per real-world PROBLEM, scored separately
-// for each of the 4 skill types so a gap points straight at how to coach.
-//   Logic = can reason to root cause from scratch. Rule = has the gut shortcut.
+// for each of the 3 skill axes (memory / technical / rule-of-thumb) so a gap
+// points straight at how to coach. (Diagnosis lives under Technical.)
 const PROBLEM_PROF_COLS: DraftColumn[] = [
-  { key: 'problem', label: 'Problem', width: '23%', placeholder: 'Chiller low-flow trip' },
-  { key: 'equipment', label: 'Where', width: '15%', placeholder: 'Bldg 75 · CH-2' },
-  { key: 'mem', label: 'Memory', width: '9%', placeholder: '0-4' },
-  { key: 'tech', label: 'Technical', width: '9%', placeholder: '0-4' },
-  { key: 'logic', label: 'Logic', width: '9%', placeholder: '0-4' },
-  { key: 'rule', label: 'Rule of thumb', width: '12%', placeholder: '0-4' },
+  { key: 'problem', label: 'Problem', width: '26%', placeholder: 'Reset VFD after fault' },
+  { key: 'equipment', label: 'Where', width: '17%', placeholder: 'Bldg 75 · CH-2' },
+  { key: 'mem', label: 'Memory', width: '11%', placeholder: '0-4' },
+  { key: 'tech', label: 'Technical', width: '11%', placeholder: '0-4' },
+  { key: 'rule', label: 'Rule of thumb', width: '13%', placeholder: '0-4' },
   { key: 'last', label: 'Last', width: '11%' },
-  { key: 'times', label: 'Times', width: '8%', placeholder: '#' },
+  { key: 'times', label: 'Times', width: '10%', placeholder: '#' },
 ];
 
 const seedProblemProf = (): DraftRow[] => [
-  makeRow({ problem: 'e.g. Chiller low-flow trip', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '2', logic: '2', rule: '1', last: '', times: '4' }),
+  makeRow({ problem: 'e.g. Reset VFD after fault', equipment: 'Bldg 75 · CH-2', mem: '3', tech: '1', rule: '2', last: '', times: '4' }),
 ];
 
 const COMPETENCY_COLS: DraftColumn[] = [
@@ -176,7 +176,8 @@ export function TrainingTechPanel({ tech }: { tech: TrainingTech }) {
       </div>
 
       {tab === 'problems' && (
-        <DraftBody intro="How well this tech handles each real-world problem — scored separately for memory, technical, logic, and rule-of-thumb. A low score points to how to coach: drill it, hands-on it, walk the diagnosis, or pass on the gut shortcut.">
+        <DraftBody intro="How well this tech handles each real-world problem — scored 0-4 for memory, technical, and rule-of-thumb. A low score points to how to coach: drill the SOP, hands-on with a lead, or shadow them on a no-disruption job.">
+          <ProblemAxisLegend />
           <DraftTable columns={PROBLEM_PROF_COLS} rows={problems} onChange={setProblems} addLabel="Add problem proficiency" />
         </DraftBody>
       )}
