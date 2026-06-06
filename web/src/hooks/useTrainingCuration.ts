@@ -12,14 +12,13 @@ import { supabase } from '../lib/supabase';
 // training_curated_items table — no component changes. The data shape mirrors
 // that future table 1:1.
 
-export const ALL_SECTIONS = ['buildings', 'roster', 'mirrors', 'drafts'] as const;
+export const ALL_SECTIONS = ['buildings', 'roster', 'mirrors'] as const;
 export type TrainingSectionKey = (typeof ALL_SECTIONS)[number];
 
 export const SECTION_LABELS: Record<TrainingSectionKey, string> = {
   buildings: 'Curated buildings',
   roster: 'Curated techs',
   mirrors: 'Site mirrors',
-  drafts: 'Template drafts',
 };
 
 export type TrainingCuration = {
