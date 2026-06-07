@@ -9,10 +9,11 @@ import {
 import { SectionEditor } from '../../components/buildings/SectionEditor';
 import { EquipmentList } from '../../components/buildings/EquipmentList';
 import {
-  DraftTable, DraftBadge, DraftBody, useLocalDraft, makeRow,
+  DraftTable, DraftBody, useLocalDraft, makeRow,
   type DraftColumn, type DraftRow,
 } from './draftTable';
-import { SOP_SECTION_KEYS, FACET_HINT, draftKey } from './trainingSections';
+import { SOP_SECTION_KEYS, draftKey } from './trainingSections';
+import { EquipmentSopEditor } from './EquipmentSopEditor';
 import { ProblemAxisLegend } from './ProblemAxisLegend';
 
 // Lazy per-building panel for the Training view. Mounted only when its outer
@@ -25,17 +26,9 @@ import { ProblemAxisLegend } from './ProblemAxisLegend';
 // ['building_equipment', id] / ['building_section_notes', id], so an edit here
 // and an edit on /buildings/:code refresh each other automatically.
 //
-// DRAFT (prototype): the per-equipment faceted SOP + the real-world problem
-// library are localStorage-only, keyed by the real equipment id, until we lock
-// their schema.
-
-const EQUIPMENT_SOP_COLS: DraftColumn[] = [
-  { key: 'facet', label: 'Facet', width: '13%', placeholder: FACET_HINT },
-  { key: 'task', label: 'Task', width: '22%', placeholder: 'e.g. tube-clean, oil sample' },
-  { key: 'steps', label: 'Steps', width: '37%' },
-  { key: 'tools', label: 'Tools', width: '14%' },
-  { key: 'frequency', label: 'Freq', width: '14%', placeholder: 'monthly / annual' },
-];
+// The per-equipment faceted SOP is now LIVE (equipment_tasks + sops, migration
+// 0074) via <EquipmentSopEditor>. The real-world problem library remains a
+// localStorage DRAFT (keyed by equipment id) until Phase 2 locks it.
 
 // Real-world problem library for one asset. The 3 skill flags = which skills the
 // problem demands (the per-tech LEVEL on each lives in the tech panel):
@@ -71,7 +64,7 @@ type Tab = 'equipment' | 'sop' | 'eqsop' | 'problems';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'equipment', label: 'Equipment (live)' },
   { key: 'sop', label: 'Building SOP (live)' },
-  { key: 'eqsop', label: 'Equipment SOP (draft)' },
+  { key: 'eqsop', label: 'Equipment SOP' },
   { key: 'problems', label: 'Problems (draft)' },
 ];
 
@@ -222,7 +215,7 @@ export function TrainingBuildingPanel({
         </div>
       )}
 
-      {/* Shared asset selector for the two per-equipment draft tabs. */}
+      {/* Shared asset selector for the equipment SOP + problems tabs. */}
       {needsAsset && (
         <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
           <span className="t-small t-muted">Asset:</span>
@@ -237,16 +230,18 @@ export function TrainingBuildingPanel({
               <option key={e.id} value={e.id}>{eqLabel(e)}</option>
             ))}
           </select>
-          <DraftBadge />
         </div>
       )}
 
       {tab === 'eqsop' && (
-        <DraftBody intro="Prototype an equipment SOP, sectioned by the four facets. Draft only (saved in this browser, keyed to the asset) until we lock the SOP schema.">
+        <div className="space-y-3">
+          <p className="t-small t-muted">
+            The equipment SOP, by facet (PM / Reset / Support / Knowledge). Each task is the unit a tech is scored &amp; signed-off on. Saves live to the database.
+          </p>
           {draftEqId
-            ? <EquipmentSopDraft key={draftEqId} equipmentId={draftEqId} />
-            : <p className="t-small t-muted">Pick an asset above to draft its SOP.</p>}
-        </DraftBody>
+            ? <EquipmentSopEditor key={draftEqId} equipmentId={draftEqId} />
+            : <p className="t-small t-muted">Pick an asset above to edit its SOP.</p>}
+        </div>
       )}
 
       {tab === 'problems' && (
@@ -261,15 +256,8 @@ export function TrainingBuildingPanel({
   );
 }
 
-// Separate components so each per-equipment localStorage draft hook has a stable
-// key (remounts via `key={draftEqId}` when the asset changes).
-
-function EquipmentSopDraft({ equipmentId }: { equipmentId: string }) {
-  const [rows, setRows] = useLocalDraft(draftKey.equipmentSop(equipmentId), () => []);
-  return (
-    <DraftTable columns={EQUIPMENT_SOP_COLS} rows={rows} onChange={setRows} addLabel="Add SOP line" />
-  );
-}
+// EquipmentProblems keeps a per-equipment localStorage draft (stable key via
+// `key={draftEqId}` remount) until Phase 2 locks the problems schema.
 
 function EquipmentProblems({ equipmentId }: { equipmentId: string }) {
   const [rows, setRows] = useLocalDraft(draftKey.equipmentProblems(equipmentId), seedProblems);
