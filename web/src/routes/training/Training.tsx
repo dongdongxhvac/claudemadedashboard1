@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { Section } from '../../components/Section';
-import { useBuildingEquipmentCountsMap } from '../../hooks/useBuildingKb';
+import { useBuildingEquipmentCountsMap, type BuildingEquipmentCounts } from '../../hooks/useBuildingKb';
 import {
   useSites, useTrainingBuildings, useTrainingRoster,
   type TrainingBuilding, type TrainingTech,
@@ -15,26 +15,57 @@ import { TrainingBuildingPanel } from './TrainingBuildingPanel';
 import { TrainingTechPanel } from './TrainingTechPanel';
 
 // COVE · Training view — a curated, editable pane over real building + user data.
-//   * Curated buildings/techs MIRROR canonical data and edit through the SAME
-//     hooks as the Building / Admin views, so edits land in all places live.
-//   * The picker (users.preferences.training) chooses the partial subset shown.
-//   * SOP + skill RECORDS are prototyped as entity-anchored drafts (localStorage,
-//     keyed to a real building/equipment/tech id) until their schema is locked.
-//
-// Phase 0 of the redesign cut the 5 old global "template" draft tables
-// (Onboarding / SOP Template / Competency Catalog / Curriculums / Requirements
-// Matrix) — they predated the problem-based model and duplicated it. Their old
-// localStorage keys (cove.training.draft:onboarding etc.) are now orphaned and
-// simply never read.
+//   * Two-pane: a sticky left rail lists the pinned buildings + techs; clicking
+//     one opens its full panel on the right. Only the selected panel mounts, so
+//     there's at most one live building subscription at a time.
+//   * Curated panels MIRROR canonical data and edit through the SAME hooks as the
+//     Building / Admin views, so edits land in all places live.
+//   * The picker (users.preferences.training) chooses what's pinned.
 
-// Binney St first (the brand-new site we're building out); UPark second and
-// rendered as a compact reference, since its data already lives in the main app.
 const SITE_META = [
   { code: 'binney', label: 'Binney St', minor: false },
   { code: 'upark',  label: 'UPark',     minor: true  },
 ] as const;
 
-// ---- read-only mirror lists ------------------------------------------------
+function countsLabel(c: BuildingEquipmentCounts | undefined): string {
+  if (!c) return '';
+  return `${c.total} eq${c.issues ? ` · ${c.issues} open` : ''}`;
+}
+
+// ---- left-rail primitives --------------------------------------------------
+
+function RailGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div className="t-small t-muted uppercase tracking-wider"
+           style={{ fontSize: '0.6rem', letterSpacing: '0.08em', padding: '2px 8px 4px', position: 'sticky', top: 0, background: 'var(--color-card)' }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RailRow({ selected, onClick, primary, meta }: { selected: boolean; onClick: () => void; primary: string; meta?: string }) {
+  return (
+    <button
+      type="button" onClick={onClick} className="t-row-hover"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+        padding: '5px 8px', border: 'none', borderLeft: selected ? '2px solid var(--color-accent)' : '2px solid transparent',
+        borderRadius: 4, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)',
+        background: selected ? 'rgba(99,102,241,0.12)' : 'transparent',
+      }}
+    >
+      <span className="t-small" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: selected ? 600 : 400 }}>
+        {primary}
+      </span>
+      {meta && <span className="t-small t-muted" style={{ whiteSpace: 'nowrap', fontSize: '0.7rem' }}>{meta}</span>}
+    </button>
+  );
+}
+
+// ---- read-only mirror lists (secondary, below the two-pane) -----------------
 
 function BuildingList({ ready, loading, rows }: { ready: boolean; loading: boolean; rows: TrainingBuilding[] }) {
   if (!ready) return <p className="t-small t-muted">Pending migration 0072 + roster import.</p>;
@@ -53,8 +84,6 @@ function BuildingList({ ready, loading, rows }: { ready: boolean; loading: boole
   );
 }
 
-/** Compact one-line render for "minor" sites — data already lives elsewhere in
- *  the app, so we don't duplicate the list; just show the real count + link out. */
 function MinorSummary({
   ready, count, noun, linkTo, linkLabel,
 }: { ready: boolean; count: number; noun: string; linkTo: string; linkLabel: string }) {
@@ -105,24 +134,48 @@ export default function Training() {
   const { curation } = useTrainingCuration();
   const saveCuration = useSaveTrainingCuration();
   const showSec = (k: string) => curation.visibleSections.includes(k);
+  const showBuildings = showSec('buildings');
+  const showRoster = showSec('roster');
 
   const siteByCode = useMemo(
     () => new Map((sitesQ.data ?? []).map((s) => [s.code, s])),
     [sitesQ.data],
   );
 
-  // Curated subsets (real rows filtered to the saved pins).
   const curatedBuildings = (bldgsQ.data ?? []).filter((b) => curation.pinnedBuildingIds.includes(b.id));
   const curatedTechs = (rosterQ.data ?? []).filter((t) => curation.pinnedTechIds.includes(t.user_id));
 
-  // Inline equipment pin toggle — spreads the latest curation so it never
-  // clobbers the picker's building/tech/section fields.
   const onToggleEquipmentPin = (equipmentId: string) => {
     saveCuration.mutate({
       ...curation,
       pinnedEquipmentIds: toggleId(curation.pinnedEquipmentIds, equipmentId),
     });
   };
+
+  // ---- two-pane selection (auto-pick first valid; fix when pins change) ----
+  const [selected, setSelected] = useState<{ kind: 'building' | 'tech'; id: string } | null>(null);
+  const validKeys = useMemo(() => {
+    const s = new Set<string>();
+    if (showBuildings) curatedBuildings.forEach((b) => s.add(`b:${b.id}`));
+    if (showRoster) curatedTechs.forEach((t) => s.add(`t:${t.user_id}`));
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBuildings, showRoster, curation.pinnedBuildingIds, curation.pinnedTechIds, bldgsQ.data, rosterQ.data]);
+
+  useEffect(() => {
+    const cur = selected ? `${selected.kind === 'building' ? 'b' : 't'}:${selected.id}` : null;
+    if (cur && validKeys.has(cur)) return;
+    const firstB = showBuildings ? curatedBuildings[0] : undefined;
+    const firstT = showRoster ? curatedTechs[0] : undefined;
+    if (firstB) setSelected({ kind: 'building', id: firstB.id });
+    else if (firstT) setSelected({ kind: 'tech', id: firstT.user_id });
+    else setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validKeys]);
+
+  const selBuilding = selected?.kind === 'building' ? curatedBuildings.find((b) => b.id === selected.id) : undefined;
+  const selTech = selected?.kind === 'tech' ? curatedTechs.find((t) => t.user_id === selected.id) : undefined;
+  const hasPins = (showBuildings && curatedBuildings.length > 0) || (showRoster && curatedTechs.length > 0);
 
   return (
     <div className="min-h-screen t-bg">
@@ -145,10 +198,9 @@ export default function Training() {
         <div className="t-card" style={{ background: 'var(--color-card-elevated, rgba(99,102,241,0.04))' }}>
           <p className="t-small" style={{ lineHeight: 1.5 }}>
             <b className="t-text">What this page is.</b>{' '}
-            Use <b>Choose what to show</b> to pick the buildings &amp; techs you're training on.
+            Use <b>Choose what to show</b> to pin the buildings &amp; techs you're training on; pick one in the left rail to work on it.
             Each <b>building</b> shows its real equipment &amp; SOP — editing here also updates the Buildings page.
-            Each <b>tech</b> shows skills you can grade. The goal: training built around real-world{' '}
-            <b>problems</b> (per building, per equipment), with each tech scored on what the problem demands —{' '}
+            Each <b>tech</b> shows skills you can grade, scored on what each problem demands —{' '}
             🧠 <b>memory</b>, 🔧 <b>technical</b>, or 💡 <b>rule-of-thumb</b>.{' '}
             <span className="t-muted">Items marked <b>DRAFT</b> save in your browser while we shape the format; live items save to the database.</span>
           </p>
@@ -159,61 +211,95 @@ export default function Training() {
             <p className="t-text">
               <b>Two-site data not wired yet.</b> Apply migration <code>0072_training_sites_foundation.sql</code> and run{' '}
               <code>watcher/import_training_roster.py</code> to populate the UPark / Binney St building &amp; roster
-              sections. The picker works right now.
+              lists. The picker works right now.
             </p>
           </div>
         )}
 
         <CurationPicker ready={ready} />
 
-        {/* Curated buildings — live + editable, single-source with the Building view. */}
-        {showSec('buildings') && (
-          curatedBuildings.length === 0 ? (
-            <div className="t-card"><p className="t-small t-muted">No buildings picked yet — choose some in “Choose what to show” to mirror their equipment + SOP here.</p></div>
-          ) : (
-            curatedBuildings.map((b) => {
-              const counts = countsQ.data?.get(b.id);
-              return (
-                <Section
-                  key={`tb-${b.id}`}
-                  collapsible
-                  id={`sec-train-bldg-${b.id}`}
-                  title={`${b.short_code ?? b.code} · ${b.name}`}
-                  subtitle={counts ? `${counts.total} equipment${counts.issues ? ` · ${counts.issues} open` : ''}` : undefined}
-                >
-                  <TrainingBuildingPanel
-                    buildingId={b.id}
-                    shortCode={b.short_code ?? b.code}
-                    name={b.name}
-                    pinnedEquipmentIds={curation.pinnedEquipmentIds}
-                    onToggleEquipmentPin={onToggleEquipmentPin}
-                  />
-                </Section>
-              );
-            })
-          )
-        )}
+        {/* ---- two-pane: pinned rail (left) + detail (right) ---- */}
+        <div className="flex gap-4 items-start">
+          <aside
+            className="shrink-0"
+            style={{ width: 250, position: 'sticky', top: 12, maxHeight: 'calc(100vh - 24px)', overflowY: 'auto' }}
+          >
+            <div className="t-card" style={{ padding: 8 }}>
+              {showBuildings && (
+                <RailGroup label={`Buildings (${curatedBuildings.length})`}>
+                  {curatedBuildings.length === 0
+                    ? <p className="t-small t-muted" style={{ padding: '2px 8px' }}>Pin buildings above.</p>
+                    : curatedBuildings.map((b) => (
+                        <RailRow
+                          key={b.id}
+                          selected={selected?.kind === 'building' && selected.id === b.id}
+                          onClick={() => setSelected({ kind: 'building', id: b.id })}
+                          primary={`${b.short_code ?? b.code} · ${b.name}`}
+                          meta={countsLabel(countsQ.data?.get(b.id))}
+                        />
+                      ))}
+                </RailGroup>
+              )}
+              {showRoster && (
+                <RailGroup label={`Techs (${curatedTechs.length})`}>
+                  {curatedTechs.length === 0
+                    ? <p className="t-small t-muted" style={{ padding: '2px 8px' }}>Pin techs above.</p>
+                    : curatedTechs.map((t) => (
+                        <RailRow
+                          key={t.user_id}
+                          selected={selected?.kind === 'tech' && selected.id === t.user_id}
+                          onClick={() => setSelected({ kind: 'tech', id: t.user_id })}
+                          primary={t.full_name}
+                          meta={`${t.discipline ? t.discipline + ' · ' : ''}L${t.level}`}
+                        />
+                      ))}
+                </RailGroup>
+              )}
+              {!showBuildings && !showRoster && (
+                <p className="t-small t-muted" style={{ padding: '4px 8px' }}>Enable Buildings / Techs in “Choose what to show”.</p>
+              )}
+            </div>
+          </aside>
 
-        {/* Curated techs — profile edits sync to Admin; skill records are drafts. */}
-        {showSec('roster') && (
-          curatedTechs.length === 0 ? (
-            <div className="t-card"><p className="t-small t-muted">No techs picked yet — choose some in “Choose what to show” to track their skills + history here.</p></div>
-          ) : (
-            curatedTechs.map((t) => (
-              <Section
-                key={`tt-${t.user_id}`}
-                collapsible
-                id={`sec-train-tech-${t.user_id}`}
-                title={t.full_name}
-                subtitle={t.discipline ? `${t.discipline} · L${t.level}` : `L${t.level}`}
-              >
-                <TrainingTechPanel tech={t} />
-              </Section>
-            ))
-          )
-        )}
+          <section className="flex-1 min-w-0">
+            {selBuilding ? (
+              <div className="t-card">
+                <div className="flex items-baseline justify-between mb-3 gap-3">
+                  <h2 className="t-section-title">{selBuilding.short_code ?? selBuilding.code} · {selBuilding.name}</h2>
+                  <span className="t-small t-muted">{countsLabel(countsQ.data?.get(selBuilding.id))}</span>
+                </div>
+                <TrainingBuildingPanel
+                  key={selBuilding.id}
+                  buildingId={selBuilding.id}
+                  shortCode={selBuilding.short_code ?? selBuilding.code}
+                  name={selBuilding.name}
+                  pinnedEquipmentIds={curation.pinnedEquipmentIds}
+                  onToggleEquipmentPin={onToggleEquipmentPin}
+                />
+              </div>
+            ) : selTech ? (
+              <div className="t-card">
+                <div className="flex items-baseline justify-between mb-3 gap-3">
+                  <h2 className="t-section-title">{selTech.full_name}</h2>
+                  <span className="t-small t-muted">
+                    {selTech.discipline ? `${selTech.discipline} · ` : ''}L{selTech.level}{selTech.is_lead ? ' · ★ lead' : ''}
+                  </span>
+                </div>
+                <TrainingTechPanel key={selTech.user_id} tech={selTech} />
+              </div>
+            ) : (
+              <div className="t-card">
+                <p className="t-small t-muted">
+                  {hasPins
+                    ? 'Pick a building or tech on the left.'
+                    : 'Nothing pinned yet — use “Choose what to show” above to pin the buildings & techs you’re training on.'}
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
 
-        {/* Site mirrors (read-only overview). Counts are the real row counts. */}
+        {/* ---- site mirrors (read-only reference, secondary) ---- */}
         {showSec('mirrors') && SITE_META.map((m) => {
           const site = siteByCode.get(m.code);
           const list = (bldgsQ.data ?? []).filter((b) => site && b.site_id === site.id);
@@ -225,17 +311,9 @@ export default function Training() {
               title={`Buildings · ${m.label}${m.minor ? ' (reference)' : ''}`}
               subtitle={ready ? `${list.length} buildings` : 'pending 0072'}
             >
-              {m.minor ? (
-                <MinorSummary
-                  ready={ready}
-                  count={list.length}
-                  noun="buildings"
-                  linkTo="/buildings"
-                  linkLabel="View full list →"
-                />
-              ) : (
-                <BuildingList ready={ready} loading={bldgsQ.isLoading} rows={list} />
-              )}
+              {m.minor
+                ? <MinorSummary ready={ready} count={list.length} noun="buildings" linkTo="/buildings" linkLabel="View full list →" />
+                : <BuildingList ready={ready} loading={bldgsQ.isLoading} rows={list} />}
             </Section>
           );
         })}
@@ -251,17 +329,9 @@ export default function Training() {
               title={`Roster · ${m.label}${m.minor ? ' (reference)' : ''}`}
               subtitle={ready ? `${list.length} techs` : 'pending 0072'}
             >
-              {m.minor ? (
-                <MinorSummary
-                  ready={ready}
-                  count={list.length}
-                  noun="techs"
-                  linkTo="/manager"
-                  linkLabel="View on dashboard →"
-                />
-              ) : (
-                <TechList ready={ready} loading={rosterQ.isLoading} rows={list} />
-              )}
+              {m.minor
+                ? <MinorSummary ready={ready} count={list.length} noun="techs" linkTo="/manager" linkLabel="View on dashboard →" />
+                : <TechList ready={ready} loading={rosterQ.isLoading} rows={list} />}
             </Section>
           );
         })}
