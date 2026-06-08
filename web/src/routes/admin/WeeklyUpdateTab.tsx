@@ -5,7 +5,7 @@
 //
 // Imported from "2026-06-05 Upark Forecast Meeting.xlsx" — only the
 // incomplete items (migration 0076).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings } from '../../hooks/useBuildings';
 import {
@@ -67,6 +67,19 @@ export function WeeklyUpdateTab() {
       return an - bn || as.localeCompare(bs);
     });
   }, [buildingsQ.data, allRows]);
+
+  // Distinct locations that actually have items — drives the filter pills.
+  // Sorted numeric-aware (20 < 88 < 300 < Engine) so the pill row reads
+  // like the building list.
+  const locationsPresent = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) if (r.location) set.add(r.location);
+    return Array.from(set).sort((a, b) => {
+      const [an, as] = locationSortKey(a);
+      const [bn, bs] = locationSortKey(b);
+      return an - bn || as.localeCompare(bs);
+    });
+  }, [allRows]);
 
   const visible = useMemo(() => {
     let rows = allRows;
@@ -188,8 +201,8 @@ export function WeeklyUpdateTab() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap mb-3" style={{ fontSize: '0.8rem' }}>
+      {/* Show + Sort */}
+      <div className="flex items-center gap-2 flex-wrap mb-2" style={{ fontSize: '0.8rem' }}>
         <span className="t-small t-muted uppercase tracking-wider">Show</span>
         <Toggle active={!showAll} onClick={() => setShowAll(false)} label="Incomplete" />
         <Toggle active={showAll} onClick={() => setShowAll(true)} label="All" />
@@ -197,17 +210,20 @@ export function WeeklyUpdateTab() {
         <Toggle active={sortMode === 'location'} onClick={() => setSortMode('location')} label="Location" />
         <Toggle active={sortMode === 'status'} onClick={() => setSortMode('status')} label="Status" />
         <Toggle active={sortMode === 'date'} onClick={() => setSortMode('date')} label="Date" />
-        <span className="t-small t-muted uppercase tracking-wider ml-3">Location</span>
-        <select
-          value={locFilter}
-          onChange={(e) => setLocFilter(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">All</option>
-          {locationOptions.map((l) => (
-            <option key={l} value={l}>{l}</option>
-          ))}
-        </select>
+      </div>
+
+      {/* Building filter pills */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        <span className="t-small t-muted uppercase tracking-wider mr-1">Bldg</span>
+        <Pill active={locFilter === ''} onClick={() => setLocFilter('')} label="All" />
+        {locationsPresent.map((l) => (
+          <Pill
+            key={l}
+            active={locFilter === l}
+            onClick={() => setLocFilter(locFilter === l ? '' : l)}
+            label={l}
+          />
+        ))}
       </div>
 
       {error && (
@@ -444,9 +460,20 @@ function EditableTextarea({
   const [draft, setDraft] = useState(value ?? '');
   const focused = useRef(false);
   const cancelRef = useRef(false);
+  const taRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!focused.current) setDraft(value ?? '');
   }, [value]);
+
+  // Auto-grow to fit content: reset to auto then size to scrollHeight.
+  // Runs on every draft change + on mount so the full note is always
+  // visible without an inner scrollbar.
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
 
   if (readOnly) {
     return (
@@ -457,6 +484,7 @@ function EditableTextarea({
   }
   return (
     <textarea
+      ref={taRef}
       value={draft}
       placeholder={placeholder}
       rows={1}
@@ -480,7 +508,13 @@ function EditableTextarea({
         }
         if (e.key === 'Escape') { cancelRef.current = true; (e.target as HTMLTextAreaElement).blur(); }
       }}
-      style={{ ...cellInputStyle, resize: 'vertical', minHeight: 28, lineHeight: 1.3 }}
+      style={{
+        ...cellInputStyle,
+        resize: 'none',
+        overflow: 'hidden',
+        minHeight: 28,
+        lineHeight: 1.35,
+      }}
     />
   );
 }
@@ -617,6 +651,32 @@ function Toggle({ active, onClick, label }: { active: boolean; onClick: () => vo
   );
 }
 
+/** Compact building-code chip for the location filter — smaller + rounder
+ *  than Toggle since there can be a dozen on one wrapping row. */
+function Pill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="t-small t-mono"
+      style={{
+        padding: '2px 9px',
+        borderRadius: 12,
+        border: '1px solid',
+        borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
+        background: active ? 'var(--color-accent)' : 'transparent',
+        color: active ? 'white' : 'var(--color-text-muted)',
+        fontWeight: active ? 700 : 500,
+        fontSize: '0.72rem',
+        cursor: 'pointer',
+        lineHeight: 1.4,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function statusColors(tone: 'good' | 'warn' | 'bad' | 'neutral'): { bg: string; fg: string } {
   if (tone === 'good') return { bg: 'rgba(16,185,129,0.15)', fg: 'var(--color-ok, #10b981)' };
   if (tone === 'warn') return { bg: 'rgba(217,119,6,0.15)', fg: 'var(--color-warn, #d97706)' };
@@ -630,16 +690,6 @@ const cellInputStyle: React.CSSProperties = {
   borderRadius: 3,
   border: '1px solid transparent',
   background: 'transparent',
-  color: 'var(--color-text)',
-  font: 'inherit',
-  fontSize: '0.8rem',
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '3px 6px',
-  borderRadius: 4,
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-card)',
   color: 'var(--color-text)',
   font: 'inherit',
   fontSize: '0.8rem',
