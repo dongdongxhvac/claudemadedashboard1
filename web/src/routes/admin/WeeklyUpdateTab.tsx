@@ -68,17 +68,27 @@ export function WeeklyUpdateTab() {
     });
   }, [buildingsQ.data, allRows]);
 
-  // Distinct locations that actually have items — drives the filter pills.
-  // Sorted numeric-aware (20 < 88 < 300 < Engine) so the pill row reads
-  // like the building list.
-  const locationsPresent = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of allRows) if (r.location) set.add(r.location);
-    return Array.from(set).sort((a, b) => {
-      const [an, as] = locationSortKey(a);
-      const [bn, bs] = locationSortKey(b);
-      return an - bn || as.localeCompare(bs);
-    });
+  // Per-location pill data: { loc, open } where open = count of not-yet-
+  // complete items. Sorted numeric-aware (20 < 88 < 300 < Engine) so the
+  // pill row reads like the building list. Also returns the grand open
+  // total for the "All" pill.
+  const { locationPills, totalOpen } = useMemo(() => {
+    const open = new Map<string, number>();
+    let total = 0;
+    for (const r of allRows) {
+      if (!r.location) continue;
+      const isOpen = isWeeklyOpen(r.status);
+      open.set(r.location, (open.get(r.location) ?? 0) + (isOpen ? 1 : 0));
+      if (isOpen) total += 1;
+    }
+    const pills = Array.from(open.keys())
+      .sort((a, b) => {
+        const [an, as] = locationSortKey(a);
+        const [bn, bs] = locationSortKey(b);
+        return an - bn || as.localeCompare(bs);
+      })
+      .map((loc) => ({ loc, open: open.get(loc) ?? 0 }));
+    return { locationPills: pills, totalOpen: total };
   }, [allRows]);
 
   const visible = useMemo(() => {
@@ -212,16 +222,17 @@ export function WeeklyUpdateTab() {
         <Toggle active={sortMode === 'date'} onClick={() => setSortMode('date')} label="Date" />
       </div>
 
-      {/* Building filter pills */}
+      {/* Building filter pills — each shows its open (not-complete) count. */}
       <div className="flex items-center gap-1.5 flex-wrap mb-3">
         <span className="t-small t-muted uppercase tracking-wider mr-1">Bldg</span>
-        <Pill active={locFilter === ''} onClick={() => setLocFilter('')} label="All" />
-        {locationsPresent.map((l) => (
+        <Pill active={locFilter === ''} onClick={() => setLocFilter('')} label="All" count={totalOpen} />
+        {locationPills.map(({ loc, open }) => (
           <Pill
-            key={l}
-            active={locFilter === l}
-            onClick={() => setLocFilter(locFilter === l ? '' : l)}
-            label={l}
+            key={loc}
+            active={locFilter === loc}
+            onClick={() => setLocFilter(locFilter === loc ? '' : loc)}
+            label={loc}
+            count={open}
           />
         ))}
       </div>
@@ -652,15 +663,21 @@ function Toggle({ active, onClick, label }: { active: boolean; onClick: () => vo
 }
 
 /** Compact building-code chip for the location filter — smaller + rounder
- *  than Toggle since there can be a dozen on one wrapping row. */
-function Pill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+ *  than Toggle since there can be a dozen on one wrapping row. Shows the
+ *  building's open (not-complete) item count as a trailing badge; the
+ *  badge is dimmed to 0 when nothing is open there. */
+function Pill({ active, onClick, label, count }: {
+  active: boolean; onClick: () => void; label: string; count?: number;
+}) {
+  const hasCount = count !== undefined;
   return (
     <button
       type="button"
       onClick={onClick}
       className="t-small t-mono"
       style={{
-        padding: '2px 9px',
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 8px 2px 9px',
         borderRadius: 12,
         border: '1px solid',
         borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
@@ -673,6 +690,26 @@ function Pill({ active, onClick, label }: { active: boolean; onClick: () => void
       }}
     >
       {label}
+      {hasCount && (
+        <span
+          style={{
+            minWidth: 15,
+            textAlign: 'center',
+            padding: '0 4px',
+            borderRadius: 8,
+            fontSize: '0.62rem',
+            fontWeight: 700,
+            background: active
+              ? 'rgba(255,255,255,0.25)'
+              : (count ? 'rgba(217,119,6,0.18)' : 'var(--color-border-soft, rgba(0,0,0,0.08))'),
+            color: active
+              ? 'white'
+              : (count ? 'var(--color-warn, #d97706)' : 'var(--color-text-muted)'),
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
