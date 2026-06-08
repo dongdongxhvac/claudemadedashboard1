@@ -7,8 +7,9 @@ import { OncallTab } from './OncallTab';
 import { OncallExperimentTab } from './OncallExperimentTab';
 import { BuildingsTab } from './BuildingsTab';
 import { RoundsTab } from './RoundsTab';
+import { WeeklyUpdateTab } from './WeeklyUpdateTab';
 
-type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds';
+type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -71,6 +72,9 @@ export default function Admin() {
               <TabButton active={tab === 'rounds'} onClick={() => setTab('rounds')}>
                 Rounds
               </TabButton>
+              <TabButton active={tab === 'weekly'} onClick={() => setTab('weekly')}>
+                Weekly Update
+              </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
             {tab === 'users'             && <UserProfilesTab canManageUsers={isAdmin} />}
@@ -78,6 +82,7 @@ export default function Admin() {
             {tab === 'oncall_experiment' && <OncallExperimentTab />}
             {tab === 'buildings'         && <BuildingsTab />}
             {tab === 'rounds'            && <RoundsTab />}
+            {tab === 'weekly'            && <WeeklyUpdateTab />}
           </div>
         )}
       </main>
