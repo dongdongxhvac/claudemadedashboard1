@@ -77,7 +77,8 @@ rules are required on any host.
 | Web frontend | Vercel (auto-deploy from GitHub `master`) | React 19, Vite 8, TypeScript; SPA rewrite only, no server code |
 | Database / auth / realtime | Supabase, project in AWS us-east-2 | Managed Postgres 17.6; SOC 2 Type II vendor |
 | Edge functions (2) | Supabase Functions (Deno) | `admin-set-password` (JWT-verified, admin-only), `notify-overtime` (trigger-invoked, sends email via Resend) |
-| Data pollers (6) | Windows 10 workstation — Task Scheduler ×5 + NSSM service ×1 | **Interim**; migration to a small Linux cloud VM in progress; can move to any corporate-managed host (see §13) |
+| Data pollers / daemons (6) | Windows 10 workstation — Task Scheduler ×5 + NSSM service ×1 (detail in §5b) | **Interim**; migration to a Hetzner Cloud VM in progress; can move to any corporate-managed host (see §13) |
+| Email relay | Power Automate flows in the CWS M365 tenant (detail in §5a) | Forwards BMS alarm emails corporate → ingestion mailbox; includes a 15-min heartbeat canary |
 | Source control | GitHub (private repo) | Code + full schema history (78 SQL migrations) |
 | Transactional email | Gmail (dedicated account, app password) + Resend (overtime notifications) | Candidates for replacement with corporate services (see §13) |
 
@@ -96,6 +97,71 @@ All jobs have retry policies (Task Scheduler: 2 retries; NSSM:
 crash-restart w/ backoff) and write run results to an `ingestion_log`
 table. Feed health is displayed as heartbeat indicators on the dashboard
 itself, and missed operational deadlines trigger automatic email alerts.
+
+## 5a. Email-relay pipeline & Power Automate (corporate-tenant footprint)
+
+This is the one component that runs **inside the C&W Microsoft 365
+tenant**, so it is called out explicitly for review.
+
+**Path of a BMS alarm email:**
+
+```
+BMS vendor system (Siemens / Delta ×2 / Northeast Tech)
+   │  vendor alarm email
+   ▼
+Corporate mailbox (jie.lao@cwservices.com, M365)
+   │  Power Automate forwarding flows (CWS tenant, employee-owned)
+   ▼
+Dedicated Gmail account (bmrupark55@gmail.com)
+   │  Gmail filters (rules exported in watcher/gmail_filters.xml)
+   ▼  routed into 6 labels by sender/keywords
+GMAIL-Alarms-Poller (IMAP, every 5 min) → Supabase
+```
+
+**Power Automate flows currently in the tenant:**
+
+| Flow | Purpose |
+|---|---|
+| Per-vendor alarm forwarders (Siemens, Delta ×2, NE Tech 730/750) | Forward matching alarm emails from the corporate mailbox to the dedicated Gmail account |
+| Daily-test forwarder | Forwards each BMS's scheduled daily test alarm — the *absence* of these is the §09 staleness signal per vendor |
+| Generator-run forwarder | Archive-only label today (not ingested) — keeps weekly generator-test noise out of the alarm feed |
+| **PA Heartbeat (Recurrence, every 15 min)** | Sends a "PA Heartbeat" email on a timer. This is the pipeline canary: if Power Automate itself stops (flow suspended, license/policy change, account issue), this dot goes stale on the dashboard within ~2.5 h — *before* anyone wonders why no alarms are arriving |
+
+**IT-relevant implications (stated plainly):**
+- These flows are owned by an employee account; a password reset,
+  license change, or DLP policy update can silently suspend them — the
+  PA-heartbeat canary exists precisely to detect that.
+- Corporate mail is being auto-forwarded to a personal-tier Gmail
+  account. Content is limited to machine-generated BMS alarm
+  notifications (no human correspondence), but this is exactly the
+  pattern ask #3 in §13 eliminates: a corporate-managed ingestion
+  mailbox would remove both the PA forwarding hop and the Gmail account.
+
+## 5b. Poller host detail & VM migration
+
+**Current production host (interim):** Windows 10 workstation.
+- 5 Task Scheduler jobs (run under a dedicated local service account)
+  + 1 NSSM-managed Windows service (`DELTA-Alarms-Daemon`, currently
+  running as a local user account; crash-restart with 10 s backoff,
+  rotating logs).
+- One on-demand Windows VPN profile exists on this host from
+  Schneider-EBO integration prep; **no production data flow depends on
+  a VPN today** (Delta enteliWEB is reachable over public HTTPS; the
+  other vendors arrive via the email relay above).
+
+**Migration in progress:** Hetzner Cloud VM (US region) —
+Ubuntu, Python 3.14, SSH access. The Cove session/auth layer has been
+ported; remaining jobs will follow as systemd services/timers. Decision
+point for IT (§13 ask 2): bless this VM, or provide an equivalent
+corporate-managed Linux/Windows VM and we deploy there instead. The
+pollers are stateless, so re-homing them is a low-risk move (env file +
+schedules).
+
+**Planned (not yet deployed):** 2 shop-floor TV kiosks (Beelink N100
+mini-PCs, WiFi, browser-kiosk mode showing the read-only `/tv` view via
+a `tv`-role account). Planned remote management is Chrome Remote
+Desktop / RDP — flagging now since remote-access tooling typically
+needs IT policy approval.
 
 ## 6. Authentication & access control
 
@@ -188,22 +254,30 @@ defaults.
 
 | # | Risk | Current state | Proposed remediation |
 |---|---|---|---|
-| 1 | Poller host is a staff Windows workstation | In production; migration to a small Linux cloud VM **in progress** (session layer ported) | Land on an IT-approved host: corporate VM, or bless the cloud VM (see §13) |
+| 1 | Poller host is a staff Windows workstation | In production; migration to a Hetzner Cloud VM **in progress** (session layer ported — see §5b) | Land on an IT-approved host: corporate VM, or bless the cloud VM (see §13) |
 | 2 | Single maintainer | All code/schema in git; this document exists | IT engagement; optional second trained admin |
 | 3 | Cove API uses an employee account token | 1-yr refresh token, auto-refreshed | IT-provisioned **service account** for Cove |
-| 4 | Alarm ingestion via personal-tier Gmail | Dedicated mailbox, app password | Corporate mailbox (IMAP app password or Graph API) |
-| 5 | `notify-overtime` edge function has JWT verification off | Trigger-invoked; URL not published; uses scoped secrets | Add a shared-secret header check or move to Supabase webhooks with signature |
-| 6 | No SSO | Supabase email auth (magic link + password) | Supabase supports SAML/OIDC — integrate Entra ID on a paid tier |
-| 7 | Vendor dependency: Supabase + Vercel | Both SOC 2 Type II; standard exports available | IT vendor review; full self-host is possible (stack is open source) if ever required |
-| 8 | Two BMS integrations deferred (Siemens Desigo direct, Schneider EBO) | Siemens covered via email-forwarding workaround | Needs an IT-provided LAN host + EBO credentials |
+| 4 | Corporate mail auto-forwarded to personal-tier Gmail via employee-owned Power Automate flows | Machine-generated BMS alarm emails only; PA-heartbeat canary detects flow suspension (§5a) | Corporate ingestion mailbox (IMAP app password or Graph API) — removes both the PA hop and the Gmail account |
+| 5 | PA flows owned by one employee account | A password reset / license / DLP change can suspend them silently (canary alerts within ~2.5 h) | Re-home flows under a service account, or eliminate via remediation #4 |
+| 6 | `notify-overtime` edge function has JWT verification off | Trigger-invoked; URL not published; uses scoped secrets | Add a shared-secret header check or move to Supabase webhooks with signature |
+| 7 | No SSO | Supabase email auth (magic link + password) | Supabase supports SAML/OIDC — integrate Entra ID on a paid tier |
+| 8 | Hetzner VM is a non-corporate vendor, root SSH, one operator | Interim migration target; pollers are stateless | IT vendor decision: bless w/ hardening (non-root user, key-only SSH, patching) or substitute corporate VM |
+| 9 | Vendor dependency: Supabase + Vercel | Both SOC 2 Type II; standard exports available | IT vendor review; full self-host is possible (stack is open source) if ever required |
+| 10 | Planned kiosk remote management (Chrome Remote Desktop / RDP) | Not yet deployed (~July) | Confirm approved remote-access tooling with IT before rollout |
+| 11 | Two BMS integrations deferred (Siemens Desigo direct, Schneider EBO) | Siemens covered via email-relay workaround (§5a) | Needs an IT-provided LAN host + EBO credentials |
 
 ## 13. What we're asking IT for
 
 1. **Security review / blessing** of this architecture for company-wide use.
-2. **A managed home for the pollers** — one small VM (Linux preferred,
-   Windows fine), outbound-only network access per the endpoint table in §5.
+2. **A managed home for the pollers** — either bless the in-progress
+   Hetzner Cloud VM (with hardening per §12 #8) or provide one small
+   corporate VM (Linux preferred, Windows fine); outbound-only network
+   access per the endpoint table in §5. Pollers are stateless — re-homing
+   is an env-file + schedule move.
 3. **Service accounts**: Cove API account; corporate mailbox for alarm
-   ingestion + alert sending (replacing Gmail/Resend).
+   ingestion + alert sending — this single item retires the
+   Power Automate forwarding flows, the personal-tier Gmail account,
+   and Resend (see §5a).
 4. **SSO**: Entra ID (SAML/OIDC) integration via Supabase Auth.
 5. **Corporate domain + DNS** (e.g. `upark-ops.cwservices.com`) replacing
    the default `*.vercel.app` URL.
@@ -224,10 +298,13 @@ defaults.
 |---|---|
 | Frontend | React 19.2 · React Router 7 · TanStack Query 5 · Tailwind 3.4 · Vite 8 · TypeScript |
 | Backend | Supabase managed Postgres 17.6 (us-east-2) · Realtime · Auth · 2 Deno edge functions |
-| Pollers | Python 3.13, 6 jobs (5 Task Scheduler + 1 NSSM service) |
+| Pollers / daemons | Python, 6 jobs: 5 Task Scheduler tasks + 1 NSSM Windows service (`DELTA-Alarms-Daemon`, 24/7) |
+| Poller host | Windows 10 workstation (interim) → Hetzner Cloud VM, US region, Ubuntu + Python 3.14 (migration in progress, §5b) |
+| Corporate-tenant footprint | Power Automate flows (alarm forwarders + 15-min heartbeat canary) under an employee M365 account (§5a) |
 | Database | 41 tables · 78 migrations · RLS enabled on 41/41 (100%) |
 | External endpoints (all outbound) | `api.cove.is:443` · `takedabms.albireoenergy.net:443` · `cwservices-bmrupark.plantlog.com:443` · `imap.gmail.com:993` · `smtp.gmail.com:587` · `*.supabase.co:443` · `*.vercel.app:443` |
 | Inbound ports required | **None** |
+| VPN dependencies | **None in production** (one dormant on-demand profile from Schneider-EBO prep, §5b) |
 | Secrets in git | **None** (verified; `.env.example` template only) |
 
 *Questions / walkthrough: Jie Lao (jie.lao@cwservices.com). A live demo
