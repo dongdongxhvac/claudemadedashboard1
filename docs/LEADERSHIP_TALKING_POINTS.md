@@ -108,6 +108,12 @@ meeting, open one screen, and run it.
   credential inventory, network requirements, data classification, and a
   list of what we'd need from IT).
 
+> *Speaker note (not for handout): the personal-positioning beat ("Three
+> Seats, One Operator") is delivered here, between the risk picture and the
+> roadmap. It lives in a separate private prep note —
+> `Three-Seats-One-Operator-Pitch.md` — and is intentionally not printed in
+> circulating copies.*
+
 ## 6. Roadmap
 
 | When | What |
