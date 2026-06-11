@@ -199,6 +199,37 @@ export function usePlantlogBuildingDaily(daysBack: number = 14) {
   });
 }
 
+export type PlantlogDailyAmPm = {
+  et_day: string;
+  am_buildings: number;
+  pm_buildings: number;
+};
+
+/** Per-day AM / PM building counts (v_plantlog_daily_ampm, migration 0080).
+ *  By round START time per building: AM = first entry of the day before
+ *  11:30 ET; PM = first afternoon entry (noon+) at/after 15:00 ET. */
+export function usePlantlogDailyAmPm(daysBack: number = 14) {
+  return useQuery({
+    queryKey: ['plantlog_daily_ampm', daysBack],
+    queryFn: async (): Promise<PlantlogDailyAmPm[]> => {
+      const since = new Date();
+      since.setDate(since.getDate() - daysBack);
+      const sinceStr = since.toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('v_plantlog_daily_ampm')
+        .select('*')
+        .gte('et_day', sinceStr);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...r,
+        am_buildings: Number(r.am_buildings),
+        pm_buildings: Number(r.pm_buildings),
+      })) as PlantlogDailyAmPm[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 /** plantlog_username -> { full_name, user_id } for the engineers who've
  *  been mapped via the User Profiles admin tab. Lets the §06 panel show
  *  "Bjorn Gonzalez (Bgonzalez)" instead of just the plantlog handle. */

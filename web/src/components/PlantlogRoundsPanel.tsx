@@ -17,6 +17,7 @@ import {
   usePlantlogUserBuildingDailyVisits,
   usePlantlogUserMap,
   usePlantlogTodayCompliance,
+  usePlantlogDailyAmPm,
   type PlantlogComplianceWindow,
   type PlantlogUserDailySpan,
   type PlantlogUserBuildingVisit,
@@ -70,6 +71,16 @@ export function PlantlogRoundsPanel() {
   const spanQ = usePlantlogUserDailySpan(days);
   const visitsQ = usePlantlogUserBuildingDailyVisits(days);
   const userMapQ = usePlantlogUserMap();
+  const ampmQ = usePlantlogDailyAmPm(days);
+
+  // et_day -> {am, pm} building counts for the matrix date headers.
+  const ampmByDay = useMemo(() => {
+    const m = new Map<string, { am: number; pm: number }>();
+    for (const r of ampmQ.data ?? []) {
+      m.set(r.et_day, { am: r.am_buildings, pm: r.pm_buildings });
+    }
+    return m;
+  }, [ampmQ.data]);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   // Expand state for the per-building breakdown inside Daily round efficiency.
   // Key shape: `${day}|${user_name}` — one engineer-day row at a time.
@@ -220,12 +231,23 @@ export function PlantlogRoundsPanel() {
               <thead>
                 <tr>
                   <th className="text-left pb-2 pr-3" style={{ position: 'sticky', left: 0, background: 'var(--color-card)' }}>Building</th>
-                  {matrix.sortedDays.map((d) => (
-                    <th key={d} className="text-right pb-2 px-2">
-                      <div>{fmtShortDay(d)}</div>
-                      <div className="t-muted" style={{ fontSize: '0.7rem' }}>{fmtDow(d)}</div>
-                    </th>
-                  ))}
+                  {matrix.sortedDays.map((d) => {
+                    const c = ampmByDay.get(d);
+                    return (
+                      <th key={d} className="text-right pb-2 px-2">
+                        <div>{fmtShortDay(d)}</div>
+                        <div className="t-muted" style={{ fontSize: '0.7rem' }}>{fmtDow(d)}</div>
+                        <div
+                          style={{ fontSize: '0.62rem', fontWeight: 400, whiteSpace: 'nowrap' }}
+                          title="Buildings counted by round START time: AM = first entry of the day before 11:30a · PM = first afternoon entry (noon+) at/after 3:00p"
+                        >
+                          <span style={{ color: 'var(--color-accent)' }}>AM {c?.am ?? 0}</span>
+                          <span className="t-muted"> · </span>
+                          <span style={{ color: 'var(--color-warn, #d97706)' }}>PM {c?.pm ?? 0}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className="text-right pb-2 pl-3 font-semibold">Total</th>
                 </tr>
               </thead>
