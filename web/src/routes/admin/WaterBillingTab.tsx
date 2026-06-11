@@ -81,11 +81,22 @@ export function WaterBillingTab() {
   const [defStart, defEnd] = useMemo(() => lastMonthRange(), []);
   const [rangeStart, setRangeStart] = useState(defStart);
   const [rangeEnd, setRangeEnd] = useState(defEnd);
+  // Tenant billing covers MAIN water meters only by default — CT /
+  // submeter / irrigation / HW-makeup meters are operational, not
+  // billable. Toggle exposes everything for ops use.
+  const [mainOnly, setMainOnly] = useState(true);
   const [showReadings, setShowReadings] = useState(false);
   const [addingReading, setAddingReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const readings = readingsQ.data ?? [];
+
+  const scopedReadings = useMemo(
+    () => mainOnly
+      ? readings.filter((r) => r.meter_label.toLowerCase().includes('main'))
+      : readings,
+    [readings, mainOnly],
+  );
 
   const buildingName = useMemo(() => {
     const m = new Map<string, string>();
@@ -97,8 +108,8 @@ export function WaterBillingTab() {
   }, [buildingsQ.data]);
 
   const lines = useMemo(
-    () => computeBilling(readings, rangeStart, rangeEnd),
-    [readings, rangeStart, rangeEnd],
+    () => computeBilling(scopedReadings, rangeStart, rangeEnd),
+    [scopedReadings, rangeStart, rangeEnd],
   );
 
   // Group lines by building for tenant-billing presentation.
@@ -153,7 +164,8 @@ export function WaterBillingTab() {
         <div>
           <h2 className="t-section-title">Water Meter Tenant Billing</h2>
           <p className="t-small t-muted">
-            usage between in-person readings · prior/current = latest reading at-or-before each boundary ·
+            main water meters only (billing scope) · usage between in-person readings ·
+            prior/current = latest reading at-or-before each boundary ·
             Jan–Apr from Excel backfill, May→ live from plantlog
           </p>
         </div>
@@ -192,6 +204,9 @@ export function WaterBillingTab() {
         <Preset label="This month" onClick={() => setPreset(thisMonthRange)} />
         <Preset label="Last 3 mo" onClick={() => setPreset(last3MonthsRange)} />
         <Preset label="YTD" onClick={() => setPreset(ytdRange)} />
+        <span className="t-small t-muted uppercase tracking-wider ml-3">Meters</span>
+        <Preset label="Main only" onClick={() => setMainOnly(true)} active={mainOnly} />
+        <Preset label="All" onClick={() => setMainOnly(false)} active={!mainOnly} />
       </div>
 
       {error && <p className="t-small mb-2" style={{ color: 'var(--color-danger)' }}>{error}</p>}
