@@ -1021,7 +1021,7 @@ function QuickPtoModal({
 
   return (
     <div
-      onClick={onClose}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -407,7 +407,6 @@ function EditDrawer({
     <div
       className="fixed inset-0 z-50 flex justify-end"
       style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
     >
       <form
         onSubmit={submit}
@@ -720,7 +719,6 @@ function AddUserDrawer({
     <div
       className="fixed inset-0 z-50 flex justify-end"
       style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
     >
       <form
         onSubmit={submit}
