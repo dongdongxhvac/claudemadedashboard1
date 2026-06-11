@@ -27,6 +27,11 @@ import {
 import { useBuildings } from '../hooks/useBuildings';
 import { useEngineers } from '../hooks/useEngineers';
 import { useMe } from '../hooks/useMe';
+import {
+  useOncallParticipants,
+  useOncallSettings,
+  oncallParticipantAt,
+} from '../hooks/useOncall';
 import { Section } from './Section';
 
 const CATEGORY_ACCENT: Record<OvertimeCategory, string> = {
@@ -777,31 +782,71 @@ function AssignEngineerModal({
   const assign = useAdminAssignToOvertime();
   const post   = posts.find((p) => p.id === postId);
   const taken  = new Set(post?.signups.map((s) => s.user_id) ?? []);
+
+  // UPark rule: if nobody signs up for OT coverage, it falls to the
+  // on-call tech — so highlight whoever is on-call for the week the
+  // post STARTS in (Friday-7am rotation weeks) and float them to the top.
+  const participantsQ = useOncallParticipants();
+  const settingsQ     = useOncallSettings();
+  const oncall = post
+    ? oncallParticipantAt(
+        new Date(post.starts_at),
+        participantsQ.data ?? [],
+        settingsQ.data ?? null,
+      )
+    : null;
+  const oncallId = oncall?.user_id ?? null;
+
   const choices = engineers
     .filter((e) => e.active && e.role === 'engineer' && !taken.has(e.user_id))
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+    .sort(
+      (a, b) =>
+        Number(b.user_id === oncallId) - Number(a.user_id === oncallId) ||
+        a.full_name.localeCompare(b.full_name),
+    );
 
   return (
     <ModalShell onClose={onClose} title="Assign engineer">
+      {oncall && taken.has(oncall.user_id) && (
+        <p className="t-small t-muted mb-2">
+          On-call that week: <b>{oncall.full_name}</b> — already on this post.
+        </p>
+      )}
       {!post ? (
         <p className="t-text t-muted">Post not found.</p>
       ) : choices.length === 0 ? (
         <p className="t-text t-muted">All active engineers are already on this post.</p>
       ) : (
         <ul className="space-y-1 max-h-72 overflow-y-auto">
-          {choices.map((e) => (
-            <li key={e.user_id}>
-              <button
-                onClick={async () => {
-                  await assign.mutateAsync({ post_id: postId, user_id: e.user_id });
-                  onClose();
-                }}
-                className="w-full text-left px-2 py-1 hover:bg-[var(--color-card-hover,#1f2937)] rounded"
-              >
-                {e.full_name}
-              </button>
-            </li>
-          ))}
+          {choices.map((e) => {
+            const isOncall = e.user_id === oncallId;
+            return (
+              <li key={e.user_id}>
+                <button
+                  onClick={async () => {
+                    await assign.mutateAsync({ post_id: postId, user_id: e.user_id });
+                    onClose();
+                  }}
+                  className="w-full text-left px-2 py-1 hover:bg-[var(--color-card-hover,#1f2937)] rounded flex items-center justify-between gap-2"
+                  style={isOncall ? {
+                    background: 'var(--color-accent-soft, rgba(99,102,241,0.10))',
+                    boxShadow: 'inset 2px 0 0 var(--color-accent)',
+                  } : undefined}
+                  title={isOncall ? 'On-call for the week this post starts — default coverage if nobody signs up' : undefined}
+                >
+                  <span className={isOncall ? 'font-semibold' : undefined}>{e.full_name}</span>
+                  {isOncall && (
+                    <span
+                      className="text-[10px] font-bold tracking-wider rounded px-1.5 py-0.5"
+                      style={{ background: 'var(--color-accent)', color: '#fff' }}
+                    >
+                      ON-CALL
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="flex justify-end mt-3">

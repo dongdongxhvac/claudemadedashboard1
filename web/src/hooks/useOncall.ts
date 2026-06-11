@@ -29,6 +29,34 @@ function effectiveOncallDate(now: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Who is on-call at a given instant? Weeks run Friday 07:00 → Friday
+ *  07:00 local (same cutover as effectiveOncallDate), anchored at
+ *  settings.start_friday, one participant per week in sort_order,
+ *  repeating forever. Mirrors the /tv rotation-grid math
+ *  ((cycleIndex·N + sort_order − 1) weeks ⇒ week w → sort_order
+ *  (w mod N) + 1). Returns null before the rotation start or when the
+ *  rotation is unconfigured.
+ *
+ *  Used by §11 overtime (UPark rule: nobody signs up → the on-call tech
+ *  covers it, so the assign modal highlights them). */
+export function oncallParticipantAt(
+  at: Date,
+  participants: OncallParticipant[],
+  settings: OncallSettings | null,
+): OncallParticipant | null {
+  if (!settings?.start_friday || participants.length === 0) return null;
+  const eff = effectiveOncallDate(at);
+  if (eff < settings.start_friday) return null;
+  const diffMs =
+    Date.parse(eff + 'T00:00:00') - Date.parse(settings.start_friday + 'T00:00:00');
+  // round (not floor): DST makes some day-spans 23/25h and floor would
+  // mis-bucket the exact Friday boundary by one week.
+  const days = Math.round(diffMs / 86_400_000);
+  const week = Math.floor(days / 7);
+  const ordered = [...participants].sort((a, b) => a.sort_order - b.sort_order);
+  return ordered[week % ordered.length] ?? null;
+}
+
 /** Current rotation (Friday 7am → next Friday 7am local) joined with engineer
  *  name. Queries oncall_rotations directly (not the current_oncall view) so
  *  the 7am cutover logic lives in one place: effectiveOncallDate(). */
