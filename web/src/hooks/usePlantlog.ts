@@ -199,32 +199,31 @@ export function usePlantlogBuildingDaily(daysBack: number = 14) {
   });
 }
 
-export type PlantlogDailyAmPm = {
+export type PlantlogDailyBuildingAmPm = {
   et_day: string;
-  am_buildings: number;
-  pm_buildings: number;
+  building: string;
+  has_am: boolean;
+  has_pm: boolean;
 };
 
-/** Per-day AM / PM building counts (v_plantlog_daily_ampm, migration 0080).
- *  By round START time per building: AM = first entry of the day before
- *  11:30 ET; PM = first afternoon entry (noon+) at/after 15:00 ET. */
-export function usePlantlogDailyAmPm(daysBack: number = 14) {
+/** Per-(day, building) AM / PM round flags (v_plantlog_daily_building_ampm,
+ *  migration 0081). By round START time: has_am = the building's first
+ *  entry of the day is before 11:30 ET; has_pm = its first afternoon
+ *  entry (noon+) is at/after 15:00 ET. The §06 efficiency section rolls
+ *  these up into per-day counts + missing-building lists. */
+export function usePlantlogDailyBuildingAmPm(daysBack: number = 14) {
   return useQuery({
-    queryKey: ['plantlog_daily_ampm', daysBack],
-    queryFn: async (): Promise<PlantlogDailyAmPm[]> => {
+    queryKey: ['plantlog_daily_building_ampm', daysBack],
+    queryFn: async (): Promise<PlantlogDailyBuildingAmPm[]> => {
       const since = new Date();
       since.setDate(since.getDate() - daysBack);
       const sinceStr = since.toISOString().slice(0, 10);
       const { data, error } = await supabase
-        .from('v_plantlog_daily_ampm')
+        .from('v_plantlog_daily_building_ampm')
         .select('*')
         .gte('et_day', sinceStr);
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        am_buildings: Number(r.am_buildings),
-        pm_buildings: Number(r.pm_buildings),
-      })) as PlantlogDailyAmPm[];
+      return (data ?? []) as PlantlogDailyBuildingAmPm[];
     },
     staleTime: 60_000,
   });

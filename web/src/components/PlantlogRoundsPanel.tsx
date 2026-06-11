@@ -17,7 +17,7 @@ import {
   usePlantlogUserBuildingDailyVisits,
   usePlantlogUserMap,
   usePlantlogTodayCompliance,
-  usePlantlogDailyAmPm,
+  usePlantlogDailyBuildingAmPm,
   type PlantlogComplianceWindow,
   type PlantlogUserDailySpan,
   type PlantlogUserBuildingVisit,
@@ -71,15 +71,45 @@ export function PlantlogRoundsPanel() {
   const spanQ = usePlantlogUserDailySpan(days);
   const visitsQ = usePlantlogUserBuildingDailyVisits(days);
   const userMapQ = usePlantlogUserMap();
-  const ampmQ = usePlantlogDailyAmPm(days);
+  const ampmQ = usePlantlogDailyBuildingAmPm(days);
 
-  // et_day -> {am, pm} building counts for the matrix date headers.
+  // Per-day AM/PM rollup for the Daily round efficiency headers: counts
+  // + WHICH buildings are missing each window. Expected set = every
+  // building observed anywhere in the loaded window, minus the no-plant-
+  // log locations (20 / 55 / 80 — same exclusion as the compliance
+  // chips). Buildings render as their leading street number.
   const ampmByDay = useMemo(() => {
-    const m = new Map<string, { am: number; pm: number }>();
-    for (const r of ampmQ.data ?? []) {
-      m.set(r.et_day, { am: r.am_buildings, pm: r.pm_buildings });
+    const rows = ampmQ.data ?? [];
+    const excluded = (b: string) => {
+      const head = (b.match(/^(\d+)/) ?? [])[1] ?? '';
+      return head === '20' || head === '55' || head === '80';
+    };
+    const shortCode = (b: string) => (b.match(/^(\d+)/) ?? [])[1] ?? b;
+    const expected = new Set<string>();
+    for (const r of rows) if (!excluded(r.building)) expected.add(r.building);
+    const byDay = new Map<string, { am: Set<string>; pm: Set<string> }>();
+    for (const r of rows) {
+      if (excluded(r.building)) continue;
+      let e = byDay.get(r.et_day);
+      if (!e) { e = { am: new Set(), pm: new Set() }; byDay.set(r.et_day, e); }
+      if (r.has_am) e.am.add(r.building);
+      if (r.has_pm) e.pm.add(r.building);
     }
-    return m;
+    const sortNum = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { numeric: true });
+    const out = new Map<string, {
+      am: number; pm: number; total: number;
+      amMissing: string[]; pmMissing: string[];
+    }>();
+    for (const [day, e] of byDay) {
+      const amMissing = [...expected].filter((b) => !e.am.has(b)).map(shortCode).sort(sortNum);
+      const pmMissing = [...expected].filter((b) => !e.pm.has(b)).map(shortCode).sort(sortNum);
+      out.set(day, {
+        am: e.am.size, pm: e.pm.size, total: expected.size,
+        amMissing, pmMissing,
+      });
+    }
+    return out;
   }, [ampmQ.data]);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   // Expand state for the per-building breakdown inside Daily round efficiency.
@@ -231,23 +261,12 @@ export function PlantlogRoundsPanel() {
               <thead>
                 <tr>
                   <th className="text-left pb-2 pr-3" style={{ position: 'sticky', left: 0, background: 'var(--color-card)' }}>Building</th>
-                  {matrix.sortedDays.map((d) => {
-                    const c = ampmByDay.get(d);
-                    return (
-                      <th key={d} className="text-right pb-2 px-2">
-                        <div>{fmtShortDay(d)}</div>
-                        <div className="t-muted" style={{ fontSize: '0.7rem' }}>{fmtDow(d)}</div>
-                        <div
-                          style={{ fontSize: '0.62rem', fontWeight: 400, whiteSpace: 'nowrap' }}
-                          title="Buildings counted by round START time: AM = first entry of the day before 11:30a · PM = first afternoon entry (noon+) at/after 3:00p"
-                        >
-                          <span style={{ color: 'var(--color-accent)' }}>AM {c?.am ?? 0}</span>
-                          <span className="t-muted"> · </span>
-                          <span style={{ color: 'var(--color-warn, #d97706)' }}>PM {c?.pm ?? 0}</span>
-                        </div>
-                      </th>
-                    );
-                  })}
+                  {matrix.sortedDays.map((d) => (
+                    <th key={d} className="text-right pb-2 px-2">
+                      <div>{fmtShortDay(d)}</div>
+                      <div className="t-muted" style={{ fontSize: '0.7rem' }}>{fmtDow(d)}</div>
+                    </th>
+                  ))}
                   <th className="text-right pb-2 pl-3 font-semibold">Total</th>
                 </tr>
               </thead>
@@ -286,10 +305,36 @@ export function PlantlogRoundsPanel() {
               Daily round efficiency · daily rounds only (excl. water treatment, weekly &amp; monthly) · <span title="Active = sum of per-building visit durations. Span = wall-clock first→last entry. When Active &lt;&lt; Span the engineer was off-round (weekly test, paperwork, travel, break)" style={{ borderBottom: '1px dotted var(--color-text-muted)', cursor: 'help' }}>Active vs Span</span> · click an engineer for per-building time
             </div>
             <div className="space-y-3">
-              {dailySpan.map(({ day, engineers }) => (
+              {dailySpan.map(({ day, engineers }) => {
+                const c = ampmByDay.get(day);
+                return (
                 <div key={day}>
-                  <div className="t-small font-semibold mb-1">
-                    {dayDate(day).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                  <div className="t-small mb-1 flex items-baseline gap-3 flex-wrap">
+                    <span className="font-semibold">
+                      {dayDate(day).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </span>
+                    {c && (
+                      <span
+                        className="t-mono"
+                        style={{ fontSize: '0.72rem' }}
+                        title="Buildings counted by round START time: AM = first entry of the day before 11:30a · PM = first afternoon entry (noon+) at/after 3:00p. Excludes 20 / 55 / 80 (no plant log)."
+                      >
+                        <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                          AM {c.am}/{c.total}
+                        </span>
+                        {c.amMissing.length > 0 && c.amMissing.length < c.total && (
+                          <span className="t-muted"> miss {c.amMissing.join('·')}</span>
+                        )}
+                        <span className="t-muted"> · </span>
+                        <span style={{ color: 'var(--color-warn, #d97706)', fontWeight: 600 }}>
+                          PM {c.pm}/{c.total}
+                        </span>
+                        {c.pmMissing.length > 0 && c.pmMissing.length < c.total && (
+                          <span className="t-muted"> miss {c.pmMissing.join('·')}</span>
+                        )}
+                        {c.pm === 0 && <span className="t-muted"> (not started)</span>}
+                      </span>
+                    )}
                   </div>
                   <table className="t-mono t-small w-full" style={{ borderCollapse: 'collapse' }}>
                     <thead>
@@ -359,7 +404,8 @@ export function PlantlogRoundsPanel() {
                     </tbody>
                   </table>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
