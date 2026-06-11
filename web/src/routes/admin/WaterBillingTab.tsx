@@ -12,6 +12,7 @@
 // onward flows live from the plantlog poller. Manual entries can be
 // added below for anything missed.
 import { useMemo, useState } from 'react';
+import { supabase } from '../../lib/supabase';
 import { useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings } from '../../hooks/useBuildings';
 import {
@@ -88,6 +89,12 @@ export function WaterBillingTab() {
   const [showReadings, setShowReadings] = useState(false);
   const [addingReading, setAddingReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Email-report state — address persists across sessions so the monthly
+  // billing run is one click.
+  const [emailTo, setEmailTo] = useState<string>(
+    () => localStorage.getItem('water_billing_email_to') ?? '',
+  );
+  const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
   const readings = readingsQ.data ?? [];
 
@@ -127,6 +134,83 @@ export function WaterBillingTab() {
     const [s, e] = fn();
     setRangeStart(s);
     setRangeEnd(e);
+  };
+
+  // Shared report rows (typed — numbers stay numbers so Excel can sum).
+  const buildReportAoa = (): (string | number)[][] => [
+    ['Water Meter Tenant Billing'],
+    [
+      `Period ${rangeStart} → ${rangeEnd}`,
+      mainOnly ? 'Main meters only' : 'All meters',
+      `Generated ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} ET`,
+    ],
+    [],
+    ['Building', 'Meter', 'Prior reading', 'Prior date', 'Current reading', 'Current date', 'Days', 'Delta (raw)', 'Multiplier', 'Usage', 'Unit', 'Flags'],
+    ...lines.map((l): (string | number)[] => [
+      l.building,
+      l.meter_label,
+      l.startReading ? l.startReading.value : '',
+      l.startReading ? fmtDate(l.startReading.reading_at) : '',
+      l.endReading ? l.endReading.value : '',
+      l.endReading ? fmtDate(l.endReading.reading_at) : '',
+      l.daysSpanned ?? '',
+      l.deltaRaw ?? '',
+      l.multiplier,
+      l.usage ?? '',
+      l.unit,
+      l.flags.map((f) => FLAG_LABEL[f].text).join('; '),
+    ]),
+  ];
+
+  const emailReport = async () => {
+    setError(null);
+    const to = emailTo.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      setError('Enter a valid email address first.');
+      return;
+    }
+    if (lines.length === 0) {
+      setError('Nothing to send — no billing lines in this period.');
+      return;
+    }
+    setEmailState('sending');
+    try {
+      // SheetJS loads on demand — keeps it out of the main bundle.
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet(buildReportAoa());
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 38 }, { wch: 14 }, { wch: 10 }, { wch: 14 },
+        { wch: 10 }, { wch: 6 }, { wch: 12 }, { wch: 9 }, { wch: 12 },
+        { wch: 10 }, { wch: 44 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Water Billing');
+      const attachment_base64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }) as string;
+
+      const filename = `water-billing_${rangeStart}_${rangeEnd}.xlsx`;
+      const { data, error: fnError } = await supabase.functions.invoke('email-report', {
+        body: {
+          to,
+          subject: `Water Meter Tenant Billing — ${rangeStart} → ${rangeEnd}`,
+          text:
+            `Water Meter Tenant Billing report attached.\n\n` +
+            `Period: ${rangeStart} → ${rangeEnd}\n` +
+            `Scope: ${mainOnly ? 'main water meters only' : 'all meters'}\n` +
+            `Lines: ${lines.length} across ${byBuilding.length} buildings\n\n` +
+            `Generated from the UPark Operations Dashboard (Admin → Water Billing).`,
+          filename,
+          attachment_base64,
+        },
+      });
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(String(data.error));
+      localStorage.setItem('water_billing_email_to', to);
+      setEmailState('sent');
+      setTimeout(() => setEmailState('idle'), 4000);
+    } catch (e) {
+      setEmailState('idle');
+      setError(e instanceof Error ? e.message : 'Send failed.');
+    }
   };
 
   const exportCsv = () => {
@@ -169,18 +253,48 @@ export function WaterBillingTab() {
             Jan–Apr from Excel backfill, May→ live from plantlog
           </p>
         </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={lines.length === 0}
-          className="t-small t-accent"
-          style={{
-            padding: '6px 14px', border: '1px solid var(--color-accent)',
-            borderRadius: 4, background: 'var(--color-card)',
-          }}
-        >
-          ⤓ Export CSV
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="email"
+            value={emailTo}
+            onChange={(e) => setEmailTo(e.target.value)}
+            placeholder="email address"
+            style={{
+              padding: '5px 10px', borderRadius: 4,
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-card)', color: 'var(--color-text)',
+              font: 'inherit', fontSize: '0.8rem', width: 220,
+            }}
+          />
+          <button
+            type="button"
+            onClick={emailReport}
+            disabled={lines.length === 0 || emailState === 'sending'}
+            className="t-small t-accent"
+            style={{
+              padding: '6px 14px', border: '1px solid var(--color-accent)',
+              borderRadius: 4, background: 'var(--color-card)',
+              opacity: emailState === 'sending' ? 0.6 : 1,
+            }}
+            title="Generates the current report as an .xlsx and emails it to the address"
+          >
+            {emailState === 'sending' ? 'Sending…'
+              : emailState === 'sent' ? '✓ Sent'
+              : '✉ Email report (.xlsx)'}
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={lines.length === 0}
+            className="t-small t-accent"
+            style={{
+              padding: '6px 14px', border: '1px solid var(--color-accent)',
+              borderRadius: 4, background: 'var(--color-card)',
+            }}
+          >
+            ⤓ CSV
+          </button>
+        </div>
       </div>
 
       {/* Range controls */}
