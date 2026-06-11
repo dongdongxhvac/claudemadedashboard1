@@ -16,11 +16,19 @@
 //           population that can see the admin view.
 // Response: 200 { ok: true } | 4xx/5xx { error }
 //
-// Transport: Resend (same RESEND_API_KEY secret notify-overtime uses).
-// From address: REPORT_FROM secret, else OT_NOTIFY_FROM, else the Resend
-// onboarding sender.
+// Transport: Gmail SMTP (bmrupark55) — Resend was tried first but its
+// unverified-domain testing mode only delivers to the account owner's
+// address, which defeats a recipient field. Gmail app-password SMTP has
+// no such restriction and is the same path the watcher's compliance
+// alerts already use.
+//
+// Credentials: GMAIL_USER + GMAIL_APP_PASSWORD, read from edge-function
+// secrets (Dashboard → Project Settings → Edge Functions → Secrets);
+// falls back to the get_app_secret() Vault accessor (migration 0078) if
+// the env secrets aren't set.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -40,6 +48,15 @@ function json(status: number, body: unknown) {
 }
 
 const MAX_ATTACHMENT_B64 = 7_000_000;  // ~5 MB binary after base64 inflation
+
+function contentTypeFor(filename: string): string {
+  if (filename.endsWith(".xlsx")) {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+  if (filename.endsWith(".csv")) return "text/csv";
+  if (filename.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -88,33 +105,52 @@ Deno.serve(async (req) => {
   if (!attachment) return json(400, { error: "attachment required" });
   if (attachment.length > MAX_ATTACHMENT_B64) return json(400, { error: "attachment too large (5 MB max)" });
 
-  // 3) Send via Resend.
-  const resendKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendKey) return json(500, { error: "RESEND_API_KEY not configured" });
-  const fromAddr =
-    Deno.env.get("REPORT_FROM") ??
-    Deno.env.get("OT_NOTIFY_FROM") ??
-    "COVE Ops <onboarding@resend.dev>";
+  // 3) Gmail credentials: env secrets first, Vault fallback.
+  let gmailUser = Deno.env.get("GMAIL_USER") ?? "";
+  let gmailPass = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
+  if (!gmailUser || !gmailPass) {
+    const [u, p] = await Promise.all([
+      admin.rpc("get_app_secret", { k: "GMAIL_USER" }),
+      admin.rpc("get_app_secret", { k: "GMAIL_APP_PASSWORD" }),
+    ]);
+    gmailUser = gmailUser || (u.data as string ?? "");
+    gmailPass = gmailPass || (p.data as string ?? "");
+  }
+  if (!gmailUser || !gmailPass) {
+    return json(500, {
+      error: "Gmail credentials not configured — add GMAIL_USER and GMAIL_APP_PASSWORD " +
+             "as edge function secrets (Dashboard → Project Settings → Edge Functions).",
+    });
+  }
 
-  const sendR = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${resendKey}`,
-      "Content-Type": "application/json",
+  // 4) Send via Gmail SMTP (implicit TLS on 465).
+  const client = new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: { username: gmailUser, password: gmailPass },
     },
-    body: JSON.stringify({
-      from: fromAddr,
-      to: [to],
-      subject,
-      text,
-      attachments: [{ filename, content: attachment }],
-    }),
   });
 
-  if (!sendR.ok) {
-    const errText = await sendR.text();
-    return json(502, { error: `resend: ${sendR.status} ${errText.slice(0, 400)}` });
+  try {
+    await client.send({
+      from: `UPark Dashboard <${gmailUser}>`,
+      to,
+      subject,
+      content: text,
+      attachments: [{
+        filename,
+        content: attachment,
+        encoding: "base64",
+        contentType: contentTypeFor(filename),
+      }],
+    });
+  } catch (e) {
+    try { await client.close(); } catch { /* already closed */ }
+    return json(502, { error: `gmail smtp: ${(e as Error).message?.slice(0, 400)}` });
   }
+  try { await client.close(); } catch { /* already closed */ }
 
   return json(200, { ok: true });
 });

@@ -202,7 +202,20 @@ export function WaterBillingTab() {
           attachment_base64,
         },
       });
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) {
+        // FunctionsHttpError hides the response body behind .context —
+        // surface the function's actual { error } message, not the
+        // generic "non-2xx status code" text.
+        let msg = fnError.message;
+        const ctx = (fnError as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const j = await ctx.json();
+            if (j?.error) msg = String(j.error);
+          } catch { /* body not json — keep generic message */ }
+        }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(String(data.error));
       localStorage.setItem('water_billing_email_to', to);
       setEmailState('sent');
