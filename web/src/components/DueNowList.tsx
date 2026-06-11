@@ -1,7 +1,12 @@
 // §02 — Due today / overdue · or WOs · by assignee.
 // Ported from cove_pm_dashboard_REAL_DATA_v5.html#renderDueToday.
 import { useMemo, useState } from 'react';
-import { useCurrentPmRows, useCurrentWoRows } from '../hooks/useCurrentSnapshots';
+import {
+  useCurrentPmRows,
+  useCurrentWoRows,
+  woDaysSinceUpdate,
+  WO_STALE_DAYS,
+} from '../hooks/useCurrentSnapshots';
 import { isClosed, localISODate, fmtMd } from '../lib/dashboard';
 import { Section } from './Section';
 
@@ -71,7 +76,7 @@ export function DueNowList() {
     type Group = {
       name: string;
       pms: { taskNo: string; due: string; isOverdue: boolean; name: string }[];
-      wos: { id: string; status: string; desc: string }[];
+      wos: { id: string; status: string; desc: string; staleDays: number | null }[];
     };
 
     const map = new Map<string, Group>();
@@ -97,20 +102,26 @@ export function DueNowList() {
       });
     }
 
+    const now = new Date();
     for (const r of woRows) {
       if (r.is_open === false) continue;
       const a = (r.assigned_to_name ?? '').trim() || '(unassigned)';
+      const days = woDaysSinceUpdate(r, now);
       bucket(a).wos.push({
         id: r.wo_id ?? '—',
         status: r.status ?? '—',
         desc: r.description ?? '',
+        staleDays: days !== null && days >= WO_STALE_DAYS ? days : null,
       });
     }
 
     const list = Array.from(map.values());
     for (const g of list) {
       g.pms.sort((a, b) => a.due.localeCompare(b.due));
-      g.wos.sort((a, b) => a.id.localeCompare(b.id));
+      // Stale WOs first (most neglected on top), then by id.
+      g.wos.sort(
+        (a, b) => (b.staleDays ?? -1) - (a.staleDays ?? -1) || a.id.localeCompare(b.id),
+      );
     }
     const sortKey = (g: { pms: unknown[]; wos: unknown[] }) =>
       sort === 'pms' ? g.pms.length : sort === 'wos' ? g.wos.length : g.pms.length + g.wos.length;
@@ -120,8 +131,11 @@ export function DueNowList() {
 
     const totalPms = list.reduce((s, g) => s + g.pms.length, 0);
     const totalWos = list.reduce((s, g) => s + g.wos.length, 0);
+    const totalStale = list.reduce(
+      (s, g) => s + g.wos.filter((w) => w.staleDays !== null).length, 0,
+    );
 
-    return { list, totalPms, totalWos };
+    return { list, totalPms, totalWos, totalStale };
   }, [pmQ.data, woQ.data, sort]);
 
   if (pmQ.isLoading || woQ.isLoading)
@@ -130,7 +144,9 @@ export function DueNowList() {
   const subtitle =
     groups.list.length === 0
       ? '0 items'
-      : `${groups.totalPms} PMs · ${groups.totalWos} WOs · ${groups.list.length} ${
+      : `${groups.totalPms} PMs · ${groups.totalWos} WOs${
+          groups.totalStale > 0 ? ` · ${groups.totalStale} stale ${WO_STALE_DAYS}d+` : ''
+        } · ${groups.list.length} ${
           groups.list.length === 1 ? 'assignee' : 'assignees'
         }`;
 
@@ -223,7 +239,18 @@ export function DueNowList() {
                           >
                             {woStatusLabel(w.status)}
                           </span>
-                          <span className="truncate" title={w.desc}>{w.desc}</span>
+                          <span className="truncate" title={w.desc}>
+                            {w.staleDays !== null && (
+                              <span
+                                className="t-mono text-[10px] font-bold rounded px-1 mr-1.5 align-middle"
+                                style={{ background: 'rgba(239,68,68,0.12)', color: '#dc2626' }}
+                                title={`No Cove update in ${w.staleDays} days`}
+                              >
+                                {w.staleDays}d
+                              </span>
+                            )}
+                            {w.desc}
+                          </span>
                         </li>
                       ))}
                     </ul>

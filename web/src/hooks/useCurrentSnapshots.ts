@@ -27,7 +27,27 @@ export type WoRow = {
   description: string | null;
   building_code: string | null;
   is_open: boolean | null;
+  updated_at_cmms: string | null;
+  submitted_date: string | null;
 };
+
+/** Days since the WO's last Cove update (updated_at_cmms, falling back
+ *  to submitted_date). Null when neither timestamp exists. */
+export function woDaysSinceUpdate(r: WoRow, now: Date = new Date()): number | null {
+  const ts = r.updated_at_cmms ?? r.submitted_date;
+  if (!ts) return null;
+  const ms = now.getTime() - new Date(ts).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return Math.floor(ms / 86_400_000);
+}
+
+/** Flag threshold shared by §02, /tv, and the watcher email (v_wo_stale). */
+export const WO_STALE_DAYS = 7;
+
+export function isWoStale(r: WoRow, now: Date = new Date()): boolean {
+  const d = woDaysSinceUpdate(r, now);
+  return d !== null && d >= WO_STALE_DAYS;
+}
 
 export type LaborRow = {
   assigned_to_name: string | null;

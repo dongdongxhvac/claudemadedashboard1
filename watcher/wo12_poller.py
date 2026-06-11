@@ -33,6 +33,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
+from wo_stale_check import run_stale_wo_check  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
@@ -520,6 +521,14 @@ def main() -> int:
     }).execute()
 
     print(f"[ok] {filename}: {len(rows)} open rows, {len(events)} new closes")
+
+    # Stale-WO check (no Cove update in 7+ days) — alert email with
+    # insert-claim dedupe. Never fails the ingest.
+    try:
+        run_stale_wo_check(client)
+    except Exception as e:
+        print(f"WARN: stale-WO check failed: {e}", file=sys.stderr)
+
     return 0
 
 

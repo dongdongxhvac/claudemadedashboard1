@@ -17,7 +17,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
-import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses } from '../../hooks/useCurrentSnapshots';
+import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses, useCurrentWoRows, woDaysSinceUpdate, WO_STALE_DAYS, type WoRow } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useRounds, useRoundsRealtime } from '../../hooks/useRounds';
 import { useShifts, useShiftsRealtime } from '../../hooks/useShifts';
@@ -97,6 +97,7 @@ export default function TvView() {
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
   const closesQ     = useRecentPmCloses(14);       // 7d window + 7d prior for delta arrows
   const woClosesQ   = useRecentWoCloses(14);       // for the "recent closes" list (mixed w/ PMs)
+  const woQ         = useCurrentWoRows();          // open WOs — stale 7d+ strip
   const laborDailyQ = useLaborDaily(14);
   const roundsQ      = useRounds();
   const shiftsQ      = useShifts();
@@ -130,6 +131,7 @@ export default function TvView() {
           shifts={shiftsQ.data ?? []}
           closes={closesQ.data ?? []}
           woCloses={woClosesQ.data ?? []}
+          woRows={woQ.data ?? []}
           laborDaily={laborDailyQ.data ?? []}
           buildings={buildingsQ.data ?? []}
           assignments={assignmentsQ.data ?? []}
@@ -276,7 +278,7 @@ function Panel({ title, children, accent, meta }: { title: string; children: Rea
  *  BuildingsPanel, surfaced again in the tall left panel so it's visible
  *  at glance height alongside the other workload-shape data. */
 function WorkloadPerformancePanel({
-  pmRows, laborRows, engineers, shifts, closes, woCloses, laborDaily, now,
+  pmRows, laborRows, engineers, shifts, closes, woCloses, woRows, laborDaily, now,
   buildings, assignments, rounds,
 }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
@@ -285,6 +287,7 @@ function WorkloadPerformancePanel({
   shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   woCloses: NonNullable<ReturnType<typeof useRecentWoCloses>['data']>;
+  woRows: WoRow[];
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
   buildings: Building[];
   assignments: BuildingAssignment[];
@@ -307,6 +310,17 @@ function WorkloadPerformancePanel({
   // remain available for downstream tweaks without re-threading props.
   void closes; void woCloses;
 
+  // Open WOs with no Cove update in 7+ days — same rule as §02 and the
+  // watcher email (v_wo_stale). One compact strip, most-stale first.
+  const staleWos = useMemo(() => {
+    return woRows
+      .filter((r) => r.is_open !== false)
+      .map((r) => ({ id: r.wo_id ?? '—', days: woDaysSinceUpdate(r, now) }))
+      .filter((r): r is { id: string; days: number } =>
+        r.days !== null && r.days >= WO_STALE_DAYS)
+      .sort((a, b) => b.days - a.days);
+  }, [woRows, now]);
+
   return (
     <section className="tv-panel tv-panel-tall" style={{ borderTopColor: '#f59e0b' }}>
       <div className="tv-panel-titlerow">
@@ -321,6 +335,15 @@ function WorkloadPerformancePanel({
       </div>
       <div className="tv-panel-body tv-wp-body">
         <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
+        {staleWos.length > 0 && (
+          <div className="tv-wo-stale-strip" title="Open WOs with no Cove update in 7+ days">
+            <span className="tv-wo-stale-count">WO {WO_STALE_DAYS}d+ no update: {staleWos.length}</span>
+            <span className="tv-wo-stale-list">
+              {staleWos.slice(0, 4).map((w) => `${w.id} ${w.days}d`).join(' · ')}
+              {staleWos.length > 4 ? ` +${staleWos.length - 4}` : ''}
+            </span>
+          </div>
+        )}
         <div className="tv-wp-divider" />
         <div className="tv-wp-crew-wrap">
           <CrewSection closes={closes} laborDaily={laborDaily} now={now} />
@@ -1958,6 +1981,26 @@ function TvStyles() {
          auto-sized: its rows are critical, must always fit. */
       .tv-wp-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
       .tv-wp-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
+      /* Stale-WO strip — single compact line under the workload chips.
+         Matches the §02 + watcher rule: no Cove update in 7+ days. */
+      .tv-wo-stale-strip {
+        flex: 0 0 auto;
+        display: flex; align-items: baseline; gap: 0.5vw;
+        min-width: 0;
+        padding: 0.1vw 0.2vw;
+        font-size: 0.72vw; line-height: 1.25;
+        white-space: nowrap; overflow: hidden;
+      }
+      .tv-wo-stale-count {
+        color: #f87171; font-weight: 700; flex: 0 0 auto;
+        letter-spacing: 0.02em;
+      }
+      .tv-wo-stale-list {
+        color: #94a3b8; font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68vw;
+        flex: 1 1 auto; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis;
+      }
       .tv-wp-workload, .tv-wp-crew, .tv-wp-closes {
         display: flex; flex-direction: column; gap: 0.2vw; min-height: 0;
       }
