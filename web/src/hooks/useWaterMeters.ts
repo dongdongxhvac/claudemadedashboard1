@@ -138,14 +138,22 @@ export type BillingFlag =
   | 'stale_end'               // newest usable reading is >40 days before range end
   | 'no_reading_in_range';    // meter skipped this period — last known state shown
 
+/** Snap window: readings are taken in person within roughly the first
+ *  week of each month (sometimes the last days of the prior month), so a
+ *  boundary "snaps" to the nearest actual reading within ±6 days. A May
+ *  1–31 period therefore bills May-4-reading → June-1-reading (true May
+ *  consumption) instead of April-reading → May-reading. */
+const SNAP_MS = 6 * 86_400_000;
+
 /** For a date range [startIso, endIso] (YYYY-MM-DD, inclusive), compute one
  *  billing line per (building, meter) from raw readings.
  *
  *  Boundary semantics: the "state of the meter at boundary B" is the
- *  latest reading taken at-or-before B. Start boundary = start date
- *  00:00 ET; end boundary = end date 23:59:59 ET. This matches how the
- *  readings are actually taken (end of month / start of next month)
- *  without assuming any calendar alignment. */
+ *  reading NEAREST to B within ±6 days (either side); when none falls in
+ *  that window, fall back to the latest reading at-or-before B. Start
+ *  boundary = start date 00:00 ET; end boundary = end date 23:59:59 ET.
+ *  This matches how readings are actually taken (end of month / start of
+ *  next month) without assuming calendar alignment. */
 export function computeBilling(
   readings: WaterReading[],
   startIso: string,
@@ -165,22 +173,41 @@ export function computeBilling(
     byMeter.set(k, arr);
   }
 
+  // Boundary resolver: reading NEAREST to boundaryMs within ±SNAP_MS
+  // (ties go to the earlier reading); fallback = latest at-or-before.
+  const resolveBoundary = (arr: WaterReading[], boundaryMs: number): WaterReading | null => {
+    let nearest: WaterReading | null = null;
+    let nearestDist = Infinity;
+    let latestBefore: WaterReading | null = null;
+    for (const r of arr) {
+      const t = Date.parse(r.reading_at);
+      const dist = Math.abs(t - boundaryMs);
+      if (dist <= SNAP_MS && dist < nearestDist) {
+        nearest = r;
+        nearestDist = dist;
+      }
+      if (t <= boundaryMs) latestBefore = r;        // arr is time-sorted
+    }
+    return nearest ?? latestBefore;
+  };
+
   const out: MeterBillingLine[] = [];
   for (const arr of byMeter.values()) {
     arr.sort((a, b) => Date.parse(a.reading_at) - Date.parse(b.reading_at));
-    const upToEnd = arr.filter((r) => Date.parse(r.reading_at) <= endMs);
-    if (upToEnd.length === 0) continue;             // meter not yet in existence for this range
-    const endReading = upToEnd[upToEnd.length - 1];
 
-    // Newest reading predates the range entirely. Two distinct cases:
+    const endReading = resolveBoundary(arr, endMs);
+    if (!endReading) continue;                      // meter not yet in existence for this range
+    const endT = Date.parse(endReading.reading_at);
+
+    // Newest usable reading predates the range entirely (no snap match
+    // near the end boundary either). Two distinct cases:
     //   * Within 90 days of range start — almost certainly a skipped
     //     in-person visit ("some buildings skip a month"). Surface the
     //     meter with its last-known state + an explicit flag, so a
     //     missing visit is VISIBLE instead of silently absent.
-    //   * Older than 90 days — historical/retired label (e.g. renamed
-    //     meters from before the plantlog log restructure); hide it.
-    if (Date.parse(endReading.reading_at) < startMs) {
-      if (startMs - Date.parse(endReading.reading_at) <= 90 * 86_400_000) {
+    //   * Older than 90 days — historical/retired label; hide it.
+    if (endT < startMs) {
+      if (startMs - endT <= 90 * 86_400_000) {
         out.push({
           building: endReading.building,
           meter_label: endReading.meter_label,
@@ -198,15 +225,20 @@ export function computeBilling(
     }
 
     const flags: BillingFlag[] = [];
-    const beforeStart = upToEnd.filter((r) => Date.parse(r.reading_at) <= startMs);
-    let startReading: WaterReading | null = null;
-    if (beforeStart.length > 0) {
-      startReading = beforeStart[beforeStart.length - 1];
-    } else {
-      // First reading for this meter falls inside the range.
+    let startReading = resolveBoundary(arr, startMs);
+    // The start boundary must resolve to a reading strictly BEFORE the
+    // end reading — a tiny range can snap both boundaries to the same
+    // entry, and a fallback can even land past the end reading.
+    if (startReading && Date.parse(startReading.reading_at) >= endT) {
+      startReading = null;
+    }
+    if (startReading === null) {
+      // No usable start near/before the boundary — first reading for
+      // this meter falls inside the range (partial period). Use the
+      // earliest reading before the end reading if one exists.
       flags.push('no_start_before_range');
-      const inRange = upToEnd.filter((r) => Date.parse(r.reading_at) > startMs);
-      startReading = inRange.length > 1 ? inRange[0] : null;
+      const earlier = arr.filter((r) => Date.parse(r.reading_at) < endT);
+      startReading = earlier.length > 0 ? earlier[0] : null;
     }
 
     let deltaRaw: number | null = null;
@@ -216,14 +248,14 @@ export function computeBilling(
       deltaRaw = endReading.value - startReading.value;
       usage = deltaRaw * endReading.multiplier;
       daysSpanned = Math.round(
-        (Date.parse(endReading.reading_at) - Date.parse(startReading.reading_at)) / 86_400_000,
+        (endT - Date.parse(startReading.reading_at)) / 86_400_000,
       );
       if (deltaRaw < 0) flags.push('negative_delta');
     } else {
       flags.push('single_reading');
     }
 
-    if (endMs - Date.parse(endReading.reading_at) > 40 * 86_400_000) {
+    if (endMs - endT > 40 * 86_400_000) {
       flags.push('stale_end');
     }
 

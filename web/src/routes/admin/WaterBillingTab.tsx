@@ -165,7 +165,7 @@ export function WaterBillingTab() {
           <h2 className="t-section-title">Water Meter Tenant Billing</h2>
           <p className="t-small t-muted">
             main water meters only (billing scope) · usage between in-person readings ·
-            prior/current = latest reading at-or-before each boundary ·
+            boundaries snap to the nearest reading within ±6 days (else latest before) ·
             Jan–Apr from Excel backfill, May→ live from plantlog
           </p>
         </div>
