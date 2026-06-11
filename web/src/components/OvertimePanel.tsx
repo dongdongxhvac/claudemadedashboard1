@@ -32,6 +32,13 @@ import {
   useOncallSettings,
   oncallParticipantAt,
 } from '../hooks/useOncall';
+import { useShifts } from '../hooks/useShifts';
+import { usePtoRequests } from '../hooks/usePto';
+import {
+  computeOtConflicts,
+  conflictSummary,
+  type OtConflict,
+} from '../hooks/useOvertimeConflicts';
 import { Section } from './Section';
 
 const CATEGORY_ACCENT: Record<OvertimeCategory, string> = {
@@ -500,6 +507,39 @@ function PostCard({
   const iAmIn     = !!mySignup;
   const isNew     = isNewPost(post) && !cancelled;
 
+  // Schedule-conflict data (all React-Query cached — shared across cards).
+  const allPostsQ = useOvertimePosts();
+  const engQ      = useEngineers();
+  const shiftsQ   = useShifts();
+  const ptoQ      = usePtoRequests();
+
+  // Self-serve is HARD-blocked on conflicts (manager assign stays a
+  // soft confirm in the modal). Computed only when the button would show.
+  const myConflicts = useMemo<OtConflict[]>(() => {
+    if (!myUserId || cancelled || closed || iAmIn || isFull) return [];
+    const me = (engQ.data ?? []).find((e) => e.user_id === myUserId);
+    return computeOtConflicts({
+      userId: myUserId,
+      post,
+      allPosts: allPostsQ.data ?? [],
+      shiftId: me?.shift_id ?? null,
+      shifts: shiftsQ.data ?? [],
+      ptoRequests: ptoQ.data ?? [],
+    });
+  }, [myUserId, cancelled, closed, iAmIn, isFull, post, allPostsQ.data, engQ.data, shiftsQ.data, ptoQ.data]);
+
+  // PTO warning on signup chips — someone assigned BEFORE their PTO got
+  // approved should jump out at whoever reads the board.
+  const signupPto = (userId: string): OtConflict | null =>
+    computeOtConflicts({
+      userId,
+      post,
+      allPosts: [],            // chips only warn about PTO, not OT/shift
+      shiftId: null,
+      shifts: [],
+      ptoRequests: ptoQ.data ?? [],
+    }).find((c) => c.kind === 'pto') ?? null;
+
   return (
     <div
       className="t-card"
@@ -554,7 +594,17 @@ function PostCard({
             }}
             title={s.self_signup ? 'Self-signed up' : 'Assigned by manager'}
           >
-            <span style={{ color: 'var(--color-ok, #10b981)' }}>✓</span>
+            {(() => {
+              const pto = signupPto(s.user_id);
+              return pto ? (
+                <span
+                  style={{ color: '#b45309', fontWeight: 700 }}
+                  title={`Heads up — ${pto.label}`}
+                >⚠</span>
+              ) : (
+                <span style={{ color: 'var(--color-ok, #10b981)' }}>✓</span>
+              );
+            })()}
             <span>{shortName(s.user_name)}</span>
             {!s.self_signup && (
               <span className="t-muted" style={{ fontSize: '0.65rem' }}>(assigned)</span>
@@ -587,14 +637,24 @@ function PostCard({
 
       <div className="flex items-center gap-2 mt-2">
         {!cancelled && !closed && !iAmIn && !isFull && myUserId && (
-          <button
-            onClick={() => signUp.mutate(post.id)}
-            disabled={signUp.isPending}
-            className="t-small t-accent hover:underline"
-            style={{ fontWeight: 600 }}
-          >
-            {signUp.isPending ? 'Signing up…' : 'Sign me up'}
-          </button>
+          myConflicts.length > 0 ? (
+            <span
+              className="t-small"
+              style={{ color: '#b45309', fontSize: '0.7rem' }}
+              title={conflictSummary(myConflicts)}
+            >
+              ⚠ Sign-up blocked: {myConflicts.map((c) => c.label).join(' · ')}
+            </span>
+          ) : (
+            <button
+              onClick={() => signUp.mutate(post.id)}
+              disabled={signUp.isPending}
+              className="t-small t-accent hover:underline"
+              style={{ fontWeight: 600 }}
+            >
+              {signUp.isPending ? 'Signing up…' : 'Sign me up'}
+            </button>
+          )
         )}
         {!cancelled && !closed && canManage && !isFull && (
           <button onClick={onAssign} className="t-small t-muted hover:underline">
@@ -771,12 +831,28 @@ function NewPostModal({
   );
 }
 
+function ConflictPill({ kind }: { kind: OtConflict['kind'] }) {
+  const cfg = {
+    pto:   { text: 'PTO',      bg: 'rgba(245,158,11,0.18)', fg: '#b45309' },
+    shift: { text: 'ON SHIFT', bg: 'rgba(100,116,139,0.18)', fg: '#64748b' },
+    ot:    { text: 'OT CLASH', bg: 'rgba(56,130,246,0.15)',  fg: '#3b82f6' },
+  }[kind];
+  return (
+    <span
+      className="text-[9px] font-bold tracking-wider rounded px-1.5 py-0.5"
+      style={{ background: cfg.bg, color: cfg.fg }}
+    >
+      {cfg.text}
+    </span>
+  );
+}
+
 function AssignEngineerModal({
   postId, posts, engineers, onClose,
 }: {
   postId: string;
   posts: OvertimePost[];
-  engineers: { user_id: string; full_name: string; active: boolean; role: string }[];
+  engineers: { user_id: string; full_name: string; active: boolean; role: string; shift_id: string | null }[];
   onClose: () => void;
 }) {
   const assign = useAdminAssignToOvertime();
@@ -788,6 +864,8 @@ function AssignEngineerModal({
   // post STARTS in (Friday-7am rotation weeks) and float them to the top.
   const participantsQ = useOncallParticipants();
   const settingsQ     = useOncallSettings();
+  const shiftsQ       = useShifts();
+  const ptoQ          = usePtoRequests();
   const oncall = post
     ? oncallParticipantAt(
         new Date(post.starts_at),
@@ -797,11 +875,30 @@ function AssignEngineerModal({
     : null;
   const oncallId = oncall?.user_id ?? null;
 
+  // Conflicts per engineer: greyed + reason, STILL clickable (manager
+  // override with confirm). PTO is the loudest flag — amber pill.
   const choices = engineers
     .filter((e) => e.active && e.role === 'engineer' && !taken.has(e.user_id))
+    .map((e) => ({
+      ...e,
+      conflicts: post
+        ? computeOtConflicts({
+            userId: e.user_id,
+            post,
+            allPosts: posts,
+            shiftId: e.shift_id,
+            shifts: shiftsQ.data ?? [],
+            ptoRequests: ptoQ.data ?? [],
+          })
+        : [],
+    }))
     .sort(
       (a, b) =>
+        // on-call pinned to top (even when conflicted — the manager MUST
+        // see "your default coverage is on PTO"), then conflict-free,
+        // then alphabetical.
         Number(b.user_id === oncallId) - Number(a.user_id === oncallId) ||
+        Number(a.conflicts.length > 0) - Number(b.conflicts.length > 0) ||
         a.full_name.localeCompare(b.full_name),
     );
 
@@ -820,27 +917,47 @@ function AssignEngineerModal({
         <ul className="space-y-1 max-h-72 overflow-y-auto">
           {choices.map((e) => {
             const isOncall = e.user_id === oncallId;
+            const conflicted = e.conflicts.length > 0;
             return (
               <li key={e.user_id}>
                 <button
                   onClick={async () => {
+                    if (conflicted) {
+                      const ok = confirm(
+                        `${e.full_name} has schedule conflicts:\n\n${conflictSummary(e.conflicts)}\n\nAssign anyway?`,
+                      );
+                      if (!ok) return;
+                    }
                     await assign.mutateAsync({ post_id: postId, user_id: e.user_id });
                     onClose();
                   }}
-                  className="w-full text-left px-2 py-1 hover:bg-[var(--color-card-hover,#1f2937)] rounded flex items-center justify-between gap-2"
-                  style={isOncall ? {
-                    background: 'var(--color-accent-soft, rgba(99,102,241,0.10))',
-                    boxShadow: 'inset 2px 0 0 var(--color-accent)',
-                  } : undefined}
+                  className="w-full text-left px-2 py-1 hover:bg-[var(--color-card-hover,#1f2937)] rounded"
+                  style={{
+                    ...(isOncall ? {
+                      background: 'var(--color-accent-soft, rgba(99,102,241,0.10))',
+                      boxShadow: 'inset 2px 0 0 var(--color-accent)',
+                    } : {}),
+                    opacity: conflicted ? 0.6 : 1,
+                  }}
                   title={isOncall ? 'On-call for the week this post starts — default coverage if nobody signs up' : undefined}
                 >
-                  <span className={isOncall ? 'font-semibold' : undefined}>{e.full_name}</span>
-                  {isOncall && (
-                    <span
-                      className="text-[10px] font-bold tracking-wider rounded px-1.5 py-0.5"
-                      style={{ background: 'var(--color-accent)', color: '#fff' }}
-                    >
-                      ON-CALL
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={isOncall ? 'font-semibold' : undefined}>{e.full_name}</span>
+                    <span className="flex items-center gap-1">
+                      {e.conflicts.map((c, i) => <ConflictPill key={i} kind={c.kind} />)}
+                      {isOncall && (
+                        <span
+                          className="text-[10px] font-bold tracking-wider rounded px-1.5 py-0.5"
+                          style={{ background: 'var(--color-accent)', color: '#fff' }}
+                        >
+                          ON-CALL
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  {conflicted && (
+                    <span className="block t-small t-muted" style={{ fontSize: '0.68rem', marginTop: 1 }}>
+                      {e.conflicts.map((c) => c.label).join(' · ')}
                     </span>
                   )}
                 </button>
