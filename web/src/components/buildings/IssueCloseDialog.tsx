@@ -90,7 +90,7 @@ export function IssueCloseDialog({
         padding: '20px',
         zIndex: 1000,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
     >
       <form
         onSubmit={submit}

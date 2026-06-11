@@ -1079,7 +1079,7 @@ function AddCoverageModal({
         display: 'flex', justifyContent: 'flex-end',
         zIndex: 50,
       }}
-      onClick={onClose}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
     >
       <div
         onClick={(e) => e.stopPropagation()}

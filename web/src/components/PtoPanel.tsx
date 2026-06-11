@@ -1937,7 +1937,7 @@ function AddPtoModal({
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
         display: 'flex', justifyContent: 'flex-end', zIndex: 50,
       }}
-      onClick={onClose}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -2263,7 +2263,7 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
         display: 'flex', justifyContent: 'flex-end', zIndex: 50,
       }}
-      onClick={onClose}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -2477,7 +2477,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
         display: 'flex', justifyContent: 'flex-end', zIndex: 50,
       }}
-      onClick={onClose}
+      // No backdrop close — stray clicks must not nuke a half-filled form.
     >
       <div
         onClick={(e) => e.stopPropagation()}

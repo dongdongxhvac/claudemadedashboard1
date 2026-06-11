@@ -684,6 +684,23 @@ function PostCard({
 // New-post modal
 // ============================================================================
 
+// 15-minute time choices for the new-post form — '06:15' → '6:15 AM'.
+// Ops never posts OT at :38; a dropdown beats the native picker's
+// minute spinner and renders the same on every browser.
+const QUARTER_HOUR_TIMES: { value: string; label: string }[] = Array.from(
+  { length: 96 },
+  (_, i) => {
+    const h = Math.floor(i / 4);
+    const m = (i % 4) * 15;
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return {
+      value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+      label: `${h12}:${String(m).padStart(2, '0')} ${ap}`,
+    };
+  },
+);
+
 function NewPostModal({
   onClose, buildings,
 }: {
@@ -692,8 +709,9 @@ function NewPostModal({
 }) {
   const create = useCreateOvertimePost();
   const [category, setCategory]       = useState<OvertimeCategory>('major_off_hour_pm');
-  const [startsLocal, setStartsLocal] = useState('');
-  const [endsLocal, setEndsLocal]     = useState('');
+  const [dateIso, setDateIso]         = useState('');   // YYYY-MM-DD
+  const [startTime, setStartTime]     = useState('');   // 'HH:MM'
+  const [endTime, setEndTime]         = useState('');   // '' = no end time
   const [buildingId, setBuildingId]   = useState<string>('');
   const [buildingLabel, setBuildingLabel] = useState<string>('');
   const [scope, setScope]             = useState('');
@@ -701,15 +719,25 @@ function NewPostModal({
   const [notes, setNotes]             = useState('');
   const [err, setErr]                 = useState<string | null>(null);
 
+  // End at-or-before start = overnight post (e.g. 11:00 PM → 3:00 AM):
+  // the end rolls to the next day, and the form says so.
+  const overnight = !!(endTime && startTime && endTime <= startTime);
+
   const submit = async () => {
     setErr(null);
-    if (!scope.trim()) { setErr('Scope is required.'); return; }
-    if (!startsLocal)  { setErr('Start time is required.'); return; }
+    if (!scope.trim())            { setErr('Scope is required.'); return; }
+    if (!dateIso || !startTime)   { setErr('Date and start time are required.'); return; }
+    const starts = new Date(`${dateIso}T${startTime}:00`);
+    let ends: Date | null = null;
+    if (endTime) {
+      ends = new Date(`${dateIso}T${endTime}:00`);
+      if (overnight) ends.setDate(ends.getDate() + 1);
+    }
     try {
       await create.mutateAsync({
         category,
-        starts_at:      new Date(startsLocal).toISOString(),
-        ends_at:        endsLocal ? new Date(endsLocal).toISOString() : null,
+        starts_at:      starts.toISOString(),
+        ends_at:        ends ? ends.toISOString() : null,
         building_id:    buildingId || null,
         building_label: buildingId ? null : (buildingLabel.trim() || null),
         scope,
@@ -747,23 +775,47 @@ function NewPostModal({
           />
         </label>
 
-        <label className="block">
-          <div className="t-small t-muted mb-1">Starts (local)</div>
+        <label className="block col-span-2">
+          <div className="t-small t-muted mb-1">Date</div>
           <input
-            type="datetime-local"
-            value={startsLocal}
-            onChange={(e) => setStartsLocal(e.target.value)}
+            type="date"
+            value={dateIso}
+            onChange={(e) => setDateIso(e.target.value)}
             className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
         </label>
+
         <label className="block">
-          <div className="t-small t-muted mb-1">Ends (optional)</div>
-          <input
-            type="datetime-local"
-            value={endsLocal}
-            onChange={(e) => setEndsLocal(e.target.value)}
+          <div className="t-small t-muted mb-1">Start time</div>
+          <select
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
             className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
+          >
+            <option value="">— pick time —</option>
+            {QUARTER_HOUR_TIMES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <div className="t-small t-muted mb-1">
+            End time (optional){overnight && (
+              <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}> · next day</span>
+            )}
+          </div>
+          <select
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            <option value="">— none —</option>
+            {QUARTER_HOUR_TIMES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}{startTime && t.value <= startTime ? ' (next day)' : ''}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="block">
@@ -988,10 +1040,11 @@ function ModalShell({
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 50,
       }}
-      onClick={onClose}
+      // Deliberately NO onClick={onClose} here — a stray click outside the
+      // card (or on a native picker popup) must not nuke a half-filled
+      // form. Close via ✕ / Cancel only.
     >
       <div
-        onClick={(e) => e.stopPropagation()}
         className="t-card"
         style={{ width: 'min(560px, 92vw)', maxHeight: '90vh', overflow: 'auto', padding: '1.25rem' }}
       >
