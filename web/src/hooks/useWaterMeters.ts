@@ -227,18 +227,30 @@ export function computeBilling(
     const flags: BillingFlag[] = [];
     let startReading = resolveBoundary(arr, startMs);
     // The start boundary must resolve to a reading strictly BEFORE the
-    // end reading — a tiny range can snap both boundaries to the same
-    // entry, and a fallback can even land past the end reading.
+    // end reading — a short range (e.g. "This month" run mid-month) can
+    // collapse both boundaries onto the same entry, and a fallback can
+    // even land past the end reading.
     if (startReading && Date.parse(startReading.reading_at) >= endT) {
       startReading = null;
     }
     if (startReading === null) {
-      // No usable start near/before the boundary — first reading for
-      // this meter falls inside the range (partial period). Use the
-      // earliest reading before the end reading if one exists.
-      flags.push('no_start_before_range');
-      const earlier = arr.filter((r) => Date.parse(r.reading_at) < endT);
-      startReading = earlier.length > 0 ? earlier[0] : null;
+      // Try the partial-period fallback: the meter's first reading falls
+      // INSIDE the range (new meter / new label). Candidates are limited
+      // to readings within the period window (snap grace included) and
+      // strictly before the end reading — NEVER the meter's earliest
+      // reading ever, which could be months before the range and would
+      // silently bill ancient consumption into this period.
+      const candidates = arr.filter((r) => {
+        const t = Date.parse(r.reading_at);
+        return t > startMs - SNAP_MS && t < endT;
+      });
+      if (candidates.length > 0) {
+        startReading = candidates[0];
+        flags.push('no_start_before_range');
+      }
+      // else: only one usable point for this period (e.g. June billed on
+      // June 10 — the July reading doesn't exist yet) → single_reading
+      // below. Honest "insufficient readings", not fabricated usage.
     }
 
     let deltaRaw: number | null = null;
