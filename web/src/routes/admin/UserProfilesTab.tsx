@@ -136,16 +136,12 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
                 <th className="py-2 px-2">Title</th>
                 <th className="py-2 px-2">Shift</th>
                 <th className="py-2 px-2">Email · sign-in</th>
-                <th className="py-2 px-2">Discipline</th>
-                <th className="py-2 px-2 text-right">Lvl</th>
-                <th className="py-2 px-2 text-right">XP</th>
-                <th className="py-2 px-2 text-center">Visible</th>
                 <th className="py-2 pl-2"></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={10} className="py-6 text-center t-text t-muted italic">
+                <tr><td colSpan={6} className="py-6 text-center t-text t-muted italic">
                   No users match this filter.
                 </td></tr>
               )}
@@ -210,21 +206,6 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
                         </div>
                       ) : (
                         <span className="t-small t-muted italic">— not set —</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-2">{r.discipline ? labelFor(r.discipline) : <span className="t-muted">—</span>}</td>
-                    <td className="py-2 px-2 text-right t-mono">{r.level}</td>
-                    <td className="py-2 px-2 text-right t-mono">{r.xp}</td>
-                    <td className="py-2 px-2 text-center">
-                      {canManageUsers ? (
-                        <Toggle
-                          checked={r.visible_to_self}
-                          onChange={(v) =>
-                            updateProfile.mutate({ user_id: r.user_id, patch: { visible_to_self: v } })
-                          }
-                        />
-                      ) : (
-                        <span className="t-small t-muted">{r.visible_to_self ? '✓' : '—'}</span>
                       )}
                     </td>
                     <td className="py-2 pl-2 whitespace-nowrap">
@@ -300,10 +281,6 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
       )}
     </div>
   );
-}
-
-function labelFor(d: string): string {
-  return DISCIPLINES.find((x) => x.value === d)?.label ?? d;
 }
 
 function RoleBadge({ role }: { role: Role }) {
