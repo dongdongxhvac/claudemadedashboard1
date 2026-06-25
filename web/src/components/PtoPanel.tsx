@@ -1493,8 +1493,28 @@ function BalancesGrid({
   onDeleteRequest?: (id: string) => void;
 }) {
   const currentYear = new Date().getFullYear();
-  const rows = summaries
-    .filter((s) => s.year === currentYear)
+  // v_pto_summary is keyed off pto_balances, so a brand-new engineer with
+  // no balance row is invisible — and there was no UI path to create that
+  // first row. Synthesize a zero-allotment placeholder for every active
+  // engineer who lacks a current-year row, so they always appear and get
+  // a "set allotment" action. Saving upserts on (user_id, year), which
+  // creates the real row. BalanceSplitCells already renders "—" when
+  // alloted is 0, so placeholders read as "not set" rather than negative.
+  const realRows = summaries.filter((s) => s.year === currentYear);
+  const haveRow = new Set(realRows.map((s) => s.user_id));
+  const placeholders: PtoSummary[] = engineers
+    .filter((e) => e.active && e.role === 'engineer' && !haveRow.has(e.user_id))
+    .map((e) => ({
+      id: `new:${e.user_id}`,            // 'new:' prefix flags a not-yet-saved row
+      user_id: e.user_id,
+      user_full_name: e.full_name,
+      year: currentYear,
+      vacation_alloted: 0, vacation_used: 0, vacation_remaining: 0,
+      sick_alloted: 0, sick_used: 0, sick_remaining: 0,
+      personal_alloted: 0, personal_used: 0, personal_remaining: 0,
+      notes: null, updated_at: '',
+    }));
+  const rows = [...realRows, ...placeholders]
     .sort((a, b) => (a.user_full_name ?? '').localeCompare(b.user_full_name ?? ''));
   // Track which engineer row is currently expanded to show the full year log.
   // Single-open accordion — clicking a different name swaps the open row.
@@ -1564,6 +1584,7 @@ function BalancesGrid({
             const isOpen = expandedUserId === s.user_id;
             const log = logByUser.get(s.user_id) ?? [];
             const hireLine = fmtHireSeniority(hireByUser.get(s.user_id) ?? null);
+            const notSet = s.id.startsWith('new:');
             return (
               <Fragment key={s.id}>
                 <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
@@ -1579,6 +1600,15 @@ function BalancesGrid({
                         {isOpen ? '▾' : '▸'}
                       </span>
                       <span className="font-medium">{s.user_full_name ?? '?'}</span>
+                      {notSet && (
+                        <span
+                          className="t-small uppercase tracking-wider"
+                          style={{ fontSize: 9, fontWeight: 700, padding: '0.05rem 0.3rem', borderRadius: 3, background: 'rgba(245,158,11,0.18)', color: '#b45309' }}
+                          title="No allotment set yet — click “set allotment”"
+                        >
+                          not set
+                        </span>
+                      )}
                     </button>
                     {hireLine && (
                       <div className="t-muted" style={{ fontSize: '0.7rem', marginLeft: 14, marginTop: 1, whiteSpace: 'nowrap' }}>
@@ -1589,7 +1619,7 @@ function BalancesGrid({
                   <BalanceSplitCells remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
                   <BalanceSplitCells remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
                   <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
-                    <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">edit allotment</button>
+                    <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">{notSet ? 'set allotment' : 'edit allotment'}</button>
                   </td>
                 </tr>
                 {isOpen && (
