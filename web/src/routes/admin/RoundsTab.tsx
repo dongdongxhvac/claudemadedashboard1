@@ -94,9 +94,12 @@ export function RoundsTab() {
   useEffect(() => { if (!editing) closeMenu(); }, [editing]);
 
   // Snapshot live → draft when entering compose (or when live changes outside compose).
+  // Only ROUNDS gate the seed — notes are optional (empty slots default
+  // below). Coupling them previously meant a failed rounds_notes query
+  // left the draft blank even though live rounds existed.
   useEffect(() => {
     if (editing) return;
-    if (!roundsQ.data || !notesQ.data) return;
+    if (!roundsQ.data) return;
     setDraftRounds(roundsQ.data.map((r) => ({
       id: r.id,
       client_key: r.id,
@@ -122,7 +125,7 @@ export function RoundsTab() {
 
   const loading = engineersQ.isLoading || shiftsQ.isLoading || buildingsQ.isLoading
     || roundsQ.isLoading || notesQ.isLoading || me.isLoading;
-  const errorObj = engineersQ.error ?? shiftsQ.error ?? buildingsQ.error ?? roundsQ.error;
+  const errorObj = engineersQ.error ?? shiftsQ.error ?? buildingsQ.error ?? roundsQ.error ?? notesQ.error;
   if (loading) return <p className="t-text t-muted">Loading rounds…</p>;
   if (errorObj) return <p className="t-text t-danger">Error: {(errorObj as Error).message}</p>;
 
