@@ -1568,10 +1568,15 @@ function BalancesGrid({
             <th className="py-1 px-3 text-center" colSpan={2} style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
               Sick
             </th>
+            <th className="py-1 px-3 text-center" colSpan={2} style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+              Floating Holiday
+            </th>
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
           </tr>
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
             <th className="py-1 pr-6">Engineer</th>
+            <th className="py-1 pl-3 pr-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>Balance</th>
+            <th className="py-1 pl-2 pr-3 text-right t-small" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>Used / Allotted</th>
             <th className="py-1 pl-3 pr-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>Balance</th>
             <th className="py-1 pl-2 pr-3 text-right t-small" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>Used / Allotted</th>
             <th className="py-1 pl-3 pr-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>Balance</th>
@@ -1618,13 +1623,14 @@ function BalancesGrid({
                   </td>
                   <BalanceSplitCells remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
                   <BalanceSplitCells remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
+                  <BalanceSplitCells remaining={s.holiday_remaining}  used={s.holiday_used}  alloted={s.holiday_alloted} />
                   <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
                     <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">{notSet ? 'set allotment' : 'edit allotment'}</button>
                   </td>
                 </tr>
                 {isOpen && (
                   <tr style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-                    <td colSpan={6} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
+                    <td colSpan={8} style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem 0.75rem' }}>
                       <PtoYearLog
                         rows={log}
                         year={currentYear}
