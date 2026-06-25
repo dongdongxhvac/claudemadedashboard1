@@ -135,9 +135,9 @@ export type PtoSummary = {
   sick_alloted: number;
   sick_used: number;
   sick_remaining: number;
-  personal_alloted: number;
-  personal_used: number;
-  personal_remaining: number;
+  holiday_alloted: number;
+  holiday_used: number;
+  holiday_remaining: number;
   notes: string | null;
   updated_at: string;
 };
@@ -413,7 +413,7 @@ export function useUpdatePtoBalance() {
       year: number;
       vacation_alloted?: number;
       sick_alloted?: number;
-      personal_alloted?: number;
+      holiday_alloted?: number;
       notes?: string | null;
     }) => {
       const { user_id, year, ...patch } = input;

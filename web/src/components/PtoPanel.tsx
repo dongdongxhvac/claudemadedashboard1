@@ -1511,7 +1511,7 @@ function BalancesGrid({
       year: currentYear,
       vacation_alloted: 0, vacation_used: 0, vacation_remaining: 0,
       sick_alloted: 0, sick_used: 0, sick_remaining: 0,
-      personal_alloted: 0, personal_used: 0, personal_remaining: 0,
+      holiday_alloted: 0, holiday_used: 0, holiday_remaining: 0,
       notes: null, updated_at: '',
     }));
   const rows = [...realRows, ...placeholders]
@@ -2482,7 +2482,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
   const update = useUpdatePtoBalance();
   const [vac, setVac]   = useState<string>(String(summary.vacation_alloted));
   const [sick, setSick] = useState<string>(String(summary.sick_alloted));
-  const [pers, setPers] = useState<string>(String(summary.personal_alloted));
+  const [holiday, setHoliday] = useState<string>(String(summary.holiday_alloted));
   const [err, setErr]   = useState<string | null>(null);
 
   const onSave = async () => {
@@ -2493,7 +2493,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
         year:    summary.year,
         vacation_alloted: Number(vac),
         sick_alloted:     Number(sick),
-        personal_alloted: Number(pers),
+        holiday_alloted:  Number(holiday),
       });
       onClose();
     } catch (e) {
@@ -2529,7 +2529,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
 
         <div className="space-y-3">
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Vacation alloted</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Vacation Allotted</span>
             <input type="number" min={0} value={vac} onChange={(e) => setVac(e.target.value)}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
@@ -2565,7 +2565,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
             </details>
           </label>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Sick alloted</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Sick Allotted</span>
             <input type="number" min={0} value={sick} onChange={(e) => setSick(e.target.value)}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
@@ -2601,11 +2601,11 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
             </details>
           </label>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Personal alloted</span>
-            <input type="number" min={0} value={pers} onChange={(e) => setPers(e.target.value)}
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Holiday Allotted</span>
+            <input type="number" min={0} value={holiday} onChange={(e) => setHoliday(e.target.value)}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
-            <p className="t-small t-muted mt-1">Used: {summary.personal_used}h</p>
+            <p className="t-small t-muted mt-1">Used: {summary.holiday_used}h</p>
           </label>
         </div>
 

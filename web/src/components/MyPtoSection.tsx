@@ -95,8 +95,8 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
           <div className="flex flex-wrap gap-3 mt-2 t-small">
             <BalanceChip label="Vacation" remaining={mySummary.vacation_remaining} used={mySummary.vacation_used} alloted={mySummary.vacation_alloted} />
             <BalanceChip label="Sick"     remaining={mySummary.sick_remaining}     used={mySummary.sick_used}     alloted={mySummary.sick_alloted} />
-            {mySummary.personal_alloted > 0 && (
-              <BalanceChip label="Personal" remaining={mySummary.personal_remaining} used={mySummary.personal_used} alloted={mySummary.personal_alloted} />
+            {mySummary.holiday_alloted > 0 && (
+              <BalanceChip label="Holiday" remaining={mySummary.holiday_remaining} used={mySummary.holiday_used} alloted={mySummary.holiday_alloted} />
             )}
           </div>
         )}
