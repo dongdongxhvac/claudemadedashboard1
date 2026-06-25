@@ -96,7 +96,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             <BalanceChip label="Vacation" remaining={mySummary.vacation_remaining} used={mySummary.vacation_used} alloted={mySummary.vacation_alloted} />
             <BalanceChip label="Sick"     remaining={mySummary.sick_remaining}     used={mySummary.sick_used}     alloted={mySummary.sick_alloted} />
             {mySummary.holiday_alloted > 0 && (
-              <BalanceChip label="Holiday" remaining={mySummary.holiday_remaining} used={mySummary.holiday_used} alloted={mySummary.holiday_alloted} />
+              <BalanceChip label="Floating Holiday" remaining={mySummary.holiday_remaining} used={mySummary.holiday_used} alloted={mySummary.holiday_alloted} />
             )}
           </div>
         )}

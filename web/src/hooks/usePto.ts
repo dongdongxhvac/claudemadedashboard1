@@ -25,7 +25,7 @@ export const PTO_TYPE_LABELS: Partial<Record<PtoType, string>> = {
   vacation: 'Vacation',
   sick: 'Sick',
   bereavement: 'Bereavement',
-  holiday: 'Holiday',
+  holiday: 'Floating Holiday',
   unpaid: 'Unpaid',
 };
 

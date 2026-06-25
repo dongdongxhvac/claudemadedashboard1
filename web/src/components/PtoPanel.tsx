@@ -2601,7 +2601,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
             </details>
           </label>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Holiday Allotted</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Floating Holiday Allotted</span>
             <input type="number" min={0} value={holiday} onChange={(e) => setHoliday(e.target.value)}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
