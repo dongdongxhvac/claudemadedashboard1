@@ -11,7 +11,7 @@ import { useMroPipelineCounts } from '../../hooks/useMroBilling';
 const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 1, title: 'Schema + RLS (mro_import_batches · mro_receipts · mro_card_charges)', done: true },
   { n: 2, title: 'Receipt storage bucket + signed-URL reads', done: true },
-  { n: 3, title: 'OCR Edge Function (Claude vision extraction)', done: false },
+  { n: 3, title: 'OCR Edge Function (Claude vision extraction) — deployed; needs ANTHROPIC_API_KEY secret', done: true },
   { n: 4, title: 'CSV import → card charges', done: false },
   { n: 5, title: 'Matching / verification engine', done: false },
   { n: 6, title: 'Reclass + verification UI', done: false },

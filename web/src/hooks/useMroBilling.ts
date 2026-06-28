@@ -2,7 +2,7 @@
 // proves the schema + RLS are live. CRUD / matching / export hooks land in
 // later phases. Tables: mro_import_batches, mro_receipts, mro_card_charges
 // (migration 0085); access gated to admin + manager by RLS (mro_can_bill()).
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 export type MroPipelineCounts = {
@@ -72,5 +72,32 @@ export function useMroReceiptSignedUrl(
       return data?.signedUrl ?? null;
     },
     staleTime: Math.max(0, expiresInSeconds - 60) * 1000,
+  });
+}
+
+// ── Phase 3: OCR extraction ─────────────────────────────────────────────
+/** Invoke the mro-ocr-receipt edge function for a receipt. The function
+ *  pulls the image, calls Claude vision, and writes the extracted_* /
+ *  ocr_* fields. Surfaces the function's real error (not the generic
+ *  "non-2xx") so a missing ANTHROPIC_API_KEY reads clearly. */
+export function useTriggerMroOcr() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (receiptId: string) => {
+      const { data, error } = await supabase.functions.invoke('mro-ocr-receipt', {
+        body: { receipt_id: receiptId },
+      });
+      if (error) {
+        let msg = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try { const j = await ctx.json(); if (j?.error) msg = String(j.error); } catch { /* keep msg */ }
+        }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(String(data.error));
+      return data as { ok: boolean; ocr_status: string; extracted_total: number | null; legibility: string | null };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] }),
   });
 }
