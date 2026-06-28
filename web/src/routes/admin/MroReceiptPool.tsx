@@ -27,6 +27,7 @@ type Staged = { file: File; url: string; building: string; category: ReceiptCate
 export function MroReceiptPool() {
   const me = useMe();
   const who = me.data?.full_name ?? me.data?.email ?? null;
+  const whoId = me.data?.id ?? null;
   const receiptsQ = useMroReceipts();
   const attachedQ = useAttachedReceiptIds();
   const buildingsQ = useBuildings();
@@ -74,7 +75,7 @@ export function MroReceiptPool() {
         is_stock: st.isStock,
         item_label: st.item || null,
       };
-      try { await upload.mutateAsync({ file: st.file, uploadedBy: who, meta }); }
+      try { await upload.mutateAsync({ file: st.file, uploadedBy: who, uploadedById: whoId, meta }); }
       catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed.'); return; }
     }
     staged.forEach((s) => URL.revokeObjectURL(s.url));

@@ -10,6 +10,9 @@ import { MroReceiptPool } from '../admin/MroReceiptPool';
 export default function MroReceipts() {
   const { signOut } = useAuth();
   const me = useMe();
+  // Field capture is open to techs (engineers/leads) + managers/admins —
+  // they see and manage only their OWN receipts (RLS). Billing stays gated.
+  const canCapture = ['admin', 'manager', 'engineer', 'lead'].includes(me.data?.role ?? '') || me.data?.is_manager === true;
   const canBill = me.data?.role === 'admin' || me.data?.role === 'manager' || me.data?.is_manager === true;
 
   return (
@@ -18,7 +21,7 @@ export default function MroReceipts() {
         <div className="mx-auto px-4 py-2.5 flex items-center justify-between" style={{ maxWidth: 720 }}>
           <h1 className="t-section-title" style={{ fontSize: '1.05rem' }}>📷 MRO Receipts</h1>
           <div className="flex items-center gap-3">
-            <Link to="/admin" className="t-small t-accent hover:underline">Billing →</Link>
+            {canBill && <Link to="/admin" className="t-small t-accent hover:underline">Billing →</Link>}
             <button onClick={signOut} className="t-small t-muted hover:underline">Sign out</button>
           </div>
         </div>
@@ -27,12 +30,13 @@ export default function MroReceipts() {
       <main className="mx-auto px-3 py-3" style={{ maxWidth: 720 }}>
         {me.isLoading ? (
           <p className="t-text t-muted">Loading…</p>
-        ) : !canBill ? (
-          <p className="t-text t-danger">MRO receipts are admin/manager only.</p>
+        ) : !canCapture ? (
+          <p className="t-text t-danger">Receipt capture isn't enabled for your account.</p>
         ) : (
           <>
             <p className="t-small t-muted mb-2">
               Snap or upload a receipt, tag it (building · category · item), and it joins the pool — OCR runs automatically.
+              {!canBill && ' You see only the receipts you upload.'}
             </p>
             <MroReceiptPool />
           </>

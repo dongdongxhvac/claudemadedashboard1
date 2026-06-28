@@ -104,7 +104,7 @@ function ChargeRow({ charge, buildings }: { charge: MroCharge; buildings: { id: 
 
   const onFile = async (file: File) => {
     setErr(null);
-    try { await upload.mutateAsync({ charge, file, uploadedBy: who }); }
+    try { await upload.mutateAsync({ charge, file, uploadedBy: who, uploadedById: me.data?.id ?? null }); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed.'); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
   };

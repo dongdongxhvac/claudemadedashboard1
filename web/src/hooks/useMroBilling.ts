@@ -232,7 +232,7 @@ export function useUpdateMroCharge() {
 export function useUploadReceiptForCharge() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { charge: MroCharge; file: File; uploadedBy: string | null }) => {
+    mutationFn: async (input: { charge: MroCharge; file: File; uploadedBy: string | null; uploadedById: string | null }) => {
       const jpeg = await reencodeToJpeg(input.file);              // throws clean on HEIC
       const path = `charges/${input.charge.id}/${crypto.randomUUID()}.jpg`;
       const up = await supabase.storage.from(MRO_RECEIPTS_BUCKET)
@@ -240,7 +240,7 @@ export function useUploadReceiptForCharge() {
       if (up.error) throw up.error;
 
       const { data: receipt, error: rErr } = await supabase.from('mro_receipts')
-        .insert({ storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy })
+        .insert({ storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy, uploaded_by_user_id: input.uploadedById })
         .select('id').single();
       if (rErr) throw rErr;
 
@@ -379,7 +379,7 @@ export function useAttachedReceiptIds() {
 export function useUploadStandaloneReceipt() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { file: File; uploadedBy: string | null; meta?: Partial<ReceiptMeta> }) => {
+    mutationFn: async (input: { file: File; uploadedBy: string | null; uploadedById: string | null; meta?: Partial<ReceiptMeta> }) => {
       const jpeg = await reencodeToJpeg(input.file);            // throws clean on HEIC
       const path = `pool/${crypto.randomUUID()}.jpg`;
       const up = await supabase.storage.from(MRO_RECEIPTS_BUCKET)
@@ -387,7 +387,8 @@ export function useUploadStandaloneReceipt() {
       if (up.error) throw up.error;
       const { data: rec, error } = await supabase.from('mro_receipts')
         .insert({
-          storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy,
+          storage_path: path, image_mime: 'image/jpeg',
+          uploaded_by: input.uploadedBy, uploaded_by_user_id: input.uploadedById,
           building_id: input.meta?.building_id ?? null,
           site_wide: input.meta?.site_wide ?? false,
           category: input.meta?.category ?? null,
