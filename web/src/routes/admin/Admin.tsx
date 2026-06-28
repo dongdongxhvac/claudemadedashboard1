@@ -9,8 +9,9 @@ import { BuildingsTab } from './BuildingsTab';
 import { RoundsTab } from './RoundsTab';
 import { WeeklyUpdateTab } from './WeeklyUpdateTab';
 import { WaterBillingTab } from './WaterBillingTab';
+import { MroBillingTab } from './MroBillingTab';
 
-type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly' | 'water';
+type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly' | 'water' | 'mro';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -79,6 +80,9 @@ export default function Admin() {
               <TabButton active={tab === 'water'} onClick={() => setTab('water')}>
                 Water Billing
               </TabButton>
+              <TabButton active={tab === 'mro'} onClick={() => setTab('mro')}>
+                MRO Billing
+              </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
             {tab === 'users'             && <UserProfilesTab canManageUsers={isAdmin} />}
@@ -88,6 +92,7 @@ export default function Admin() {
             {tab === 'rounds'            && <RoundsTab />}
             {tab === 'weekly'            && <WeeklyUpdateTab />}
             {tab === 'water'             && <WaterBillingTab />}
+            {tab === 'mro'               && <MroBillingTab />}
           </div>
         )}
       </main>
