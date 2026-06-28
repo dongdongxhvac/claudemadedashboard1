@@ -298,6 +298,18 @@ export function useVerifyCharge() {
 export const RECEIPT_CATEGORIES = ['HVAC', 'Plumbing', 'Electrical', 'Control', 'Other'] as const;
 export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];
 
+/** Map a receipt's simplified tag category to the charge's billing MEP. */
+export function receiptCategoryToMep(c: ReceiptCategory | null): MepCategory | null {
+  switch (c) {
+    case 'HVAC': return 'Mechanical';
+    case 'Plumbing': return 'Plumbing';
+    case 'Electrical': return 'Electrical';
+    case 'Control': return 'Controls / BMS';
+    case 'Other': return 'General / Other';
+    default: return null;
+  }
+}
+
 /** Tech's at-capture tags on a receipt (overlay in the pool). */
 export type ReceiptMeta = {
   building_id: string | null;
@@ -431,8 +443,10 @@ export function useConfirmMatch() {
     mutationFn: async (input: {
       chargeId: string; receiptId: string; matchConfidence: number;
       amountDelta: number | null; exceptionReason: ExceptionReason | null; verifiedBy: string | null;
+      // Optional reclass prefill carried over from the receipt's tags.
+      buildingId?: string | null; mepCategory?: MepCategory | null; note?: string | null;
     }) => {
-      const { error } = await supabase.from('mro_card_charges').update({
+      const patch: Record<string, unknown> = {
         receipt_id: input.receiptId,
         status: 'verified',
         match_confidence: input.matchConfidence,
@@ -441,7 +455,11 @@ export function useConfirmMatch() {
         verified_by: input.verifiedBy,
         verified_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq('id', input.chargeId);
+      };
+      if (input.buildingId !== undefined) patch.building_id = input.buildingId;
+      if (input.mepCategory !== undefined) patch.mep_category = input.mepCategory;
+      if (input.note !== undefined) patch.note = input.note;
+      const { error } = await supabase.from('mro_card_charges').update(patch).eq('id', input.chargeId);
       if (error) throw error;
     },
     onSuccess: () => invalidateCharges(qc),

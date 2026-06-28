@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { useMe } from '../../hooks/useMe';
 import {
   useMroCharges, useMroReceipts, useAttachedReceiptIds, useConfirmMatch,
-  useMroReceiptSignedUrl,
+  useMroReceiptSignedUrl, receiptCategoryToMep,
   type MroCharge, type MroReceiptFull, type ExceptionReason,
 } from '../../hooks/useMroBilling';
 import {
@@ -73,9 +73,18 @@ export function MroAutoMatch() {
       // the human can re-classify in the workbench.
       reason = 'freight-delta';
     }
+    // Carry the receipt's tags onto the charge — fill empties only, never
+    // overwrite a manual reclass. Receipt building/category → charge
+    // building_id / MEP; item label → note.
+    const buildingId = charge.building_id ?? rec?.building_id ?? null;
+    const mepCategory = charge.mep_category ?? receiptCategoryToMep(rec?.category ?? null);
+    const note = charge.note || rec?.item_label || null;
     setBusyIds((s) => new Set(s).add(charge.id));
     try {
-      await confirm.mutateAsync({ chargeId: charge.id, receiptId, matchConfidence: score, amountDelta: delta, exceptionReason: reason, verifiedBy: who });
+      await confirm.mutateAsync({
+        chargeId: charge.id, receiptId, matchConfidence: score, amountDelta: delta, exceptionReason: reason, verifiedBy: who,
+        buildingId, mepCategory, note,
+      });
     } catch (e) { setErr(e instanceof Error ? e.message : 'Confirm failed.'); }
     finally { setBusyIds((s) => { const n = new Set(s); n.delete(charge.id); return n; }); }
   };
