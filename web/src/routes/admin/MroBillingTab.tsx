@@ -14,7 +14,7 @@ const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 2, title: 'Receipt storage bucket + signed-URL reads', done: true },
   { n: 3, title: 'OCR Edge Function (Claude vision extraction) — deployed; needs ANTHROPIC_API_KEY secret', done: true },
   { n: 4, title: 'CSV import → card charges (auto-detect columns)', done: true },
-  { n: 5, title: 'Matching / verification engine', done: false },
+  { n: 5, title: 'Matching / verification engine (scored, tiered, 13 checks pass)', done: true },
   { n: 6, title: 'Reclass + verification UI', done: false },
   { n: 7, title: 'Billing export (grouped + CSV / print)', done: false },
 ];
