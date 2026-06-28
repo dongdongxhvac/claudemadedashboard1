@@ -161,6 +161,12 @@ export function useImportMroCsv() {
         inserted = data?.length ?? 0;
       }
 
+      // Don't leave an empty batch behind when the file was entirely
+      // duplicates (overlapping period re-import).
+      if (inserted === 0) {
+        await supabase.from('mro_import_batches').delete().eq('id', batch.id);
+      }
+
       return { batchId: batch.id, inserted, skipped: rows.length - inserted, noAmount };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] }),

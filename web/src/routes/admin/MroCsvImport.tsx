@@ -92,11 +92,19 @@ export function MroCsvImport() {
       {error && <p className="t-small t-danger mb-2">{error}</p>}
 
       {result && (
-        <div className="t-small mb-2" style={{ color: 'var(--color-ok, #10b981)' }}>
-          ✓ Imported <b>{result.inserted}</b> charge{result.inserted === 1 ? '' : 's'}
-          {result.skipped > 0 && <> · <span className="t-muted">{result.skipped} already loaded (skipped)</span></>}
-          {result.noAmount > 0 && <> · <span style={{ color: 'var(--color-warn, #d97706)' }}>{result.noAmount} no-amount rows dropped</span></>}
-        </div>
+        result.inserted === 0 && (result.skipped > 0 || result.noAmount > 0) ? (
+          <div className="t-small mb-2 t-muted">
+            This file was entirely already loaded — nothing new added
+            ({result.skipped} duplicate{result.skipped === 1 ? '' : 's'}
+            {result.noAmount > 0 && `, ${result.noAmount} no-amount`}).
+          </div>
+        ) : (
+          <div className="t-small mb-2" style={{ color: 'var(--color-ok, #10b981)' }}>
+            ✓ Imported <b>{result.inserted}</b> charge{result.inserted === 1 ? '' : 's'}
+            {result.skipped > 0 && <> · <span className="t-muted">{result.skipped} already loaded (skipped)</span></>}
+            {result.noAmount > 0 && <> · <span style={{ color: 'var(--color-warn, #d97706)' }}>{result.noAmount} no-amount rows dropped</span></>}
+          </div>
+        )
       )}
 
       {parsed && (

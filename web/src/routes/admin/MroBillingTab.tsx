@@ -6,6 +6,7 @@
 // RLS exist (migration 0085, mro_* tables, admin/manager-gated); the
 // pipeline UI fills in over the following phases. Built in the dashboard's
 // own house style (CSS theme variables), not a separate palette.
+import { Link } from 'react-router-dom';
 import { useMroPipelineCounts } from '../../hooks/useMroBilling';
 import { MroCsvImport } from './MroCsvImport';
 import { MroReceiptPool } from './MroReceiptPool';
@@ -29,7 +30,12 @@ export function MroBillingTab() {
   return (
     <div>
       <div className="mb-1">
-        <h2 className="t-section-title">MRO Billing</h2>
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h2 className="t-section-title">MRO Billing</h2>
+          <Link to="/mro/receipts" className="t-small t-accent hover:underline" title="Phone-first receipt capture — bookmark on a phone">
+            📷 Phone receipt page →
+          </Link>
+        </div>
         <p className="t-small t-muted">
           reimbursable MRO purchases on a cost-plus contract · capture → reclass → verify → bill ·
           admin + manager only
