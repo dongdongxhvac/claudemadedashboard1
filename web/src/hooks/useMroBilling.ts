@@ -335,6 +335,8 @@ export type MroReceiptFull = {
   ocr_status: string | null;
   ocr_legibility: string | null;
   uploaded_at: string;
+  uploaded_by: string | null;
+  uploaded_by_user_id: string | null;
   building_id: string | null;
   site_wide: boolean;
   category: ReceiptCategory | null;
@@ -343,6 +345,12 @@ export type MroReceiptFull = {
   building: { short_code: string | null; name: string } | null;
 };
 
+/** A receipt captured via the anonymous field link (no owner; uploaded_by
+ *  carries the tech's typed name, e.g. "field: Mark D"). */
+export function isFieldReceipt(r: { uploaded_by_user_id: string | null; uploaded_by: string | null }): boolean {
+  return !r.uploaded_by_user_id && (r.uploaded_by ?? '').toLowerCase().startsWith('field');
+}
+
 /** All receipts (the candidate pool for matching). */
 export function useMroReceipts() {
   return useQuery({
@@ -350,7 +358,7 @@ export function useMroReceipts() {
     queryFn: async (): Promise<MroReceiptFull[]> => {
       const { data, error } = await supabase
         .from('mro_receipts')
-        .select('id,storage_path,extracted_total,extracted_date,extracted_merchant,extracted_last4,ocr_status,ocr_legibility,uploaded_at,building_id,site_wide,category,is_stock,item_label,building:buildings(short_code,name)')
+        .select('id,storage_path,extracted_total,extracted_date,extracted_merchant,extracted_last4,ocr_status,ocr_legibility,uploaded_at,uploaded_by,uploaded_by_user_id,building_id,site_wide,category,is_stock,item_label,building:buildings(short_code,name)')
         .order('uploaded_at', { ascending: false });
       if (error) throw error;
       const rows = (data ?? []) as unknown as MroReceiptFull[];

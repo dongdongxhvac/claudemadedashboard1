@@ -10,7 +10,7 @@ import { useBuildings } from '../../hooks/useBuildings';
 import {
   useMroReceipts, useAttachedReceiptIds, useUploadStandaloneReceipt,
   useDeleteMroReceipt, useUpdateReceiptMeta, useTriggerMroOcr, useMroReceiptSignedUrl,
-  RECEIPT_CATEGORIES,
+  isFieldReceipt, RECEIPT_CATEGORIES,
   type MroReceiptFull, type ReceiptCategory, type ReceiptMeta,
 } from '../../hooks/useMroBilling';
 import { parseReceiptFilename } from '../../lib/mroReceiptFilename';
@@ -47,6 +47,17 @@ export function MroReceiptPool() {
   const receipts = receiptsQ.data ?? [];
   const attached = attachedQ.data ?? new Set<string>();
   const unattachedCount = useMemo(() => receipts.filter((r) => !attached.has(r.id)).length, [receipts, attached]);
+
+  // Field uploads (from the anonymous link) new since the manager last
+  // reviewed — a per-browser timestamp, so a manager sees what the crew
+  // dropped at a glance. "Mark reviewed" stamps now.
+  const [lastSeen, setLastSeen] = useState<string>(() => localStorage.getItem('mro_field_last_seen') ?? '');
+  const newField = useMemo(
+    () => receipts.filter((r) => isFieldReceipt(r) && (!lastSeen || r.uploaded_at > lastSeen)),
+    [receipts, lastSeen],
+  );
+  const markReviewed = () => { const now = new Date().toISOString(); localStorage.setItem('mro_field_last_seen', now); setLastSeen(now); };
+  const newFieldIds = useMemo(() => new Set(newField.map((r) => r.id)), [newField]);
 
   const stage = (files: FileList | null, fromCamera: boolean) => {
     if (!files) return;
@@ -100,6 +111,21 @@ export function MroReceiptPool() {
 
       {err && <p className="t-small t-danger mb-2">{err}</p>}
 
+      {/* New field uploads since last review */}
+      {newField.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap mb-2" style={{ padding: '6px 10px', borderRadius: 6, background: 'rgba(34,211,238,0.10)', border: '1px solid rgba(34,211,238,0.4)' }}>
+          <span className="t-small" style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+            🆕 {newField.length} new field upload{newField.length === 1 ? '' : 's'} from the crew
+          </span>
+          <span className="t-small t-muted">
+            {Array.from(new Set(newField.map((r) => (r.uploaded_by ?? '').replace(/^field:\s*/i, '').trim()).filter(Boolean))).slice(0, 4).join(', ')}
+          </span>
+          <button type="button" onClick={markReviewed} className="t-small t-muted ml-auto" style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>
+            mark reviewed
+          </button>
+        </div>
+      )}
+
       {/* Staging — tag each before uploading */}
       {staged.length > 0 && (
         <div className="mb-3" style={{ border: '1px solid var(--color-accent)', borderRadius: 6, padding: '0.6rem' }}>
@@ -141,7 +167,7 @@ export function MroReceiptPool() {
         : (
         <div className="flex flex-wrap gap-2">
           {receipts.map((r) => (
-            <ReceiptCard key={r.id} receipt={r} attached={attached.has(r.id)} buildings={buildings} onError={setErr} />
+            <ReceiptCard key={r.id} receipt={r} attached={attached.has(r.id)} buildings={buildings} onError={setErr} isNewField={newFieldIds.has(r.id)} />
           ))}
         </div>
       )}
@@ -149,8 +175,8 @@ export function MroReceiptPool() {
   );
 }
 
-function ReceiptCard({ receipt, attached, buildings, onError }: {
-  receipt: MroReceiptFull; attached: boolean; buildings: BuildingOpt[]; onError: (m: string | null) => void;
+function ReceiptCard({ receipt, attached, buildings, onError, isNewField }: {
+  receipt: MroReceiptFull; attached: boolean; buildings: BuildingOpt[]; onError: (m: string | null) => void; isNewField?: boolean;
 }) {
   const sig = useMroReceiptSignedUrl(receipt.storage_path);
   const del = useDeleteMroReceipt();
@@ -160,6 +186,8 @@ function ReceiptCard({ receipt, attached, buildings, onError }: {
 
   const failed = receipt.ocr_status === 'failed';
   const pending = receipt.ocr_status === 'pending';
+  const fromField = isFieldReceipt(receipt);
+  const techName = fromField ? (receipt.uploaded_by ?? '').replace(/^field:\s*/i, '').trim() : '';
   const buildingLabel = receipt.site_wide ? 'UPark' : (receipt.building?.short_code ?? null);
   const buildingCode = receipt.building?.short_code ?? '';
 
@@ -172,7 +200,9 @@ function ReceiptCard({ receipt, attached, buildings, onError }: {
   const patch = (p: Partial<ReceiptMeta>) => meta.mutate({ id: receipt.id, patch: p }, { onError: (e) => onError((e as Error).message) });
 
   return (
-    <div style={{ width: 178, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-card)' }}>
+    <div style={{ width: 178, borderRadius: 6, overflow: 'hidden', background: 'var(--color-card)',
+      border: isNewField ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
+      boxShadow: isNewField ? '0 0 0 2px rgba(34,211,238,0.25)' : undefined }}>
       <a href={sig.data ?? undefined} target="_blank" rel="noreferrer" style={{ display: 'block', height: 96, background: 'var(--color-bg)', position: 'relative' }}>
         {sig.data
           ? <img src={sig.data} alt="receipt" style={{ width: '100%', height: 96, objectFit: 'cover' }} />
@@ -195,6 +225,11 @@ function ReceiptCard({ receipt, attached, buildings, onError }: {
           </button>
         </div>
         <div className="t-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={receipt.extracted_merchant ?? ''}>{receipt.extracted_merchant ?? '—'}</div>
+        {fromField && (
+          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--color-accent)' }} title={`Captured in the field${techName ? ` by ${techName}` : ''}`}>
+            ⬇ FIELD{techName ? ` · ${techName}` : ''}{isNewField ? ' · NEW' : ''}
+          </div>
+        )}
 
         {editing && (
           <div className="space-y-1 mt-1">
