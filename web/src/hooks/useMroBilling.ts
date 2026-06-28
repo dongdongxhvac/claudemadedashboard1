@@ -102,6 +102,41 @@ function headQuery(table: string) {
   return supabase.from(table).select('*', { count: 'exact', head: true });
 }
 
+// ── Field link token (managed in-app, stored in mro_config) ─────────────
+const FIELD_TOKEN_KEY = ['mro_field_token'];
+
+export function useMroFieldToken() {
+  return useQuery({
+    queryKey: FIELD_TOKEN_KEY,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.from('mro_config').select('value').eq('key', 'field_token').maybeSingle();
+      if (error) throw error;
+      return (data?.value ?? '').trim() || null;
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Set, rotate, or clear (null) the field-link token. */
+export function useSetMroFieldToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (value: string | null) => {
+      const { error } = await supabase.from('mro_config')
+        .upsert({ key: 'field_token', value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: FIELD_TOKEN_KEY }),
+  });
+}
+
+/** A random URL-safe token for the field link. */
+export function genFieldToken(): string {
+  const a = new Uint8Array(16);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ── Phase 4: CSV import → card charges ──────────────────────────────────
 export type MroImportResult = {
   batchId: string;

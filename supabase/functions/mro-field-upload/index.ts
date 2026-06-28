@@ -42,7 +42,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json(405, { error: "method not allowed" });
 
-  const FIELD_TOKEN = Deno.env.get("MRO_FIELD_TOKEN");
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // Token comes from in-app config (managed from the dashboard); fall back
+  // to an env secret if set. Empty => feature is off.
+  let FIELD_TOKEN = Deno.env.get("MRO_FIELD_TOKEN") ?? "";
+  if (!FIELD_TOKEN) {
+    const { data: cfg } = await admin.from("mro_config").select("value").eq("key", "field_token").maybeSingle();
+    FIELD_TOKEN = (cfg?.value ?? "").trim();
+  }
   if (!FIELD_TOKEN) return json(503, { error: "Field capture is not enabled." });
 
   let body: {
@@ -62,8 +70,6 @@ Deno.serve(async (req) => {
   if (b64.length > MAX_B64) return json(413, { error: "image too large (max ~6 MB)" });
 
   const category = body.category && OK_CATEGORY.has(body.category) ? body.category : null;
-
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   // Resolve a typed building number/code → building_id (best-effort).
   let building_id: string | null = null;

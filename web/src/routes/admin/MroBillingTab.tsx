@@ -13,6 +13,7 @@ import { MroReceiptPool } from './MroReceiptPool';
 import { MroAutoMatch } from './MroAutoMatch';
 import { MroChargesWorkbench } from './MroChargesWorkbench';
 import { MroBillingExport } from './MroBillingExport';
+import { MroFieldLink } from './MroFieldLink';
 
 const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 1, title: 'Schema + RLS (mro_import_batches · mro_receipts · mro_card_charges)', done: true },
@@ -36,14 +37,7 @@ export function MroBillingTab() {
             📷 Phone receipt page →
           </Link>
         </div>
-        <details className="t-small t-muted mt-0.5">
-          <summary style={{ cursor: 'pointer' }}>Login-free field link (for techs with no account)</summary>
-          <div className="mt-1" style={{ fontSize: '0.72rem' }}>
-            Share <code>{location.origin}/field/receipt?k=YOUR_TOKEN</code> — replace YOUR_TOKEN with the
-            <code> MRO_FIELD_TOKEN</code> you set in Supabase → Edge Functions → Secrets. Inert until that secret exists;
-            rotate it to kill all outstanding links.
-          </div>
-        </details>
+        <MroFieldLink />
         <p className="t-small t-muted">
           reimbursable MRO purchases on a cost-plus contract · capture → reclass → verify → bill ·
           admin + manager only
