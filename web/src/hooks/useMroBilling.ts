@@ -49,3 +49,28 @@ export function useMroPipelineCounts() {
 function headQuery(table: string) {
   return supabase.from(table).select('*', { count: 'exact', head: true });
 }
+
+// ── Phase 2: private receipt storage ────────────────────────────────────
+export const MRO_RECEIPTS_BUCKET = 'mro-receipts';
+
+/** Short-lived signed URL for a private receipt object. The bucket is
+ *  private (migration 0086); only admin/manager can mint URLs (storage
+ *  RLS). Refetches before expiry so a shown thumbnail never 403s. */
+export function useMroReceiptSignedUrl(
+  storagePath: string | null | undefined,
+  expiresInSeconds = 3600,
+) {
+  return useQuery({
+    queryKey: ['mro_receipt_signed_url', storagePath, expiresInSeconds],
+    enabled: !!storagePath,
+    queryFn: async (): Promise<string | null> => {
+      if (!storagePath) return null;
+      const { data, error } = await supabase.storage
+        .from(MRO_RECEIPTS_BUCKET)
+        .createSignedUrl(storagePath, expiresInSeconds);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
+    staleTime: Math.max(0, expiresInSeconds - 60) * 1000,
+  });
+}
