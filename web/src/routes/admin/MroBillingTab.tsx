@@ -8,6 +8,7 @@
 // own house style (CSS theme variables), not a separate palette.
 import { useMroPipelineCounts } from '../../hooks/useMroBilling';
 import { MroCsvImport } from './MroCsvImport';
+import { MroReceiptPool } from './MroReceiptPool';
 import { MroAutoMatch } from './MroAutoMatch';
 import { MroChargesWorkbench } from './MroChargesWorkbench';
 import { MroBillingExport } from './MroBillingExport';
@@ -53,6 +54,10 @@ export function MroBillingTab() {
 
       <div className="mb-4">
         <MroCsvImport />
+      </div>
+
+      <div className="mb-4">
+        <MroReceiptPool />
       </div>
 
       <div className="mb-4">

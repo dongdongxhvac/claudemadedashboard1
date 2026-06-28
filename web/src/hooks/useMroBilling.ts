@@ -337,6 +337,51 @@ export function useAttachedReceiptIds() {
   });
 }
 
+/** Upload a receipt into the pool, unattached (normalize → JPEG → bucket →
+ *  row → OCR). Used by the receipt-pool panel + camera capture. */
+export function useUploadStandaloneReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { file: File; uploadedBy: string | null }) => {
+      const jpeg = await reencodeToJpeg(input.file);            // throws clean on HEIC
+      const path = `pool/${crypto.randomUUID()}.jpg`;
+      const up = await supabase.storage.from(MRO_RECEIPTS_BUCKET)
+        .upload(path, jpeg, { contentType: 'image/jpeg', upsert: false });
+      if (up.error) throw up.error;
+      const { data: rec, error } = await supabase.from('mro_receipts')
+        .insert({ storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy })
+        .select('id').single();
+      if (error) throw error;
+      try { await supabase.functions.invoke('mro-ocr-receipt', { body: { receipt_id: rec.id } }); }
+      catch { /* OCR best-effort; status surfaced in the pool */ }
+      return rec.id as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mro_receipts'] });
+      qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] });
+    },
+  });
+}
+
+/** Delete a receipt (storage object + row). The caller must ensure it's
+ *  unattached — deleting an attached receipt would null a charge's
+ *  receipt_id (FK on delete set null) and strand a verified charge. */
+export function useDeleteMroReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; storagePath: string }) => {
+      await supabase.storage.from(MRO_RECEIPTS_BUCKET).remove([input.storagePath]); // best-effort
+      const { error } = await supabase.from('mro_receipts').delete().eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mro_receipts'] });
+      qc.invalidateQueries({ queryKey: ['mro_attached_receipt_ids'] });
+      qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] });
+    },
+  });
+}
+
 /** Confirm an engine-proposed match: attach the receipt AND verify, in one
  *  write, recording the engine's score as match_confidence + the delta
  *  (+ reason when non-zero). */
