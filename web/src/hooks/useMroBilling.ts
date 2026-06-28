@@ -295,6 +295,18 @@ export function useVerifyCharge() {
 }
 
 // ── Phase 6b: scored auto-match ─────────────────────────────────────────
+export const RECEIPT_CATEGORIES = ['HVAC', 'Plumbing', 'Electrical', 'Control', 'Other'] as const;
+export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];
+
+/** Tech's at-capture tags on a receipt (overlay in the pool). */
+export type ReceiptMeta = {
+  building_id: string | null;
+  site_wide: boolean;
+  category: ReceiptCategory | null;
+  is_stock: boolean | null;
+  item_label: string | null;
+};
+
 export type MroReceiptFull = {
   id: string;
   storage_path: string;
@@ -305,6 +317,12 @@ export type MroReceiptFull = {
   ocr_status: string | null;
   ocr_legibility: string | null;
   uploaded_at: string;
+  building_id: string | null;
+  site_wide: boolean;
+  category: ReceiptCategory | null;
+  is_stock: boolean | null;
+  item_label: string | null;
+  building: { short_code: string | null; name: string } | null;
 };
 
 /** All receipts (the candidate pool for matching). */
@@ -314,10 +332,11 @@ export function useMroReceipts() {
     queryFn: async (): Promise<MroReceiptFull[]> => {
       const { data, error } = await supabase
         .from('mro_receipts')
-        .select('id,storage_path,extracted_total,extracted_date,extracted_merchant,extracted_last4,ocr_status,ocr_legibility,uploaded_at')
+        .select('id,storage_path,extracted_total,extracted_date,extracted_merchant,extracted_last4,ocr_status,ocr_legibility,uploaded_at,building_id,site_wide,category,is_stock,item_label,building:buildings(short_code,name)')
         .order('uploaded_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r) => ({ ...r, extracted_total: r.extracted_total === null ? null : Number(r.extracted_total) })) as MroReceiptFull[];
+      const rows = (data ?? []) as unknown as MroReceiptFull[];
+      return rows.map((r) => ({ ...r, extracted_total: r.extracted_total === null ? null : Number(r.extracted_total) }));
     },
     staleTime: 20_000,
   });
@@ -342,14 +361,21 @@ export function useAttachedReceiptIds() {
 export function useUploadStandaloneReceipt() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { file: File; uploadedBy: string | null }) => {
+    mutationFn: async (input: { file: File; uploadedBy: string | null; meta?: Partial<ReceiptMeta> }) => {
       const jpeg = await reencodeToJpeg(input.file);            // throws clean on HEIC
       const path = `pool/${crypto.randomUUID()}.jpg`;
       const up = await supabase.storage.from(MRO_RECEIPTS_BUCKET)
         .upload(path, jpeg, { contentType: 'image/jpeg', upsert: false });
       if (up.error) throw up.error;
       const { data: rec, error } = await supabase.from('mro_receipts')
-        .insert({ storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy })
+        .insert({
+          storage_path: path, image_mime: 'image/jpeg', uploaded_by: input.uploadedBy,
+          building_id: input.meta?.building_id ?? null,
+          site_wide: input.meta?.site_wide ?? false,
+          category: input.meta?.category ?? null,
+          is_stock: input.meta?.is_stock ?? null,
+          item_label: input.meta?.item_label?.trim() || null,
+        })
         .select('id').single();
       if (error) throw error;
       try { await supabase.functions.invoke('mro-ocr-receipt', { body: { receipt_id: rec.id } }); }
@@ -360,6 +386,20 @@ export function useUploadStandaloneReceipt() {
       qc.invalidateQueries({ queryKey: ['mro_receipts'] });
       qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] });
     },
+  });
+}
+
+/** Edit a pooled receipt's tags (building / category / stock / item). */
+export function useUpdateReceiptMeta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; patch: Partial<ReceiptMeta> }) => {
+      const p = { ...input.patch };
+      if ('item_label' in p) p.item_label = p.item_label?.trim() || null;
+      const { error } = await supabase.from('mro_receipts').update(p).eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mro_receipts'] }),
   });
 }
 
