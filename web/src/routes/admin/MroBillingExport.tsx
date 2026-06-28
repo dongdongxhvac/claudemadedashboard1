@@ -29,6 +29,14 @@ export function MroBillingExport() {
 
   const model = useMemo(() => buildBillingModel(charges, markup), [charges, markup]);
 
+  // In-range pipeline counts — make the verified-only gate transparent so a
+  // $0 total reads as "verify your charges", not "billing is broken".
+  const counts = useMemo(() => {
+    const c = { verified: 0, unreviewed: 0, exception: 0 };
+    for (const ch of charges) c[ch.status]++;
+    return c;
+  }, [charges]);
+
   const exportCsv = () => {
     const csv = billingCsv(model);
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -68,12 +76,24 @@ export function MroBillingExport() {
         <Total label="Lines" value={model.grand.count} plain />
       </div>
 
+      {/* Pipeline transparency — only verified are billed. */}
+      <p className="t-small t-muted mb-2">
+        In range: <b style={{ color: 'var(--color-ok, #10b981)' }}>{counts.verified} verified</b> (billed)
+        {' · '}{counts.unreviewed} unreviewed{' · '}{counts.exception} exception
+      </p>
+
       {model.missingReceiptCount > 0 && (
         <p className="t-small t-danger mb-2">⚠ {model.missingReceiptCount} verified line(s) have no receipt attached — review before billing.</p>
       )}
 
       {chargesQ.isLoading ? <p className="t-small t-muted">Loading…</p>
-        : model.grand.count === 0 ? <p className="t-small t-muted">No verified charges in range. Verify charges in the workbench above.</p>
+        : model.grand.count === 0 ? (
+          <p className="t-small t-muted">
+            Nothing billed yet — billing counts <b>verified</b> charges only.
+            {counts.unreviewed > 0 && <> You have <b>{counts.unreviewed}</b> unreviewed charge(s) in this range:
+              reclass + attach a receipt, then click <span style={{ color: 'var(--color-ok, #10b981)' }}>✓ Verify</span> in the workbench above.</>}
+          </p>
+        )
         : model.buildings.map((b) => (
           <div key={b.buildingKey} className="mb-3">
             <div className="t-small mb-1" style={{ fontWeight: 700, borderBottom: '1px solid var(--color-border)', paddingBottom: 2 }}>
