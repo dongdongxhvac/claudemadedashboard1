@@ -7,12 +7,13 @@
 // pipeline UI fills in over the following phases. Built in the dashboard's
 // own house style (CSS theme variables), not a separate palette.
 import { useMroPipelineCounts } from '../../hooks/useMroBilling';
+import { MroCsvImport } from './MroCsvImport';
 
 const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 1, title: 'Schema + RLS (mro_import_batches · mro_receipts · mro_card_charges)', done: true },
   { n: 2, title: 'Receipt storage bucket + signed-URL reads', done: true },
   { n: 3, title: 'OCR Edge Function (Claude vision extraction) — deployed; needs ANTHROPIC_API_KEY secret', done: true },
-  { n: 4, title: 'CSV import → card charges', done: false },
+  { n: 4, title: 'CSV import → card charges (auto-detect columns)', done: true },
   { n: 5, title: 'Matching / verification engine', done: false },
   { n: 6, title: 'Reclass + verification UI', done: false },
   { n: 7, title: 'Billing export (grouped + CSV / print)', done: false },
@@ -46,6 +47,10 @@ export function MroBillingTab() {
           Error reading MRO tables: {(counts.error as Error).message}
         </p>
       )}
+
+      <div className="mb-4">
+        <MroCsvImport />
+      </div>
 
       {/* Build roadmap — so the tab reads as intentionally in-progress. */}
       <div className="t-card" style={{ padding: '1rem', maxWidth: 720 }}>

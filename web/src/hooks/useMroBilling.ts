@@ -4,6 +4,7 @@
 // (migration 0085); access gated to admin + manager by RLS (mro_can_bill()).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import type { ParsedCharge } from '../lib/mroCsv';
 
 export type MroPipelineCounts = {
   batches: number;
@@ -48,6 +49,71 @@ export function useMroPipelineCounts() {
 
 function headQuery(table: string) {
   return supabase.from(table).select('*', { count: 'exact', head: true });
+}
+
+// ── Phase 4: CSV import → card charges ──────────────────────────────────
+export type MroImportResult = {
+  batchId: string;
+  inserted: number;   // new charges loaded
+  skipped: number;    // already imported (external_ref already present)
+  noAmount: number;   // rows dropped — no parseable amount, can't bill
+};
+
+/** Create an import batch + load its charges. Dedup-upserts on
+ *  external_ref so re-importing an overlapping period skips charges
+ *  already loaded — never deduping on amount (two identical charges with
+ *  different Document ids are both kept). */
+export function useImportMroCsv() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      source: string;
+      periodStart: string | null;
+      periodEnd: string | null;
+      charges: ParsedCharge[];
+      createdBy: string | null;
+    }): Promise<MroImportResult> => {
+      const { data: batch, error: bErr } = await supabase
+        .from('mro_import_batches')
+        .insert({
+          source: input.source || null,
+          period_start: input.periodStart,
+          period_end: input.periodEnd,
+          created_by: input.createdBy,
+        })
+        .select('id')
+        .single();
+      if (bErr) throw bErr;
+
+      const importable = input.charges.filter((c) => c.amount !== null);
+      const noAmount = input.charges.length - importable.length;
+
+      const rows = importable.map((c) => ({
+        import_batch_id: batch.id,
+        external_ref: c.external_ref,
+        txn_date: c.txn_date,
+        post_date: c.post_date,
+        merchant: c.merchant,
+        amount: c.amount,
+        cardholder: c.cardholder,
+        card_last4: c.card_last4,
+        status: 'unreviewed',
+      }));
+
+      let inserted = 0;
+      if (rows.length > 0) {
+        const { data, error } = await supabase
+          .from('mro_card_charges')
+          .upsert(rows, { onConflict: 'external_ref', ignoreDuplicates: true })
+          .select('id');
+        if (error) throw error;
+        inserted = data?.length ?? 0;
+      }
+
+      return { batchId: batch.id, inserted, skipped: rows.length - inserted, noAmount };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] }),
+  });
 }
 
 // ── Phase 2: private receipt storage ────────────────────────────────────
