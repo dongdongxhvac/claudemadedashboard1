@@ -8,6 +8,7 @@
 // own house style (CSS theme variables), not a separate palette.
 import { useMroPipelineCounts } from '../../hooks/useMroBilling';
 import { MroCsvImport } from './MroCsvImport';
+import { MroAutoMatch } from './MroAutoMatch';
 import { MroChargesWorkbench } from './MroChargesWorkbench';
 
 const PHASES: { n: number; title: string; done: boolean }[] = [
@@ -16,7 +17,7 @@ const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 3, title: 'OCR Edge Function (Claude vision extraction) — deployed; needs ANTHROPIC_API_KEY secret', done: true },
   { n: 4, title: 'CSV import → card charges (auto-detect columns)', done: true },
   { n: 5, title: 'Matching / verification engine (scored, tiered, 13 checks pass)', done: true },
-  { n: 6, title: 'Reclass + verification UI — 6a charge list/upload/verify (6b: scored match panel)', done: true },
+  { n: 6, title: 'Reclass + verification UI — 6a workbench + 6b scored auto-match', done: true },
   { n: 7, title: 'Billing export (grouped + CSV / print)', done: false },
 ];
 
@@ -51,6 +52,10 @@ export function MroBillingTab() {
 
       <div className="mb-4">
         <MroCsvImport />
+      </div>
+
+      <div className="mb-4">
+        <MroAutoMatch />
       </div>
 
       <div className="mb-4">

@@ -204,6 +204,8 @@ export function useMroChargesRealtime() {
 const invalidateCharges = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: CHARGES_KEY });
   qc.invalidateQueries({ queryKey: ['mro_pipeline_counts'] });
+  qc.invalidateQueries({ queryKey: ['mro_receipts'] });
+  qc.invalidateQueries({ queryKey: ['mro_attached_receipt_ids'] });
 };
 
 /** Reclass — building / MEP / note. */
@@ -286,6 +288,75 @@ export function useVerifyCharge() {
         verified_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateCharges(qc),
+  });
+}
+
+// ── Phase 6b: scored auto-match ─────────────────────────────────────────
+export type MroReceiptFull = {
+  id: string;
+  storage_path: string;
+  extracted_total: number | null;
+  extracted_date: string | null;
+  extracted_merchant: string | null;
+  extracted_last4: string | null;
+  ocr_status: string | null;
+  ocr_legibility: string | null;
+  uploaded_at: string;
+};
+
+/** All receipts (the candidate pool for matching). */
+export function useMroReceipts() {
+  return useQuery({
+    queryKey: ['mro_receipts'],
+    queryFn: async (): Promise<MroReceiptFull[]> => {
+      const { data, error } = await supabase
+        .from('mro_receipts')
+        .select('id,storage_path,extracted_total,extracted_date,extracted_merchant,extracted_last4,ocr_status,ocr_legibility,uploaded_at')
+        .order('uploaded_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({ ...r, extracted_total: r.extracted_total === null ? null : Number(r.extracted_total) })) as MroReceiptFull[];
+    },
+    staleTime: 20_000,
+  });
+}
+
+/** Set of receipt ids already attached to some charge (any status). */
+export function useAttachedReceiptIds() {
+  return useQuery({
+    queryKey: ['mro_attached_receipt_ids'],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('mro_card_charges').select('receipt_id').not('receipt_id', 'is', null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.receipt_id as string));
+    },
+    staleTime: 20_000,
+  });
+}
+
+/** Confirm an engine-proposed match: attach the receipt AND verify, in one
+ *  write, recording the engine's score as match_confidence + the delta
+ *  (+ reason when non-zero). */
+export function useConfirmMatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      chargeId: string; receiptId: string; matchConfidence: number;
+      amountDelta: number | null; exceptionReason: ExceptionReason | null; verifiedBy: string | null;
+    }) => {
+      const { error } = await supabase.from('mro_card_charges').update({
+        receipt_id: input.receiptId,
+        status: 'verified',
+        match_confidence: input.matchConfidence,
+        amount_delta: input.amountDelta,
+        exception_reason: input.exceptionReason,
+        verified_by: input.verifiedBy,
+        verified_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', input.chargeId);
       if (error) throw error;
     },
     onSuccess: () => invalidateCharges(qc),
