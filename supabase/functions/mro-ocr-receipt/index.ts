@@ -101,22 +101,27 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return json(401, { error: "missing bearer token" });
 
-  // 1) Caller must be an active admin or manager (mirrors mro_can_bill()).
-  const caller = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: who, error: whoErr } = await caller.auth.getUser();
-  if (whoErr || !who.user) return json(401, { error: "invalid token" });
-
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const { data: callerRow } = await admin
-    .from("users")
-    .select("role, is_manager, active")
-    .eq("auth_user_id", who.user.id)
-    .maybeSingle();
-  const canBill = !!callerRow?.active &&
-    (callerRow.role === "admin" || callerRow.role === "manager" || callerRow.is_manager === true);
-  if (!canBill) return json(403, { error: "admin or manager only" });
+
+  // Internal trusted call (mro-field-upload) presents the service-role key
+  // as the bearer — skip the user/role check. Otherwise the caller must be
+  // an active admin or manager (mirrors mro_can_bill()).
+  const isInternal = authHeader === `Bearer ${SERVICE_ROLE}`;
+  if (!isInternal) {
+    const caller = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: who, error: whoErr } = await caller.auth.getUser();
+    if (whoErr || !who.user) return json(401, { error: "invalid token" });
+    const { data: callerRow } = await admin
+      .from("users")
+      .select("role, is_manager, active")
+      .eq("auth_user_id", who.user.id)
+      .maybeSingle();
+    const canBill = !!callerRow?.active &&
+      (callerRow.role === "admin" || callerRow.role === "manager" || callerRow.is_manager === true);
+    if (!canBill) return json(403, { error: "admin or manager only" });
+  }
 
   // 2) Input + receipt lookup.
   let body: { receipt_id?: string };

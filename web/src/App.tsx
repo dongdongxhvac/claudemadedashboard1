@@ -13,6 +13,7 @@ import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
 import MroReceipts from './routes/mro/Receipts';
+import FieldReceipt from './routes/field/Receipt';
 import { useMe } from './hooks/useMe';
 
 /** Reset scroll to the top on every route change. Without this, navigating
@@ -65,6 +66,8 @@ export default function App() {
       <ErrorBoundary>
       <Routes>
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
+        {/* Public, login-free field capture — gated by the URL token, not auth. */}
+        <Route path="/field/receipt" element={<FieldReceipt />} />
         <Route path="/manager" element={<Protected><RequireManagerArea><Manager /></RequireManagerArea></Protected>} />
         <Route path="/admin"   element={<Protected><Admin /></Protected>} />
         <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
