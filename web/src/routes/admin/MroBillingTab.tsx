@@ -10,6 +10,7 @@ import { useMroPipelineCounts } from '../../hooks/useMroBilling';
 import { MroCsvImport } from './MroCsvImport';
 import { MroAutoMatch } from './MroAutoMatch';
 import { MroChargesWorkbench } from './MroChargesWorkbench';
+import { MroBillingExport } from './MroBillingExport';
 
 const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 1, title: 'Schema + RLS (mro_import_batches · mro_receipts · mro_card_charges)', done: true },
@@ -18,7 +19,7 @@ const PHASES: { n: number; title: string; done: boolean }[] = [
   { n: 4, title: 'CSV import → card charges (auto-detect columns)', done: true },
   { n: 5, title: 'Matching / verification engine (scored, tiered, 13 checks pass)', done: true },
   { n: 6, title: 'Reclass + verification UI — 6a workbench + 6b scored auto-match', done: true },
-  { n: 7, title: 'Billing export (grouped + CSV / print)', done: false },
+  { n: 7, title: 'Billing export (grouped by building→MEP, markup, CSV + print)', done: true },
 ];
 
 export function MroBillingTab() {
@@ -60,6 +61,10 @@ export function MroBillingTab() {
 
       <div className="mb-4">
         <MroChargesWorkbench />
+      </div>
+
+      <div className="mb-4">
+        <MroBillingExport />
       </div>
 
       {/* Build roadmap — so the tab reads as intentionally in-progress. */}
