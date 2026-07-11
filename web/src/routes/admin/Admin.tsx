@@ -32,7 +32,7 @@ export default function Admin() {
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div>
             <h1 className="t-section-title">
-              COVE · Admin
+              UPark · Admin
               {!isAdmin && isLead && (
                 <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
                   ★ Lead view

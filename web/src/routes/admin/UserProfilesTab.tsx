@@ -6,6 +6,7 @@ import {
   type EngineerRow, type Role, type Discipline,
 } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
+import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -46,8 +47,15 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
 
   const FILTERS = canManageUsers ? FILTERS_ADMIN : FILTERS_LEAD;
 
+  // UPark home-site scope (NULL home_site = UPark; see useSiteScope.ts) —
+  // Binney people are managed from /binney/admin, one click away via the
+  // → Binney St nav link. Fails open while the id set loads.
+  const uparkIds = useUparkUserIds();
+
   // Leads only ever see engineer rows (active + inactive).
-  const allRows = (q.data ?? []).filter((r) => canManageUsers || r.role === 'engineer');
+  const allRows = (q.data ?? [])
+    .filter((r) => !uparkIds || uparkIds.has(r.user_id))
+    .filter((r) => canManageUsers || r.role === 'engineer');
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0 };
