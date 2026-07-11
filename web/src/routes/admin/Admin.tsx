@@ -40,6 +40,9 @@ export default function Admin() {
             <p className="t-small t-muted">{today}</p>
           </div>
           <div className="flex items-center gap-4">
+            <Link to="/binney/admin" className="t-small t-accent hover:underline">
+              → Binney St
+            </Link>
             <Link to={isAdmin ? '/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
