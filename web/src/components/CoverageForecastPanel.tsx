@@ -17,6 +17,7 @@ import {
 } from '../hooks/usePto';
 import { useOvertimePosts, OVERTIME_CATEGORY_LABELS } from '../hooks/useOvertime';
 import { useEngineers } from '../hooks/useEngineers';
+import { useUparkUserIds } from '../hooks/useSiteScope';
 import { Section } from './Section';
 import { PTO_TYPE_COLOR } from './PtoPanel';
 
@@ -47,10 +48,15 @@ export function CoverageForecastPanel() {
   const ptoQ = usePtoRequests();
   const otQ = useOvertimePosts();
   const engineersQ = useEngineers();
+  // UPark home-site scope — same rule as §12 PtoPanel (see useSiteScope.ts):
+  // exclude other sites' engineers/PTO from the headcount and out-chips.
+  const uparkIds = useUparkUserIds();
 
   const totalEngineers = useMemo(
-    () => (engineersQ.data ?? []).filter((e) => e.active && e.role === 'engineer').length,
-    [engineersQ.data],
+    () => (engineersQ.data ?? []).filter(
+      (e) => e.active && e.role === 'engineer' && (!uparkIds || uparkIds.has(e.user_id)),
+    ).length,
+    [engineersQ.data, uparkIds],
   );
 
   // Today + next 2 WORK days (Mon–Fri only). UPark regular hours are
@@ -66,7 +72,8 @@ export function CoverageForecastPanel() {
       const dow = d.getDay();
       const isWeekend = dow === 0 || dow === 6;
       const outRows = ptoRows.filter(
-        (r) => r.status === 'approved' && r.starts_on <= iso && r.ends_on >= iso,
+        (r) => r.status === 'approved' && r.starts_on <= iso && r.ends_on >= iso
+          && (!uparkIds || uparkIds.has(r.user_id)),
       );
       const partialCount = outRows.filter(isPartialDay).length;
       const fullDayCount = outRows.length - partialCount;
@@ -94,7 +101,7 @@ export function CoverageForecastPanel() {
       );
     }
     return out;
-  }, [ptoQ.data, totalEngineers]);
+  }, [ptoQ.data, totalEngineers, uparkIds]);
 
   // Open OT slots in the same 3-day window (or all open posts whose
   // start falls before the window's end).

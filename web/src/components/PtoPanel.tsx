@@ -26,6 +26,7 @@ import {
 import { useOvertimePosts, type OvertimePost } from '../hooks/useOvertime';
 import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks/useBuildingAssignments';
 import { useBuildings, type Building } from '../hooks/useBuildings';
+import { useUparkUserIds } from '../hooks/useSiteScope';
 import { Section } from './Section';
 
 // ───────────────────────────── helpers
@@ -167,7 +168,7 @@ export function PtoPanel() {
   const summaryQ       = usePtoSummary();
   const engineersQ     = useEngineers();
   const shiftsQ        = useShifts();
-  const buckets        = usePtoBuckets();
+  const rawBuckets     = usePtoBuckets();
   // Read-only — no realtime subs here. The respective panels on this page
   // (OvertimePanel, OncallBadge, etc.) already subscribe to these tables
   // and invalidate the shared react-query keys.
@@ -176,6 +177,33 @@ export function PtoPanel() {
   const otPostsQ       = useOvertimePosts();
   const assignmentsQ   = useCurrentBuildingAssignments();
   const buildingsQ     = useBuildings();
+
+  // Scope §12 to UPark-homed people (NULL home_site = UPark; see
+  // useSiteScope.ts). Without this, engineers seeded for other sites
+  // (Binney St, migration 0093) would appear in the roll, balances, heatmap
+  // and Add-PTO dropdown. List-level only — mutations, RLS and engineer
+  // self-serve are untouched. While the id set loads, lists render
+  // unfiltered (pre-scope behavior).
+  const uparkIds = useUparkUserIds();
+  const engineers = useMemo(
+    () => (engineersQ.data ?? []).filter((e) => !uparkIds || uparkIds.has(e.user_id)),
+    [engineersQ.data, uparkIds],
+  );
+  const summaries = useMemo(
+    () => (summaryQ.data ?? []).filter((s) => !uparkIds || uparkIds.has(s.user_id)),
+    [summaryQ.data, uparkIds],
+  );
+  const buckets = useMemo(() => {
+    const keep = (r: PtoRequest) => !uparkIds || uparkIds.has(r.user_id);
+    return {
+      all:      rawBuckets.all.filter(keep),
+      pending:  rawBuckets.pending.filter(keep),
+      upcoming: rawBuckets.upcoming.filter(keep),
+      outToday: rawBuckets.outToday.filter(keep),
+      isLoading: rawBuckets.isLoading,
+      error: rawBuckets.error,
+    };
+  }, [rawBuckets, uparkIds]);
 
   // Pre-compute on-call weeks for everyone in the rotation horizon.
   const oncallWeeks = useMemo(() => {
@@ -305,7 +333,7 @@ export function PtoPanel() {
               The heatmap lives in the leading cell of TodayAttendance's
               grid; the 3 day blocks fill the rest. */}
           <TodayAttendance
-            engineers={engineersQ.data ?? []}
+            engineers={engineers}
             shifts={shiftsQ.data ?? []}
             allApproved={buckets.all.filter((r) => r.status === 'approved')}
             leadingCell={
@@ -331,11 +359,11 @@ export function PtoPanel() {
           )}
 
           {/* Balances */}
-          {(summaryQ.data ?? []).length > 0 && (
+          {summaries.length > 0 && (
             <BalancesGrid
-              summaries={summaryQ.data ?? []}
+              summaries={summaries}
               allRequests={buckets.all}
-              engineers={engineersQ.data ?? []}
+              engineers={engineers}
               onEdit={(s) => setShowEditBalance(s)}
               onEditRequest={(r) => setEditingRequest(r)}
               onDeleteRequest={(id) => {
@@ -348,7 +376,7 @@ export function PtoPanel() {
 
       {showAdd && (
         <AddPtoModal
-          engineers={engineersQ.data ?? []}
+          engineers={engineers}
           allRequests={buckets.all}
           presetDate={addPresetDate}
           onClose={() => { setShowAdd(false); setAddPresetDate(null); }}
