@@ -69,6 +69,24 @@ export function useMySiteAccess(): {
   };
 }
 
+/** Resolve a site code ('upark' | 'binney') to its UUID. undefined while
+ *  loading, null when the sites row is missing. */
+export function useSiteIdByCode(code: SiteCode | undefined): string | null | undefined {
+  const q = useQuery({
+    queryKey: ['site_id_by_code', code ?? null],
+    enabled: !!code,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from('sites').select('id').eq('code', code!).maybeSingle();
+      if (error) throw error;
+      return data?.id ?? null;
+    },
+    staleTime: Infinity,
+  });
+  if (!code) return undefined;
+  return q.isLoading ? undefined : (q.data ?? null);
+}
+
 /** Home-site code of ANOTHER user (public.users id). NULL home_site_id — or a
  *  missing profile — resolves to 'upark', the historical default. Used by the
  *  engineer profile page's site fence. */

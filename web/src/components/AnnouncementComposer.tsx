@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePostAnnouncement, type FocusLevel } from '../hooks/useFocusBoard';
+import { useSiteIdByCode, type SiteCode } from '../hooks/useSiteScope';
 
 const LEVELS: { value: FocusLevel; label: string }[] = [
   { value: 'info',     label: 'Info' },
@@ -21,13 +22,16 @@ function plusHoursIso(h: number | null): string | null {
   return new Date(Date.now() + h * 3_600_000).toISOString();
 }
 
-export function AnnouncementComposer() {
+export function AnnouncementComposer({ siteCode = 'upark' }: { siteCode?: SiteCode }) {
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [level, setLevel] = useState<FocusLevel>('info');
   const [expiryHours, setExpiryHours] = useState<number | null>(24);
   const [pinned, setPinned] = useState(false);
   const post = usePostAnnouncement();
+  // Announcements are stamped with the page's site (0097) so each site's
+  // crew only sees its own board.
+  const siteId = useSiteIdByCode(siteCode);
 
   const reset = () => {
     setBody('');
@@ -44,6 +48,7 @@ export function AnnouncementComposer() {
       level,
       pinned,
       expires_at: plusHoursIso(expiryHours),
+      site_id: siteId ?? null,
     });
     reset();
     setOpen(false);
@@ -70,7 +75,9 @@ export function AnnouncementComposer() {
   return (
     <form onSubmit={onSubmit} className="t-card space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="t-section-title">Post announcement</h3>
+        <h3 className="t-section-title">
+          Post announcement · {siteCode === 'binney' ? 'Binney St' : 'UPark'}
+        </h3>
         <button
           type="button"
           onClick={() => { setOpen(false); reset(); }}

@@ -180,8 +180,8 @@ export default function ManagerPc() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
-        <FocusBoardBanner />
-        <AnnouncementComposer />
+        <FocusBoardBanner siteCode="upark" />
+        <AnnouncementComposer siteCode="upark" />
         {pmQ.isLoading || woQ.isLoading ? (
           <p className="text-gray-500">Loading current snapshot...</p>
         ) : pmQ.isError ? (

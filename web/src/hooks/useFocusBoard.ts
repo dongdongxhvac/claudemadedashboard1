@@ -52,6 +52,9 @@ export function usePostAnnouncement() {
       expires_at?: string | null;
       title?: string | null;
       pinned?: boolean;
+      /** Site the announcement targets (0097). Omitted/null → the DB trigger
+       *  stamps UPark, the historical default. */
+      site_id?: string | null;
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
       const payload = {
@@ -62,6 +65,7 @@ export function usePostAnnouncement() {
         expires_at: input.expires_at ?? null,
         pinned: input.pinned ?? false,
         created_by: userRes.user?.id ?? null,
+        site_id: input.site_id ?? null,
       };
       const { error, data } = await supabase
         .from('focus_board_items')

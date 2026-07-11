@@ -7,6 +7,8 @@ import { useAuth } from '../../lib/auth';
 import { useIsAdmin } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
 import { SiteSwitcher } from './SiteSwitcher';
+import { FocusBoardBanner } from '../../components/FocusBoardBanner';
+import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { useBinneySiteId } from './hooks/useBinneySiteId';
 import { useBinneyUserIds } from './hooks/useBinneyPto';
 
@@ -53,6 +55,8 @@ export default function BinneyManager() {
           </p>
         ) : (
           <>
+            <FocusBoardBanner siteCode="binney" />
+            <AnnouncementComposer siteCode="binney" />
             {rosterEmpty && (
               <p className="t-small t-muted">
                 No engineers are homed at Binney St yet — the PTO panel below will stay

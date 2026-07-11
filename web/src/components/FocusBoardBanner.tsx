@@ -1,5 +1,5 @@
 import { useActiveFocusItems, useDismissFocusItem, type FocusLevel } from '../hooks/useFocusBoard';
-import { useMySiteAccess } from '../hooks/useSiteScope';
+import { useMySiteAccess, useSiteIdByCode, type SiteCode } from '../hooks/useSiteScope';
 
 const LEVEL_STYLE: Record<FocusLevel, { bg: string; border: string; fg: string; label: string }> = {
   info:     { bg: '#eff6ff', border: '#bfdbfe', fg: '#1e40af', label: 'INFO' },
@@ -8,14 +8,26 @@ const LEVEL_STYLE: Record<FocusLevel, { bg: string; border: string; fg: string; 
   critical: { bg: '#7f1d1d', border: '#7f1d1d', fg: '#ffffff', label: 'CRITICAL' },
 };
 
-export function FocusBoardBanner({ allowDismiss = true }: { allowDismiss?: boolean }) {
+export function FocusBoardBanner({
+  allowDismiss = true,
+  siteCode,
+}: {
+  allowDismiss?: boolean;
+  /** When set (site pages), show that SITE's announcements regardless of
+   *  viewer. When omitted (engineer pages), filter by the viewer's home
+   *  site — admin/director then see everything. NULL-site items show
+   *  everywhere. */
+  siteCode?: SiteCode;
+}) {
   const q = useActiveFocusItems();
   const dismiss = useDismissFocusItem();
-  // Site fence (0097): show only announcements for the viewer's home site
-  // (NULL site = all sites); admin/director see everything.
   const access = useMySiteAccess();
-  const items = (q.data ?? []).filter((it) =>
-    access.canSeeAllSites || it.site_id === null || it.site_id === access.homeSiteId);
+  const pageSiteId = useSiteIdByCode(siteCode);
+  const items = (q.data ?? []).filter((it) => {
+    if (it.site_id === null) return true;
+    if (siteCode) return pageSiteId === undefined || it.site_id === pageSiteId;
+    return access.canSeeAllSites || it.site_id === access.homeSiteId;
+  });
 
   if (items.length === 0) return null;
 

@@ -385,16 +385,31 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, skipped: "no recipients" });
     }
 
-    // Gmail creds: env secrets first, Vault fallback (migration 0078).
-    let gmailUser = Deno.env.get("GMAIL_USER") ?? "";
-    let gmailPass = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
+    // Sender account per site (user 2026-07-11): Binney mail goes out from
+    // the Binney Gmail (GMAIL_USER_BINNEY / GMAIL_APP_PASSWORD_BINNEY — env
+    // first, then the get_app_secret Vault accessor), UPark likewise via
+    // _UPARK keys when set. Falls back to the default GMAIL_USER pair
+    // (bmrupark55) so sending keeps working until a site's app password is
+    // seeded.
+    async function lookupCreds(userKey: string, passKey: string): Promise<{ user: string; pass: string }> {
+      let user = Deno.env.get(userKey) ?? "";
+      let pass = Deno.env.get(passKey) ?? "";
+      if (!user || !pass) {
+        const [u, p] = await Promise.all([
+          admin.rpc("get_app_secret", { k: userKey }),
+          admin.rpc("get_app_secret", { k: passKey }),
+        ]);
+        user = user || ((u.data as string) ?? "");
+        pass = pass || ((p.data as string) ?? "");
+      }
+      return { user, pass };
+    }
+    const siteSuffix = (site.code as string).toUpperCase();
+    let { user: gmailUser, pass: gmailPass } = await lookupCreds(
+      `GMAIL_USER_${siteSuffix}`, `GMAIL_APP_PASSWORD_${siteSuffix}`,
+    );
     if (!gmailUser || !gmailPass) {
-      const [u, p] = await Promise.all([
-        admin.rpc("get_app_secret", { k: "GMAIL_USER" }),
-        admin.rpc("get_app_secret", { k: "GMAIL_APP_PASSWORD" }),
-      ]);
-      gmailUser = gmailUser || ((u.data as string) ?? "");
-      gmailPass = gmailPass || ((p.data as string) ?? "");
+      ({ user: gmailUser, pass: gmailPass } = await lookupCreds("GMAIL_USER", "GMAIL_APP_PASSWORD"));
     }
     if (!gmailUser || !gmailPass) return json(500, { error: "gmail credentials not configured" });
 
