@@ -24,6 +24,7 @@ import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { OncallBadge } from '../../components/OncallBadge';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useIsAdmin } from '../../hooks/useMe';
+import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { Link } from 'react-router-dom';
 
 function isClosed(status: string | null): boolean {
@@ -110,6 +111,7 @@ export default function ManagerPc() {
   useSnapshotRealtime();
   useFocusBoardRealtime();
   const isAdmin = useIsAdmin();
+  const siteAccess = useMySiteAccess();
   const pmQ = useCurrentPmRows();
   const woQ = useCurrentWoRows();
 
@@ -155,9 +157,11 @@ export default function ManagerPc() {
             <Link to="/training" className="t-small t-accent hover:underline">
               Training
             </Link>
-            <Link to="/binney/manager" className="t-small t-accent hover:underline">
-              → Binney St
-            </Link>
+            {siteAccess.canSeeAllSites && (
+              <Link to="/binney/manager" className="t-small t-accent hover:underline">
+                → Binney St
+              </Link>
+            )}
             {isAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 Admin

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
+import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { UserProfilesTab } from './UserProfilesTab';
 import { OncallTab } from './OncallTab';
 import { OncallExperimentTab } from './OncallExperimentTab';
@@ -16,6 +17,7 @@ type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | '
 export default function Admin() {
   const { session, signOut } = useAuth();
   const me = useMe();
+  const siteAccess = useMySiteAccess();
   const [tab, setTab] = useState<Tab>('users');
 
   const today = new Date().toLocaleDateString('en-CA');
@@ -40,9 +42,11 @@ export default function Admin() {
             <p className="t-small t-muted">{today}</p>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/binney/admin" className="t-small t-accent hover:underline">
-              → Binney St
-            </Link>
+            {siteAccess.canSeeAllSites && (
+              <Link to="/binney/admin" className="t-small t-accent hover:underline">
+                → Binney St
+              </Link>
+            )}
             <Link to={isAdmin ? '/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>

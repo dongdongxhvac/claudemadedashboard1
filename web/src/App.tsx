@@ -17,6 +17,7 @@ import BinneyAdmin from './routes/binney/Admin';
 import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe } from './hooks/useMe';
+import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
 
 /** Reset scroll to the top on every route change. Without this, navigating
  *  from a long page (e.g. the manager dashboard) to another route leaves the
@@ -41,13 +42,28 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Role-aware home redirect: engineers go to /engineer/me, tv to /tv, others to /manager. */
+/** Role-aware home redirect: engineers go to /engineer/me, tv to /tv, others
+ *  to their home site's manager page (Binney-homed managers land on
+ *  /binney/manager, everyone else on /manager). */
 function Home() {
   const me = useMe();
-  if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  const access = useMySiteAccess();
+  if (me.isLoading || access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
   if (me.data?.role === 'tv')       return <Navigate to="/tv" replace />;
-  return <Navigate to="/manager" replace />;
+  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
+}
+
+/** Fence a site's manager/admin pages: admin + director can enter every
+ *  site; managers/engineers/leads only their home site — anyone else is
+ *  bounced to their own site's dashboard (engineers then bounce onward to
+ *  /engineer/me via RequireManagerArea). Navigation-level gating — RLS
+ *  stays role-based. */
+function RequireSite({ site, children }: { site: SiteCode; children: React.ReactNode }) {
+  const access = useMySiteAccess();
+  if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (access.canSeeAllSites || access.homeSite === site) return <>{children}</>;
+  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
 }
 
 /** Gate the manager dashboard to non-engineers. Engineers/TV that reach
@@ -70,8 +86,12 @@ export default function App() {
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         {/* Public, login-free field capture — gated by the URL token, not auth. */}
         <Route path="/field/receipt" element={<FieldReceipt />} />
-        <Route path="/manager" element={<Protected><RequireManagerArea><Manager /></RequireManagerArea></Protected>} />
-        <Route path="/admin"   element={<Protected><Admin /></Protected>} />
+        <Route path="/manager" element={<Protected><RequireSite site="upark"><RequireManagerArea><Manager /></RequireManagerArea></RequireSite></Protected>} />
+        <Route path="/admin"   element={<Protected><RequireSite site="upark"><Admin /></RequireSite></Protected>} />
+        {/* Symmetric /upark/* addresses — aliases for now; canonical flip is
+            deferred so existing bookmarks/kiosks/email links keep working. */}
+        <Route path="/upark/manager" element={<Navigate to="/manager" replace />} />
+        <Route path="/upark/admin"   element={<Navigate to="/admin" replace />} />
         <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
         <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
@@ -80,8 +100,8 @@ export default function App() {
         <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
         <Route path="/training" element={<Protected><RequireManagerArea><Training /></RequireManagerArea></Protected>} />
         {/* Binney St — isolated route tree (first pass: PTO only). */}
-        <Route path="/binney/manager" element={<Protected><RequireManagerArea><BinneyManager /></RequireManagerArea></Protected>} />
-        <Route path="/binney/admin"   element={<Protected><BinneyAdmin /></Protected>} />
+        <Route path="/binney/manager" element={<Protected><RequireSite site="binney"><RequireManagerArea><BinneyManager /></RequireManagerArea></RequireSite></Protected>} />
+        <Route path="/binney/admin"   element={<Protected><RequireSite site="binney"><BinneyAdmin /></RequireSite></Protected>} />
         <Route path="/mro/receipts" element={<Protected><MroReceipts /></Protected>} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
