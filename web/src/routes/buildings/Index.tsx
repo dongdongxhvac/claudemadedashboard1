@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe, useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings, useBuildingsRealtime } from '../../hooks/useBuildings';
+import { useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
   useBuildingEquipmentCountsMap,
   useBuildingEquipmentDownRealtime,
@@ -42,7 +43,13 @@ export default function BuildingsIndex() {
   // the cards always reflects current state.
   useBuildingEquipmentDownRealtime();
 
-  const buildings = (buildingsQ.data ?? []).slice().sort(compareByShortCode);
+  // UPark scope: the KB index is the whole crew's discovery surface — keep
+  // other sites' buildings (Binney seed, migration 0093) out of it until
+  // Binney gets its own KB pages. Fails open while the id set loads.
+  const uparkBldgIds = useUparkBuildingIds();
+  const buildings = (buildingsQ.data ?? [])
+    .filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id))
+    .sort(compareByShortCode);
   const countsMap = countsQ.data;
 
   return (
