@@ -402,7 +402,9 @@ Deno.serve(async (req: Request) => {
         user = user || ((u.data as string) ?? "");
         pass = pass || ((p.data as string) ?? "");
       }
-      return { user, pass };
+      // Google displays app passwords as "xxxx xxxx xxxx xxxx" but SMTP AUTH
+      // wants the bare 16 chars — strip whitespace so any paste format works.
+      return { user: user.trim(), pass: pass.replace(/\s+/g, "") };
     }
     const siteSuffix = (site.code as string).toUpperCase();
     let { user: gmailUser, pass: gmailPass } = await lookupCreds(
