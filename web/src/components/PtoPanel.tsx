@@ -516,13 +516,15 @@ function ApprovalControls({
           type="text"
           value={denyNote}
           onChange={(e) => setDenyNote(e.target.value)}
-          placeholder="Reason for denial (sent to engineer)"
+          placeholder="Reason for denial — required, sent to engineer"
           className="flex-1 border rounded px-2 py-1 t-small"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', minWidth: 200 }}
         />
         <button
-          onClick={() => onDeny(req.id, denyNote.trim() || null)}
-          className="t-small px-3 py-1 rounded font-medium text-white"
+          onClick={() => onDeny(req.id, denyNote.trim())}
+          disabled={!denyNote.trim()}
+          title={denyNote.trim() ? undefined : 'A denial reason is required'}
+          className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-danger)' }}
         >Confirm deny</button>
         <button onClick={() => { setDenyMode(false); setDenyNote(''); }} className="t-small">Cancel</button>
