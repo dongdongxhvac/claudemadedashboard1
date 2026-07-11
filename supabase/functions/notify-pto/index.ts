@@ -20,7 +20,10 @@
 //    Recipients per site: env PTO_CAL_TO_UPARK / PTO_CAL_TO_BINNEY, falling
 //    back to get_app_secret() Vault keys of the same name (comma-separated
 //    emails — currently the test users, later a group address). Empty/unset
-//    = no invites for that site.
+//    = no site list — but the REQUESTER's own email is always included, so
+//    the engineer's work calendar gets the event at both sites. Attendees
+//    carry RSVP=FALSE + X-MICROSOFT-CDO-BUSYSTATUS:FREE: on M365 the event
+//    auto-appears on arrival and Outlook asks for no response.
 //
 // Recipient control for notifications is the users.is_manager toggle in the
 // admin view — no hardcoded names. Transport is Gmail SMTP (email-report
@@ -189,10 +192,14 @@ function buildIcs(opts: {
     `SUMMARY:${icsEscape(asciiSafe(opts.summary))}`,
     `DESCRIPTION:${icsEscape(asciiSafe(opts.description))}`,
     `ORGANIZER;CN=${icsEscape(asciiSafe(opts.organizerName))}:mailto:${opts.organizerEmail}`,
+    // RSVP=FALSE: no accept/decline expected — Exchange/M365 still places
+    // the event on the calendar automatically when the request arrives.
     ...opts.attendees.map((a) =>
-      `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${a}`),
+      `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${a}`),
     `STATUS:${opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
     "TRANSP:TRANSPARENT",
+    "X-MICROSOFT-CDO-BUSYSTATUS:FREE",
+    "X-MICROSOFT-DISALLOW-COUNTER:TRUE",
     `SEQUENCE:${opts.method === "CANCEL" ? 1 : 0}`,
     "END:VEVENT",
     "END:VCALENDAR",
@@ -340,6 +347,14 @@ Deno.serve(async (req: Request) => {
       inviteAction = "CANCEL";
     }
     let calTo = inviteAction ? await calRecipients(admin, site.code as string) : [];
+    // The engineer's own calendar always gets the event (and its CANCEL),
+    // even when the site has no group list configured.
+    if (inviteAction) {
+      const reqEmail = (requester?.email ?? "").trim().toLowerCase();
+      if (/@/.test(reqEmail) && !calTo.some((e) => e.toLowerCase() === reqEmail)) {
+        calTo.push(reqEmail);
+      }
+    }
 
     // Notification recipients — QA overrides never set by the trigger.
     let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
