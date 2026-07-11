@@ -143,7 +143,7 @@ export default function ManagerPc() {
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div>
-            <h1 className="t-section-title">COVE · PM Dashboard</h1>
+            <h1 className="t-section-title">UPark · PM Dashboard</h1>
             <p className="t-small t-muted">
               {today}
               {snapshotLocal && <span> · snapshot {snapshotLocal}</span>}

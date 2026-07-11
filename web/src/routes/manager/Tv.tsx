@@ -52,7 +52,7 @@ export default function ManagerTv() {
         className="border-b px-6 py-2 flex items-baseline justify-between"
         style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
       >
-        <h1 className="t-section-title">COVE · PM Dashboard</h1>
+        <h1 className="t-section-title">UPark · PM Dashboard</h1>
         <div className="t-small t-muted flex items-center gap-4">
           <span>{today}</span>
           {snapshotLocal && <span>· snapshot {snapshotLocal}</span>}

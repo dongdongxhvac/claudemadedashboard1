@@ -95,7 +95,7 @@ export function openPrintWindow(
   <div class="sign-line"><div class="sign-label">Technician signature</div></div>
   <div class="sign-line"><div class="sign-label">Date</div></div>
 </div>
-<footer>COVE · PM Dashboard</footer>
+<footer>UPark · PM Dashboard</footer>
 </body></html>`);
   win.document.close();
   // Don't auto-print — user clicks the Print button in the new tab when ready.
