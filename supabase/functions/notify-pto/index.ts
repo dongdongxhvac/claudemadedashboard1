@@ -1,32 +1,41 @@
 // notify-pto — Supabase Edge Function.
 //
-// Invoked by the DB trigger pto_requests_notify_trg (migration 0094) via
-// pg_net on INSERT/UPDATE of pto_requests. Site-aware PTO notifications:
+// Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
+// via pg_net on INSERT/UPDATE of pto_requests. Two jobs:
 //
-//   event 'submitted' (new pending request)
-//     → email every ACTIVE user with is_manager=true homed at the
-//       requester's site (engineer_profiles.home_site_id; NULL = UPark).
-//   event 'decided' (status changed to approved/denied, or inserted
-//   directly as approved by a manager)
-//     → email those same home-site managers PLUS the requester, so the
-//       other managers see it's handled and the engineer gets the outcome.
+// 1) NOTIFICATION EMAILS (site-aware)
+//    event 'submitted' (new pending request)
+//      → email every ACTIVE user with is_manager=true homed at the
+//        requester's site (engineer_profiles.home_site_id; NULL = UPark).
+//    event 'decided' (status → approved/denied, or inserted as approved)
+//      → email those home-site managers PLUS the requester.
 //
-// Recipient control is the users.is_manager toggle in the admin view —
-// no hardcoded names. Transport is Gmail SMTP (same as email-report):
-// Resend's testing mode only delivers to the account owner, which can't
-// reach arbitrary manager/engineer inboxes.
+// 2) CALENDAR INVITES (.ics) — no Power Automate required
+//    approved            → iCalendar METHOD:REQUEST (all-day, shows as Free)
+//                          to the site's calendar list.
+//    approved→cancelled  → event 'retracted': METHOD:CANCEL with the same
+//                          UID retracts it (no notification email — the
+//                          calendar cancel itself lands in inboxes).
+//    approved→denied     → 'decided' Denied email + METHOD:CANCEL.
+//    Recipients per site: env PTO_CAL_TO_UPARK / PTO_CAL_TO_BINNEY, falling
+//    back to get_app_secret() Vault keys of the same name (comma-separated
+//    emails — currently the test users, later a group address). Empty/unset
+//    = no invites for that site.
 //
-// Deployed with verify_jwt ENABLED (tighter than notify-overtime): the DB
-// trigger authenticates with the project anon key, which is a valid signed
-// JWT. Callers without a project JWT are rejected at the gateway.
+// Recipient control for notifications is the users.is_manager toggle in the
+// admin view — no hardcoded names. Transport is Gmail SMTP (email-report
+// pattern); Resend's testing mode can't reach arbitrary recipients.
+//
+// Deployed with verify_jwt ENABLED: the DB trigger authenticates with the
+// project anon key (a valid signed JWT, public by design).
 //
 // Credentials: GMAIL_USER + GMAIL_APP_PASSWORD from edge secrets, falling
 // back to the get_app_secret() Vault accessor (migration 0078).
 //
 // QA hooks (never set by the trigger):
-//   payload.dry_run      — resolve recipients + subject, send nothing.
-//   payload.override_to  — send to these addresses instead of the real list.
-//   env PTO_QA_FORCE_TO  — global override for staging-style testing.
+//   payload.dry_run      — resolve recipients + invite plan, send nothing.
+//   payload.override_to  — notification emails only: replace the real list.
+//   env PTO_QA_FORCE_TO  — global override for BOTH sends (staging-style).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
@@ -54,7 +63,8 @@ type PtoRecord = {
 
 type Payload = {
   type: "pto_request";
-  event: "submitted" | "decided";
+  event: "submitted" | "decided" | "retracted";
+  prev_status?: string | null;
   record: PtoRecord;
   dry_run?: boolean;
   override_to?: string[];
@@ -103,9 +113,9 @@ function partialLabel(r: PtoRecord): string | null {
 
 /** SMTP header + text-part safety: denomailer 1.6 folds RFC2047-encoded
  *  headers incorrectly, so a non-ASCII subject ('·', '—') breaks the whole
- *  header block and Gmail renders raw MIME as the body. Subjects and the
- *  plain-text part are forced to ASCII; the HTML part keeps the pretty
- *  typography (it's safely QP-encoded once headers are valid). */
+ *  header block and Gmail renders raw MIME as the body. Subjects, the
+ *  plain-text part, and ICS content are forced to ASCII; the HTML part
+ *  keeps the pretty typography (safely QP-encoded once headers are valid). */
 function asciiSafe(s: string): string {
   return s
     .replace(/[·]/g, "-")
@@ -126,6 +136,84 @@ function json(status: number, body: unknown) {
   });
 }
 
+// ── iCalendar helpers ───────────────────────────────────────────────
+
+function icsEscape(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+/** RFC 5545 line folding: max 75 octets per line, continuation indented. */
+function icsFold(line: string): string {
+  const out: string[] = [];
+  let s = line;
+  while (s.length > 74) {
+    out.push(s.slice(0, 74));
+    s = " " + s.slice(74);
+  }
+  out.push(s);
+  return out.join("\r\n");
+}
+
+function icsDate(iso: string): string {
+  return iso.replaceAll("-", "");
+}
+
+function icsAddDays(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildIcs(opts: {
+  method: "REQUEST" | "CANCEL";
+  uid: string;
+  summary: string;
+  description: string;
+  startIso: string;      // inclusive first day off
+  endIso: string;        // inclusive last day off (DTEND is +1, exclusive)
+  organizerEmail: string;
+  organizerName: string;
+  attendees: string[];
+}): string {
+  const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "PRODID:-//UPark Dashboard//PTO//EN",
+    "VERSION:2.0",
+    `METHOD:${opts.method}`,
+    "BEGIN:VEVENT",
+    `UID:${opts.uid}`,
+    `DTSTAMP:${dtstamp}`,
+    `DTSTART;VALUE=DATE:${icsDate(opts.startIso)}`,
+    `DTEND;VALUE=DATE:${icsDate(icsAddDays(opts.endIso, 1))}`,
+    `SUMMARY:${icsEscape(asciiSafe(opts.summary))}`,
+    `DESCRIPTION:${icsEscape(asciiSafe(opts.description))}`,
+    `ORGANIZER;CN=${icsEscape(asciiSafe(opts.organizerName))}:mailto:${opts.organizerEmail}`,
+    ...opts.attendees.map((a) =>
+      `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${a}`),
+    `STATUS:${opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
+    "TRANSP:TRANSPARENT",
+    `SEQUENCE:${opts.method === "CANCEL" ? 1 : 0}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return lines.map(icsFold).join("\r\n") + "\r\n";
+}
+
+/** Per-site calendar recipient list: env first, Vault fallback. */
+async function calRecipients(
+  admin: ReturnType<typeof createClient>,
+  siteCode: string,
+): Promise<string[]> {
+  const key = `PTO_CAL_TO_${siteCode.toUpperCase()}`;
+  let v = Deno.env.get(key) ?? "";
+  if (!v) {
+    const r = await admin.rpc("get_app_secret", { k: key });
+    v = ((r.data as string) ?? "");
+  }
+  return v.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
@@ -134,7 +222,7 @@ Deno.serve(async (req: Request) => {
   if (payload.type !== "pto_request" || !payload.record?.id) {
     return json(400, { error: "unknown payload" });
   }
-  if (payload.event !== "submitted" && payload.event !== "decided") {
+  if (!["submitted", "decided", "retracted"].includes(payload.event)) {
     return json(400, { error: "unknown event" });
   }
 
@@ -191,7 +279,7 @@ Deno.serve(async (req: Request) => {
     }
     const resolvedTo = [...recipients];
 
-    // Compose.
+    // Compose the notification email.
     const who = r.user_full_name ?? requester?.full_name ?? "Unknown";
     const range = fmtRange(r.starts_on, r.ends_on);
     const tl = typeLabel(r.type);
@@ -242,17 +330,36 @@ Deno.serve(async (req: Request) => {
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
       `\n\n${dashUrl}`);
 
-    // QA overrides — the DB trigger never sets these.
-    const effectiveTo = payload.override_to?.length
-      ? payload.override_to
-      : QA_FORCE_TO
-        ? QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean)
-        : resolvedTo;
+    // ── Calendar invite plan ──────────────────────────────────────
+    let inviteAction: "REQUEST" | "CANCEL" | null = null;
+    if (payload.event === "decided" && r.status === "approved") {
+      inviteAction = "REQUEST";
+    } else if (payload.event === "retracted") {
+      inviteAction = "CANCEL";
+    } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
+      inviteAction = "CANCEL";
+    }
+    let calTo = inviteAction ? await calRecipients(admin, site.code as string) : [];
+
+    // Notification recipients — QA overrides never set by the trigger.
+    let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
+    if (QA_FORCE_TO) {
+      const forced = QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean);
+      effectiveTo = forced;
+      if (calTo.length) calTo = forced;
+    }
+    // 'retracted' sends no notification email — the calendar CANCEL is the
+    // message.
+    if (payload.event === "retracted") effectiveTo = [];
 
     if (payload.dry_run) {
-      return json(200, { ok: true, dry_run: true, event: payload.event, site: site.code, subject, resolved_to: resolvedTo, effective_to: effectiveTo });
+      return json(200, {
+        ok: true, dry_run: true, event: payload.event, site: site.code,
+        subject, resolved_to: resolvedTo, effective_to: effectiveTo,
+        invite: inviteAction ? { action: inviteAction, to: calTo } : null,
+      });
     }
-    if (effectiveTo.length === 0) {
+    if (effectiveTo.length === 0 && !(inviteAction && calTo.length)) {
       return json(200, { ok: true, skipped: "no recipients" });
     }
 
@@ -277,19 +384,64 @@ Deno.serve(async (req: Request) => {
         auth: { username: gmailUser, password: gmailPass },
       },
     });
+    let inviteSentTo: string[] = [];
     try {
-      await client.send({
-        from: `${site.name} Dashboard <${gmailUser}>`,
-        to: effectiveTo,
-        subject,
-        content: text,
-        html,
-      });
+      if (effectiveTo.length > 0) {
+        await client.send({
+          from: `${site.name} Dashboard <${gmailUser}>`,
+          to: effectiveTo,
+          subject,
+          content: text,
+          html,
+        });
+      }
+
+      if (inviteAction && calTo.length > 0) {
+        const ics = buildIcs({
+          method: inviteAction,
+          uid: `pto-${r.id}@claudemadedashboard1.vercel.app`,
+          summary: `PTO - ${who} (${tl})`,
+          description:
+            `${who} - ${tl} ${range} (${r.hours}h)` +
+            (partial ? ` - ${partial}` : "") +
+            (r.reason ? `\nReason: ${r.reason}` : "") +
+            `\n${dashUrl}`,
+          startIso: r.starts_on,
+          endIso: r.ends_on,
+          organizerEmail: gmailUser,
+          organizerName: `${site.name} Dashboard`,
+          attendees: calTo,
+        });
+        const invSubject = asciiSafe(
+          (inviteAction === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${tl}) ${range}`,
+        );
+        await client.send({
+          from: `${site.name} Dashboard <${gmailUser}>`,
+          to: calTo,
+          subject: invSubject,
+          content: asciiSafe(
+            inviteAction === "CANCEL"
+              ? `This PTO was retracted - the calendar event is cancelled.\n\n${who} - ${tl} ${range}`
+              : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`,
+          ),
+          attachments: [{
+            filename: "invite.ics",
+            content: btoa(ics),
+            encoding: "base64",
+            contentType: `text/calendar; method=${inviteAction}; charset=utf-8`,
+          }],
+        });
+        inviteSentTo = calTo;
+      }
     } finally {
       try { await client.close(); } catch { /* already closed */ }
     }
 
-    return json(200, { ok: true, event: payload.event, site: site.code, sent_to: effectiveTo });
+    return json(200, {
+      ok: true, event: payload.event, site: site.code,
+      sent_to: effectiveTo, invite_sent_to: inviteSentTo,
+      invite_action: inviteAction,
+    });
   } catch (e) {
     return json(500, { error: (e as Error).message });
   }
