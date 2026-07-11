@@ -42,16 +42,24 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Role-aware home redirect: engineers go to /engineer/me, tv to /tv, others
- *  to their home site's manager page (Binney-homed managers land on
- *  /binney/manager, everyone else on /manager). */
+/** Role-aware home redirect — always to a site-prefixed address:
+ *  engineers → /<site>/engineer, tv → /upark/tv, others → /<site>/manager. */
 function Home() {
   const me = useMe();
   const access = useMySiteAccess();
   if (me.isLoading || access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
-  if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
-  if (me.data?.role === 'tv')       return <Navigate to="/tv" replace />;
-  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
+  if (me.data?.role === 'engineer') return <Navigate to={`/${access.homeSite}/engineer`} replace />;
+  if (me.data?.role === 'tv')       return <Navigate to="/upark/tv" replace />;
+  return <Navigate to={`/${access.homeSite}/manager`} replace />;
+}
+
+/** Legacy bare URLs (/manager, /admin, /engineer/me) → the viewer's
+ *  home-site address, so an old bookmark can't land anyone on the wrong
+ *  site — the address bar always shows /upark/... or /binney/... */
+function SiteRedirect({ page }: { page: 'manager' | 'admin' | 'engineer' }) {
+  const access = useMySiteAccess();
+  if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  return <Navigate to={`/${access.homeSite}/${page}`} replace />;
 }
 
 /** Fence a site's manager/admin pages: admin + director can enter every
@@ -63,7 +71,7 @@ function RequireSite({ site, children }: { site: SiteCode; children: React.React
   const access = useMySiteAccess();
   if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (access.canSeeAllSites || access.homeSite === site) return <>{children}</>;
-  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
+  return <Navigate to={`/${access.homeSite}/manager`} replace />;
 }
 
 /** Admin + director only — for cross-site tools (/training) that would
@@ -72,7 +80,7 @@ function RequireCrossSite({ children }: { children: React.ReactNode }) {
   const access = useMySiteAccess();
   if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (access.canSeeAllSites) return <>{children}</>;
-  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
+  return <Navigate to={`/${access.homeSite}/manager`} replace />;
 }
 
 /** Gate the manager dashboard to non-engineers. Engineers/TV that reach
@@ -82,7 +90,7 @@ function RequireManagerArea({ children }: { children: React.ReactNode }) {
   const me = useMe();
   if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
-  if (me.data?.role === 'tv')       return <Navigate to="/tv" replace />;
+  if (me.data?.role === 'tv')       return <Navigate to="/upark/tv" replace />;
   return <>{children}</>;
 }
 
@@ -95,19 +103,21 @@ export default function App() {
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         {/* Public, login-free field capture — gated by the URL token, not auth. */}
         <Route path="/field/receipt" element={<FieldReceipt />} />
-        <Route path="/manager" element={<Protected><RequireSite site="upark"><RequireManagerArea><Manager /></RequireManagerArea></RequireSite></Protected>} />
-        <Route path="/admin"   element={<Protected><RequireSite site="upark"><Admin /></RequireSite></Protected>} />
-        {/* Symmetric /upark/* addresses — aliases for now; canonical flip is
-            deferred so existing bookmarks/kiosks/email links keep working. */}
-        <Route path="/upark/manager" element={<Navigate to="/manager" replace />} />
-        <Route path="/upark/admin"   element={<Navigate to="/admin" replace />} />
-        <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
+        {/* Canonical UPark addresses — every site page carries its site
+            prefix so a shared/bookmarked URL always says which site it is. */}
+        <Route path="/upark/manager" element={<Protected><RequireSite site="upark"><RequireManagerArea><Manager /></RequireManagerArea></RequireSite></Protected>} />
+        <Route path="/upark/admin"   element={<Protected><RequireSite site="upark"><Admin /></RequireSite></Protected>} />
+        <Route path="/upark/engineer" element={<Protected><RequireSite site="upark"><EngineerMe /></RequireSite></Protected>} />
+        {/* Legacy bare addresses → the viewer's own home-site page. */}
+        <Route path="/manager" element={<Protected><SiteRedirect page="manager" /></Protected>} />
+        <Route path="/admin"   element={<Protected><SiteRedirect page="admin" /></Protected>} />
+        <Route path="/engineer/me" element={<Protected><SiteRedirect page="engineer" /></Protected>} />
         {/* UPark-flavored surfaces: shift TV, shop TV, MRO. Site-fenced so
             Binney staff don't land in UPark data (admin/director pass). */}
         <Route path="/engineer/shift" element={<Protected><RequireSite site="upark"><EngineerShiftTv /></RequireSite></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
-        <Route path="/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
-        <Route path="/upark/tv" element={<Navigate to="/tv" replace />} />
+        <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
+        <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
         <Route path="/buildings" element={<Protected><BuildingsIndex /></Protected>} />
         <Route path="/upark/buildings" element={<Navigate to="/buildings" replace />} />
         <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
@@ -116,6 +126,7 @@ export default function App() {
         {/* Binney St — isolated route tree (first pass: PTO only). */}
         <Route path="/binney/manager" element={<Protected><RequireSite site="binney"><RequireManagerArea><BinneyManager /></RequireManagerArea></RequireSite></Protected>} />
         <Route path="/binney/admin"   element={<Protected><RequireSite site="binney"><BinneyAdmin /></RequireSite></Protected>} />
+        <Route path="/binney/engineer" element={<Protected><RequireSite site="binney"><EngineerMe /></RequireSite></Protected>} />
         <Route path="/mro/receipts" element={<Protected><RequireSite site="upark"><MroReceipts /></RequireSite></Protected>} />
         <Route path="/upark/mro/receipts" element={<Navigate to="/mro/receipts" replace />} />
         <Route path="/"        element={<Protected><Home /></Protected>} />

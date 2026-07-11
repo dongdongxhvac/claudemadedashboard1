@@ -165,7 +165,7 @@ export default function ManagerPc() {
               </Link>
             )}
             {isAdmin && (
-              <Link to="/admin" className="t-small t-accent hover:underline">
+              <Link to="/upark/admin" className="t-small t-accent hover:underline">
                 Admin
               </Link>
             )}

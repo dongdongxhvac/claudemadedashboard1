@@ -297,7 +297,7 @@ Deno.serve(async (req: Request) => {
     const tl = typeLabel(r.type);
     const partial = partialLabel(r);
     const decision = r.status === "approved" ? "Approved" : r.status === "denied" ? "Denied" : r.status;
-    const dashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/manager" : "/manager"}`;
+    const dashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/manager" : "/upark/manager"}`;
 
     const subject = asciiSafe(payload.event === "submitted"
       ? `[PTO - ${site.name}] New request - ${who} - ${tl} ${range}`

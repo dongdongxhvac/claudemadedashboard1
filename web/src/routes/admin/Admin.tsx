@@ -47,7 +47,7 @@ export default function Admin() {
                 → Binney St
               </Link>
             )}
-            <Link to={isAdmin ? '/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
+            <Link to={isAdmin ? '/upark/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
             <span className="t-small t-muted">{session?.user.email}</span>
