@@ -31,6 +31,7 @@ import { useOvertimePosts, type OvertimePost } from '../../hooks/useOvertime';
 import { useCurrentBuildingAssignments, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useBuildings, type Building } from '../../hooks/useBuildings';
 import { Section } from '../../components/Section';
+import { PtoCalRecipientsEditor } from '../../components/PtoCalRecipientsEditor';
 
 // ───────────────────────────── helpers
 
@@ -347,6 +348,9 @@ export function BinneyPtoPanel() {
               }}
             />
           )}
+
+          {/* Calendar-invite recipient list (manager-editable) */}
+          <PtoCalRecipientsEditor siteCode="binney" />
         </div>
       )}
 

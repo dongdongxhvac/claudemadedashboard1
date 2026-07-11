@@ -28,6 +28,7 @@ import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks
 import { useBuildings, type Building } from '../hooks/useBuildings';
 import { useUparkUserIds } from '../hooks/useSiteScope';
 import { Section } from './Section';
+import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
 
 // ───────────────────────────── helpers
 
@@ -371,6 +372,9 @@ export function PtoPanel() {
               }}
             />
           )}
+
+          {/* Calendar-invite recipient list (manager-editable) */}
+          <PtoCalRecipientsEditor siteCode="upark" />
         </div>
       )}
 

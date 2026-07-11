@@ -17,9 +17,9 @@
 //                          UID retracts it (no notification email — the
 //                          calendar cancel itself lands in inboxes).
 //    approved→denied     → 'decided' Denied email + METHOD:CANCEL.
-//    Recipients per site: env PTO_CAL_TO_UPARK / PTO_CAL_TO_BINNEY, falling
-//    back to get_app_secret() Vault keys of the same name (comma-separated
-//    emails — currently the test users, later a group address). Empty/unset
+//    Recipients per site: the pto_cal_recipients table (migration 0096),
+//    manager-editable from the PTO panels. An env secret
+//    PTO_CAL_TO_<SITE> still overrides everything for QA. Empty table
 //    = no site list — but the REQUESTER's own email is always included, so
 //    the engineer's work calendar gets the event at both sites. Attendees
 //    carry RSVP=FALSE + X-MICROSOFT-CDO-BUSYSTATUS:FREE: on M365 the event
@@ -207,18 +207,23 @@ function buildIcs(opts: {
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
-/** Per-site calendar recipient list: env first, Vault fallback. */
+/** Per-site calendar recipient list: env override first (QA), then the
+ *  manager-editable pto_cal_recipients table (migration 0096). */
 async function calRecipients(
   admin: ReturnType<typeof createClient>,
+  siteId: string,
   siteCode: string,
 ): Promise<string[]> {
-  const key = `PTO_CAL_TO_${siteCode.toUpperCase()}`;
-  let v = Deno.env.get(key) ?? "";
-  if (!v) {
-    const r = await admin.rpc("get_app_secret", { k: key });
-    v = ((r.data as string) ?? "");
-  }
-  return v.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+  const envV = Deno.env.get(`PTO_CAL_TO_${siteCode.toUpperCase()}`) ?? "";
+  if (envV) return envV.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+  const { data, error } = await admin
+    .from("pto_cal_recipients")
+    .select("email")
+    .eq("site_id", siteId);
+  if (error) throw error;
+  return (data ?? [])
+    .map((r) => ((r.email as string) ?? "").trim())
+    .filter((e) => /@/.test(e));
 }
 
 Deno.serve(async (req: Request) => {
@@ -346,7 +351,9 @@ Deno.serve(async (req: Request) => {
     } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
       inviteAction = "CANCEL";
     }
-    let calTo = inviteAction ? await calRecipients(admin, site.code as string) : [];
+    let calTo = inviteAction
+      ? await calRecipients(admin, site.id as string, site.code as string)
+      : [];
     // The engineer's own calendar always gets the event (and its CANCEL),
     // even when the site has no group list configured.
     if (inviteAction) {
