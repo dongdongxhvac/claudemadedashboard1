@@ -12,6 +12,8 @@ import TvView from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
+import BinneyManager from './routes/binney/Manager';
+import BinneyAdmin from './routes/binney/Admin';
 import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe } from './hooks/useMe';
@@ -77,6 +79,9 @@ export default function App() {
         <Route path="/buildings" element={<Protected><BuildingsIndex /></Protected>} />
         <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
         <Route path="/training" element={<Protected><RequireManagerArea><Training /></RequireManagerArea></Protected>} />
+        {/* Binney St — isolated route tree (first pass: PTO only). */}
+        <Route path="/binney/manager" element={<Protected><RequireManagerArea><BinneyManager /></RequireManagerArea></Protected>} />
+        <Route path="/binney/admin"   element={<Protected><BinneyAdmin /></Protected>} />
         <Route path="/mro/receipts" element={<Protected><MroReceipts /></Protected>} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
