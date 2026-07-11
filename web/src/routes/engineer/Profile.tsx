@@ -7,6 +7,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useEngineerProfile, type CompletionEntry } from '../../hooks/useEngineerProfile';
 import { useMe } from '../../hooks/useMe';
+import { useMySiteAccess, useHomeSiteCodeOf } from '../../hooks/useSiteScope';
 import { DISCIPLINES, type Discipline } from '../../hooks/useEngineers';
 
 // ----- level → tier visuals -----
@@ -42,6 +43,9 @@ export default function EngineerProfile() {
   const { id } = useParams<{ id: string }>();
   const me = useMe();
   const q = useEngineerProfile(id);
+  // Site fence: profiles are viewable by same-site staff (or admin/director).
+  const access = useMySiteAccess();
+  const targetSite = useHomeSiteCodeOf(id);
 
   if (q.isLoading || me.isLoading) return <Wrap><p>Loading...</p></Wrap>;
   if (q.isError) return <Wrap><p style={{ color: '#fecaca' }}>Error: {(q.error as Error).message}</p></Wrap>;
@@ -66,6 +70,27 @@ export default function EngineerProfile() {
   // visible_to_self. Admin/manager can always see.
   const isSelf = me.data?.id === p.user_id;
   const isAdminOrMgr = me.data?.role === 'admin' || me.data?.role === 'manager';
+  // Cross-site fence: a profile is only viewable by the same site's people
+  // (admin/director roam). Applied before the self-visibility gate.
+  const crossSiteBlocked =
+    !isSelf &&
+    !access.canSeeAllSites &&
+    !access.isLoading &&
+    !targetSite.isLoading &&
+    targetSite.siteCode !== null &&
+    targetSite.siteCode !== access.homeSite;
+  if (crossSiteBlocked) {
+    return (
+      <Wrap>
+        <div className="text-center py-16">
+          <div className="text-6xl mb-4">🔒</div>
+          <h2 className="text-2xl font-medium mb-2">Profile not available</h2>
+          <p className="opacity-70">This profile doesn't exist or has been removed.</p>
+          <Link to="/" className="inline-block mt-6 underline opacity-80 hover:opacity-100">← Back</Link>
+        </div>
+      </Wrap>
+    );
+  }
   if (isSelf && !isAdminOrMgr && !p.visible_to_self) {
     return (
       <Wrap>

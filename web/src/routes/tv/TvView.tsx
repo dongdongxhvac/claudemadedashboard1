@@ -49,6 +49,7 @@ import {
   usePtoRequests, usePtoRealtime, isPartialDay, partialDayLabel,
   type PtoRequest,
 } from '../../hooks/usePto';
+import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -106,6 +107,30 @@ export default function TvView() {
   const engineersQ   = useEngineers();
   const weatherQ     = useWeather();
 
+  // UPark scope (data only — the locked panel layout is untouched). The
+  // Binney seed put a second site's people/buildings/PTO into the shared
+  // tables; this wall is UPark's, so filter them out (see useSiteScope).
+  const uparkIds = useUparkUserIds();
+  const uparkBldgIds = useUparkBuildingIds();
+  const access = useMySiteAccess();
+  const engineers = useMemo(
+    () => (engineersQ.data ?? []).filter((e) => !uparkIds || uparkIds.has(e.user_id)),
+    [engineersQ.data, uparkIds],
+  );
+  const ptoRows = useMemo(
+    () => (ptoQ.data ?? []).filter((r) => !uparkIds || uparkIds.has(r.user_id)),
+    [ptoQ.data, uparkIds],
+  );
+  const uparkBuildings = useMemo(
+    () => (buildingsQ.data ?? []).filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)),
+    [buildingsQ.data, uparkBldgIds],
+  );
+  const focusItems = useMemo(
+    () => (focusQ.data ?? []).filter((it) =>
+      it.site_id === null || access.homeSiteId === null || it.site_id === access.homeSiteId),
+    [focusQ.data, access.homeSiteId],
+  );
+
   // Tick once a minute so the header clock + freshness stay live.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -120,20 +145,20 @@ export default function TvView() {
         now={now}
         oncall={oncallQ.data ?? []}
         weather={weatherQ.data ?? null}
-        focusItems={focusQ.data ?? []}
+        focusItems={focusItems}
       />
       <main className="tv-grid">
         {/* Left column: one tall panel spanning both rows */}
         <WorkloadPerformancePanel
           pmRows={pmQ.data ?? []}
           laborRows={laborQ.data ?? []}
-          engineers={engineersQ.data ?? []}
+          engineers={engineers}
           shifts={shiftsQ.data ?? []}
           closes={closesQ.data ?? []}
           woCloses={woClosesQ.data ?? []}
           woRows={woQ.data ?? []}
           laborDaily={laborDailyQ.data ?? []}
-          buildings={buildingsQ.data ?? []}
+          buildings={uparkBuildings}
           assignments={assignmentsQ.data ?? []}
           rounds={roundsQ.data ?? []}
           now={now}
@@ -147,8 +172,8 @@ export default function TvView() {
         </div>
         {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
         <CoverageTvPanel
-          engineers={engineersQ.data ?? []}
-          pto={ptoQ.data ?? []}
+          engineers={engineers}
+          pto={ptoRows}
           now={now}
         />
         {/* Right column bottom */}

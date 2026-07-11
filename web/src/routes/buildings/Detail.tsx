@@ -17,6 +17,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { useBuildings } from '../../hooks/useBuildings';
+import { useMySiteAccess, useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
   useBuildingSections,
   useBuildingEquipment,
@@ -58,6 +59,10 @@ export default function BuildingDetail() {
   const { signOut } = useAuth();
   const me = useMe();
   const buildingsQ = useBuildings();
+  // Site fence: a building's detail page is only for that site's staff —
+  // admin/director roam both sites (see useSiteScope).
+  const access = useMySiteAccess();
+  const uparkBldgIds = useUparkBuildingIds();
   const [tab, setTab] = useState<Tab>('equipment');
   const [sopSection, setSopSection] = useState<SectionKey>('overview');
 
@@ -94,6 +99,16 @@ export default function BuildingDetail() {
     return <p className="t-text t-muted p-6">Loading…</p>;
   }
   if (!building) {
+    return <Navigate to="/buildings" replace />;
+  }
+  // Cross-site URL access bounces back to the (site-scoped) index. Fails
+  // open while the id set loads so deep links don't flicker-redirect.
+  const buildingInUpark = uparkBldgIds?.has(building.id);
+  const siteOk =
+    access.canSeeAllSites ||
+    uparkBldgIds === undefined ||
+    (access.homeSite === 'upark') === buildingInUpark;
+  if (!access.isLoading && !siteOk) {
     return <Navigate to="/buildings" replace />;
   }
 

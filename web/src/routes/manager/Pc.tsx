@@ -154,9 +154,11 @@ export default function ManagerPc() {
             <Link to="/buildings" className="t-small t-accent hover:underline">
               Buildings
             </Link>
-            <Link to="/training" className="t-small t-accent hover:underline">
-              Training
-            </Link>
+            {siteAccess.canSeeAllSites && (
+              <Link to="/training" className="t-small t-accent hover:underline">
+                Training
+              </Link>
+            )}
             {siteAccess.canSeeAllSites && (
               <Link to="/binney/manager" className="t-small t-accent hover:underline">
                 → Binney St

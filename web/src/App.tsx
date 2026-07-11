@@ -66,6 +66,15 @@ function RequireSite({ site, children }: { site: SiteCode; children: React.React
   return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
 }
 
+/** Admin + director only — for cross-site tools (/training) that would
+ *  otherwise expose one site's content to the other's staff. */
+function RequireCrossSite({ children }: { children: React.ReactNode }) {
+  const access = useMySiteAccess();
+  if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (access.canSeeAllSites) return <>{children}</>;
+  return <Navigate to={access.homeSite === 'binney' ? '/binney/manager' : '/manager'} replace />;
+}
+
 /** Gate the manager dashboard to non-engineers. Engineers/TV that reach
  *  /manager (bookmark, stale tab, manual URL) bounce to their own home, so the
  *  "engineer → /engineer/me, admin → /manager" rule holds however they arrive. */
@@ -93,16 +102,22 @@ export default function App() {
         <Route path="/upark/manager" element={<Navigate to="/manager" replace />} />
         <Route path="/upark/admin"   element={<Navigate to="/admin" replace />} />
         <Route path="/engineer/me" element={<Protected><EngineerMe /></Protected>} />
-        <Route path="/engineer/shift" element={<Protected><EngineerShiftTv /></Protected>} />
+        {/* UPark-flavored surfaces: shift TV, shop TV, MRO. Site-fenced so
+            Binney staff don't land in UPark data (admin/director pass). */}
+        <Route path="/engineer/shift" element={<Protected><RequireSite site="upark"><EngineerShiftTv /></RequireSite></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
-        <Route path="/tv" element={<Protected><TvView /></Protected>} />
+        <Route path="/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
+        <Route path="/upark/tv" element={<Navigate to="/tv" replace />} />
         <Route path="/buildings" element={<Protected><BuildingsIndex /></Protected>} />
+        <Route path="/upark/buildings" element={<Navigate to="/buildings" replace />} />
         <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
-        <Route path="/training" element={<Protected><RequireManagerArea><Training /></RequireManagerArea></Protected>} />
+        {/* Training is the training-manager's cross-site tool — admin/director only. */}
+        <Route path="/training" element={<Protected><RequireCrossSite><Training /></RequireCrossSite></Protected>} />
         {/* Binney St — isolated route tree (first pass: PTO only). */}
         <Route path="/binney/manager" element={<Protected><RequireSite site="binney"><RequireManagerArea><BinneyManager /></RequireManagerArea></RequireSite></Protected>} />
         <Route path="/binney/admin"   element={<Protected><RequireSite site="binney"><BinneyAdmin /></RequireSite></Protected>} />
-        <Route path="/mro/receipts" element={<Protected><MroReceipts /></Protected>} />
+        <Route path="/mro/receipts" element={<Protected><RequireSite site="upark"><MroReceipts /></RequireSite></Protected>} />
+        <Route path="/upark/mro/receipts" element={<Navigate to="/mro/receipts" replace />} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
         <Route path="*"        element={<Protected><Home /></Protected>} />
       </Routes>
