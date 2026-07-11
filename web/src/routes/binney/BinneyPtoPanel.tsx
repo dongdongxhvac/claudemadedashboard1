@@ -633,8 +633,9 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
 
 // ───────────────────────────── Today attendance (interactive roll)
 
-/** Compute today + next N work days (skips Sat/Sun). Always includes today
- *  even if today is a weekend. */
+/** Compute today + next N calendar days. Binney runs 4×10 with two crews
+ *  covering all 7 days, so — unlike UPark's Mon–Fri panel — weekends are
+ *  real workdays and are never skipped. */
 function computeWorkDays(extra: number): { iso: string; label: string; isToday: boolean }[] {
   const fmt = (d: Date): string => d.toLocaleDateString('en-CA');
   const labelOf = (d: Date) => {
@@ -647,11 +648,24 @@ function computeWorkDays(extra: number): { iso: string; label: string; isToday: 
   const cursor = new Date(today);
   while (out.length < 1 + extra) {
     cursor.setDate(cursor.getDate() + 1);
-    const dow = cursor.getDay();
-    if (dow === 0 || dow === 6) continue;  // skip weekends
     out.push({ iso: fmt(cursor), label: labelOf(cursor), isToday: false });
   }
   return out;
+}
+
+/** Binney crew calendar: two 4×10 crews with a Wednesday overlap.
+ *    Sun–Wed crew works Sun(0) Mon(1) Tue(2) Wed(3)
+ *    Wed–Sat crew works Wed(3) Thu(4) Fri(5) Sat(6)
+ *  Crew membership is derived from the shift NAME seeded by migration 0093
+ *  ('Sun-Wed 6A', 'Wed-Sat 7:30A', ...). Any other shift name — or no shift
+ *  at all — counts as scheduled every day, so unassigned techs stay visible
+ *  in the roll instead of silently disappearing. */
+function crewWorksOn(shiftName: string | null | undefined, iso: string): boolean {
+  if (!shiftName) return true;
+  const dow = new Date(iso + 'T00:00:00').getDay(); // 0=Sun .. 6=Sat
+  if (shiftName.startsWith('Sun-Wed')) return dow <= 3;
+  if (shiftName.startsWith('Wed-Sat')) return dow >= 3;
+  return true;
 }
 
 function TodayAttendance({
@@ -716,13 +730,22 @@ function TodayAttendance({
   // Rolling counts across the 3-day horizon for the header. Partial-day
   // engineers are counted as "in" (they're around for part of the day) but
   // get a separate "partial" tally so the manager sees them at a glance.
+  // Binney: the in/total denominators count only engineers whose CREW works
+  // that day (Sun–Wed vs Wed–Sat), so the Sunday crew doesn't read as
+  // "out" on a Friday.
+  const shiftNameById = useMemo(
+    () => new Map(shifts.map((s) => [s.id, s.name])),
+    [shifts],
+  );
   const counts = useMemo(() => {
-    const totalActive = engineers.filter((e) => e.active && e.role === 'engineer').length;
     return days.map((d) => {
       let fullOut = 0;
       let partial = 0;
+      let scheduled = 0;
       for (const e of engineers) {
         if (!e.active || e.role !== 'engineer') continue;
+        if (!crewWorksOn(e.shift_id ? shiftNameById.get(e.shift_id) : null, d.iso)) continue;
+        scheduled++;
         const p = ptoByUserDay.get(`${e.user_id}|${d.iso}`);
         if (!p) continue;
         if (isPartialDay(p)) partial++;
@@ -732,11 +755,11 @@ function TodayAttendance({
         iso: d.iso,
         out: fullOut,
         partial,
-        in: totalActive - fullOut,
-        total: totalActive,
+        in: scheduled - fullOut,
+        total: scheduled,
       };
     });
-  }, [days, engineers, ptoByUserDay]);
+  }, [days, engineers, ptoByUserDay, shiftNameById]);
 
   // Clicking an empty DayChip opens a QuickPtoModal pre-filled for that
   // (engineer, date) so the manager can pick a type (defaults to sick),
@@ -836,7 +859,10 @@ function DayAttendanceGroup({
         </span>
       </div>
       <div className="space-y-1">
-        {shiftGroups.map((g) => (
+        {/* Hide a crew's whole row on days its rotation doesn't work —
+            the '_noshift' bucket (label "No shift") never matches a crew
+            prefix, so unassigned techs show every day. */}
+        {shiftGroups.filter((g) => crewWorksOn(g.shift_id === '_noshift' ? null : g.label, day.iso)).map((g) => (
           <div key={g.shift_id} className="flex items-baseline gap-2 flex-wrap">
             <span
               className="t-muted uppercase tracking-wider"
@@ -1325,15 +1351,17 @@ function CapHeatmap({ requests, onPickDate }: {
       ? `\nSick: ${cell.sick.map((p) => `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`).join(', ')}`
       : '';
     if (cell.people.length === 0) {
+      // Binney covers all 7 days (two 4×10 crews), so weekend cells get the
+      // same click-to-add affordance as weekdays.
       const base = cell.isPast
         ? `${date}\n(past — no vacation)`
-        : `${date}\nNo one on vacation${cell.isWeekend ? '' : ' — click to add'}`;
+        : `${date}\nNo one on vacation — click to add`;
       return base + sickLine;
     }
     const names = cell.people.map((p) =>
       `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`
     ).join(', ');
-    return `${date}\nVacation: ${names}${sickLine}${cell.isWeekend || cell.isPast ? '' : '\n(click to add another PTO)'}`;
+    return `${date}\nVacation: ${names}${sickLine}${cell.isPast ? '' : '\n(click to add another PTO)'}`;
   };
 
   return (
@@ -1413,7 +1441,8 @@ function CapHeatmap({ requests, onPickDate }: {
                     width: 26, height: 26, padding: 0,
                     borderRadius: 3,
                     background: color(count, cell.isPast),
-                    opacity: cell.isPast ? 0.4 : cell.isWeekend ? 0.55 : 1,
+                    // No weekend dimming — Binney's crews work Sat + Sun.
+                    opacity: cell.isPast ? 0.4 : 1,
                     border: cell.isToday ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.08)',
                     cursor: clickable ? 'pointer' : 'default',
                     fontSize: label.length > 2 ? 10 : label.length === 2 ? 11 : 13,
