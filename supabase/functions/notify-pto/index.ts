@@ -101,6 +101,19 @@ function partialLabel(r: PtoRecord): string | null {
   return `${fmtTime12(r.out_from)}–${fmtTime12(r.out_until)}`;
 }
 
+/** SMTP header + text-part safety: denomailer 1.6 folds RFC2047-encoded
+ *  headers incorrectly, so a non-ASCII subject ('·', '—') breaks the whole
+ *  header block and Gmail renders raw MIME as the body. Subjects and the
+ *  plain-text part are forced to ASCII; the HTML part keeps the pretty
+ *  typography (it's safely QP-encoded once headers are valid). */
+function asciiSafe(s: string): string {
+  return s
+    .replace(/[·]/g, "-")
+    .replace(/[—–]/g, "-")
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^\x20-\x7E\n\r\t]/g, "?");
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]);
@@ -186,9 +199,9 @@ Deno.serve(async (req: Request) => {
     const decision = r.status === "approved" ? "Approved" : r.status === "denied" ? "Denied" : r.status;
     const dashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/manager" : "/manager"}`;
 
-    const subject = payload.event === "submitted"
-      ? `[PTO · ${site.name}] New request — ${who} · ${tl} ${range}`
-      : `[PTO · ${site.name}] ${decision} — ${who} · ${tl} ${range}`;
+    const subject = asciiSafe(payload.event === "submitted"
+      ? `[PTO - ${site.name}] New request - ${who} - ${tl} ${range}`
+      : `[PTO - ${site.name}] ${decision} - ${who} - ${tl} ${range}`);
 
     const rows: [string, string][] = [
       ["Engineer", who],
@@ -225,9 +238,9 @@ Deno.serve(async (req: Request) => {
           </a>
         </p>
       </div>`;
-    const text = `${heading}\n\n` +
+    const text = asciiSafe(`${heading}\n\n` +
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-      `\n\n${dashUrl}`;
+      `\n\n${dashUrl}`);
 
     // QA overrides — the DB trigger never sets these.
     const effectiveTo = payload.override_to?.length
