@@ -25,11 +25,13 @@ export default function BinneyManager() {
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div>
-            <h1 className="t-section-title">Binney St · Dashboard</h1>
+            <div className="flex items-baseline gap-3">
+              <h1 className="t-section-title">Binney St · Dashboard</h1>
+              <SiteSwitcher />
+            </div>
             <p className="t-small t-muted">{today} · first pass — PTO only</p>
           </div>
           <div className="flex items-center gap-4">
-            <SiteSwitcher />
             {isAdmin && (
               <Link to="/binney/admin" className="t-small t-accent hover:underline">
                 Admin

@@ -31,22 +31,24 @@ export default function Admin() {
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div>
-            <h1 className="t-section-title">
-              UPark · Admin
-              {!isAdmin && isLead && (
-                <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
-                  ★ Lead view
-                </span>
+            <div className="flex items-baseline gap-3">
+              <h1 className="t-section-title">
+                UPark · Admin
+                {!isAdmin && isLead && (
+                  <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
+                    ★ Lead view
+                  </span>
+                )}
+              </h1>
+              {siteAccess.canSeeAllSites && (
+                <Link to="/binney/admin" className="t-small t-accent hover:underline">
+                  → Binney St
+                </Link>
               )}
-            </h1>
+            </div>
             <p className="t-small t-muted">{today}</p>
           </div>
           <div className="flex items-center gap-4">
-            {siteAccess.canSeeAllSites && (
-              <Link to="/binney/admin" className="t-small t-accent hover:underline">
-                → Binney St
-              </Link>
-            )}
             <Link to={isAdmin ? '/upark/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
