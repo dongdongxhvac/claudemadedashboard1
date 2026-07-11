@@ -16,6 +16,9 @@ export type FocusItem = {
   expires_at: string | null;
   created_by: string | null;
   created_at: string;
+  /** Site the announcement belongs to (0097). NULL = all sites. Inserts are
+   *  stamped UPark by a DB trigger when unspecified. */
+  site_id: string | null;
 };
 
 const KEY = ['focus_board_active'];

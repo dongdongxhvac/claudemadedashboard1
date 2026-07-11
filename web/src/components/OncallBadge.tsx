@@ -2,10 +2,15 @@
 // (the rotation whose Fri→Fri window contains today). Renders nothing if no
 // schedule for this week, so the header stays clean when the schedule has gaps.
 import { useCurrentOncall, useOncallRealtime, fmtMd, plus7Days } from '../hooks/useOncall';
+import { useMySiteAccess } from '../hooks/useSiteScope';
 
 export function OncallBadge({ size = 'sm' }: { size?: 'sm' | 'tv' }) {
   useOncallRealtime();
   const q = useCurrentOncall();
+  // The rotation is UPark's — hide the badge from Binney-homed viewers until
+  // Binney gets its own rotation. Admin/director keep seeing it.
+  const access = useMySiteAccess();
+  if (!access.canSeeAllSites && access.homeSite === 'binney') return null;
   if (q.isLoading || !q.data) return null;
   const { rotation, primary, secondary } = q.data;
 

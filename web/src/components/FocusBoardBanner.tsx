@@ -1,4 +1,5 @@
 import { useActiveFocusItems, useDismissFocusItem, type FocusLevel } from '../hooks/useFocusBoard';
+import { useMySiteAccess } from '../hooks/useSiteScope';
 
 const LEVEL_STYLE: Record<FocusLevel, { bg: string; border: string; fg: string; label: string }> = {
   info:     { bg: '#eff6ff', border: '#bfdbfe', fg: '#1e40af', label: 'INFO' },
@@ -10,7 +11,11 @@ const LEVEL_STYLE: Record<FocusLevel, { bg: string; border: string; fg: string; 
 export function FocusBoardBanner({ allowDismiss = true }: { allowDismiss?: boolean }) {
   const q = useActiveFocusItems();
   const dismiss = useDismissFocusItem();
-  const items = q.data ?? [];
+  // Site fence (0097): show only announcements for the viewer's home site
+  // (NULL site = all sites); admin/director see everything.
+  const access = useMySiteAccess();
+  const items = (q.data ?? []).filter((it) =>
+    access.canSeeAllSites || it.site_id === null || it.site_id === access.homeSiteId);
 
   if (items.length === 0) return null;
 

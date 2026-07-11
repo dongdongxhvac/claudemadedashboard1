@@ -29,12 +29,14 @@ export function useMySiteAccess(): {
   isLoading: boolean;
   canSeeAllSites: boolean;
   homeSite: SiteCode;
+  /** The viewer's home site UUID (falls back to the UPark id when unhomed). */
+  homeSiteId: string | null;
 } {
   const q = useQuery({
     queryKey: ['my_site_access'],
-    queryFn: async (): Promise<{ role: string | null; homeSiteCode: string | null }> => {
+    queryFn: async (): Promise<{ role: string | null; homeSiteCode: string | null; homeSiteId: string | null }> => {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return { role: null, homeSiteCode: null };
+      if (!auth.user) return { role: null, homeSiteCode: null, homeSiteId: null };
       const [meRes, sitesRes] = await Promise.all([
         supabase
           .from('users')
@@ -49,9 +51,11 @@ export function useMySiteAccess(): {
       const raw = meRes.data as { role: string; engineer_profiles: EpRow | EpRow[] | null } | null;
       const ep = Array.isArray(raw?.engineer_profiles) ? raw?.engineer_profiles[0] : raw?.engineer_profiles;
       const codeById = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.code as string]));
+      const uparkId = (sitesRes.data ?? []).find((s) => s.code === 'upark')?.id ?? null;
       return {
         role: raw?.role ?? null,
         homeSiteCode: ep?.home_site_id ? (codeById.get(ep.home_site_id) ?? null) : null,
+        homeSiteId: ep?.home_site_id ?? (uparkId as string | null),
       };
     },
     staleTime: 60_000,
@@ -61,6 +65,35 @@ export function useMySiteAccess(): {
     isLoading: q.isLoading,
     canSeeAllSites: role === 'admin' || role === 'director',
     homeSite: q.data?.homeSiteCode === 'binney' ? 'binney' : 'upark',
+    homeSiteId: q.data?.homeSiteId ?? null,
+  };
+}
+
+/** Home-site code of ANOTHER user (public.users id). NULL home_site_id — or a
+ *  missing profile — resolves to 'upark', the historical default. Used by the
+ *  engineer profile page's site fence. */
+export function useHomeSiteCodeOf(userId: string | null | undefined): {
+  isLoading: boolean;
+  siteCode: SiteCode | null;
+} {
+  const q = useQuery({
+    queryKey: ['home_site_of', userId ?? null],
+    enabled: !!userId,
+    queryFn: async (): Promise<string | null> => {
+      const [profRes, sitesRes] = await Promise.all([
+        supabase.from('engineer_profiles').select('home_site_id').eq('user_id', userId!).maybeSingle(),
+        supabase.from('sites').select('id, code'),
+      ]);
+      if (profRes.error) throw profRes.error;
+      if (sitesRes.error) throw sitesRes.error;
+      const codeById = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.code as string]));
+      return profRes.data?.home_site_id ? (codeById.get(profRes.data.home_site_id) ?? null) : null;
+    },
+    staleTime: 60_000,
+  });
+  return {
+    isLoading: !!userId && q.isLoading,
+    siteCode: q.isLoading ? null : q.data === 'binney' ? 'binney' : 'upark',
   };
 }
 
