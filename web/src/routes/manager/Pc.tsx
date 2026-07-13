@@ -202,6 +202,8 @@ export default function ManagerPc() {
         )}
 
         <div className="space-y-3 pt-2">
+          {/* §12 first — PTO is the page's most-used panel (user 2026-07-12). */}
+          <PtoPanel />
           <CoverageForecastPanel />
           <DueNowList />
           <DueThisMonth />
@@ -215,7 +217,6 @@ export default function ManagerPc() {
           <EmailAlarmsHistoryPanel />
           <EquipmentDownPanel />
           <OvertimePanel />
-          <PtoPanel />
           <MonthlyMeterReadingsPanel />
         </div>
         <JumpNav />

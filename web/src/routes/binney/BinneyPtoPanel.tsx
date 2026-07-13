@@ -1601,7 +1601,7 @@ function BalancesGrid({
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log</span>
       </div>
-      <div className="flex flex-wrap items-start" style={{ columnGap: '2.5rem', rowGap: '1rem' }}>
+      <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
       <table key={hi} className="t-text t-small border-collapse" style={{ width: 'auto' }}>
         <thead>
@@ -1609,10 +1609,10 @@ function BalancesGrid({
               used/allotted" in one cell so two half-tables fit side by side
               within the page container. */}
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-            <th className="py-1 pr-6">Engineer</th>
-            <th className="py-1 px-3 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Vacation</th>
-            <th className="py-1 px-3 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Sick</th>
-            <th className="py-1 px-3 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Fl. Holiday</th>
+            <th className="py-1 pr-3">Engineer</th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Vacation</th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Sick</th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Fl. Holiday</th>
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
           </tr>
         </thead>
@@ -1625,7 +1625,7 @@ function BalancesGrid({
             return (
               <Fragment key={s.id}>
                 <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
-                  <td className="py-1 pr-6 align-top">
+                  <td className="py-1 pr-3 align-top">
                     <button
                       type="button"
                       onClick={() => setExpandedUserId(isOpen ? null : s.user_id)}
@@ -1657,7 +1657,7 @@ function BalancesGrid({
                   <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
                   <BalanceCell remaining={s.holiday_remaining}  used={s.holiday_used}  alloted={s.holiday_alloted} />
                   <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
-                    <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline">{notSet ? 'set allotment' : 'edit allotment'}</button>
+                    <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline" title={notSet ? 'Set allotment' : 'Edit allotment'}>{notSet ? 'set' : 'edit'}</button>
                   </td>
                 </tr>
                 {isOpen && (
@@ -1689,16 +1689,16 @@ function BalancesGrid({
 function BalanceCell({ remaining, used, alloted }: { remaining: number; used: number; alloted: number }) {
   if (alloted === 0) {
     return (
-      <td className="py-1 px-3 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
+      <td className="py-1 px-2 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
     );
   }
   const color = remaining <= 0 ? 'var(--color-danger)'
               : remaining <= 8 ? 'var(--color-warn, #d97706)'
               : 'var(--color-text)';
   return (
-    <td className="py-1 px-3 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+    <td className="py-1 px-2 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
       <span style={{ color, fontWeight: remaining <= 8 ? 600 : 400 }}>{remaining}h</span>
-      <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 6 }}>{used}/{alloted}</span>
+      <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 4 }}>{used}/{alloted}</span>
     </td>
   );
 }
