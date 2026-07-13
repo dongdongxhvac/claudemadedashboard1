@@ -1529,6 +1529,21 @@ function BalancesGrid({
   onDeleteRequest?: (id: string) => void;
 }) {
   const currentYear = new Date().getFullYear();
+  // Column sorting: name (default) or one of the three balances. A balance
+  // header click sorts lowest-first (who's running out); click again to
+  // flip. "not set" rows always sink to the bottom of balance sorts.
+  type SortKey = 'name' | 'vacation' | 'sick' | 'holiday';
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const onSort = (k: SortKey) => {
+    if (sortKey === k) {
+      setSortDir((d) => (d === 1 ? -1 : 1));
+    } else {
+      setSortKey(k);
+      setSortDir(1);
+    }
+  };
+  const sortArrow = (k: SortKey) => (sortKey === k ? (sortDir === 1 ? ' ↑' : ' ↓') : '');
   // v_pto_summary is keyed off pto_balances, so a brand-new engineer with
   // no balance row is invisible — and there was no UI path to create that
   // first row. Synthesize a zero-allotment placeholder for every active
@@ -1550,8 +1565,20 @@ function BalancesGrid({
       holiday_alloted: 0, holiday_used: 0, holiday_remaining: 0,
       notes: null, updated_at: '',
     }));
-  const rows = [...realRows, ...placeholders]
-    .sort((a, b) => (a.user_full_name ?? '').localeCompare(b.user_full_name ?? ''));
+  const rows = [...realRows, ...placeholders].sort((a, b) => {
+    if (sortKey === 'name') {
+      return sortDir * (a.user_full_name ?? '').localeCompare(b.user_full_name ?? '');
+    }
+    const pick = (s: PtoSummary): [number, number] =>
+      sortKey === 'vacation' ? [s.vacation_alloted, s.vacation_remaining]
+      : sortKey === 'sick'   ? [s.sick_alloted, s.sick_remaining]
+      :                        [s.holiday_alloted, s.holiday_remaining];
+    const [aAlloted, aRem] = pick(a);
+    const [bAlloted, bRem] = pick(b);
+    if ((aAlloted === 0) !== (bAlloted === 0)) return aAlloted === 0 ? 1 : -1;
+    if (aRem !== bRem) return sortDir * (aRem - bRem);
+    return (a.user_full_name ?? '').localeCompare(b.user_full_name ?? '');
+  });
   // Track which engineer row is currently expanded to show the full year log.
   // Single-open accordion — clicking a different name swaps the open row.
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -1594,7 +1621,7 @@ function BalancesGrid({
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">
-        Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log</span>
+        Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
       </div>
       <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
@@ -1604,10 +1631,18 @@ function BalancesGrid({
               used/allotted" in one cell so two half-tables fit side by side
               within the page container. */}
           <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
-            <th className="py-1 pr-3">Engineer</th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Vacation</th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Sick</th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }} title="Balance · used/allotted">Fl. Holiday</th>
+            <th className="py-1 pr-3">
+              <button type="button" onClick={() => onSort('name')} className="hover:t-accent" title="Sort by name">Engineer{sortArrow('name')}</button>
+            </th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => onSort('vacation')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Vacation{sortArrow('vacation')}</button>
+            </th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => onSort('sick')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Sick{sortArrow('sick')}</button>
+            </th>
+            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => onSort('holiday')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Fl. Holiday{sortArrow('holiday')}</button>
+            </th>
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
           </tr>
         </thead>
