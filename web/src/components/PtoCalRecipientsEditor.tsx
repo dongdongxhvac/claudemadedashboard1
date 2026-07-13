@@ -47,6 +47,28 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
     staleTime: 30_000,
   });
 
+  // Default recipients summary: this site's managers (named — it's a short
+  // list) and how many engineers are covered (each invite goes to the one
+  // requesting engineer, so only the count is shown).
+  const defaultsQ = useQuery({
+    queryKey: ['pto_cal_defaults', siteCode, siteQ.data ?? null],
+    enabled: !!siteQ.data,
+    queryFn: async (): Promise<{ managers: string[]; engineerCount: number }> => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('full_name, is_manager, role, active, engineer_profiles!inner(home_site_id)')
+        .eq('engineer_profiles.home_site_id', siteQ.data!)
+        .eq('active', true);
+      if (error) throw error;
+      const rows = (data ?? []) as { full_name: string; is_manager: boolean; role: string }[];
+      return {
+        managers: rows.filter((r) => r.is_manager).map((r) => r.full_name).sort(),
+        engineerCount: rows.filter((r) => r.role === 'engineer').length,
+      };
+    },
+    staleTime: 60_000,
+  });
+
   const add = useMutation({
     mutationFn: async (input: { email: string; note: string | null }) => {
       const { error } = await supabase.from('pto_cal_recipients').insert({
@@ -85,15 +107,22 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         type="button"
         onClick={() => setOpen(!open)}
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
-        title="Invites go to home-site managers + the engineer by default; this list adds extra recipients (client / director / admin)"
+        title="Invites go to home-site managers + the requesting engineer by default; extras (client / director / admin) are added below"
       >
-        {open ? '▾' : '▸'} Calendar invite extras ({rows.length})
+        {open ? '▾' : '▸'} Calendar invites · {defaultsQ.data?.managers.length ?? '…'} managers
+        · {defaultsQ.data?.engineerCount ?? '…'} engineers · {rows.length} extras
       </button>
       {open && (
         <div className="mt-2 space-y-2">
           <p className="t-small t-muted">
-            Default: home-site managers + the engineer. Anyone added here (client,
-            director, admin — any inbox) also gets every invite and cancellation.
+            <strong>Managers ({defaultsQ.data?.managers.length ?? 0})</strong>:{' '}
+            {defaultsQ.data?.managers.join(', ') || '—'}
+            {' · '}
+            <strong>Engineers ({defaultsQ.data?.engineerCount ?? 0})</strong>: each invite
+            goes to the engineer whose PTO it is
+            {' · '}
+            <strong>Extras ({rows.length})</strong>: added below — any inbox, gets every
+            invite and cancellation.
             {siteQ.data === null && !siteQ.isLoading && (
               <span className="t-danger"> Site row missing — cannot edit.</span>
             )}
