@@ -1628,9 +1628,10 @@ function BalancesGrid({
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
       </div>
-      <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
+      <div className="flex flex-wrap items-start" style={{ columnGap: '1.75rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
-      <table key={hi} className="t-text t-small border-collapse" style={{ width: 'auto' }}>
+      <div key={hi} style={hi > 0 ? { borderLeft: '1px solid var(--color-border)', paddingLeft: '1.75rem' } : undefined}>
+      <table className="t-text t-small border-collapse" style={{ width: 'auto' }}>
         <thead>
           {/* Single compact header row — each type column shows "balance
               used/allotted" in one cell so two half-tables fit side by side
@@ -1712,6 +1713,7 @@ function BalancesGrid({
           })}
         </tbody>
       </table>
+      </div>
       ))}
       </div>
     </div>
@@ -1727,12 +1729,13 @@ function BalanceCell({ remaining, used, alloted }: { remaining: number; used: nu
       <td className="py-1 px-2 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
     );
   }
-  const color = remaining <= 0 ? 'var(--color-danger)'
-              : remaining <= 8 ? 'var(--color-warn, #d97706)'
-              : 'var(--color-text)';
+  // Red only when the balance is truly low (< 4h, incl. negatives) — per
+  // user 2026-07-12. No amber tier.
+  const low = remaining < 4;
+  const color = low ? 'var(--color-danger)' : 'var(--color-text)';
   return (
     <td className="py-1 px-2 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
-      <span style={{ color, fontWeight: remaining <= 8 ? 600 : 400 }}>{remaining}h</span>
+      <span style={{ color, fontWeight: low ? 600 : 400 }}>{remaining}h</span>
       <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 4 }}>{used}/{alloted}</span>
     </td>
   );
