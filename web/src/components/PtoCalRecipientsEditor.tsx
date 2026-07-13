@@ -1,9 +1,10 @@
-// Manager-editable recipient list for approved-PTO calendar invites (.ics).
+// Manager-editable EXTRA recipients for approved-PTO calendar invites (.ics).
 //
-// Backed by pto_cal_recipients (migration 0096); the notify-pto edge function
-// reads the same table when it sends METHOD:REQUEST / CANCEL emails. The
-// requesting engineer always receives the invite in addition to this list.
-// Client emails are fine — anything with an inbox works.
+// Invites go to the home-site managers (users.is_manager) + the requesting
+// engineer BY DEFAULT — that built-in list is not shown or editable here.
+// This pool (pto_cal_recipients, migration 0096) holds the extras a manager
+// adds on top: client, director, admin — anything with an inbox. notify-pto
+// merges default + extras (deduped) when it sends METHOD:REQUEST / CANCEL.
 //
 // Rendered by BOTH the UPark and Binney PTO panels with their site code.
 // Additive shared component: self-contained queries/mutations, no shared
@@ -84,24 +85,19 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         type="button"
         onClick={() => setOpen(!open)}
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
-        title="Approved-PTO calendar invites (.ics) go to these addresses plus the engineer"
+        title="Invites go to home-site managers + the engineer by default; this list adds extra recipients (client / director / admin)"
       >
-        {open ? '▾' : '▸'} Calendar invite recipients ({rows.length})
+        {open ? '▾' : '▸'} Calendar invite extras ({rows.length})
       </button>
       {open && (
         <div className="mt-2 space-y-2">
           <p className="t-small t-muted">
-            Approved PTO sends a calendar invite to these addresses <em>plus the engineer</em>.
-            Retractions cancel the same event. Client emails are allowed.
+            Default: home-site managers + the engineer. Anyone added here (client,
+            director, admin — any inbox) also gets every invite and cancellation.
             {siteQ.data === null && !siteQ.isLoading && (
               <span className="t-danger"> Site row missing — cannot edit.</span>
             )}
           </p>
-          {rows.length === 0 && !listQ.isLoading && (
-            <p className="t-small t-muted italic">
-              No group recipients yet — invites currently go only to the requesting engineer.
-            </p>
-          )}
           <ul className="flex flex-wrap gap-2">
             {rows.map((r) => (
               <li

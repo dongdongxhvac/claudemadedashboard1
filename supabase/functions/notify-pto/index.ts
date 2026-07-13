@@ -351,16 +351,18 @@ Deno.serve(async (req: Request) => {
     } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
       inviteAction = "CANCEL";
     }
-    let calTo = inviteAction
-      ? await calRecipients(admin, site.id as string, site.code as string)
-      : [];
-    // The engineer's own calendar always gets the event (and its CANCEL),
-    // even when the site has no group list configured.
+    // Invite recipients (user 2026-07-11): home-site managers + the
+    // requesting engineer BY DEFAULT, plus the manager-added extras from
+    // pto_cal_recipients (clients/directors/admins). Deduped.
+    let calTo: string[] = [];
     if (inviteAction) {
-      const reqEmail = (requester?.email ?? "").trim().toLowerCase();
-      if (/@/.test(reqEmail) && !calTo.some((e) => e.toLowerCase() === reqEmail)) {
-        calTo.push(reqEmail);
-      }
+      const extras = await calRecipients(admin, site.id as string, site.code as string);
+      const merged = new Map<string, string>();
+      for (const e of managerEmails) merged.set(e.toLowerCase(), e);
+      const reqEmail = (requester?.email ?? "").trim();
+      if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
+      for (const e of extras) merged.set(e.toLowerCase(), e);
+      calTo = [...merged.values()];
     }
 
     // Notification recipients — QA overrides never set by the trigger.
