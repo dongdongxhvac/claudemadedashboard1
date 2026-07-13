@@ -1583,12 +1583,20 @@ function BalancesGrid({
 
   if (rows.length === 0) return null;
 
+  // Long rosters (Binney runs 20+) make one column far too tall — split the
+  // rows into two side-by-side tables when there are enough of them.
+  // flex-wrap falls back to a single column when the viewport is narrow.
+  const mid = Math.ceil(rows.length / 2);
+  const halves = rows.length > 6 ? [rows.slice(0, mid), rows.slice(mid)] : [rows];
+
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log</span>
       </div>
-      <table className="t-text t-small border-collapse" style={{ width: 'auto' }}>
+      <div className="flex flex-wrap items-start" style={{ columnGap: '2.5rem', rowGap: '1rem' }}>
+      {halves.map((half, hi) => (
+      <table key={hi} className="t-text t-small border-collapse" style={{ width: 'auto' }}>
         <thead>
           {/* Two-level header: top row groups Vacation/Sick, bottom row labels
               the Balance and Used/Allotted sub-columns. Table is natural-
@@ -1619,7 +1627,7 @@ function BalancesGrid({
           </tr>
         </thead>
         <tbody>
-          {rows.map((s) => {
+          {half.map((s) => {
             const isOpen = expandedUserId === s.user_id;
             const log = logByUser.get(s.user_id) ?? [];
             const hireLine = fmtHireSeniority(hireByUser.get(s.user_id) ?? null);
@@ -1679,6 +1687,8 @@ function BalancesGrid({
           })}
         </tbody>
       </table>
+      ))}
+      </div>
     </div>
   );
 }
