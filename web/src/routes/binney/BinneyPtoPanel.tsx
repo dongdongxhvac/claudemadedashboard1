@@ -335,8 +335,10 @@ export function BinneyPtoPanel() {
             />
           )}
 
-          {/* Balances */}
-          {(summaryQ.data ?? []).length > 0 && (
+          {/* Balances — rendered even with zero pto_balances rows: the grid
+              synthesizes "not set" placeholder rows per engineer, which is
+              the entry path for seeding allotments. */}
+          {(engineersQ.data ?? []).length > 0 && (
             <BalancesGrid
               summaries={summaryQ.data ?? []}
               allRequests={buckets.all}

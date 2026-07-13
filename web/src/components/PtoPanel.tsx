@@ -359,8 +359,10 @@ export function PtoPanel() {
             />
           )}
 
-          {/* Balances */}
-          {summaries.length > 0 && (
+          {/* Balances — rendered even with zero pto_balances rows: the grid
+              synthesizes "not set" placeholder rows per engineer, which is
+              the entry path for seeding allotments. */}
+          {engineers.length > 0 && (
             <BalancesGrid
               summaries={summaries}
               allRequests={buckets.all}
