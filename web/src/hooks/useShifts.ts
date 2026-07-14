@@ -11,6 +11,10 @@ export type Shift = {
   end_time: string;
   sort_order: number;
   active: boolean;
+  /** Binney weekend-crew tag: 'saturday' (Wed–Sat), 'sunday' (Sun–Wed),
+   *  NULL for Mon–Fri shifts (incl. all UPark shifts). Single source of
+   *  truth for every crew filter/split. */
+  crew: 'saturday' | 'sunday' | null;
 };
 
 const KEY = ['shifts'];
@@ -21,7 +25,7 @@ export function useShifts() {
     queryFn: async (): Promise<Shift[]> => {
       const { data, error } = await supabase
         .from('shifts')
-        .select('id, name, start_time, lunch_out, lunch_in, end_time, sort_order, active')
+        .select('id, name, start_time, lunch_out, lunch_in, end_time, sort_order, active, crew')
         .eq('active', true)
         .order('sort_order', { ascending: true });
       if (error) throw error;

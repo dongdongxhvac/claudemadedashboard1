@@ -13,9 +13,12 @@ import {
 import { useShifts } from '../../hooks/useShifts';
 import { supabase } from '../../lib/supabase';
 
-type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
+type Crew = 'saturday' | 'sunday' | null;
+type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew';
 const FILTERS_ADMIN: { key: Filter; label: string }[] = [
   { key: 'active',   label: 'All active' },
+  { key: 'sat_crew', label: 'Saturday crew' },
+  { key: 'sun_crew', label: 'Sunday crew' },
   { key: 'engineer', label: 'Engineers' },
   { key: 'manager',  label: 'Managers' },
   { key: 'director', label: 'Directors' },
@@ -25,10 +28,14 @@ const FILTERS_ADMIN: { key: Filter; label: string }[] = [
 // Leads only see engineers (active + inactive). No managers / directors / admins.
 const FILTERS_LEAD: { key: Filter; label: string }[] = [
   { key: 'engineer', label: 'Engineers' },
+  { key: 'sat_crew', label: 'Saturday crew' },
+  { key: 'sun_crew', label: 'Sunday crew' },
   { key: 'inactive', label: 'Inactive engineers' },
 ];
 
-function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
+// Crew comes from shifts.crew via the person's shift — same source of truth
+// the PTO panel's roll and balances split use.
+function applyFilter(rows: EngineerRow[], f: Filter, crewOf: (r: EngineerRow) => Crew): EngineerRow[] {
   switch (f) {
     case 'active':   return rows.filter((r) => r.active);
     case 'engineer': return rows.filter((r) => r.active && r.role === 'engineer');
@@ -36,6 +43,8 @@ function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
     case 'director': return rows.filter((r) => r.active && r.role === 'director');
     case 'admin':    return rows.filter((r) => r.active && r.role === 'admin');
     case 'inactive': return rows.filter((r) => !r.active);
+    case 'sat_crew': return rows.filter((r) => r.active && crewOf(r) === 'saturday');
+    case 'sun_crew': return rows.filter((r) => r.active && crewOf(r) === 'sunday');
   }
 }
 
@@ -54,8 +63,17 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
   // Leads only ever see engineer rows (active + inactive).
   const allRows = (q.data ?? []).filter((r) => canManageUsers || r.role === 'engineer');
 
+  const crewByShiftId = useMemo(
+    () => new Map((shiftsQ.data ?? []).map((s) => [s.id, s.crew ?? null])),
+    [shiftsQ.data],
+  );
+
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0 };
+    const crewOf = (r: EngineerRow): Crew => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null);
+    const c: Record<Filter, number> = {
+      active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0,
+      sat_crew: 0, sun_crew: 0,
+    };
     for (const r of allRows) {
       if (r.active) {
         c.active++;
@@ -63,17 +81,20 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
         else if (r.role === 'manager')  c.manager++;
         else if (r.role === 'director') c.director++;
         else if (r.role === 'admin')    c.admin++;
+        if (crewOf(r) === 'saturday') c.sat_crew++;
+        else if (crewOf(r) === 'sunday') c.sun_crew++;
       } else {
         c.inactive++;
       }
     }
     return c;
-  }, [allRows]);
+  }, [allRows, crewByShiftId]);
 
   if (q.isLoading) return <p className="t-text t-muted">Loading users...</p>;
   if (q.isError) return <p className="t-text t-danger">Error: {(q.error as Error).message}</p>;
 
-  const rows = applyFilter(allRows, filter);
+  const rows = applyFilter(allRows, filter,
+    (r) => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null));
   const shifts = shiftsQ.data ?? [];
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 

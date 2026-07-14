@@ -182,6 +182,17 @@ export function BinneyPtoPanel() {
   const assignmentsQ   = useCurrentBuildingAssignments();
   const buildingsQ     = useBuildings();
 
+  // Crew per engineer (from shifts.crew) — powers the balances crew split
+  // below; the roll and the User Profiles filter read the same column.
+  const crewByUserId = useMemo(() => {
+    const byShift = new Map((shiftsQ.data ?? []).map((s) => [s.id, (s.crew ?? null) as Crew]));
+    const m = new Map<string, Crew | undefined>();
+    for (const e of engineersQ.data ?? []) {
+      m.set(e.user_id, e.shift_id ? byShift.get(e.shift_id) : undefined);
+    }
+    return m;
+  }, [engineersQ.data, shiftsQ.data]);
+
   // Pre-compute on-call weeks for everyone in the rotation horizon.
   const oncallWeeks = useMemo(() => {
     const startFriday = settingsQ.data?.start_friday;
@@ -343,6 +354,7 @@ export function BinneyPtoPanel() {
               summaries={summaryQ.data ?? []}
               allRequests={buckets.all}
               engineers={engineersQ.data ?? []}
+              crewByUser={crewByUserId}
               onEdit={(s) => setShowEditBalance(s)}
               onEditRequest={(r) => setEditingRequest(r)}
               onDeleteRequest={(id) => {
@@ -661,26 +673,27 @@ function computeWorkDays(extra: number): { iso: string; label: string; isToday: 
   return out;
 }
 
-/** Binney crew calendar: two 4×10 crews with a Wednesday overlap.
- *    Sun–Wed crew works Sun(0) Mon(1) Tue(2) Wed(3)
- *    Wed–Sat crew works Wed(3) Thu(4) Fri(5) Sat(6)
- *  Crew membership is derived from the shift NAME seeded by migration 0093
- *  ('Sun-Wed 6A', 'Wed-Sat 7:30A', ...). Any other shift name — or no shift
- *  at all — counts as scheduled every day, so unassigned techs stay visible
- *  in the roll instead of silently disappearing. */
-function crewWorksOn(shiftName: string | null | undefined, iso: string): boolean {
-  if (!shiftName) return true;
+/** Binney crew calendar, keyed off shifts.crew (the single source of truth
+ *  shared with the balances split and the User Profiles crew filter):
+ *    'sunday'   crew works Sun(0) Mon(1) Tue(2) Wed(3)   — Sun–Wed shifts
+ *    'saturday' crew works Wed(3) Thu(4) Fri(5) Sat(6)   — Wed–Sat shifts
+ *    null       = a Mon–Fri day shift (works Mon–Fri)
+ *    undefined  = no shift assigned → scheduled every day, so unassigned
+ *                 techs stay visible in the roll instead of vanishing. */
+type Crew = 'saturday' | 'sunday' | null;
+function crewWorksOn(crew: Crew | undefined, iso: string): boolean {
+  if (crew === undefined) return true;
   const dow = new Date(iso + 'T00:00:00').getDay(); // 0=Sun .. 6=Sat
-  if (shiftName.startsWith('Sun-Wed')) return dow <= 3;
-  if (shiftName.startsWith('Wed-Sat')) return dow >= 3;
-  return true;
+  if (crew === 'sunday') return dow <= 3;
+  if (crew === 'saturday') return dow >= 3;
+  return dow >= 1 && dow <= 5; // Mon–Fri day shift
 }
 
 function TodayAttendance({
   engineers, shifts, allApproved, leadingCell,
 }: {
   engineers: EngineerRow[];
-  shifts: { id: string; name: string; sort_order: number }[];
+  shifts: { id: string; name: string; sort_order: number; crew?: Crew }[];
   allApproved: PtoRequest[];
   /** Optional left-most cell rendered in the same grid row as the 3 day
    *  blocks. Used to pin the vacation-cap heatmap alongside attendance. */
@@ -723,12 +736,14 @@ function TodayAttendance({
     const out = orderedShifts.map((s) => ({
       shift_id: s.id,
       label: s.name,
+      crew: (s.crew ?? null) as Crew | undefined,
       engineers: (byShift.get(s.id) ?? []).sort((a, b) => a.full_name.localeCompare(b.full_name)),
     })).filter((g) => g.engineers.length > 0);
     if (noShift.length > 0) {
       out.push({
         shift_id: '_noshift',
         label: 'No shift',
+        crew: undefined,   // unassigned → shown every day
         engineers: noShift.sort((a, b) => a.full_name.localeCompare(b.full_name)),
       });
     }
@@ -739,10 +754,10 @@ function TodayAttendance({
   // engineers are counted as "in" (they're around for part of the day) but
   // get a separate "partial" tally so the manager sees them at a glance.
   // Binney: the in/total denominators count only engineers whose CREW works
-  // that day (Sun–Wed vs Wed–Sat), so the Sunday crew doesn't read as
-  // "out" on a Friday.
-  const shiftNameById = useMemo(
-    () => new Map(shifts.map((s) => [s.id, s.name])),
+  // that day (Sun–Wed vs Wed–Sat vs Mon–Fri), so the Sunday crew doesn't
+  // read as "out" on a Friday.
+  const crewByShiftId = useMemo(
+    () => new Map(shifts.map((s) => [s.id, (s.crew ?? null) as Crew])),
     [shifts],
   );
   const counts = useMemo(() => {
@@ -752,7 +767,7 @@ function TodayAttendance({
       let scheduled = 0;
       for (const e of engineers) {
         if (!e.active || e.role !== 'engineer') continue;
-        if (!crewWorksOn(e.shift_id ? shiftNameById.get(e.shift_id) : null, d.iso)) continue;
+        if (!crewWorksOn(e.shift_id ? crewByShiftId.get(e.shift_id) : undefined, d.iso)) continue;
         scheduled++;
         const p = ptoByUserDay.get(`${e.user_id}|${d.iso}`);
         if (!p) continue;
@@ -767,7 +782,7 @@ function TodayAttendance({
         total: scheduled,
       };
     });
-  }, [days, engineers, ptoByUserDay, shiftNameById]);
+  }, [days, engineers, ptoByUserDay, crewByShiftId]);
 
   // Clicking an empty DayChip opens a QuickPtoModal pre-filled for that
   // (engineer, date) so the manager can pick a type (defaults to sick),
@@ -825,7 +840,7 @@ function DayAttendanceGroup({
 }: {
   day: { iso: string; label: string; isToday: boolean };
   counts: { in: number; out: number; partial: number; total: number };
-  shiftGroups: { shift_id: string; label: string; engineers: EngineerRow[] }[];
+  shiftGroups: { shift_id: string; label: string; crew: Crew | undefined; engineers: EngineerRow[] }[];
   ptoLookup: Map<string, PtoRequest>;
   disabled: boolean;
   onLogClick: (eng: EngineerRow, iso: string, label: string) => void;
@@ -868,9 +883,8 @@ function DayAttendanceGroup({
       </div>
       <div className="space-y-1">
         {/* Hide a crew's whole row on days its rotation doesn't work —
-            the '_noshift' bucket (label "No shift") never matches a crew
-            prefix, so unassigned techs show every day. */}
-        {shiftGroups.filter((g) => crewWorksOn(g.shift_id === '_noshift' ? null : g.label, day.iso)).map((g) => (
+            the '_noshift' bucket (crew undefined) shows every day. */}
+        {shiftGroups.filter((g) => crewWorksOn(g.crew, day.iso)).map((g) => (
           <div key={g.shift_id} className="flex items-baseline gap-2 flex-wrap">
             <span
               className="t-muted uppercase tracking-wider"
@@ -1524,11 +1538,13 @@ function fmtHireSeniority(hireIso: string | null): string {
 }
 
 function BalancesGrid({
-  summaries, allRequests, engineers, onEdit, onEditRequest, onDeleteRequest,
+  summaries, allRequests, engineers, crewByUser, onEdit, onEditRequest, onDeleteRequest,
 }: {
   summaries: PtoSummary[];
   allRequests: PtoRequest[];
   engineers: EngineerRow[];
+  /** user_id → crew (shifts.crew). Drives the two-sided crew split. */
+  crewByUser?: Map<string, Crew | undefined>;
   onEdit: (s: PtoSummary) => void;
   onEditRequest?: (r: PtoRequest) => void;
   onDeleteRequest?: (id: string) => void;
@@ -1617,11 +1633,26 @@ function BalancesGrid({
 
   if (rows.length === 0) return null;
 
-  // Long rosters (Binney runs 20+) make one column far too tall — split the
-  // rows into two side-by-side tables when there are enough of them.
-  // flex-wrap falls back to a single column when the viewport is narrow.
+  // Two-sided crew split (user 2026-07-13): left = Saturday crew, right =
+  // Sunday crew, plus a trailing bucket for Mon–Fri / unassigned so nobody
+  // vanishes. Crew comes from shifts.crew via crewByUser — the same source
+  // the roll and the User Profiles filter use. Falls back to an
+  // alphabetical half-split while no crews are assigned.
+  const crewOf = (uid: string) => crewByUser?.get(uid);
+  const sat = rows.filter((s) => crewOf(s.user_id) === 'saturday');
+  const sun = rows.filter((s) => crewOf(s.user_id) === 'sunday');
+  const rest = rows.filter((s) => crewOf(s.user_id) !== 'saturday' && crewOf(s.user_id) !== 'sunday');
   const mid = Math.ceil(rows.length / 2);
-  const halves = rows.length > 6 ? [rows.slice(0, mid), rows.slice(mid)] : [rows];
+  const halves: { label: string | null; rows: PtoSummary[] }[] =
+    sat.length > 0 || sun.length > 0
+      ? [
+          { label: `Saturday crew (${sat.length})`, rows: sat },
+          { label: `Sunday crew (${sun.length})`, rows: sun },
+          { label: `Mon–Fri / no crew (${rest.length})`, rows: rest },
+        ].filter((h) => h.rows.length > 0)
+      : rows.length > 6
+        ? [{ label: null, rows: rows.slice(0, mid) }, { label: null, rows: rows.slice(mid) }]
+        : [{ label: null, rows }];
 
   return (
     <div>
@@ -1631,6 +1662,9 @@ function BalancesGrid({
       <div className="flex flex-wrap items-start" style={{ columnGap: '1.75rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
       <div key={hi} style={hi > 0 ? { borderLeft: '1px solid var(--color-border)', paddingLeft: '1.75rem' } : undefined}>
+      {half.label && (
+        <div className="t-small t-muted uppercase tracking-wider mb-1">{half.label}</div>
+      )}
       <table className="t-text t-small border-collapse" style={{ width: 'auto' }}>
         <thead>
           {/* Single compact header row — each type column shows "balance
@@ -1653,7 +1687,7 @@ function BalancesGrid({
           </tr>
         </thead>
         <tbody>
-          {half.map((s) => {
+          {half.rows.map((s) => {
             const isOpen = expandedUserId === s.user_id;
             const log = logByUser.get(s.user_id) ?? [];
             const hireLine = fmtHireSeniority(hireByUser.get(s.user_id) ?? null);
