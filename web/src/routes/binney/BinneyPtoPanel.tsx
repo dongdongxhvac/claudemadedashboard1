@@ -21,6 +21,7 @@ import {
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
   type PtoRequestSource,
 } from './hooks/useBinneyPto';
+import { useEngineerPtoDailyHours } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { useShifts } from '../../hooks/useShifts';
 import {
@@ -2582,8 +2583,23 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
 
 // ───────────────────────────── Edit balance modal
 
+// Sick accrual by length of service. Days are policy; hours are days ×
+// the engineer's daily rate (Binney = 10h/day, resolved per-engineer so
+// Justin McCarthy's 8h override shows 8h days). First year accrues in
+// steps; from 1 year on, each year starts with the full 8 days.
+const SICK_ACCRUAL: { label: string; days: number }[] = [
+  { label: '<3 months',        days: 0 },
+  { label: '3 – <6 months',    days: 2 },
+  { label: '6 – <9 months',    days: 3 },
+  { label: '9 – <12 months',   days: 4 },
+  { label: '1 yr+ (each year)', days: 8 },
+];
+
 function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: () => void }) {
   const update = useUpdatePtoBalance();
+  // Binney default is 10h/day; per-engineer override (e.g. McCarthy = 8) wins.
+  const dailyHoursQ = useEngineerPtoDailyHours(summary.user_id);
+  const sickDailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
   const [vac, setVac]   = useState<string>(String(summary.vacation_alloted));
   const [sick, setSick] = useState<string>(String(summary.sick_alloted));
   const [holiday, setHoliday] = useState<string>(String(summary.holiday_alloted));
@@ -2676,30 +2692,22 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
             <p className="t-small t-muted mt-1">Used: {summary.sick_used}h</p>
             <details className="mt-1">
               <summary className="t-small t-muted cursor-pointer" style={{ fontSize: '0.7rem' }}>
-                Sick day schedule (first-year accrual by length of service)
+                Sick day schedule ({sickDailyHours}h/day · by length of service)
               </summary>
               <table className="t-small t-mono mt-1" style={{ borderCollapse: 'collapse', fontSize: '0.7rem' }}>
                 <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">&lt;3 months</td>
-                    <td className="text-right py-0.5">0 days</td>
-                    <td className="pl-2 py-0.5 t-muted">0h</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">3 – &lt;6 months</td>
-                    <td className="text-right py-0.5">2 days</td>
-                    <td className="pl-2 py-0.5 t-muted">16h</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">6 – &lt;9 months</td>
-                    <td className="text-right py-0.5">3 days</td>
-                    <td className="pl-2 py-0.5 t-muted">24h</td>
-                  </tr>
-                  <tr>
-                    <td className="pr-3 py-0.5 t-muted">9 – &lt;12 months</td>
-                    <td className="text-right py-0.5">4 days</td>
-                    <td className="pl-2 py-0.5 t-muted">32h</td>
-                  </tr>
+                  {SICK_ACCRUAL.map((r, i) => (
+                    <tr
+                      key={r.label}
+                      style={i < SICK_ACCRUAL.length - 1
+                        ? { borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }
+                        : undefined}
+                    >
+                      <td className="pr-3 py-0.5 t-muted">{r.label}</td>
+                      <td className="text-right py-0.5">{r.days} days</td>
+                      <td className="pl-2 py-0.5 t-muted">{r.days * sickDailyHours}h</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </details>
