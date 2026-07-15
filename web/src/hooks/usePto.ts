@@ -176,6 +176,27 @@ export function usePtoSummary() {
   });
 }
 
+/** Per-engineer PTO auto-fill daily-hours override (migration 0101). Returns
+ *  the raw column value or null when unset — callers apply the site default
+ *  (Binney 10, UPark 8) themselves. */
+export function useEngineerPtoDailyHours(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['pto_daily_hours', userId ?? null],
+    enabled: !!userId,
+    queryFn: async (): Promise<number | null> => {
+      const { data, error } = await supabase
+        .from('engineer_profiles')
+        .select('pto_daily_hours')
+        .eq('user_id', userId!)
+        .maybeSingle();
+      if (error) throw error;
+      const v = (data as { pto_daily_hours: number | string | null } | null)?.pto_daily_hours;
+      return v == null ? null : Number(v);
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function usePtoRealtime() {
   const qc = useQueryClient();
   useEffect(() => {

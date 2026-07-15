@@ -21,10 +21,11 @@
 import { useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoRealtime,
-  useSubmitPto, useCancelPto,
+  useSubmitPto, useCancelPto, useEngineerPtoDailyHours,
   checkVacationCap,
   type PtoRequest, type PtoType,
 } from '../hooks/usePto';
+import { useMySiteAccess } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
 
 // Engineer self-serve only exposes the two real time-off categories.
@@ -49,6 +50,15 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
   const reqQ     = usePtoRequests();
   const summaryQ = usePtoSummary();
   usePtoRealtime();
+
+  // Auto-fill hours rule. Binney runs a 7-day 4x10 schedule → 10h/day and
+  // every day in the range counts; UPark → 8h/day, weekdays only. A per-
+  // engineer override (migration 0101, e.g. Justin McCarthy = 8) wins over
+  // the site default.
+  const { homeSite } = useMySiteAccess();
+  const overrideQ = useEngineerPtoDailyHours(userId);
+  const dailyHours = overrideQ.data != null ? overrideQ.data : (homeSite === 'binney' ? 10 : 8);
+  const countAllDays = homeSite === 'binney';
 
   const year = new Date().getFullYear();
 
@@ -92,7 +102,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
 
         {/* Balances strip */}
         {mySummary && (
-          <div className="flex flex-wrap gap-3 mt-2 t-small">
+          <div className="flex flex-wrap gap-3 mt-3">
             <BalanceChip label="Vacation" remaining={mySummary.vacation_remaining} used={mySummary.vacation_used} alloted={mySummary.vacation_alloted} />
             <BalanceChip label="Sick"     remaining={mySummary.sick_remaining}     used={mySummary.sick_used}     alloted={mySummary.sick_alloted} />
             {mySummary.holiday_alloted > 0 && (
@@ -106,6 +116,8 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
         <RequestForm
           userId={userId}
           allRequests={reqQ.data ?? []}
+          dailyHours={dailyHours}
+          countAllDays={countAllDays}
           onDone={() => setShowForm(false)}
         />
       )}
@@ -142,28 +154,32 @@ function BalanceChip({
 }) {
   if (alloted === 0) {
     return (
-      <span className="t-small t-muted" style={{
-        padding: '0.2rem 0.55rem', borderRadius: 999,
+      <div className="t-muted" style={{
+        padding: '0.5rem 0.85rem', borderRadius: 10, minWidth: 120,
         border: '1px solid var(--color-border-soft)',
       }}>
-        {label}: —
-      </span>
+        <div className="t-small t-muted" style={{ marginBottom: 4 }}>{label}</div>
+        <div style={{ fontSize: '1.35rem', fontWeight: 600, lineHeight: 1 }}>—</div>
+      </div>
     );
   }
   const color = remaining <= 0 ? 'var(--color-danger)'
               : remaining <= 8 ? 'var(--color-warn, #d97706)'
               : 'var(--color-text)';
   return (
-    <span style={{
-      padding: '0.2rem 0.55rem', borderRadius: 999,
+    <div style={{
+      padding: '0.5rem 0.85rem', borderRadius: 10, minWidth: 120,
       border: '1px solid var(--color-border-soft)',
       background: 'var(--color-card)',
-      display: 'inline-flex', alignItems: 'baseline', gap: 4,
     }}>
-      <span className="t-muted">{label}:</span>
-      <span style={{ color, fontWeight: remaining <= 8 ? 600 : 500 }}>{remaining}h</span>
-      <span className="t-muted t-mono" style={{ fontSize: '0.65rem' }}>({used}/{alloted})</span>
-    </span>
+      <div className="t-small t-muted" style={{ marginBottom: 4 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ color, fontSize: '1.6rem', fontWeight: 700, lineHeight: 1 }}>
+          {remaining}<span style={{ fontSize: '0.95rem', fontWeight: 600 }}>h</span>
+        </span>
+        <span className="t-muted t-mono" style={{ fontSize: '0.7rem' }}>{used}/{alloted} used</span>
+      </div>
+    </div>
   );
 }
 
@@ -203,10 +219,12 @@ function PendingMineList({ rows }: { rows: PtoRequest[] }) {
 }
 
 function RequestForm({
-  userId, allRequests, onDone,
+  userId, allRequests, dailyHours, countAllDays, onDone,
 }: {
   userId: string;
   allRequests: PtoRequest[];
+  dailyHours: number;
+  countAllDays: boolean;
   onDone: () => void;
 }) {
   const submit = useSubmitPto();
@@ -221,6 +239,9 @@ function RequestForm({
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
     if (days <= 0) return 0;
+    // Binney (7-day schedule) counts every day in the range; UPark counts
+    // weekdays only. The per-day rate is the engineer's dailyHours.
+    if (countAllDays) return days * dailyHours;
     let weekdays = 0;
     const cur = new Date(startsOn + 'T00:00:00');
     for (let i = 0; i < days; i++) {
@@ -228,8 +249,8 @@ function RequestForm({
       if (dow !== 0 && dow !== 6) weekdays++;
       cur.setDate(cur.getDate() + 1);
     }
-    return weekdays * 8;
-  }, [startsOn, endsOn]);
+    return weekdays * dailyHours;
+  }, [startsOn, endsOn, countAllDays, dailyHours]);
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
   const cap = type === 'vacation' && startsOn && endsOn
