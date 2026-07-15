@@ -126,9 +126,12 @@ export default function App() {
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
-        <Route path="/buildings" element={<Protected><BuildingsIndex /></Protected>} />
+        {/* Buildings KB is UPark-only content (Index filters via
+            useUparkBuildingIds), so fence it like the other UPark surfaces —
+            otherwise Binney staff land in UPark's building list. */}
+        <Route path="/buildings" element={<Protected><RequireSite site="upark"><BuildingsIndex /></RequireSite></Protected>} />
         <Route path="/upark/buildings" element={<Navigate to="/buildings" replace />} />
-        <Route path="/buildings/:short_code" element={<Protected><BuildingDetail /></Protected>} />
+        <Route path="/buildings/:short_code" element={<Protected><RequireSite site="upark"><BuildingDetail /></RequireSite></Protected>} />
         {/* Training is the training-manager's cross-site tool — admin/director only. */}
         <Route path="/training" element={<Protected><RequireCrossSite><Training /></RequireCrossSite></Protected>} />
         {/* Binney St — isolated route tree (first pass: PTO only). */}

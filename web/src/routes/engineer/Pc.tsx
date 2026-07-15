@@ -199,9 +199,13 @@ export default function EngineerPc() {
                 View profile →
               </Link>
             )}
-            <Link to="/buildings" className="t-small t-accent hover:underline">
-              Buildings
-            </Link>
+            {/* /buildings is the UPark KB index (site-fenced in App.tsx) —
+                Binney has no buildings surface yet, so don't offer the link. */}
+            {!binneyOnly && (
+              <Link to="/buildings" className="t-small t-accent hover:underline">
+                Buildings
+              </Link>
+            )}
             {canAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 {isAdmin ? 'Admin' : 'Admin (lead)'}
