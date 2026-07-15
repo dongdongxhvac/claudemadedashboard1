@@ -15,13 +15,14 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
-  checkVacationCap, PTO_TYPE_LABELS, ptoTypeLabel,
+  checkVacationCap, ptoTypeLabel,
+  PTO_MANAGER_TYPE_OPTIONS, PTO_OTHER_LEAVE_TYPES,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
   type PtoRequestSource,
 } from './hooks/useBinneyPto';
-import { useEngineerPtoDailyHours } from '../../hooks/usePto';
+import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { useShifts } from '../../hooks/useShifts';
 import {
@@ -65,6 +66,9 @@ export const PTO_TYPE_COLOR: Record<PtoType, string> = {
   bereavement: '#a855f7',   // purple
   holiday:     '#10b981',   // green
   unpaid:      '#64748b',   // slate
+  leave:       '#f59e0b',   // amber
+  short_term:  '#ec4899',   // pink
+  jury_duty:   '#6366f1',   // indigo
 };
 const PTO_TYPE_BG: Record<PtoType, string> = {
   vacation:    'rgba(59,130,246,0.06)',
@@ -73,7 +77,24 @@ const PTO_TYPE_BG: Record<PtoType, string> = {
   bereavement: 'rgba(168,85,247,0.05)',
   holiday:     'rgba(16,185,129,0.05)',
   unpaid:      'rgba(100,116,139,0.05)',
+  leave:       'rgba(245,158,11,0.06)',
+  short_term:  'rgba(236,72,153,0.06)',
+  jury_duty:   'rgba(99,102,241,0.06)',
 };
+
+/** <option>s for a PTO type <select>, in the given display order. If `ensure`
+ *  is a type not already in the list (e.g. a legacy 'unpaid'/'personal' row
+ *  being edited), it's prepended so the select can still display it. */
+function PtoTypeOptions({ options, ensure }: { options: PtoType[]; ensure?: PtoType }) {
+  const list = ensure && !options.includes(ensure) ? [ensure, ...options] : options;
+  return (
+    <>
+      {list.map((t) => (
+        <option key={t} value={t}>{ptoTypeLabel(t)}</option>
+      ))}
+    </>
+  );
+}
 
 // ── Conflict detection: surface approved PTO that overlaps an on-call
 // week, an OT signup, or covers a primary-building assignment so the
@@ -1135,15 +1156,9 @@ function QuickPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal is hidden because we stripped its entry from
-                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
-                  with type='personal' render via ptoTypeLabel() elsewhere
-                  — they fall back to the raw "personal" string. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
-                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
-                .map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
+              {/* Manager-loggable types in display order; ensure keeps any
+                  legacy value (personal/unpaid) selectable when editing. */}
+              <PtoTypeOptions options={PTO_MANAGER_TYPE_OPTIONS} ensure={type} />
             </select>
           </label>
 
@@ -1283,7 +1298,7 @@ function CapHeatmap({ requests, onPickDate }: {
 
   // Per-day list of engineers on vacation (approved or pending). Store
   // {name, status} so we can build initials + tooltip with status hints.
-  type DayInfo = { name: string; status: 'approved' | 'pending'; };
+  type DayInfo = { name: string; status: 'approved' | 'pending'; label?: string };
 
   // Generic per-day grouper for one PTO type. Reused for vacation (drives the
   // cell colour + cap count) and sick (drives the non-counting corner dot).
@@ -1308,6 +1323,27 @@ function CapHeatmap({ requests, onPickDate }: {
   // Sick is shown as a corner dot only — it never counts toward the vacation
   // cap colour, so the 2-engineer cap math stays untouched.
   const sickByDay = useMemo(() => groupByDay('sick'), [requests]);
+  // Other absence types (bereavement / leave / short-term / jury duty) — a
+  // second non-counting marker, labelled per type in the tooltip. Never
+  // touches the 2-engineer cap math.
+  const otherByDay = useMemo(() => {
+    const m = new Map<string, DayInfo[]>();
+    const otherSet = new Set<PtoType>(PTO_OTHER_LEAVE_TYPES);
+    for (const r of requests) {
+      if (!otherSet.has(r.type)) continue;
+      if (r.status !== 'approved' && r.status !== 'pending') continue;
+      let cur = r.starts_on;
+      while (cur <= r.ends_on) {
+        const list = m.get(cur) ?? [];
+        list.push({ name: r.user_full_name ?? '?', status: r.status, label: ptoTypeLabel(r.type) });
+        m.set(cur, list);
+        const d = new Date(cur + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        cur = d.toISOString().slice(0, 10);
+      }
+    }
+    return m;
+  }, [requests]);
 
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   type Cell = {
@@ -1319,6 +1355,7 @@ function CapHeatmap({ requests, onPickDate }: {
     isWeekend: boolean;
     people: DayInfo[];
     sick: DayInfo[];
+    other: DayInfo[];
   };
   const cells: Cell[] = [];
   for (let i = 0; i < totalDays; i++) {
@@ -1336,6 +1373,7 @@ function CapHeatmap({ requests, onPickDate }: {
       isWeekend: row >= 5,
       people:    byDay.get(iso) ?? [],
       sick:      sickByDay.get(iso) ?? [],
+      other:     otherByDay.get(iso) ?? [],
     });
   }
 
@@ -1373,18 +1411,21 @@ function CapHeatmap({ requests, onPickDate }: {
     const sickLine = cell.sick.length > 0
       ? `\nSick: ${cell.sick.map((p) => `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`).join(', ')}`
       : '';
+    const otherLine = cell.other.length > 0
+      ? `\n${cell.other.map((p) => `${p.name} (${p.label ?? 'leave'})${p.status === 'pending' ? ' pending' : ''}`).join(', ')}`
+      : '';
     if (cell.people.length === 0) {
       // Binney covers all 7 days (two 4×10 crews), so weekend cells get the
       // same click-to-add affordance as weekdays.
       const base = cell.isPast
         ? `${date}\n(past — no vacation)`
         : `${date}\nNo one on vacation — click to add`;
-      return base + sickLine;
+      return base + sickLine + otherLine;
     }
     const names = cell.people.map((p) =>
       `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`
     ).join(', ');
-    return `${date}\nVacation: ${names}${sickLine}${cell.isPast ? '' : '\n(click to add another PTO)'}`;
+    return `${date}\nVacation: ${names}${sickLine}${otherLine}${cell.isPast ? '' : '\n(click to add another PTO)'}`;
   };
 
   return (
@@ -1425,6 +1466,10 @@ function CapHeatmap({ requests, onPickDate }: {
           <span style={{ width: 7, height: 7, borderRadius: 999, background: '#ef4444', border: '1px solid rgba(0,0,0,0.15)' }} />
           <span>sick</span>
         </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 2, background: '#8b5cf6', border: '1px solid rgba(0,0,0,0.15)' }} />
+          <span>leave</span>
+        </span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -1452,6 +1497,7 @@ function CapHeatmap({ requests, onPickDate }: {
               const label = cellLabel(cell.people);
               const clickable = !cell.isPast && !!onPickDate;
               const hasSick = cell.sick.length > 0;
+              const hasOther = cell.other.length > 0;
               return (
                 <button
                   key={cell.iso}
@@ -1491,6 +1537,23 @@ function CapHeatmap({ requests, onPickDate }: {
                       }}
                     >
                       {cell.sick.length > 1 ? cell.sick.length : ''}
+                    </span>
+                  )}
+                  {hasOther && (
+                    // Non-counting "other leave" marker (bereavement/leave/
+                    // short-term/jury): purple corner square, bottom-right.
+                    <span
+                      style={{
+                        position: 'absolute', bottom: 1, right: 1,
+                        minWidth: 7, height: 7, borderRadius: 2,
+                        background: '#8b5cf6',
+                        border: '1px solid rgba(255,255,255,0.85)',
+                        fontSize: 7, lineHeight: '6px', color: '#fff',
+                        fontWeight: 700, padding: cell.other.length > 1 ? '0 1px' : 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      {cell.other.length > 1 ? cell.other.length : ''}
                     </span>
                   )}
                 </button>
@@ -2152,15 +2215,9 @@ function AddPtoModal({
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal is hidden because we stripped its entry from
-                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
-                  with type='personal' render via ptoTypeLabel() elsewhere
-                  — they fall back to the raw "personal" string. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
-                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
-                .map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
+              {/* Manager-loggable types in display order; ensure keeps any
+                  legacy value (personal/unpaid) selectable when editing. */}
+              <PtoTypeOptions options={PTO_MANAGER_TYPE_OPTIONS} ensure={type} />
             </select>
           </label>
 
@@ -2455,15 +2512,9 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
               className="w-full border rounded px-2 py-1 t-text"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             >
-              {/* Personal is hidden because we stripped its entry from
-                  PTO_TYPE_LABELS (it's now a Partial record). Legacy rows
-                  with type='personal' render via ptoTypeLabel() elsewhere
-                  — they fall back to the raw "personal" string. */}
-              {(Object.entries(PTO_TYPE_LABELS) as [PtoType, string | undefined][])
-                .filter((entry): entry is [PtoType, string] => entry[1] !== undefined)
-                .map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
+              {/* Manager-loggable types in display order; ensure keeps any
+                  legacy value (personal/unpaid) selectable when editing. */}
+              <PtoTypeOptions options={PTO_MANAGER_TYPE_OPTIONS} ensure={type} />
             </select>
           </label>
 
@@ -2582,18 +2633,6 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
 }
 
 // ───────────────────────────── Edit balance modal
-
-// Sick accrual by length of service. Days are policy; hours are days ×
-// the engineer's daily rate (Binney = 10h/day, resolved per-engineer so
-// Justin McCarthy's 8h override shows 8h days). First year accrues in
-// steps; from 1 year on, each year starts with the full 8 days.
-const SICK_ACCRUAL: { label: string; days: number }[] = [
-  { label: '<3 months',        days: 0 },
-  { label: '3 – <6 months',    days: 2 },
-  { label: '6 – <9 months',    days: 3 },
-  { label: '9 – <12 months',   days: 4 },
-  { label: '1 yr+ (each year)', days: 8 },
-];
 
 function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: () => void }) {
   const update = useUpdatePtoBalance();

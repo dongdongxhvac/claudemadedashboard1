@@ -20,7 +20,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 import { useBinneySiteId } from './useBinneySiteId';
 
-export type PtoType   = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'holiday' | 'unpaid';
+export type PtoType   = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'holiday' | 'unpaid'
+                      | 'leave' | 'short_term' | 'jury_duty';
 export type PtoStatus = 'pending'  | 'approved' | 'denied' | 'cancelled';
 
 /** Friendly labels for PTO types. Partial because "personal" was removed
@@ -31,8 +32,11 @@ export type PtoStatus = 'pending'  | 'approved' | 'denied' | 'cancelled';
 export const PTO_TYPE_LABELS: Partial<Record<PtoType, string>> = {
   vacation: 'Vacation',
   sick: 'Sick',
-  bereavement: 'Bereavement',
   holiday: 'Floating Holiday',
+  bereavement: 'Bereavement',
+  leave: 'Leave',
+  short_term: 'Short-Term',
+  jury_duty: 'Jury Duty',
   unpaid: 'Unpaid',
 };
 
@@ -42,6 +46,19 @@ export function ptoTypeLabel(t: PtoType | null | undefined): string {
   if (!t) return '—';
   return PTO_TYPE_LABELS[t] ?? t;
 }
+
+/** Types the manager Add/Quick/Edit-PTO dropdowns offer, in display order.
+ *  Mirrors the shared usePto set. 'unpaid'/'personal' are legacy — not
+ *  offered for new entries but still render via ptoTypeLabel(). */
+export const PTO_MANAGER_TYPE_OPTIONS: PtoType[] = [
+  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty',
+];
+
+/** Absence types shown on the coverage heatmap as a non-counting marker
+ *  (they don't count toward the 2-engineer vacation cap). */
+export const PTO_OTHER_LEAVE_TYPES: PtoType[] = [
+  'bereavement', 'leave', 'short_term', 'jury_duty',
+];
 
 export type PtoRequestSource =
   | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'team'

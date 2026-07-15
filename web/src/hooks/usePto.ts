@@ -53,6 +53,18 @@ export const PTO_OTHER_LEAVE_TYPES: PtoType[] = [
   'bereavement', 'leave', 'short_term', 'jury_duty',
 ];
 
+/** Sick accrual by length of service (reference schedule shown in the
+ *  balance editor). Days are policy; hours = days × the engineer's daily
+ *  rate (UPark 8h, Binney 10h, per-engineer override). First year accrues
+ *  in steps; from 1 year on, each year starts with the full 8 days. */
+export const SICK_ACCRUAL: { label: string; days: number }[] = [
+  { label: '<3 months',         days: 0 },
+  { label: '3 – <6 months',     days: 2 },
+  { label: '6 – <9 months',     days: 3 },
+  { label: '9 – <12 months',    days: 4 },
+  { label: '1 yr+ (each year)', days: 8 },
+];
+
 /** Look up a friendly label for a PtoType, falling back to the raw type
  *  string when there's no entry (e.g. legacy 'personal' rows). */
 export function ptoTypeLabel(t: PtoType | null | undefined): string {

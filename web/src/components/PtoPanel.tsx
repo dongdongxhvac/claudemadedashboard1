@@ -11,8 +11,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
-  checkVacationCap, ptoTypeLabel,
-  PTO_MANAGER_TYPE_OPTIONS, PTO_OTHER_LEAVE_TYPES,
+  checkVacationCap, ptoTypeLabel, useEngineerPtoDailyHours,
+  PTO_MANAGER_TYPE_OPTIONS, PTO_OTHER_LEAVE_TYPES, SICK_ACCRUAL,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
@@ -2596,6 +2596,9 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
 
 function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: () => void }) {
   const update = useUpdatePtoBalance();
+  // UPark default is 8h/day; per-engineer override wins if set.
+  const dailyHoursQ = useEngineerPtoDailyHours(summary.user_id);
+  const sickDailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 8;
   const [vac, setVac]   = useState<string>(String(summary.vacation_alloted));
   const [sick, setSick] = useState<string>(String(summary.sick_alloted));
   const [holiday, setHoliday] = useState<string>(String(summary.holiday_alloted));
@@ -2688,30 +2691,22 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
             <p className="t-small t-muted mt-1">Used: {summary.sick_used}h</p>
             <details className="mt-1">
               <summary className="t-small t-muted cursor-pointer" style={{ fontSize: '0.7rem' }}>
-                Sick day schedule (first-year accrual by length of service)
+                Sick day schedule ({sickDailyHours}h/day · by length of service)
               </summary>
               <table className="t-small t-mono mt-1" style={{ borderCollapse: 'collapse', fontSize: '0.7rem' }}>
                 <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">&lt;3 months</td>
-                    <td className="text-right py-0.5">0 days</td>
-                    <td className="pl-2 py-0.5 t-muted">0h</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">3 – &lt;6 months</td>
-                    <td className="text-right py-0.5">2 days</td>
-                    <td className="pl-2 py-0.5 t-muted">16h</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
-                    <td className="pr-3 py-0.5 t-muted">6 – &lt;9 months</td>
-                    <td className="text-right py-0.5">3 days</td>
-                    <td className="pl-2 py-0.5 t-muted">24h</td>
-                  </tr>
-                  <tr>
-                    <td className="pr-3 py-0.5 t-muted">9 – &lt;12 months</td>
-                    <td className="text-right py-0.5">4 days</td>
-                    <td className="pl-2 py-0.5 t-muted">32h</td>
-                  </tr>
+                  {SICK_ACCRUAL.map((r, i) => (
+                    <tr
+                      key={r.label}
+                      style={i < SICK_ACCRUAL.length - 1
+                        ? { borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }
+                        : undefined}
+                    >
+                      <td className="pr-3 py-0.5 t-muted">{r.label}</td>
+                      <td className="text-right py-0.5">{r.days} days</td>
+                      <td className="pl-2 py-0.5 t-muted">{r.days * sickDailyHours}h</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </details>
