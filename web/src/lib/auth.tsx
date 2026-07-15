@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
@@ -15,17 +16,30 @@ const Ctx = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  // Track the signed-in auth user so we can drop cached queries whenever the
+  // identity changes. React Query keys like ['my_engineer_context'] aren't
+  // scoped to the auth user, so without this a sign-out → sign-in (or account
+  // switch) in the same tab would serve the previous user's data until it went
+  // stale — e.g. a Binney engineer briefly showing a UPark engineer's dashboard.
+  const prevUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      prevUserId.current = data.session?.user?.id ?? null;
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      const newUserId = s?.user?.id ?? null;
+      if (prevUserId.current !== undefined && prevUserId.current !== newUserId) {
+        queryClient.clear();
+      }
+      prevUserId.current = newUserId;
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const signInWithMagicLink = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
