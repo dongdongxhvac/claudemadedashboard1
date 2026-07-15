@@ -1,10 +1,14 @@
-// Manager-editable EXTRA recipients for approved-PTO calendar invites (.ics).
+// Manager-editable recipients for approved-PTO calendar invites (.ics).
 //
-// Invites go to the home-site managers (users.is_manager) + the requesting
-// engineer BY DEFAULT — that built-in list is not shown or editable here.
-// This pool (pto_cal_recipients, migration 0096) holds the extras a manager
-// adds on top: client, director, admin — anything with an inbox. notify-pto
-// merges default + extras (deduped) when it sends METHOD:REQUEST / CANCEL.
+// Per-site rule — notify-pto v12 (migration 0100):
+//   UPark  — invites go to home-site managers (users.is_manager) + the
+//            requesting engineer BY DEFAULT; this table (pto_cal_recipients,
+//            migration 0096) holds EXTRAS added on top (client/director/admin).
+//   Binney — invites go to EXACTLY this table's list (the O365 group, which
+//            fans out to its members); managers + the engineer are reached
+//            through the group, not individually. Empty list falls back to
+//            the UPark rule.
+// The copy below branches on siteCode so each panel states its own rule.
 //
 // Rendered by BOTH the UPark and Binney PTO panels with their site code.
 // Additive shared component: self-contained queries/mutations, no shared
@@ -20,6 +24,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binney' }) {
   const qc = useQueryClient();
   const LIST_KEY = ['pto_cal_recipients', siteCode];
+  // Binney invites go ONLY to the list below (notify-pto v12); UPark adds
+  // managers + the requesting engineer on top. Copy branches on this.
+  const isBinney = siteCode === 'binney';
 
   const siteQ = useQuery({
     queryKey: ['pto_cal_site_id', siteCode],
@@ -49,10 +56,11 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
 
   // Default recipients summary: this site's managers (named — it's a short
   // list) and how many engineers are covered (each invite goes to the one
-  // requesting engineer, so only the count is shown).
+  // requesting engineer, so only the count is shown). UPark only — Binney
+  // doesn't invite managers/engineers individually, so the query is skipped.
   const defaultsQ = useQuery({
     queryKey: ['pto_cal_defaults', siteCode, siteQ.data ?? null],
-    enabled: !!siteQ.data,
+    enabled: !!siteQ.data && !isBinney,
     queryFn: async (): Promise<{ managers: string[]; engineerCount: number }> => {
       const { data, error } = await supabase
         .from('users')
@@ -107,22 +115,40 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         type="button"
         onClick={() => setOpen(!open)}
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
-        title="Invites go to home-site managers + the requesting engineer by default; extras (client / director / admin) are added below"
+        title={isBinney
+          ? 'Invites go only to the recipients listed below (the group fans out to its members)'
+          : 'Invites go to home-site managers + the requesting engineer by default; extras (client / director / admin) are added below'}
       >
-        {open ? '▾' : '▸'} Calendar invites · {defaultsQ.data?.managers.length ?? '…'} managers
-        · {defaultsQ.data?.engineerCount ?? '…'} engineers · {rows.length} extras
+        {open ? '▾' : '▸'} Calendar invites · {isBinney
+          ? `${rows.length} recipient${rows.length === 1 ? '' : 's'}`
+          : `${defaultsQ.data?.managers.length ?? '…'} managers · ${defaultsQ.data?.engineerCount ?? '…'} engineers · ${rows.length} extras`}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
           <p className="t-small t-muted">
-            <strong>Managers ({defaultsQ.data?.managers.length ?? 0})</strong>:{' '}
-            {defaultsQ.data?.managers.join(', ') || '—'}
-            {' · '}
-            <strong>Engineers ({defaultsQ.data?.engineerCount ?? 0})</strong>: each invite
-            goes to the engineer whose PTO it is
-            {' · '}
-            <strong>Extras ({rows.length})</strong>: added below — any inbox, gets every
-            invite and cancellation.
+            {isBinney ? (
+              <>
+                Invites go <strong>only to the recipients listed below</strong>. The group
+                fans out to its members, so managers and the requesting engineer are reached
+                through the group — not invited individually.
+                {rows.length === 0 && (
+                  <span className="t-danger"> List is empty — invites currently fall back to
+                    managers + the requesting engineer. Add the group to restore group-only
+                    delivery.</span>
+                )}
+              </>
+            ) : (
+              <>
+                <strong>Managers ({defaultsQ.data?.managers.length ?? 0})</strong>:{' '}
+                {defaultsQ.data?.managers.join(', ') || '—'}
+                {' · '}
+                <strong>Engineers ({defaultsQ.data?.engineerCount ?? 0})</strong>: each invite
+                goes to the engineer whose PTO it is
+                {' · '}
+                <strong>Extras ({rows.length})</strong>: added below — any inbox, gets every
+                invite and cancellation.
+              </>
+            )}
             {siteQ.data === null && !siteQ.isLoading && (
               <span className="t-danger"> Site row missing — cannot edit.</span>
             )}
