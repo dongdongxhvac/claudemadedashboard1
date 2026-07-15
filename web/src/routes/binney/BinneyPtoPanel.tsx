@@ -1045,13 +1045,17 @@ function QuickPtoModal({
     );
   }, [summaryQ.data, engineer.user_id, currentYear]);
 
-  // Auto-adjust hours when partial-day window changes — unless the manager
-  // already typed a custom value, in which case respect it.
+  // Binney default is 10h/day; per-engineer override wins (McCarthy = 8).
+  const dailyHoursQ = useEngineerPtoDailyHours(engineer.user_id);
+  const dailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
+
+  // Auto-adjust hours when the partial-day window (or the resolved daily
+  // rate) changes — unless the manager already typed a custom value.
   useEffect(() => {
     if (hoursManuallyEdited) return;
     const isPartial = !!outFrom || !!outUntil;
-    setHours(isPartial ? '4' : '8');
-  }, [outFrom, outUntil, hoursManuallyEdited]);
+    setHours(String(isPartial ? dailyHours / 2 : dailyHours));
+  }, [outFrom, outUntil, hoursManuallyEdited, dailyHours]);
 
   // Switching type: keep "called out" tied to sick, blank otherwise so the
   // manager doesn't accidentally log "called out" for a planned vacation.
@@ -1246,7 +1250,7 @@ function QuickPtoModal({
 
         {isPartial && (
           <p className="t-small t-muted mt-2">
-            Partial day — {engineer.full_name.split(' ')[0]} will be counted as in (partial) on the Coverage panel. Hours auto-set to 4h; override above if needed.
+            Partial day — {engineer.full_name.split(' ')[0]} will be counted as in (partial) on the Coverage panel. Hours auto-set to {dailyHours / 2}h (half a {dailyHours}h day); override above if needed.
           </p>
         )}
 
@@ -2054,19 +2058,18 @@ function AddPtoModal({
   const [outUntil, setOutUntil]             = useState<string>('');
   const [err, setErr]                       = useState<string | null>(null);
 
-  // Auto-compute hours: 8h × number of weekdays in range.
+  // Binney default is 10h/day; per-engineer override wins (McCarthy = 8).
+  // Reacts to whichever engineer is picked in the form.
+  const dailyHoursQ = useEngineerPtoDailyHours(userId || null);
+  const dailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
+
+  // Auto-compute hours: rate × every day in range. Binney's two 4×10 crews
+  // cover all 7 days, so weekends are working days here.
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
     if (days <= 0) return 0;
-    let weekdays = 0;
-    const cur = new Date(startsOn + 'T00:00:00');
-    for (let i = 0; i < days; i++) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) weekdays++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return weekdays * 8;
-  }, [startsOn, endsOn]);
+    return days * dailyHours;
+  }, [startsOn, endsOn, dailyHours]);
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
   const eng = engineers?.find((e) => e.user_id === userId);
@@ -2250,7 +2253,7 @@ function AddPtoModal({
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">
-              Hours <span className="t-muted">(auto: {computedHours}h — 8h × weekdays. Override below to change)</span>
+              Hours <span className="t-muted">(auto: {computedHours}h — {dailyHours}h × days. Override below to change)</span>
             </span>
             <input
               type="number" min={0.5} step={0.5}

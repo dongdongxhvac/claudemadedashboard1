@@ -272,7 +272,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                 s.day +
                 'h at ' +
                 s.label +
-                '). It changes the sick schedule shown in the balance editor and the engineer’s own request form — but it does NOT change any hours a manager’s Add PTO form fills in. See "Known gaps".',
+                '). It drives every automatic hours figure for that person: the sick schedule in the balance editor, their own request form, the manager’s Add PTO form, and the quick call-out log. Justin McCarthy is on 8h days; everyone else at Binney is on 10h.',
             },
           ],
         },
@@ -410,7 +410,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                 'A balance card appears showing their Vacation and Sick hours left. "No balance row for this engineer yet" is fine — you can set the allotment afterwards.',
                 'Choose the Type — Sick, Vacation, Floating Holiday, Bereavement, Leave, Short-Term or Jury Duty.',
                 'Choose the Status. It defaults to "Approved (direct)", which logs it immediately with you recorded as the reviewer and skips the queue entirely. Pick "Pending (review queue)" if you want it reviewed instead.',
-                'Set the dates. Leave Hours blank to accept the auto figure — but read the next box first, because the auto figure is wrong more often than you would like.',
+                'Set the dates. Leave Hours blank to accept the auto figure — read the next box for exactly how that figure is worked out.',
                 'For a partial day: "Out from" is when they LEAVE, "Out until" is when they COME BACK. Both blank means a full day. A partial-day engineer still counts as present in the headcount, tagged "partial".',
                 'Pick a Request source — Verbal, Phone call, Text, Email, Team or Other. This is required; the save is refused without it. Add a Source detail like "text 3:42pm" if it helps.',
                 'Watch for a red cap box. Click Save PTO. Note this fires an email.',
@@ -418,21 +418,18 @@ export function buildManual(site: ManualSite): Chapter[] {
             },
             {
               kind: 'note',
-              tone: 'danger',
-              title:
-                s.binney
-                  ? 'The Hours auto-fill is wrong at Binney — always check it'
-                  : 'The Hours auto-fill ignores an engineer’s custom day length',
+              tone: s.binney ? 'warn' : 'info',
+              title: 'How the Hours auto-fill works',
               text: s.binney
-                ? 'Add PTO fills in 8 hours times the number of Mon–Fri days in the range. It ignores Binney’s 10-hour day and counts Saturday and Sunday as ZERO — even though both crews work weekends. A week of vacation for the Saturday crew auto-fills 24h (Wed/Thu/Fri only) instead of 40h. The quick call-out log has the same fault: it defaults to 8h full-day and 4h partial, not 10 and 5. Type the correct hours in by hand, every time. Confusingly, the engineer’s OWN request form does the Binney maths correctly — only the manager-side forms are stuck on the UPark rule.'
-                : 'Add PTO always fills 8 hours per weekday and the quick log always defaults to 8h (4h partial), no matter what that engineer’s personal daily-hours setting says. The setting only changes the reference table in the balance editor. If someone is on a non-8h day, type their hours in yourself.',
+                ? 'Add PTO uses the engineer’s own day length — ' + s.day + 'h for everyone except Justin McCarthy, who is on 8h — times EVERY day in the range, weekends included, because both crews work weekends. The quick call-out log matches: a full day is their day length, a partial day is half of it. One thing to watch: it counts calendar days, not the days that engineer is actually rostered. A Mon–Sun span auto-fills 70h even though a 4×10 crew only works 40h of it. Set From and To to the days they are actually scheduled, or type the hours in yourself.'
+                : 'Add PTO uses the engineer’s own day length — ' + s.day + 'h unless someone has a custom day length set — times the number of Mon–Fri days in the range; Saturday and Sunday count as zero. The quick call-out log matches: a full day is their day length, a partial day is half of it.',
             },
             {
               kind: 'note',
               tone: 'info',
               title: 'The quick call-out log',
               text:
-                'Clicking an engineer’s chip in the roll opens a small form pre-set for the morning call-out: Sick, source Phone call, reason "called out", 8 hours, that one day only. Switch the type away from Sick and the "called out" reason clears itself. Anything logged this way saves as APPROVED immediately — it never reaches the queue. Entering a partial-day time drops the hours from 8 to 4 automatically, unless you typed your own figure first.',
+                'Clicking an engineer’s chip in the roll opens a small form pre-set for the morning call-out: Sick, source Phone call, reason "called out", that engineer’s own day length in hours, that one day only. Switch the type away from Sick and the "called out" reason clears itself. Anything logged this way saves as APPROVED immediately — it never reaches the queue. Entering a partial-day time halves the hours automatically, unless you typed your own figure first.',
             },
             {
               kind: 'note',
