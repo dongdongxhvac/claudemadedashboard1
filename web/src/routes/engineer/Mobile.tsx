@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
+import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { useFocusBoardRealtime, useActiveFocusItems } from '../../hooks/useFocusBoard';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import {
@@ -28,6 +29,7 @@ export default function EngineerMobile() {
   const { signOut } = useAuth();
   const me = useMe();
   const ctx = useMyEngineerContext();
+  const siteAccess = useMySiteAccess();
   useSnapshotRealtime();
   useFocusBoardRealtime();
 
@@ -43,7 +45,7 @@ export default function EngineerMobile() {
     return <Navigate to="/manager" replace />;
   }
 
-  if (me.isLoading || ctx.isLoading) {
+  if (me.isLoading || ctx.isLoading || siteAccess.isLoading) {
     return <Wrap><p className="t-text t-muted p-6">Loading...</p></Wrap>;
   }
 
@@ -62,6 +64,26 @@ export default function EngineerMobile() {
   }
 
   const profileTabAllowed = ctx.data.visible_to_self;
+
+  // Binney St engineers have no CMMS feed (PMs/WOs/labor are UPark-only), so
+  // their phone surface is PTO-only: header + focus board + PTO, no tab nav.
+  if (siteAccess.homeSite === 'binney') {
+    return (
+      <Wrap>
+        <header className="px-4 py-3 border-b flex items-baseline justify-between gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+          <div>
+            <h1 className="t-section-title">My PTO</h1>
+            <p className="t-small t-muted">{ctx.data.cmms_assignee_name}</p>
+          </div>
+          <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
+        </header>
+        <main className="p-4 space-y-4 pb-8">
+          <FocusBoardBanner allowDismiss={false} />
+          <MyPtoSection userId={ctx.data.user_id} compact />
+        </main>
+      </Wrap>
+    );
+  }
 
   return (
     <Wrap>

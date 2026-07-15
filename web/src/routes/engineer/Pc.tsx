@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe, useIsAdmin } from '../../hooks/useMe';
+import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -38,6 +39,7 @@ export default function EngineerPc() {
   const isAdmin = useIsAdmin();
   const canAdmin = isAdmin || me.data?.is_lead === true;
   const ctx = useMyEngineerContext();
+  const siteAccess = useMySiteAccess();
   useSnapshotRealtime();
   useFocusBoardRealtime();
 
@@ -151,7 +153,7 @@ export default function EngineerPc() {
       })
     : null;
 
-  if (me.isLoading || ctx.isLoading) {
+  if (me.isLoading || ctx.isLoading || siteAccess.isLoading) {
     return <div className="min-h-screen t-bg p-8 t-text t-muted">Loading...</div>;
   }
   // Non-engineers (admin/manager/etc.) have no engineer context — send them to
@@ -174,6 +176,9 @@ export default function EngineerPc() {
   const dueNowAccent: 'red' | 'amber' | undefined =
     stats.overdue.length > 0 ? 'red' : stats.today.length > 0 ? 'amber' : undefined;
   const profileAllowed = ctx.data.visible_to_self;
+  // Binney St engineers have no CMMS feed (PMs/WOs/labor are UPark-only), so
+  // their dashboard is PTO-only. Everything else would just render empty.
+  const binneyOnly = siteAccess.homeSite === 'binney';
 
   return (
     <div className="min-h-screen t-bg">
@@ -211,6 +216,11 @@ export default function EngineerPc() {
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <FocusBoardBanner allowDismiss={false} />
 
+        {binneyOnly ? (
+          /* Binney St: PTO-only view — no CMMS-backed panels for this site yet. */
+          <MyPtoSection userId={ctx.data.user_id} />
+        ) : (
+        <>
         {/* stat strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Hours · this week" value={stats.weekHours.toFixed(1)}
@@ -366,6 +376,8 @@ export default function EngineerPc() {
 
         {snapshotLocal && (
           <p className="t-small t-muted text-center pt-2">Data as of {snapshotLocal}</p>
+        )}
+        </>
         )}
       </main>
     </div>
