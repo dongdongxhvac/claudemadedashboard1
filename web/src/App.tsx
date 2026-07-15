@@ -12,6 +12,7 @@ import TvView from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
+import Manual from './routes/manual/Manual';
 import BinneyManager from './routes/binney/Manager';
 import BinneyAdmin from './routes/binney/Admin';
 import MroReceipts from './routes/mro/Receipts';
@@ -56,7 +57,7 @@ function Home() {
 /** Legacy bare URLs (/manager, /admin, /engineer/me) → the viewer's
  *  home-site address, so an old bookmark can't land anyone on the wrong
  *  site — the address bar always shows /upark/... or /binney/... */
-function SiteRedirect({ page }: { page: 'manager' | 'admin' | 'engineer' }) {
+function SiteRedirect({ page }: { page: 'manager' | 'admin' | 'engineer' | 'manual' }) {
   const access = useMySiteAccess();
   if (access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   return <Navigate to={`/${access.homeSite}/${page}`} replace />;
@@ -108,6 +109,13 @@ export default function App() {
         <Route path="/upark/manager" element={<Protected><RequireSite site="upark"><RequireManagerArea><Manager /></RequireManagerArea></RequireSite></Protected>} />
         <Route path="/upark/admin"   element={<Protected><RequireSite site="upark"><Admin /></RequireSite></Protected>} />
         <Route path="/upark/engineer" element={<Protected><RequireSite site="upark"><EngineerMe /></RequireSite></Protected>} />
+        {/* Operations manual — site-scoped because the rules genuinely differ
+            (day length, sick hours, crews, invite recipients). Site-fenced like
+            every other site page, but NOT manager-gated: it is documentation,
+            so an engineer who follows a link is shown it rather than bounced. */}
+        <Route path="/upark/manual" element={<Protected><RequireSite site="upark"><Manual site="upark" /></RequireSite></Protected>} />
+        <Route path="/binney/manual" element={<Protected><RequireSite site="binney"><Manual site="binney" /></RequireSite></Protected>} />
+        <Route path="/manual" element={<Protected><SiteRedirect page="manual" /></Protected>} />
         {/* Legacy bare addresses → the viewer's own home-site page. */}
         <Route path="/manager" element={<Protected><SiteRedirect page="manager" /></Protected>} />
         <Route path="/admin"   element={<Protected><SiteRedirect page="admin" /></Protected>} />

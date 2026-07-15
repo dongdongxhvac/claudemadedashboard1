@@ -39,6 +39,9 @@ export default function BinneyManager() {
                 Admin
               </Link>
             )}
+            <Link to="/binney/manual" className="t-small t-accent hover:underline">
+              Manual
+            </Link>
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">
               Sign out

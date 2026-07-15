@@ -171,6 +171,9 @@ export default function ManagerPc() {
                 Admin
               </Link>
             )}
+            <Link to="/upark/manual" className="t-small t-accent hover:underline">
+              Manual
+            </Link>
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">
               Sign out
