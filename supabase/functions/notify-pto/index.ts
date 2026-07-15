@@ -11,19 +11,23 @@
 //      → email those home-site managers PLUS the requester.
 //
 // 2) CALENDAR INVITES (.ics) — no Power Automate required
-//    approved            → iCalendar METHOD:REQUEST (all-day, shows as Free)
-//                          to the site's calendar list.
+//    approved            → iCalendar METHOD:REQUEST (all-day, shows as Free).
 //    approved→cancelled  → event 'retracted': METHOD:CANCEL with the same
 //                          UID retracts it (no notification email — the
 //                          calendar cancel itself lands in inboxes).
 //    approved→denied     → 'decided' Denied email + METHOD:CANCEL.
-//    Recipients per site: the pto_cal_recipients table (migration 0096),
-//    manager-editable from the PTO panels. An env secret
-//    PTO_CAL_TO_<SITE> still overrides everything for QA. Empty table
-//    = no site list — but the REQUESTER's own email is always included, so
-//    the engineer's work calendar gets the event at both sites. Attendees
-//    carry RSVP=FALSE + X-MICROSOFT-CDO-BUSYSTATUS:FREE: on M365 the event
-//    auto-appears on arrival and Outlook asks for no response.
+//    Invite recipients per site:
+//      UPark  (user 2026-07-11)    — home-site managers + the requesting
+//        engineer BY DEFAULT, plus manager-added extras from
+//        pto_cal_recipients (migration 0096, editable in the PTO panels).
+//      Binney (manager 2026-07-14) — ONLY the pto_cal_recipients list,
+//        seeded (migration 0100) with the CW Binney Engineering O365 group
+//        so the invite lands on the group calendar instead of everyone's
+//        inbox. Falls back to the UPark rule if the list is ever emptied so
+//        invites can't silently stop.
+//    An env secret PTO_CAL_TO_<SITE> still overrides the list for QA.
+//    Attendees carry RSVP=FALSE + X-MICROSOFT-CDO-BUSYSTATUS:FREE: on M365
+//    the event auto-appears on arrival and Outlook asks for no response.
 //
 // Recipient control for notifications is the users.is_manager toggle in the
 // admin view — no hardcoded names. Transport is Gmail SMTP (email-report
@@ -32,8 +36,9 @@
 // Deployed with verify_jwt ENABLED: the DB trigger authenticates with the
 // project anon key (a valid signed JWT, public by design).
 //
-// Credentials: GMAIL_USER + GMAIL_APP_PASSWORD from edge secrets, falling
-// back to the get_app_secret() Vault accessor (migration 0078).
+// Credentials: per-site sender — GMAIL_USER_<SITE> + GMAIL_APP_PASSWORD_<SITE>
+// (env then Vault via get_app_secret, migration 0078), falling back to the
+// default GMAIL_USER pair until a site's app password is seeded.
 //
 // QA hooks (never set by the trigger):
 //   payload.dry_run      — resolve recipients + invite plan, send nothing.
@@ -207,8 +212,8 @@ function buildIcs(opts: {
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
-/** Per-site calendar recipient list: env override first (QA), then the
- *  manager-editable pto_cal_recipients table (migration 0096). */
+/** Per-site pto_cal_recipients list (migration 0096): extras at UPark, the
+ *  whole invite list at Binney. Env override first (QA). */
 async function calRecipients(
   admin: ReturnType<typeof createClient>,
   siteId: string,
@@ -351,17 +356,23 @@ Deno.serve(async (req: Request) => {
     } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
       inviteAction = "CANCEL";
     }
-    // Invite recipients (user 2026-07-11): home-site managers + the
-    // requesting engineer BY DEFAULT, plus the manager-added extras from
-    // pto_cal_recipients (clients/directors/admins). Deduped.
+    // Invite recipients — per-site rule (see header):
+    //   UPark  — managers + requester + pto_cal_recipients extras. Deduped.
+    //   Binney — ONLY the pto_cal_recipients list (the O365 group); the
+    //            group fans out, so no individual manager/requester copies.
+    //            Empty list falls back to the UPark rule.
     let calTo: string[] = [];
     if (inviteAction) {
-      const extras = await calRecipients(admin, site.id as string, site.code as string);
+      const listed = await calRecipients(admin, site.id as string, site.code as string);
       const merged = new Map<string, string>();
-      for (const e of managerEmails) merged.set(e.toLowerCase(), e);
-      const reqEmail = (requester?.email ?? "").trim();
-      if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
-      for (const e of extras) merged.set(e.toLowerCase(), e);
+      if (site.code === "binney" && listed.length > 0) {
+        for (const e of listed) merged.set(e.toLowerCase(), e);
+      } else {
+        for (const e of managerEmails) merged.set(e.toLowerCase(), e);
+        const reqEmail = (requester?.email ?? "").trim();
+        if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
+        for (const e of listed) merged.set(e.toLowerCase(), e);
+      }
       calTo = [...merged.values()];
     }
 
