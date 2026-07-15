@@ -22,19 +22,16 @@ import { useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoRealtime,
   useSubmitPto, useCancelPto, useEngineerPtoDailyHours,
-  checkVacationCap,
+  checkVacationCap, ptoTypeLabel, PTO_ENGINEER_TYPE_OPTIONS,
   type PtoRequest, type PtoType,
 } from '../hooks/usePto';
 import { useMySiteAccess } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
 
-// Engineer self-serve only exposes the two real time-off categories.
-// Everything else (personal/holiday/bereavement/unpaid) goes through the
-// manager who has the full set in Add PTO.
-const PTO_TYPE_OPTIONS: { value: PtoType; label: string }[] = [
-  { value: 'vacation', label: 'Vacation' },
-  { value: 'sick',     label: 'Sick' },
-];
+// Engineer self-serve exposes vacation, sick, floater (holiday) and jury
+// duty. The rest (bereavement/leave/short-term/unpaid) are manager-add only.
+const PTO_TYPE_OPTIONS: { value: PtoType; label: string }[] =
+  PTO_ENGINEER_TYPE_OPTIONS.map((value) => ({ value, label: ptoTypeLabel(value) }));
 
 function todayIso(): string {
   return new Date().toLocaleDateString('en-CA');

@@ -13,7 +13,8 @@ import { useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
-export type PtoType   = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'holiday' | 'unpaid';
+export type PtoType   = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'holiday' | 'unpaid'
+                      | 'leave' | 'short_term' | 'jury_duty';
 export type PtoStatus = 'pending'  | 'approved' | 'denied' | 'cancelled';
 
 /** Friendly labels for PTO types. Partial because "personal" was removed
@@ -24,10 +25,33 @@ export type PtoStatus = 'pending'  | 'approved' | 'denied' | 'cancelled';
 export const PTO_TYPE_LABELS: Partial<Record<PtoType, string>> = {
   vacation: 'Vacation',
   sick: 'Sick',
-  bereavement: 'Bereavement',
   holiday: 'Floating Holiday',
+  bereavement: 'Bereavement',
+  leave: 'Leave',
+  short_term: 'Short-Term',
+  jury_duty: 'Jury Duty',
   unpaid: 'Unpaid',
 };
+
+/** Types the manager Add/Quick/Edit-PTO dropdowns offer, in display order.
+ *  vacation/sick/holiday carry balances; the rest are non-balance absence
+ *  types that still show on the heatmap + year log. 'unpaid'/'personal' are
+ *  legacy — not offered for new entries but still render via ptoTypeLabel(). */
+export const PTO_MANAGER_TYPE_OPTIONS: PtoType[] = [
+  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty',
+];
+
+/** Types the engineer self-serve form offers. Subset of the manager set. */
+export const PTO_ENGINEER_TYPE_OPTIONS: PtoType[] = [
+  'sick', 'vacation', 'holiday', 'jury_duty',
+];
+
+/** Absence types shown on the coverage heatmap as a non-counting marker
+ *  (like sick, but grouped) — they don't count toward the 2-engineer
+ *  vacation cap. */
+export const PTO_OTHER_LEAVE_TYPES: PtoType[] = [
+  'bereavement', 'leave', 'short_term', 'jury_duty',
+];
 
 /** Look up a friendly label for a PtoType, falling back to the raw type
  *  string when there's no entry (e.g. legacy 'personal' rows). */
