@@ -1,18 +1,22 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// The CODE below is functionally identical to deployed v16. NOTE: the
-// deployed copy carries a THINNER header comment block than this one — when
-// you `supabase functions download notify-pto` and diff, expect the header
-// comments to differ; the code from the first `import` down must match. Work
-// on the laptop deploys straight from `supabase functions deploy`, so diff
-// before editing. Deploying a stale copy silently breaks the Power Automate
-// flow (see PTO_DATA below).
+// This file was deployed VERBATIM as v18 — repo and live are identical.
+// Work on the laptop deploys straight from `supabase functions deploy`, so
+// before editing here run `supabase functions download notify-pto` and diff.
+// Deploying a stale copy silently breaks the Power Automate flow (see
+// PTO_DATA below).
 //
-// v17 (2026-07-16): Binney manager-email mute RE-ENABLED — Binney PTO is in
-// develop mode; managers get no notification emails until launch. The
-// PA-flow calendar email (to jie.lao) still sends. Remove the marked line
-// below to go live.
+// v18 (2026-07-16): Binney sends are now split (user request — "no invite to
+// my personal, yes to home managers"):
+//   * PA FEED — body-only email (PTO_DATA, NO .ics) → pto_cal_recipients
+//     (jie.lao). No attachment = can never book a personal calendar. Always
+//     on; this is what keeps the group calendar in sync.
+//   * INVITE (.ics) → Binney home managers, so approved PTO books THEIR
+//     personal calendars. Gated behind BINNEY_LIVE.
+//   * Notification emails → managers + requester. Gated behind BINNEY_LIVE.
+// BINNEY_LIVE = false (develop mode): managers get NOTHING; only the PA feed
+// goes out. Flip the constant to true + redeploy at launch.
 //
 // Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
 // via pg_net on INSERT/UPDATE of pto_requests. The trigger also carries a
@@ -45,18 +49,15 @@
 //      * The flow strips %0D/%0A before parsing so wraps can't split a marker.
 //      * The first attachment is the "External Mail" banner (0.jpg), not the
 //        .ics — parse the BODY, never attachments.
-//    The .ics is still attached (harmless, and the personal-calendar path
-//    still works for UPark).
-//
-//    Invite recipients per site:
-//      UPark  — home-site managers + the requesting engineer, plus extras
-//               from pto_cal_recipients (migration 0096, editable in-panel).
-//      Binney — ONLY the pto_cal_recipients list, which is deliberately just
-//               jie.lao@cwservices.com: that inbox feeds the PA flow, which
-//               republishes to the group calendar. The group SMTP address is
-//               intentionally NOT here — adding it back emails ~24 people an
-//               invite with the raw PTO_DATA line in it. Empty list falls
-//               back to the UPark rule.
+//    Recipients per site (v18):
+//      UPark  — .ics invite → home-site managers + the requesting engineer,
+//               plus extras from pto_cal_recipients (migration 0096,
+//               editable in-panel). Personal-calendar auto-book still works.
+//      Binney — PA feed (body-only, PTO_DATA, no .ics) → pto_cal_recipients,
+//               deliberately just jie.lao@cwservices.com; .ics invite →
+//               home managers only, and only when BINNEY_LIVE. The group
+//               SMTP address must NOT be added to pto_cal_recipients —
+//               that emails ~24 people directly.
 //
 // Transport is Gmail SMTP, per-site sender: GMAIL_USER_<SITE> +
 // GMAIL_APP_PASSWORD_<SITE> (env first, then the get_app_secret Vault
@@ -78,6 +79,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DASHBOARD_BASE = Deno.env.get("PTO_DASHBOARD_BASE") ?? "https://claudemadedashboard1.vercel.app";
 const QA_FORCE_TO = Deno.env.get("PTO_QA_FORCE_TO") ?? "";
+
+// Binney launch switch. false = develop mode: managers get no notification
+// emails and no .ics invites; only the body-only PA-feed email (group
+// calendar sync) goes out. Flip to true + redeploy at launch.
+const BINNEY_LIVE = false;
 
 type PtoRecord = {
   id: string;
@@ -362,19 +368,24 @@ Deno.serve(async (req: Request) => {
       inviteAction = "CANCEL";
     }
 
-    let calTo: string[] = [];
+    let calTo: string[] = [];     // .ics invite — books personal calendars
+    let paFeedTo: string[] = [];  // Binney body-only PTO_DATA email — PA flow feed
     if (inviteAction) {
       const listed = await calRecipients(admin, site.id as string, site.code as string);
-      const merged = new Map<string, string>();
-      if (site.code === "binney" && listed.length > 0) {
-        for (const e of listed) merged.set(e.toLowerCase(), e);
+      if (site.code === "binney") {
+        // PA feed → the pto_cal_recipients list (jie.lao). No .ics attached,
+        // so it can never book a personal calendar.
+        paFeedTo = listed;
+        // Real .ics invite → home managers' personal calendars (launch only).
+        calTo = BINNEY_LIVE ? managerEmails : [];
       } else {
+        const merged = new Map<string, string>();
         for (const e of managerEmails) merged.set(e.toLowerCase(), e);
         const reqEmail = (requester?.email ?? "").trim();
         if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
         for (const e of listed) merged.set(e.toLowerCase(), e);
+        calTo = [...merged.values()];
       }
-      calTo = [...merged.values()];
     }
 
     let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
@@ -382,22 +393,23 @@ Deno.serve(async (req: Request) => {
       const forced = QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean);
       effectiveTo = forced;
       if (calTo.length) calTo = forced;
+      if (paFeedTo.length) paFeedTo = forced;
     }
     if (payload.event === "retracted") effectiveTo = [];
 
-    // DEVELOP MODE (re-enabled 2026-07-16): Binney PTO is not launched — no
-    // manager notification emails. The calendar email (feeds the PA flow)
-    // still sends. Delete this line at launch and redeploy.
-    if (site.code === "binney") effectiveTo = [];
+    // Develop mode: no Binney manager notification emails until launch.
+    if (site.code === "binney" && !BINNEY_LIVE) effectiveTo = [];
 
     if (payload.dry_run) {
       return json(200, {
         ok: true, dry_run: true, event: payload.event, site: site.code,
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
+        pa_feed: paFeedTo.length ? paFeedTo : null,
+        binney_live: BINNEY_LIVE,
       });
     }
-    if (effectiveTo.length === 0 && !(inviteAction && calTo.length)) {
+    if (effectiveTo.length === 0 && !(inviteAction && (calTo.length || paFeedTo.length))) {
       return json(200, { ok: true, skipped: "no recipients" });
     }
 
@@ -432,6 +444,7 @@ Deno.serve(async (req: Request) => {
       },
     });
     let inviteSentTo: string[] = [];
+    let paFeedSentTo: string[] = [];
     try {
       if (effectiveTo.length > 0) {
         await client.send({
@@ -441,6 +454,28 @@ Deno.serve(async (req: Request) => {
           content: text,
           html,
         });
+      }
+
+      // Binney PA feed: body-only, NO .ics — Power Automate parses the
+      // PTO_DATA line and writes the event to the group calendar. Subject
+      // must keep containing "PTO" (the flow's trigger filter).
+      if (inviteAction && paFeedTo.length > 0) {
+        const feedSubject = asciiSafe(
+          (inviteAction === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${tl}) ${range}`,
+        );
+        await client.send({
+          from: `${site.name} Dashboard <${gmailUser}>`,
+          to: paFeedTo,
+          subject: feedSubject,
+          content: asciiSafe(
+            (inviteAction === "CANCEL"
+              ? `PTO retracted - remove from the group calendar.`
+              : `Approved PTO - group calendar sync record.`) +
+            `\n\n${who} - ${tl} ${range} (${r.hours}h)` +
+            `\n\nPTO_DATA|action:${inviteAction}|id:${r.id}|starts:${r.starts_on}|ends:${r.ends_on}|hours:${r.hours}|engineer:${who}|type:${tl}`,
+          ),
+        });
+        paFeedSentTo = paFeedTo;
       }
 
       if (inviteAction && calTo.length > 0) {
@@ -466,11 +501,12 @@ Deno.serve(async (req: Request) => {
           from: `${site.name} Dashboard <${gmailUser}>`,
           to: calTo,
           subject: invSubject,
+          // No PTO_DATA line here — the PA feed email carries it; keep the
+          // human-facing invite clean.
           content: asciiSafe(
-            (inviteAction === "CANCEL"
+            inviteAction === "CANCEL"
               ? `This PTO was retracted - the calendar event is cancelled.\n\n${who} - ${tl} ${range}`
-              : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`)
-            + `\n\nPTO_DATA|action:${inviteAction}|id:${r.id}|starts:${r.starts_on}|ends:${r.ends_on}|hours:${r.hours}|engineer:${who}|type:${tl}`,
+              : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`,
           ),
           attachments: [{
             filename: "invite.ics",
@@ -488,7 +524,7 @@ Deno.serve(async (req: Request) => {
     return json(200, {
       ok: true, event: payload.event, site: site.code,
       sent_to: effectiveTo, invite_sent_to: inviteSentTo,
-      invite_action: inviteAction,
+      pa_feed_sent_to: paFeedSentTo, invite_action: inviteAction,
     });
   } catch (e) {
     return json(500, { error: (e as Error).message });
