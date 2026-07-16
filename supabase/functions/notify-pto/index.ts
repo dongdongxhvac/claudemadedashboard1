@@ -41,9 +41,15 @@
 // default GMAIL_USER pair until a site's app password is seeded.
 //
 // QA hooks (never set by the trigger):
-//   payload.dry_run      — resolve recipients + invite plan, send nothing.
-//   payload.override_to  — notification emails only: replace the real list.
-//   env PTO_QA_FORCE_TO  — global override for BOTH sends (staging-style).
+//   payload.dry_run         — resolve recipients + invite plan, send nothing.
+//   payload.override_to     — notification emails only: replace the real list.
+//   PTO_QA_FORCE_TO_<SITE>  — per-site override for BOTH sends: env first, then
+//                             Vault (set_app_secret), so it flips without a
+//                             redeploy. Point a site at a test address to
+//                             silence its real recipients while an external
+//                             flow (Power Automate) is under test; set it to
+//                             '' to turn it back off. Other sites unaffected.
+//   env PTO_QA_FORCE_TO     — same, but global across sites (fallback).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
@@ -376,10 +382,22 @@ Deno.serve(async (req: Request) => {
       calTo = [...merged.values()];
     }
 
-    // Notification recipients — QA overrides never set by the trigger.
+    // QA force list (never set by the trigger) — per-site key first: env, then
+    // Vault so it flips without a redeploy; falls back to the global env key.
+    // Forces BOTH sends to the test address so one site can be silenced while
+    // an external flow is under test. Set the Vault value to '' to turn off.
+    const qaKey = `PTO_QA_FORCE_TO_${(site.code as string).toUpperCase()}`;
+    let qaRaw = (Deno.env.get(qaKey) ?? "").trim();
+    if (!qaRaw) {
+      const { data: qaVault } = await admin.rpc("get_app_secret", { k: qaKey });
+      qaRaw = ((qaVault as string) ?? "").trim();
+    }
+    if (!qaRaw) qaRaw = QA_FORCE_TO;
+    const forced = qaRaw.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+
+    // Notification recipients.
     let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
-    if (QA_FORCE_TO) {
-      const forced = QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean);
+    if (forced.length) {
       effectiveTo = forced;
       if (calTo.length) calTo = forced;
     }
@@ -392,6 +410,7 @@ Deno.serve(async (req: Request) => {
         ok: true, dry_run: true, event: payload.event, site: site.code,
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
+        qa_forced: forced.length ? forced : null,
       });
     }
     if (effectiveTo.length === 0 && !(inviteAction && calTo.length)) {
