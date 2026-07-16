@@ -1,22 +1,27 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v18 — repo and live are identical.
+// This file was deployed VERBATIM as v19 — repo and live are identical.
 // Work on the laptop deploys straight from `supabase functions deploy`, so
 // before editing here run `supabase functions download notify-pto` and diff.
 // Deploying a stale copy silently breaks the Power Automate flow (see
 // PTO_DATA below).
 //
-// v18 (2026-07-16): Binney sends are now split (user request — "no invite to
-// my personal, yes to home managers"):
-//   * PA FEED — body-only email (PTO_DATA, NO .ics) → pto_cal_recipients
-//     (jie.lao). No attachment = can never book a personal calendar. Always
-//     on; this is what keeps the group calendar in sync.
-//   * INVITE (.ics) → Binney home managers, so approved PTO books THEIR
-//     personal calendars. Gated behind BINNEY_LIVE.
-//   * Notification emails → managers + requester. Gated behind BINNEY_LIVE.
-// BINNEY_LIVE = false (develop mode): managers get NOTHING; only the PA feed
-// goes out. Flip the constant to true + redeploy at launch.
+// v19 (2026-07-16): two recipient lists (migration 0102 adds kind):
+//   * kind='feed'   — SHARED calendar sync inboxes (admin-only in panel).
+//     Binney sends the body-only PTO_DATA email here (jie.lao); Power
+//     Automate writes the event onto the group calendar. Always on.
+//     No .ics = can never book a personal calendar.
+//   * kind='invite' — PERSONAL calendar extras on top of the built-ins
+//     (home managers + requester at UPark; home managers at Binney).
+// Binney's .ics invites + notification emails are gated behind BINNEY_LIVE.
+//
+// BINNEY_LIVE — THE DEVELOP-MODE SWITCH. Resolved per event: env var
+// BINNEY_LIVE first, then Vault. Anything except the string "true" =
+// develop mode (managers get NOTHING; only the PA feed sends). Flip it
+// WITHOUT a redeploy, from the Supabase SQL editor:
+//   select set_app_secret('BINNEY_LIVE', 'true');   -- launch
+//   select set_app_secret('BINNEY_LIVE', 'false');  -- back to develop mode
 //
 // Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
 // via pg_net on INSERT/UPDATE of pto_requests. The trigger also carries a
@@ -49,15 +54,15 @@
 //      * The flow strips %0D/%0A before parsing so wraps can't split a marker.
 //      * The first attachment is the "External Mail" banner (0.jpg), not the
 //        .ics — parse the BODY, never attachments.
-//    Recipients per site (v18):
+//    Recipients per site (v19, kinds from migration 0102):
 //      UPark  — .ics invite → home-site managers + the requesting engineer,
-//               plus extras from pto_cal_recipients (migration 0096,
-//               editable in-panel). Personal-calendar auto-book still works.
-//      Binney — PA feed (body-only, PTO_DATA, no .ics) → pto_cal_recipients,
-//               deliberately just jie.lao@cwservices.com; .ics invite →
-//               home managers only, and only when BINNEY_LIVE. The group
-//               SMTP address must NOT be added to pto_cal_recipients —
-//               that emails ~24 people directly.
+//               plus kind='invite' extras. 'feed' rows are ignored until
+//               UPark gets its own PA flow.
+//      Binney — PA feed (body-only, PTO_DATA, no .ics) → kind='feed' rows
+//               (jie.lao); .ics invite → home managers + kind='invite'
+//               extras, only when BINNEY_LIVE. The group SMTP address must
+//               NOT be added to either list — that emails ~24 people
+//               directly.
 //
 // Transport is Gmail SMTP, per-site sender: GMAIL_USER_<SITE> +
 // GMAIL_APP_PASSWORD_<SITE> (env first, then the get_app_secret Vault
@@ -80,10 +85,18 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DASHBOARD_BASE = Deno.env.get("PTO_DASHBOARD_BASE") ?? "https://claudemadedashboard1.vercel.app";
 const QA_FORCE_TO = Deno.env.get("PTO_QA_FORCE_TO") ?? "";
 
-// Binney launch switch. false = develop mode: managers get no notification
-// emails and no .ics invites; only the body-only PA-feed email (group
-// calendar sync) goes out. Flip to true + redeploy at launch.
-const BINNEY_LIVE = false;
+/** Binney launch switch (develop mode when false) — env first, then Vault,
+ *  so it flips with SQL and no redeploy:
+ *    select set_app_secret('BINNEY_LIVE', 'true' | 'false');
+ *  Unset/anything-but-"true" = develop mode. */
+async function binneyLive(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  let v = (Deno.env.get("BINNEY_LIVE") ?? "").trim();
+  if (!v) {
+    const { data } = await admin.rpc("get_app_secret", { k: "BINNEY_LIVE" });
+    v = ((data as string) ?? "").trim();
+  }
+  return v.toLowerCase() === "true";
+}
 
 type PtoRecord = {
   id: string;
@@ -233,21 +246,31 @@ function buildIcs(opts: {
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
+/** pto_cal_recipients split by kind (migration 0102):
+ *  feed = shared-calendar sync inboxes (Binney PA flow; admin-only in panel),
+ *  invite = personal-calendar .ics extras. PTO_CAL_TO_<SITE> env override
+ *  (QA) replaces the site's primary list: feed at Binney, invite at UPark. */
 async function calRecipients(
   admin: ReturnType<typeof createClient>,
   siteId: string,
   siteCode: string,
-): Promise<string[]> {
+): Promise<{ feed: string[]; invite: string[] }> {
   const envV = Deno.env.get(`PTO_CAL_TO_${siteCode.toUpperCase()}`) ?? "";
-  if (envV) return envV.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+  if (envV) {
+    const list = envV.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
+    return siteCode === "binney" ? { feed: list, invite: [] } : { feed: [], invite: list };
+  }
   const { data, error } = await admin
     .from("pto_cal_recipients")
-    .select("email")
+    .select("email, kind")
     .eq("site_id", siteId);
   if (error) throw error;
-  return (data ?? [])
-    .map((r) => ((r.email as string) ?? "").trim())
+  const rows = (data ?? []) as { email: string | null; kind: string | null }[];
+  const clean = (k: string) => rows
+    .filter((r) => (r.kind ?? "invite") === k)
+    .map((r) => (r.email ?? "").trim())
     .filter((e) => /@/.test(e));
+  return { feed: clean("feed"), invite: clean("invite") };
 }
 
 Deno.serve(async (req: Request) => {
@@ -368,22 +391,29 @@ Deno.serve(async (req: Request) => {
       inviteAction = "CANCEL";
     }
 
+    const live = site.code === "binney" ? await binneyLive(admin) : true;
+
     let calTo: string[] = [];     // .ics invite — books personal calendars
     let paFeedTo: string[] = [];  // Binney body-only PTO_DATA email — PA flow feed
     if (inviteAction) {
-      const listed = await calRecipients(admin, site.id as string, site.code as string);
+      const lists = await calRecipients(admin, site.id as string, site.code as string);
       if (site.code === "binney") {
-        // PA feed → the pto_cal_recipients list (jie.lao). No .ics attached,
-        // so it can never book a personal calendar.
-        paFeedTo = listed;
-        // Real .ics invite → home managers' personal calendars (launch only).
-        calTo = BINNEY_LIVE ? managerEmails : [];
+        // PA feed → 'feed' rows (jie.lao). No .ics attached, so it can never
+        // book a personal calendar. Always on.
+        paFeedTo = lists.feed;
+        // Real .ics invite → home managers + 'invite' extras. Launch only.
+        if (live) {
+          const merged = new Map<string, string>();
+          for (const e of managerEmails) merged.set(e.toLowerCase(), e);
+          for (const e of lists.invite) merged.set(e.toLowerCase(), e);
+          calTo = [...merged.values()];
+        }
       } else {
         const merged = new Map<string, string>();
         for (const e of managerEmails) merged.set(e.toLowerCase(), e);
         const reqEmail = (requester?.email ?? "").trim();
         if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
-        for (const e of listed) merged.set(e.toLowerCase(), e);
+        for (const e of lists.invite) merged.set(e.toLowerCase(), e);
         calTo = [...merged.values()];
       }
     }
@@ -398,7 +428,7 @@ Deno.serve(async (req: Request) => {
     if (payload.event === "retracted") effectiveTo = [];
 
     // Develop mode: no Binney manager notification emails until launch.
-    if (site.code === "binney" && !BINNEY_LIVE) effectiveTo = [];
+    if (site.code === "binney" && !live) effectiveTo = [];
 
     if (payload.dry_run) {
       return json(200, {
@@ -406,7 +436,7 @@ Deno.serve(async (req: Request) => {
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
         pa_feed: paFeedTo.length ? paFeedTo : null,
-        binney_live: BINNEY_LIVE,
+        binney_live: site.code === "binney" ? live : null,
       });
     }
     if (effectiveTo.length === 0 && !(inviteAction && (calTo.length || paFeedTo.length))) {
