@@ -1,11 +1,17 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// The code below is byte-identical to deployed v15 (only this header block
-// differs — comments don't affect behavior). Work on the laptop deploys
-// straight from `supabase functions deploy`, so before editing here run
-// `supabase functions download notify-pto` and diff. Deploying a stale copy
-// silently breaks the Power Automate flow (see PTO_DATA below).
+// The CODE below is functionally identical to deployed v16. NOTE: the
+// deployed copy carries a THINNER header comment block than this one — when
+// you `supabase functions download notify-pto` and diff, expect the header
+// comments to differ; the code from the first `import` down must match. Work
+// on the laptop deploys straight from `supabase functions deploy`, so diff
+// before editing. Deploying a stale copy silently breaks the Power Automate
+// flow (see PTO_DATA below).
+//
+// v16 (2026-07-16): removed the TEMP Binney manager-email mute — Binney home
+// managers now get notification emails again (submit → managers, decide →
+// managers + requester), same as UPark. The calendar path is unchanged.
 //
 // Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
 // via pg_net on INSERT/UPDATE of pto_requests. The trigger also carries a
@@ -63,9 +69,6 @@
 //   payload.dry_run      — resolve recipients + invite plan, send nothing.
 //   payload.override_to  — notification emails only: replace the real list.
 //   env PTO_QA_FORCE_TO  — global override for BOTH sends (staging-style).
-//
-// TEMP: Binney manager notification emails are muted while the PA flow is
-// under test — see the marked line below. Revert by deleting it.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
@@ -380,11 +383,6 @@ Deno.serve(async (req: Request) => {
       if (calTo.length) calTo = forced;
     }
     if (payload.event === "retracted") effectiveTo = [];
-
-    // TEMP (2026-07-15, per request): mute Binney manager notification emails
-    // during Power Automate flow testing. Calendar invite still sends (it
-    // feeds the flow). Revert: delete this line and redeploy.
-    if (site.code === "binney") effectiveTo = [];
 
     if (payload.dry_run) {
       return json(200, {
