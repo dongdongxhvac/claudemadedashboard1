@@ -1,55 +1,71 @@
 // notify-pto — Supabase Edge Function.
 //
+// !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
+// The code below is byte-identical to deployed v15 (only this header block
+// differs — comments don't affect behavior). Work on the laptop deploys
+// straight from `supabase functions deploy`, so before editing here run
+// `supabase functions download notify-pto` and diff. Deploying a stale copy
+// silently breaks the Power Automate flow (see PTO_DATA below).
+//
 // Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
-// via pg_net on INSERT/UPDATE of pto_requests. Two jobs:
+// via pg_net on INSERT/UPDATE of pto_requests. The trigger also carries a
+// backfill/past-date guard: it suppresses sends when request_source =
+// 'ontheclock_csv' or ends_on < current_date. Two jobs:
 //
 // 1) NOTIFICATION EMAILS (site-aware)
-//    event 'submitted' (new pending request)
-//      → email every ACTIVE user with is_manager=true homed at the
-//        requester's site (engineer_profiles.home_site_id; NULL = UPark).
-//    event 'decided' (status → approved/denied, or inserted as approved)
-//      → email those home-site managers PLUS the requester.
+//    'submitted' → active is_manager users homed at the requester's site
+//                  (engineer_profiles.home_site_id; NULL = UPark).
+//    'decided'   → those managers PLUS the requester.
+//    NOTE: is_manager is ALSO a permission flag — current_user_is_manager()
+//    (migration 0031) gates buildings/on-call proposal publishing, MRO
+//    receipt capture + billing, and overtime management. NEVER flip it just
+//    to silence email; it silently strips those rights.
 //
-// 2) CALENDAR INVITES (.ics) — no Power Automate required
-//    approved            → iCalendar METHOD:REQUEST (all-day, shows as Free).
-//    approved→cancelled  → event 'retracted': METHOD:CANCEL with the same
-//                          UID retracts it (no notification email — the
-//                          calendar cancel itself lands in inboxes).
-//    approved→denied     → 'decided' Denied email + METHOD:CANCEL.
+// 2) CALENDAR EVENTS — via Power Automate, NOT via the .ics
+//    Direct invites do not work here: accepting an .ics only books a
+//    PERSONAL calendar, Outlook blocks importing to a shared calendar, and
+//    Mimecast strips the .ics attachment in transit. So the invite email's
+//    BODY carries a machine-readable line that survives Mimecast:
+//
+//      PTO_DATA|action:REQUEST|id:<uuid>|starts:<iso>|ends:<iso>|hours:<n>|engineer:<name>|type:<label>
+//
+//    A Power Automate flow ("PTO to Binney shared calendar", cloud-only —
+//    NOT in this repo) watches the Binney Gmail folder, parses that line and
+//    writes the event onto the M365 group calendar via the Office 365 Groups
+//    connector. GOTCHAS, learned the hard way:
+//      * Delimit with ':' — NEVER '='. Quoted-printable uses '=' as its
+//        soft-wrap/escape char and corrupts the line depending on length.
+//      * The flow strips %0D/%0A before parsing so wraps can't split a marker.
+//      * The first attachment is the "External Mail" banner (0.jpg), not the
+//        .ics — parse the BODY, never attachments.
+//    The .ics is still attached (harmless, and the personal-calendar path
+//    still works for UPark).
+//
 //    Invite recipients per site:
-//      UPark  (user 2026-07-11)    — home-site managers + the requesting
-//        engineer BY DEFAULT, plus manager-added extras from
-//        pto_cal_recipients (migration 0096, editable in the PTO panels).
-//      Binney (manager 2026-07-14) — ONLY the pto_cal_recipients list,
-//        seeded (migration 0100) with the CW Binney Engineering O365 group
-//        so the invite lands on the group calendar instead of everyone's
-//        inbox. Falls back to the UPark rule if the list is ever emptied so
-//        invites can't silently stop.
-//    An env secret PTO_CAL_TO_<SITE> still overrides the list for QA.
-//    Attendees carry RSVP=FALSE + X-MICROSOFT-CDO-BUSYSTATUS:FREE: on M365
-//    the event auto-appears on arrival and Outlook asks for no response.
+//      UPark  — home-site managers + the requesting engineer, plus extras
+//               from pto_cal_recipients (migration 0096, editable in-panel).
+//      Binney — ONLY the pto_cal_recipients list, which is deliberately just
+//               jie.lao@cwservices.com: that inbox feeds the PA flow, which
+//               republishes to the group calendar. The group SMTP address is
+//               intentionally NOT here — adding it back emails ~24 people an
+//               invite with the raw PTO_DATA line in it. Empty list falls
+//               back to the UPark rule.
 //
-// Recipient control for notifications is the users.is_manager toggle in the
-// admin view — no hardcoded names. Transport is Gmail SMTP (email-report
-// pattern); Resend's testing mode can't reach arbitrary recipients.
+// Transport is Gmail SMTP, per-site sender: GMAIL_USER_<SITE> +
+// GMAIL_APP_PASSWORD_<SITE> (env first, then the get_app_secret Vault
+// accessor, migration 0078), falling back to the default GMAIL_USER pair.
+// Resend's testing mode can't reach arbitrary recipients.
 //
-// Deployed with verify_jwt ENABLED: the DB trigger authenticates with the
+// Deployed with verify_jwt ENABLED: the trigger authenticates with the
 // project anon key (a valid signed JWT, public by design).
 //
-// Credentials: per-site sender — GMAIL_USER_<SITE> + GMAIL_APP_PASSWORD_<SITE>
-// (env then Vault via get_app_secret, migration 0078), falling back to the
-// default GMAIL_USER pair until a site's app password is seeded.
-//
 // QA hooks (never set by the trigger):
-//   payload.dry_run         — resolve recipients + invite plan, send nothing.
-//   payload.override_to     — notification emails only: replace the real list.
-//   PTO_QA_FORCE_TO_<SITE>  — per-site override for BOTH sends: env first, then
-//                             Vault (set_app_secret), so it flips without a
-//                             redeploy. Point a site at a test address to
-//                             silence its real recipients while an external
-//                             flow (Power Automate) is under test; set it to
-//                             '' to turn it back off. Other sites unaffected.
-//   env PTO_QA_FORCE_TO     — same, but global across sites (fallback).
+//   payload.dry_run      — resolve recipients + invite plan, send nothing.
+//   payload.override_to  — notification emails only: replace the real list.
+//   env PTO_QA_FORCE_TO  — global override for BOTH sends (staging-style).
+//
+// TEMP: Binney manager notification emails are muted while the PA flow is
+// under test — see the marked line below. Revert by deleting it.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
@@ -96,7 +112,6 @@ function typeLabel(t: string): string {
   return TYPE_LABELS[t] ?? t;
 }
 
-/** 'YYYY-MM-DD' → 'Mon 7/13' without timezone drift (UTC-pinned). */
 function fmtDay(iso: string): string {
   const d = new Date(iso + "T00:00:00Z");
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
@@ -105,7 +120,7 @@ function fmtDay(iso: string): string {
 }
 
 function fmtRange(starts: string, ends: string): string {
-  return starts === ends ? fmtDay(starts) : `${fmtDay(starts)} – ${fmtDay(ends)}`;
+  return starts === ends ? fmtDay(starts) : `${fmtDay(starts)} - ${fmtDay(ends)}`;
 }
 
 function fmtTime12(hhmm: string | null): string {
@@ -122,14 +137,9 @@ function partialLabel(r: PtoRecord): string | null {
   if (!r.out_from && !r.out_until) return null;
   if (!r.out_from) return `in at ${fmtTime12(r.out_until)}`;
   if (!r.out_until) return `out from ${fmtTime12(r.out_from)}`;
-  return `${fmtTime12(r.out_from)}–${fmtTime12(r.out_until)}`;
+  return `${fmtTime12(r.out_from)}-${fmtTime12(r.out_until)}`;
 }
 
-/** SMTP header + text-part safety: denomailer 1.6 folds RFC2047-encoded
- *  headers incorrectly, so a non-ASCII subject ('·', '—') breaks the whole
- *  header block and Gmail renders raw MIME as the body. Subjects, the
- *  plain-text part, and ICS content are forced to ASCII; the HTML part
- *  keeps the pretty typography (safely QP-encoded once headers are valid). */
 function asciiSafe(s: string): string {
   return s
     .replace(/[·]/g, "-")
@@ -150,13 +160,10 @@ function json(status: number, body: unknown) {
   });
 }
 
-// ── iCalendar helpers ───────────────────────────────────────────────
-
 function icsEscape(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 }
 
-/** RFC 5545 line folding: max 75 octets per line, continuation indented. */
 function icsFold(line: string): string {
   const out: string[] = [];
   let s = line;
@@ -183,8 +190,8 @@ function buildIcs(opts: {
   uid: string;
   summary: string;
   description: string;
-  startIso: string;      // inclusive first day off
-  endIso: string;        // inclusive last day off (DTEND is +1, exclusive)
+  startIso: string;
+  endIso: string;
   organizerEmail: string;
   organizerName: string;
   attendees: string[];
@@ -203,8 +210,6 @@ function buildIcs(opts: {
     `SUMMARY:${icsEscape(asciiSafe(opts.summary))}`,
     `DESCRIPTION:${icsEscape(asciiSafe(opts.description))}`,
     `ORGANIZER;CN=${icsEscape(asciiSafe(opts.organizerName))}:mailto:${opts.organizerEmail}`,
-    // RSVP=FALSE: no accept/decline expected — Exchange/M365 still places
-    // the event on the calendar automatically when the request arrives.
     ...opts.attendees.map((a) =>
       `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${a}`),
     `STATUS:${opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
@@ -218,8 +223,6 @@ function buildIcs(opts: {
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
-/** Per-site pto_cal_recipients list (migration 0096): extras at UPark, the
- *  whole invite list at Binney. Env override first (QA). */
 async function calRecipients(
   admin: ReturnType<typeof createClient>,
   siteId: string,
@@ -252,8 +255,6 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   try {
-    // Re-read the enriched row (names for requester/reviewer) — the trigger
-    // payload carries ids only.
     const { data: reqRows, error: reqErr } = await admin
       .from("v_pto_requests_enriched")
       .select("*")
@@ -262,7 +263,6 @@ Deno.serve(async (req: Request) => {
     const r = reqRows?.[0];
     if (!r) return json(404, { error: "request not found" });
 
-    // Requester (email + home site).
     const { data: requester, error: uErr } = await admin
       .from("users")
       .select("id, email, full_name, engineer_profiles(home_site_id)")
@@ -274,15 +274,12 @@ Deno.serve(async (req: Request) => {
       ? (requester?.engineer_profiles as EpRow[])[0]
       : (requester?.engineer_profiles as EpRow | null);
 
-    // Site: NULL home_site_id = UPark (historical default, same rule as the
-    // frontend's useSiteScope).
     const { data: sites, error: sErr } = await admin.from("sites").select("id, code, name");
     if (sErr) throw sErr;
     const upark = (sites ?? []).find((s) => s.code === "upark");
     const site = (sites ?? []).find((s) => s.id === ep?.home_site_id) ?? upark;
     if (!site) return json(500, { error: "sites table empty" });
 
-    // Home-site managers: the curated is_manager toggle in the admin view.
     const { data: managers, error: mErr } = await admin
       .from("users")
       .select("id, email, full_name, engineer_profiles!inner(home_site_id)")
@@ -302,7 +299,6 @@ Deno.serve(async (req: Request) => {
     }
     const resolvedTo = [...recipients];
 
-    // Compose the notification email.
     const who = r.user_full_name ?? requester?.full_name ?? "Unknown";
     const range = fmtRange(r.starts_on, r.ends_on);
     const tl = typeLabel(r.type);
@@ -317,7 +313,7 @@ Deno.serve(async (req: Request) => {
     const rows: [string, string][] = [
       ["Engineer", who],
       ["Type", tl],
-      ["Dates", `${range} (${r.days} day${r.days === 1 ? "" : "s"} · ${r.hours}h)`],
+      ["Dates", `${range} (${r.days} day${r.days === 1 ? "" : "s"} - ${r.hours}h)`],
     ];
     if (partial) rows.push(["Partial day", partial]);
     if (r.reason) rows.push(["Reason", r.reason]);
@@ -333,7 +329,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const heading = payload.event === "submitted"
-      ? "New PTO request — needs review"
+      ? "New PTO request - needs review"
       : `PTO request ${decision.toLowerCase()}`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 560px;">
@@ -353,7 +349,6 @@ Deno.serve(async (req: Request) => {
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
       `\n\n${dashUrl}`);
 
-    // ── Calendar invite plan ──────────────────────────────────────
     let inviteAction: "REQUEST" | "CANCEL" | null = null;
     if (payload.event === "decided" && r.status === "approved") {
       inviteAction = "REQUEST";
@@ -362,11 +357,7 @@ Deno.serve(async (req: Request) => {
     } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
       inviteAction = "CANCEL";
     }
-    // Invite recipients — per-site rule (see header):
-    //   UPark  — managers + requester + pto_cal_recipients extras. Deduped.
-    //   Binney — ONLY the pto_cal_recipients list (the O365 group); the
-    //            group fans out, so no individual manager/requester copies.
-    //            Empty list falls back to the UPark rule.
+
     let calTo: string[] = [];
     if (inviteAction) {
       const listed = await calRecipients(admin, site.id as string, site.code as string);
@@ -382,47 +373,30 @@ Deno.serve(async (req: Request) => {
       calTo = [...merged.values()];
     }
 
-    // QA force list (never set by the trigger) — per-site key first: env, then
-    // Vault so it flips without a redeploy; falls back to the global env key.
-    // Forces BOTH sends to the test address so one site can be silenced while
-    // an external flow is under test. Set the Vault value to '' to turn off.
-    const qaKey = `PTO_QA_FORCE_TO_${(site.code as string).toUpperCase()}`;
-    let qaRaw = (Deno.env.get(qaKey) ?? "").trim();
-    if (!qaRaw) {
-      const { data: qaVault } = await admin.rpc("get_app_secret", { k: qaKey });
-      qaRaw = ((qaVault as string) ?? "").trim();
-    }
-    if (!qaRaw) qaRaw = QA_FORCE_TO;
-    const forced = qaRaw.split(",").map((s) => s.trim()).filter((e) => /@/.test(e));
-
-    // Notification recipients.
     let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
-    if (forced.length) {
+    if (QA_FORCE_TO) {
+      const forced = QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean);
       effectiveTo = forced;
       if (calTo.length) calTo = forced;
     }
-    // 'retracted' sends no notification email — the calendar CANCEL is the
-    // message.
     if (payload.event === "retracted") effectiveTo = [];
+
+    // TEMP (2026-07-15, per request): mute Binney manager notification emails
+    // during Power Automate flow testing. Calendar invite still sends (it
+    // feeds the flow). Revert: delete this line and redeploy.
+    if (site.code === "binney") effectiveTo = [];
 
     if (payload.dry_run) {
       return json(200, {
         ok: true, dry_run: true, event: payload.event, site: site.code,
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
-        qa_forced: forced.length ? forced : null,
       });
     }
     if (effectiveTo.length === 0 && !(inviteAction && calTo.length)) {
       return json(200, { ok: true, skipped: "no recipients" });
     }
 
-    // Sender account per site (user 2026-07-11): Binney mail goes out from
-    // the Binney Gmail (GMAIL_USER_BINNEY / GMAIL_APP_PASSWORD_BINNEY — env
-    // first, then the get_app_secret Vault accessor), UPark likewise via
-    // _UPARK keys when set. Falls back to the default GMAIL_USER pair
-    // (bmrupark55) so sending keeps working until a site's app password is
-    // seeded.
     async function lookupCreds(userKey: string, passKey: string): Promise<{ user: string; pass: string }> {
       let user = Deno.env.get(userKey) ?? "";
       let pass = Deno.env.get(passKey) ?? "";
@@ -434,8 +408,6 @@ Deno.serve(async (req: Request) => {
         user = user || ((u.data as string) ?? "");
         pass = pass || ((p.data as string) ?? "");
       }
-      // Google displays app passwords as "xxxx xxxx xxxx xxxx" but SMTP AUTH
-      // wants the bare 16 chars — strip whitespace so any paste format works.
       return { user: user.trim(), pass: pass.replace(/\s+/g, "") };
     }
     const siteSuffix = (site.code as string).toUpperCase();
@@ -491,9 +463,10 @@ Deno.serve(async (req: Request) => {
           to: calTo,
           subject: invSubject,
           content: asciiSafe(
-            inviteAction === "CANCEL"
+            (inviteAction === "CANCEL"
               ? `This PTO was retracted - the calendar event is cancelled.\n\n${who} - ${tl} ${range}`
-              : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`,
+              : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`)
+            + `\n\nPTO_DATA|action:${inviteAction}|id:${r.id}|starts:${r.starts_on}|ends:${r.ends_on}|hours:${r.hours}|engineer:${who}|type:${tl}`,
           ),
           attachments: [{
             filename: "invite.ics",
