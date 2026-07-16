@@ -1,13 +1,15 @@
-// Manager-editable recipients for approved-PTO calendar invites (.ics).
-//
-// Per-site rule — notify-pto v12 (migration 0100):
-//   UPark  — invites go to home-site managers (users.is_manager) + the
-//            requesting engineer BY DEFAULT; this table (pto_cal_recipients,
-//            migration 0096) holds EXTRAS added on top (client/director/admin).
-//   Binney — invites go to EXACTLY this table's list (the O365 group, which
-//            fans out to its members); managers + the engineer are reached
-//            through the group, not individually. Empty list falls back to
-//            the UPark rule.
+// Manager-editable pto_cal_recipients list (migration 0096) — but the list
+// MEANS different things per site (notify-pto v18):
+//   UPark  — .ics invites go to home-site managers (users.is_manager) + the
+//            requesting engineer BY DEFAULT; this table holds EXTRAS added
+//            on top (client/director/admin).
+//   Binney — this table is the POWER AUTOMATE FEED inbox (jie.lao): a
+//            body-only sync email (PTO_DATA line, no .ics) goes here and the
+//            PA flow writes the event onto the M365 group calendar. It is
+//            NOT an invite list. Emptying it silently kills the group
+//            calendar sync — there is no fallback. Manager .ics invites +
+//            notification emails are separate, gated by BINNEY_LIVE in the
+//            edge function.
 // The copy below branches on siteCode so each panel states its own rule.
 //
 // Rendered by BOTH the UPark and Binney PTO panels with their site code.
@@ -116,25 +118,26 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         onClick={() => setOpen(!open)}
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
         title={isBinney
-          ? 'Invites go only to the recipients listed below (the group fans out to its members)'
+          ? 'This list is the Power Automate feed inbox — a sync email goes here and the flow writes the event onto the group calendar. Do not empty it.'
           : 'Invites go to home-site managers + the requesting engineer by default; extras (client / director / admin) are added below'}
       >
-        {open ? '▾' : '▸'} Calendar invites · {isBinney
-          ? `${rows.length} recipient${rows.length === 1 ? '' : 's'}`
-          : `${defaultsQ.data?.managers.length ?? '…'} managers · ${defaultsQ.data?.engineerCount ?? '…'} engineers · ${rows.length} extras`}
+        {open ? '▾' : '▸'} {isBinney
+          ? `Group calendar sync · ${rows.length} feed inbox${rows.length === 1 ? '' : 'es'}`
+          : `Calendar invites · ${defaultsQ.data?.managers.length ?? '…'} managers · ${defaultsQ.data?.engineerCount ?? '…'} engineers · ${rows.length} extras`}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
           <p className="t-small t-muted">
             {isBinney ? (
               <>
-                Invites go <strong>only to the recipients listed below</strong>. The group
-                fans out to its members, so managers and the requesting engineer are reached
-                through the group — not invited individually.
+                Approved PTO reaches the <strong>shared group calendar</strong> via Power
+                Automate: a sync email goes to the inbox(es) below, and the flow writes the
+                event onto the calendar. This is a <strong>feed address, not an invite list</strong>
+                {' '}— manager invites are separate and turn on at launch (BINNEY_LIVE).
                 {rows.length === 0 && (
-                  <span className="t-danger"> List is empty — invites currently fall back to
-                    managers + the requesting engineer. Add the group to restore group-only
-                    delivery.</span>
+                  <span className="t-danger"> List is empty — group calendar sync is OFF.
+                    Nothing will appear on the shared calendar until the feed inbox is
+                    re-added.</span>
                 )}
               </>
             ) : (
