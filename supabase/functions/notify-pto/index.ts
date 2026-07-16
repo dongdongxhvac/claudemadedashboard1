@@ -9,9 +9,10 @@
 // before editing. Deploying a stale copy silently breaks the Power Automate
 // flow (see PTO_DATA below).
 //
-// v16 (2026-07-16): removed the TEMP Binney manager-email mute — Binney home
-// managers now get notification emails again (submit → managers, decide →
-// managers + requester), same as UPark. The calendar path is unchanged.
+// v17 (2026-07-16): Binney manager-email mute RE-ENABLED — Binney PTO is in
+// develop mode; managers get no notification emails until launch. The
+// PA-flow calendar email (to jie.lao) still sends. Remove the marked line
+// below to go live.
 //
 // Invoked by the DB trigger pto_requests_notify_trg (migrations 0094/0095)
 // via pg_net on INSERT/UPDATE of pto_requests. The trigger also carries a
@@ -383,6 +384,11 @@ Deno.serve(async (req: Request) => {
       if (calTo.length) calTo = forced;
     }
     if (payload.event === "retracted") effectiveTo = [];
+
+    // DEVELOP MODE (re-enabled 2026-07-16): Binney PTO is not launched — no
+    // manager notification emails. The calendar email (feeds the PA flow)
+    // still sends. Delete this line at launch and redeploy.
+    if (site.code === "binney") effectiveTo = [];
 
     if (payload.dry_run) {
       return json(200, {
