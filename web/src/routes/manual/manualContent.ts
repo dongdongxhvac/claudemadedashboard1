@@ -35,7 +35,7 @@ export type Block =
 export type Topic = { id: string; title: string; blocks: Block[] };
 export type Chapter = { id: string; title: string; summary: string; topics: Topic[] };
 
-export const LAST_UPDATED = '2026-07-15';
+export const LAST_UPDATED = '2026-07-17';
 
 export const SITE_LABEL: Record<ManualSite, string> = {
   upark: 'UPark',
@@ -361,9 +361,10 @@ export function buildManual(site: ManualSite): Chapter[] {
                 'Read the header tally without expanding: "N pending · N out today · N upcoming", plus a red conflicts count if there are any.',
                 'Expand the section. "Pending approval (N)" is the first block.',
                 'Read each card: engineer, type, date range, and days/hours — e.g. "Vacation · 8/3 – 8/7 (5d / 40h)". The grey line underneath says when it was submitted, and adds "by <name>" only when a manager filed it rather than the engineer.',
+                'Vacation, sick and floating-holiday cards also show a balance line: hours left now → what approval would leave. It turns red when approval would overdraw. "No balance set" means the year’s allotment was never entered — fix that in Balances below before deciding. Other leave kinds have no allotment, so no line.',
                 'Check the left edge. Amber is normal. Red means the two-engineer vacation cap is exceeded, and a red box names exactly who is already booked.',
                 'A quiet grey note reading "<name> also off these dates (within cap)" is informational — one other person is off and you are still inside the cap. Approve normally.',
-                'To approve: click the green Approve. The card moves to "Upcoming approved" and your name and the time are stamped on the record.',
+                'To approve: click the green Approve. The card moves to "Upcoming approved", your name and the time are stamped on the record, "by <your name>" appears next to the status in the engineer’s year log, and the decision email says "Approved by <your name>".',
                 'To deny: click the red Deny, type a reason — Confirm deny stays greyed out until you do — then Confirm deny.',
                 'Check the card actually disappeared. If it did not, the write was refused: nothing on screen will tell you.',
               ],
@@ -387,7 +388,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: 'danger',
               title: 'Approving wipes any reason already on the record',
               text:
-                'The plain Approve button clears the review note. If a request was denied with a reason and is later flipped to approved, that reason is destroyed silently, and the new approver replaces the original reviewer. Since the note is never shown on screen anyway, nobody will notice.',
+                'The plain Approve button clears the review note. If a request was denied with a reason and is later flipped to approved, that reason is destroyed silently, and the new approver replaces the original reviewer. The note only surfaces as a hover tooltip on the "by <name>" tag in the year log, so the loss is easy to miss.',
             },
           ],
         },
@@ -664,7 +665,7 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'bullets',
               items: [
-                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a button to the manager dashboard.',
+                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a button to the manager dashboard. Decision emails also name the decider: "Approved by <name>" or "Denied by <name>".',
                 'A manager adding PTO already marked Approved skips the "new request" email and goes straight to the decision email.',
                 'Who counts as a "manager" for email is the Manager on/off switch on each user profile — not the role badge. Someone whose role says Manager with the switch off gets NO email; a lead engineer with the switch on does. Only an Admin can flip it.',
                 'If email or the invite fails for any reason, the PTO still saves. A silent email failure leaves no sign in the app.',
@@ -678,30 +679,30 @@ export function buildManual(site: ManualSite): Chapter[] {
               kind: 'table',
               head: ['Site', 'Invite goes to'],
               rows: [
-                ['UPark', 'Every active home-site manager, plus the engineer whose PTO it is, plus any extra addresses on the Calendar invites list. The list only ADDS people on top'],
-                ['Binney St', 'ONLY the addresses on the Calendar invites list — the CW Binney Engineering O365 group, which owns a shared group calendar. Managers and the engineer are reached through the group, not invited individually'],
+                ['UPark', 'Every active home-site manager, plus the engineer whose PTO it is, plus any extra addresses on the invite list. The list only ADDS people on top'],
+                ['Binney St', 'Nobody directly. A sync email goes to the shared-calendar feed inbox, and an automated flow copies the event onto the CW Binney Engineering shared group calendar with the title "PTO — <name> — <type> <hours>h". Once the system launches, home managers will also get a personal invite; while it is in develop mode they get nothing'],
               ],
             },
             {
               kind: 'p',
               text:
-                'The Calendar invites row at the bottom of the panel tells you which rule is in force before you expand it: UPark reads "N managers · N engineers · N extras", Binney reads "N recipients". Admins and managers can change the list; directors can see it but not edit; engineers cannot see it at all. Changes take effect immediately — there is no Save button.',
+                'The row at the bottom of the panel tells you which rule is in force before you expand it: UPark reads "Calendar invites · N managers · N engineers · N extras"; Binney reads "PTO calendar · N sync inboxes · N personal" and opens into TWO lists. The shared-calendar sync list is ADMIN-ONLY — emptying it turns the shared calendar sync off with no fallback, and the panel warns in red. The personal invite list (home managers built in, extras added below) is editable by admins and managers. Directors can see everything but not edit; engineers cannot see it at all. Changes take effect immediately — there is no Save button.',
             },
             {
               kind: 'note',
               tone: 'warn',
               title: 'An extra address gets everything',
               text:
-                'Anyone added to the Calendar invites list receives EVERY approved-PTO invite and every cancellation for that site. It cannot be filtered to one engineer or one type of leave. They get invites only — never the New request or Approved/Denied emails.',
+                'Anyone added as an extra on the personal invite list receives EVERY approved-PTO invite and every cancellation for that site. It cannot be filtered to one engineer or one type of leave. They get invites only — never the New request or Approved/Denied emails. At Binney these invites are muted entirely until launch.',
             },
             ...(s.binney
               ? [
                   {
                     kind: 'note' as const,
                     tone: 'danger' as const,
-                    title: 'Two ways Binney invites break silently',
+                    title: 'Two ways the Binney shared calendar breaks silently',
                     text:
-                      'Binney mail is sent from a Gmail account outside the CUSHWAKE1 tenant, so the O365 group must have "let people outside the organization email this group" switched on — otherwise invites are dropped with no error anywhere. And if the Calendar invites list is ever emptied, invites do not stop: they silently revert to the UPark rule and start landing in every manager’s and the engineer’s personal inbox. The panel warns in red when the list is empty.',
+                      'If the shared-calendar sync list is ever emptied, the group calendar simply stops updating — there is no fallback and no error anywhere; the panel warns in red. And the copying itself is done by an automated flow that lives outside the dashboard — if that flow is switched off or errors, sync emails keep arriving in the feed inbox but nothing lands on the calendar. Cancellations are not yet removed automatically, so a retracted PTO may need deleting from the group calendar by hand.',
                   },
                 ]
               : []),

@@ -306,6 +306,7 @@ export function BinneyPtoPanel() {
           <PendingQueue
             pending={buckets.pending}
             all={buckets.all}
+            summaries={summaryQ.data ?? []}
             onApprove={(id, opts) => review.mutate({ id, decision: 'approved', ...opts })}
             onDeny={(id, note)    => review.mutate({ id, decision: 'denied', review_note: note })}
           />
@@ -417,10 +418,11 @@ export function BinneyPtoPanel() {
 // ───────────────────────────── Pending approval queue
 
 function PendingQueue({
-  pending, all, onApprove, onDeny,
+  pending, all, summaries, onApprove, onDeny,
 }: {
   pending: PtoRequest[];
   all: PtoRequest[];
+  summaries: PtoSummary[];
   onApprove: (id: string, opts: { cap_override?: boolean; cap_override_reason?: string }) => void;
   onDeny: (id: string, note: string | null) => void;
 }) {
@@ -443,6 +445,7 @@ function PendingQueue({
             key={r.id}
             req={r}
             allRequests={all}
+            summaries={summaries}
             onApprove={onApprove}
             onDeny={onDeny}
           />
@@ -452,11 +455,45 @@ function PendingQueue({
   );
 }
 
+/** One-line balance context on a pending card: hours left now → what
+ *  approval would leave, red when it would overdraw. Only the three tracked
+ *  balance types; other leave kinds have no allotment to check. */
+function BalanceHint({ req, summaries }: { req: PtoRequest; summaries: PtoSummary[] }) {
+  if (req.type !== 'vacation' && req.type !== 'sick' && req.type !== 'holiday') return null;
+  const s = summaries.find((x) => x.user_id === req.user_id);
+  if (!s) {
+    return (
+      <p className="t-small t-muted mt-1 italic">
+        No balance set for this engineer this year — set the allotment in Balances below.
+      </p>
+    );
+  }
+  const remaining = Number(
+    req.type === 'vacation' ? s.vacation_remaining :
+    req.type === 'sick'     ? s.sick_remaining     : s.holiday_remaining,
+  );
+  const alloted = Number(
+    req.type === 'vacation' ? s.vacation_alloted :
+    req.type === 'sick'     ? s.sick_alloted     : s.holiday_alloted,
+  );
+  const after = remaining - Number(req.hours);
+  return (
+    <p className="t-small mt-1" style={{ color: after < 0 ? 'var(--color-danger)' : undefined }}>
+      <span className="t-muted">{ptoTypeLabel(req.type)} balance:</span>{' '}
+      <strong>{remaining}h</strong> of {alloted}h left
+      <span className="t-muted"> → </span>
+      <strong>{after}h</strong> after approval
+      {after < 0 && <strong> — exceeds balance</strong>}
+    </p>
+  );
+}
+
 function PendingRow({
-  req, allRequests, onApprove, onDeny,
+  req, allRequests, summaries, onApprove, onDeny,
 }: {
   req: PtoRequest;
   allRequests: PtoRequest[];
+  summaries: PtoSummary[];
   onApprove: (id: string, opts: { cap_override?: boolean; cap_override_reason?: string }) => void;
   onDeny: (id: string, note: string | null) => void;
 }) {
@@ -485,6 +522,8 @@ function PendingRow({
         </div>
       </div>
       {req.reason && <p className="t-small t-muted mt-1">{req.reason}</p>}
+
+      <BalanceHint req={req} summaries={summaries} />
 
       {cap.exceeded && (
         <div
@@ -1919,6 +1958,15 @@ export function PtoYearLog({
               >
                 {r.status}
               </span>
+              {r.reviewed_by_name && (r.status === 'approved' || r.status === 'denied') && (
+                <span
+                  className="t-muted"
+                  style={{ fontSize: 10 }}
+                  title={r.review_note ? `Note: ${r.review_note}` : undefined}
+                >
+                  by {r.reviewed_by_name}
+                </span>
+              )}
               {r.request_source && (
                 <span
                   className="t-muted"

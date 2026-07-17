@@ -1,7 +1,12 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v19 — repo and live are identical.
+// This file was deployed VERBATIM as v20 — repo and live are identical.
+//
+// v20 (2026-07-16): calendar event title format is now
+// "PTO - <full name> - <type> <hours>h" (user request; the PA flow's
+// Subject expression was updated to match), and decision emails label the
+// reviewer row "Approved by" / "Denied by" instead of "By".
 // Work on the laptop deploys straight from `supabase functions deploy`, so
 // before editing here run `supabase functions download notify-pto` and diff.
 // Deploying a stale copy silently breaks the Power Automate flow (see
@@ -357,7 +362,7 @@ Deno.serve(async (req: Request) => {
       }
     } else {
       rows.push(["Decision", decision]);
-      if (r.reviewed_by_name) rows.push(["By", r.reviewed_by_name]);
+      if (r.reviewed_by_name) rows.push([`${decision} by`, r.reviewed_by_name]);
       if (r.review_note) rows.push(["Note", r.review_note]);
     }
 
@@ -512,7 +517,9 @@ Deno.serve(async (req: Request) => {
         const ics = buildIcs({
           method: inviteAction,
           uid: `pto-${r.id}@claudemadedashboard1.vercel.app`,
-          summary: `PTO - ${who} (${tl})`,
+          // Title format (user 2026-07-16): "PTO - <name> - <type> <hours>h"
+          // — keep in step with the PA flow's Subject expression.
+          summary: `PTO - ${who} - ${tl} ${r.hours}h`,
           description:
             `${who} - ${tl} ${range} (${r.hours}h)` +
             (partial ? ` - ${partial}` : "") +
