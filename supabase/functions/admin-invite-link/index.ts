@@ -148,5 +148,21 @@ Deno.serve(async (req) => {
     detail: email,
   });
 
-  return json(200, { ok: true, action_link: linkRes.data.properties.action_link, kind, email });
+  // Prefer a link to OUR /set-password page carrying the hashed token —
+  // consumed only when the user clicks Continue (supabase.auth.verifyOtp).
+  // The raw action_link points at GoTrue's /verify endpoint, which spends
+  // the one-time token on ANY load — browser preloading and chat link
+  // previews were eating links before the user ever saw the page.
+  const hashedToken = linkRes.data.properties.hashed_token ?? null;
+  const app_link = hashedToken && redirect_to
+    ? `${redirect_to}?token_hash=${encodeURIComponent(hashedToken)}&type=${kind}`
+    : null;
+
+  return json(200, {
+    ok: true,
+    link: app_link ?? linkRes.data.properties.action_link,
+    action_link: linkRes.data.properties.action_link,
+    kind,
+    email,
+  });
 });

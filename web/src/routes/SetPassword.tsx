@@ -9,13 +9,24 @@
 // NO session and must still render the explanation) nor PublicOnly (a fresh
 // link arrives WITH a session and must not bounce to the dashboard).
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { supabase, authLink } from '../lib/supabase';
 
 export default function SetPassword() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  // Preferred link shape: ?token_hash=...&type=invite|recovery pointing at
+  // THIS page. The token is only consumed when the user clicks Continue
+  // (verifyOtp) — so browser preloading / chat link previews, which load
+  // pages but never click, can't burn the one-time token. The legacy
+  // action_link shape (session arrives via URL hash) still works below.
+  const [params] = useSearchParams();
+  const tokenHash = params.get('token_hash');
+  const rawType   = params.get('type');
+  const otpType: 'invite' | 'recovery' = rawType === 'invite' ? 'invite' : 'recovery';
+  const [verifyState, setVerifyState] = useState<'idle' | 'working' | 'failed'>('idle');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [status, setStatus]     = useState<'idle' | 'saving' | 'error'>('idle');
@@ -23,6 +34,39 @@ export default function SetPassword() {
 
   if (loading) {
     return <div className="p-8 text-gray-500">Loading...</div>;
+  }
+
+  if (!session && tokenHash && verifyState !== 'failed') {
+    const verify = async () => {
+      setVerifyState('working');
+      const { error } = await supabase.auth.verifyOtp({ type: otpType, token_hash: tokenHash });
+      if (error) {
+        setVerifyState('failed');
+        setVerifyError(error.message);
+        return;
+      }
+      // Session is now set (AuthProvider picks it up); drop the token from
+      // the URL so a refresh doesn't retry a spent token.
+      navigate('/set-password', { replace: true });
+    };
+    return (
+      <Shell>
+        <h1 className="text-xl font-semibold text-gray-900 mb-2">
+          {otpType === 'invite' ? 'Welcome — activate your account' : 'Reset your password'}
+        </h1>
+        <p className="text-sm text-gray-600 mb-4">
+          Click continue to verify this link, then choose your password.
+        </p>
+        <button
+          type="button"
+          onClick={verify}
+          disabled={verifyState === 'working'}
+          className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded px-3 py-2 text-sm font-medium"
+        >
+          {verifyState === 'working' ? 'Verifying…' : 'Continue'}
+        </button>
+      </Shell>
+    );
   }
 
   if (!session) {
@@ -33,8 +77,10 @@ export default function SetPassword() {
           This sign-in link can only be used once and expires after a short time.
           Ask your admin or manager to generate a new invite link.
         </p>
-        {authLink.errorDescription && (
-          <p className="text-sm text-red-600 mb-1">{authLink.errorDescription.replace(/\+/g, ' ')}</p>
+        {(verifyError ?? authLink.errorDescription) && (
+          <p className="text-sm text-red-600 mb-1">
+            {(verifyError ?? authLink.errorDescription!).replace(/\+/g, ' ')}
+          </p>
         )}
         <p className="text-sm text-gray-600 mt-3">
           Already have a password?{' '}

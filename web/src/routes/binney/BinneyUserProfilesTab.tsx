@@ -1070,13 +1070,14 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
       setMessage(ctx?.error ?? error.message);
       return;
     }
-    const res = data as { action_link?: string; kind?: 'invite' | 'recovery' };
-    if (!res?.action_link) {
+    const res = data as { link?: string; action_link?: string; kind?: 'invite' | 'recovery' };
+    const bestLink = res?.link ?? res?.action_link;
+    if (!bestLink) {
       setStatus('error');
       setMessage('No link returned — try again.');
       return;
     }
-    setLink(res.action_link);
+    setLink(bestLink);
     setKind(res.kind ?? 'invite');
     setStatus('idle');
     setCopied(false);
