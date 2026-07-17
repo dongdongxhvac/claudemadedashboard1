@@ -665,7 +665,7 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'bullets',
               items: [
-                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a button to the manager dashboard. Decision emails also name the decider: "Approved by <name>" or "Denied by <name>".',
+                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a plain written-out link to the manager dashboard (deliberately not a styled button — corporate mail filters treat those as phishing bait). Decision emails also name the decider: "Approved by <name>" or "Denied by <name>".',
                 'A manager adding PTO already marked Approved skips the "new request" email and goes straight to the decision email.',
                 'Who counts as a "manager" for email is the Manager on/off switch on each user profile — not the role badge. Someone whose role says Manager with the switch off gets NO email; a lead engineer with the switch on does. Only an Admin can flip it.',
                 'If email or the invite fails for any reason, the PTO still saves. A silent email failure leaves no sign in the app.',
@@ -680,7 +680,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               head: ['Site', 'Invite goes to'],
               rows: [
                 ['UPark', 'Every active home-site manager, plus the engineer whose PTO it is, plus any extra addresses on the invite list. The list only ADDS people on top'],
-                ['Binney St', 'Nobody directly. A sync email goes to the shared-calendar feed inbox, and an automated flow copies the event onto the CW Binney Engineering shared group calendar with the title "PTO — <name> — <type> <hours>h". Once the system launches, home managers will also get a personal invite; while it is in develop mode they get nothing'],
+                ['Binney St', 'Nobody directly. A sync email goes to the shared-calendar feed inbox, and an automated flow copies the event onto the CW Binney Engineering shared group calendar with the title "PTO — <name> (<type> <hours>h)". Once the system launches, home managers will also get a personal invite; while it is in develop mode they get nothing'],
               ],
             },
             {

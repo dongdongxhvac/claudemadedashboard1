@@ -1,12 +1,18 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v20 — repo and live are identical.
+// This file was deployed VERBATIM as v21 — repo and live are identical.
 //
-// v20 (2026-07-16): calendar event title format is now
-// "PTO - <full name> - <type> <hours>h" (user request; the PA flow's
-// Subject expression was updated to match), and decision emails label the
-// reviewer row "Approved by" / "Denied by" instead of "By".
+// v21 (2026-07-17): Mimecast-friendly links — the styled button in the HTML
+// part is replaced by a bare anchor whose VISIBLE TEXT IS THE URL ITSELF
+// (styled buttons + text≠href are classic phishing heuristics corporate
+// filters block; anchor-text==href with the address also in the plain-text
+// part is the most survivable form). Keep this rule for EVERY email this
+// project sends (login invites included). Event title format is now
+// "PTO - <full name> (<type> <hours>h)".
+//
+// v20 (2026-07-16): decision emails label the reviewer row
+// "Approved by" / "Denied by" instead of "By".
 // Work on the laptop deploys straight from `supabase functions deploy`, so
 // before editing here run `supabase functions download notify-pto` and diff.
 // Deploying a stale copy silently breaks the Power Automate flow (see
@@ -378,9 +384,8 @@ Deno.serve(async (req: Request) => {
           ).join("")}
         </table>
         <p style="margin-top:16px;">
-          <a href="${dashUrl}" style="display:inline-block; padding:8px 14px; background:#4f46e5; color:#fff; border-radius:4px; text-decoration:none;">
-            Open ${escapeHtml(site.name)} dashboard
-          </a>
+          ${escapeHtml(site.name)} dashboard:<br/>
+          <a href="${dashUrl}">${dashUrl}</a>
         </p>
       </div>`;
     const text = asciiSafe(`${heading}\n\n` +
@@ -517,9 +522,9 @@ Deno.serve(async (req: Request) => {
         const ics = buildIcs({
           method: inviteAction,
           uid: `pto-${r.id}@claudemadedashboard1.vercel.app`,
-          // Title format (user 2026-07-16): "PTO - <name> - <type> <hours>h"
+          // Title format (user 2026-07-17): "PTO - <name> (<type> <hours>h)"
           // — keep in step with the PA flow's Subject expression.
-          summary: `PTO - ${who} - ${tl} ${r.hours}h`,
+          summary: `PTO - ${who} (${tl} ${r.hours}h)`,
           description:
             `${who} - ${tl} ${range} (${r.hours}h)` +
             (partial ? ` - ${partial}` : "") +
