@@ -339,21 +339,32 @@ export function BinneyPtoPanel() {
             </div>
           )}
 
-          {/* Top row: heatmap | today | tomorrow | day-after — all in one
-              4-column grid so the manager scans coverage left→right.
-              The heatmap lives in the leading cell of TodayAttendance's
-              grid; the 3 day blocks fill the rest. */}
+          {/* Top row: 7-day attendance roll — today (featured) + the next 6
+              calendar days, so both crew rotations are visible a full week
+              out. */}
           <TodayAttendance
             engineers={engineersQ.data ?? []}
             shifts={shiftsQ.data ?? []}
             allApproved={buckets.all.filter((r) => r.status === 'approved')}
-            leadingCell={
+          />
+
+          {/* Heatmap in its own row (room for the date labels) with the
+              staffing-vs-labor-model range checker beside it. */}
+          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '0 0 auto' }}>
               <CapHeatmap
                 requests={buckets.all}
                 onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
               />
-            }
-          />
+            </div>
+            <div style={{ flex: '1 1 460px', minWidth: 380 }}>
+              <StaffingForecast
+                engineers={engineersQ.data ?? []}
+                shifts={shiftsQ.data ?? []}
+                requests={buckets.all}
+              />
+            </div>
+          </div>
 
           {/* Upcoming approved, grouped */}
           {buckets.upcoming.length > 0 && (
@@ -751,19 +762,17 @@ function crewWorksOn(crew: Crew | undefined, iso: string): boolean {
 }
 
 function TodayAttendance({
-  engineers, shifts, allApproved, leadingCell,
+  engineers, shifts, allApproved,
 }: {
   engineers: EngineerRow[];
   shifts: { id: string; name: string; sort_order: number; crew?: Crew }[];
   allApproved: PtoRequest[];
-  /** Optional left-most cell rendered in the same grid row as the 3 day
-   *  blocks. Used to pin the vacation-cap heatmap alongside attendance. */
-  leadingCell?: React.ReactNode;
 }) {
   const submit = useSubmitPto();
 
-  // 3 date columns: today + 2 work days.
-  const days = useMemo(() => computeWorkDays(2), []);
+  // 7 date columns: today + the next 6 calendar days — a full week, so both
+  // crew rotations (Sun–Wed and Wed–Sat) appear in their entirety.
+  const days = useMemo(() => computeWorkDays(6), []);
 
   // Lookup: `${user_id}|${iso}` → PTO record covering that day (approved only).
   const ptoByUserDay = useMemo(() => {
@@ -811,7 +820,7 @@ function TodayAttendance({
     return out;
   }, [engineers, shifts]);
 
-  // Rolling counts across the 3-day horizon for the header. Partial-day
+  // Rolling counts across the 7-day horizon for the header. Partial-day
   // engineers are counted as "in" (they're around for part of the day) but
   // get a separate "partial" tally so the manager sees them at a glance.
   // Binney: the in/total denominators count only engineers whose CREW works
@@ -855,31 +864,32 @@ function TodayAttendance({
     setLogTarget({ engineer: eng, dateIso, dayLabel });
   };
 
-  // When the heatmap is pinned to the leading cell, the row becomes
-  // heatmap | today (2fr) | tomorrow (1fr) | day-after (1fr).
-  // Otherwise it stays 3-col attendance-only.
+  // 7 columns: today (wider, featured) + 6 preview days. On viewports too
+  // narrow for the row, it scrolls horizontally instead of squeezing — PC is
+  // the primary target, phone is backup.
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: leadingCell ? 'auto 2fr 1fr 1fr' : '2fr 1fr 1fr',
-        gap: 12,
-        alignItems: 'flex-start',
-      }}
-    >
-      {leadingCell}
-      {days.map((d, i) => (
-        <DayAttendanceGroup
-          key={d.iso}
-          day={d}
-          counts={counts[i]}
-          shiftGroups={groups}
-          ptoLookup={ptoByUserDay}
-          disabled={submit.isPending}
-          onLogClick={onLogClick}
-          isPrimary={i === 0}
-        />
-      ))}
+    <div style={{ overflowX: 'auto' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(280px, 1.6fr) repeat(6, minmax(168px, 1fr))',
+          gap: 10,
+          alignItems: 'flex-start',
+        }}
+      >
+        {days.map((d, i) => (
+          <DayAttendanceGroup
+            key={d.iso}
+            day={d}
+            counts={counts[i]}
+            shiftGroups={groups}
+            ptoLookup={ptoByUserDay}
+            disabled={submit.isPending}
+            onLogClick={onLogClick}
+            isPrimary={i === 0}
+          />
+        ))}
+      </div>
       {logTarget && (
         <QuickPtoModal
           engineer={logTarget.engineer}
@@ -893,7 +903,7 @@ function TodayAttendance({
 }
 
 /** One day's attendance roll — matches the original single-day chip design,
- *  rendered once per day in the 3-column row. Today's column is wider and
+ *  rendered once per day in the 7-column row. Today's column is wider and
  *  gets a slightly larger font + accent treatment so the eye lands there
  *  first. */
 function DayAttendanceGroup({
@@ -1420,13 +1430,16 @@ function CapHeatmap({ requests, onPickDate }: {
     });
   }
 
-  // Month labels — one per week column showing the month boundary.
-  const weekLabels: { col: number; label: string }[] = [];
+  // Column headers: month name at each month boundary, plus the Monday
+  // day-of-month for EVERY column so a specific date can be located without
+  // hovering cell by cell. The column containing today gets accent styling.
+  const todayCol = cells.find((c) => c.isToday)?.col ?? -1;
+  const weekLabels: { col: number; month: string; day: number }[] = [];
   let lastMonth = '';
   for (let c = 0; c < weeks; c++) {
     const monthDate = new Date(cells[c * 7].iso + 'T00:00:00');
     const m = monthDate.toLocaleString(undefined, { month: 'short' });
-    weekLabels.push({ col: c, label: m === lastMonth ? '' : m });
+    weekLabels.push({ col: c, month: m === lastMonth ? '' : m, day: monthDate.getDate() });
     lastMonth = m;
   }
 
@@ -1450,7 +1463,11 @@ function CapHeatmap({ requests, onPickDate }: {
   };
 
   const tooltip = (cell: Cell): string => {
-    const date = `${cell.iso}${cell.isToday ? ' (today)' : ''}${cell.isPast ? ' (past)' : ''}`;
+    // Lead with a human-readable date ("Tue, Jul 21") so the hover confirms
+    // the day being booked/checked at a glance; keep the ISO for precision.
+    const nice = new Date(cell.iso + 'T00:00:00')
+      .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const date = `${nice} · ${cell.iso}${cell.isToday ? ' (today)' : ''}${cell.isPast ? ' (past)' : ''}`;
     const sickLine = cell.sick.length > 0
       ? `\nSick: ${cell.sick.map((p) => `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`).join(', ')}`
       : '';
@@ -1516,8 +1533,9 @@ function CapHeatmap({ requests, onPickDate }: {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-        {/* Day-of-week labels column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 18 }}>
+        {/* Day-of-week labels column — paddingTop matches the two header
+            rows (month 14+1 + date 11+4) so Mon aligns with the first row. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 30 }}>
           {dayLabels.map((d) => (
             <div key={d} className="t-muted" style={{ fontSize: 10, height: 26, lineHeight: '26px', textAlign: 'right', width: 28 }}>
               {d}
@@ -1527,10 +1545,25 @@ function CapHeatmap({ requests, onPickDate }: {
         {/* Heatmap grid */}
         <div>
           {/* Month labels row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 1 }}>
             {weekLabels.map((w) => (
               <div key={w.col} className="t-muted" style={{ fontSize: 10, height: 14, textAlign: 'left' }}>
-                {w.label}
+                {w.month}
+              </div>
+            ))}
+          </div>
+          {/* Week-start (Monday) date row — locates any date without hovering */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 4 }}>
+            {weekLabels.map((w) => (
+              <div
+                key={w.col}
+                style={{
+                  fontSize: 9, height: 11, lineHeight: '11px', textAlign: 'left',
+                  color: w.col === todayCol ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  fontWeight: w.col === todayCol ? 700 : 400,
+                }}
+              >
+                {w.day}
               </div>
             ))}
           </div>
@@ -1618,6 +1651,233 @@ function LegendChip({ color, label }: { color: string; label: string }) {
       <span style={{ width: 12, height: 12, background: color, borderRadius: 2, border: '1px solid rgba(0,0,0,0.1)' }} />
       <span>{label}</span>
     </span>
+  );
+}
+
+// ───────────────────────────── Staffing vs labor model (range checker)
+//
+// Manager workflow: pick a date range and compare expected documented hours
+// per engineer against the labor model. Binney runs 4×10s and a worked day
+// documents ~8.5 h in COVE, so a full week is 4 × 8.5 = 34 h and one full-day
+// absence drops it to 3 × 8.5 = 25.5 h. The per-day figure is editable in the
+// block header so the model can be tuned (e.g. 8.75 → 35 h/wk) without a code
+// change.
+const DEFAULT_DOC_HRS_PER_DAY = 8.5;
+
+function StaffingForecast({ engineers, shifts, requests }: {
+  engineers: EngineerRow[];
+  shifts: { id: string; name: string; sort_order: number; crew?: Crew }[];
+  requests: PtoRequest[];
+}) {
+  const today = todayIso();
+  const [from, setFrom] = useState(today);
+  const [to, setTo]     = useState(addDaysIso(today, 6));
+  const [hrsStr, setHrsStr] = useState(String(DEFAULT_DOC_HRS_PER_DAY));
+  const hrs = Number(hrsStr) > 0 ? Number(hrsStr) : DEFAULT_DOC_HRS_PER_DAY;
+
+  // Sun–Sat presets — both crews (Sun–Wed / Wed–Sat) fit inside one
+  // Sunday-anchored week, so that's the natural labor-model window.
+  const sunday = useMemo(() => {
+    const d = new Date(today + 'T00:00:00');
+    return addDaysIso(today, -d.getDay());
+  }, [today]);
+  const presets: { label: string; from: string; to: string }[] = [
+    { label: 'This wk', from: sunday,                to: addDaysIso(sunday, 6) },
+    { label: 'Next wk', from: addDaysIso(sunday, 7), to: addDaysIso(sunday, 13) },
+    { label: 'Next 7d', from: today,                 to: addDaysIso(today, 6) },
+  ];
+
+  // Enumerate the range, capped so a typo'd year can't render thousands of
+  // rows — the cap is surfaced next to the day count when it bites.
+  const MAX_DAYS = 62;
+  const { dates, clamped } = useMemo(() => {
+    const out: string[] = [];
+    if (from && to && to >= from) {
+      let cur = from;
+      while (cur <= to && out.length < MAX_DAYS) {
+        out.push(cur);
+        cur = addDaysIso(cur, 1);
+      }
+    }
+    return { dates: out, clamped: out.length === MAX_DAYS && to > out[out.length - 1] };
+  }, [from, to]);
+
+  const crewByShiftId = useMemo(
+    () => new Map(shifts.map((s) => [s.id, (s.crew ?? null) as Crew])),
+    [shifts],
+  );
+  const shiftById = useMemo(() => new Map(shifts.map((s) => [s.id, s])), [shifts]);
+
+  // Per engineer over the range: scheduled crew days, full-day absences
+  // (approved, any type — they all remove the day's documented hours),
+  // partial days (still count as worked), pending requests (surfaced but
+  // never subtracted). Engineers without a shift can't be scheduled against
+  // a crew calendar, so they're listed separately and excluded from hours.
+  type Row = {
+    eng: EngineerRow; shiftName: string; sortOrder: number;
+    sched: number; outFull: number; partial: number; pending: number;
+  };
+  const { rows, noShift } = useMemo(() => {
+    const first = dates[0] ?? '';
+    const last  = dates[dates.length - 1] ?? '';
+    const inRange  = (r: PtoRequest) => r.starts_on <= last && r.ends_on >= first;
+    const approved = requests.filter((r) => r.status === 'approved' && inRange(r));
+    const pendingReqs = requests.filter((r) => r.status === 'pending' && inRange(r));
+    const rows: Row[] = [];
+    const noShift: EngineerRow[] = [];
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer') continue;
+      if (!e.shift_id) { noShift.push(e); continue; }
+      const crew  = crewByShiftId.get(e.shift_id);
+      const shift = shiftById.get(e.shift_id);
+      let sched = 0, outFull = 0, partial = 0, pending = 0;
+      for (const iso of dates) {
+        if (!crewWorksOn(crew, iso)) continue;
+        sched++;
+        const ap = approved.find((r) => r.user_id === e.user_id && r.starts_on <= iso && r.ends_on >= iso);
+        if (ap) { if (isPartialDay(ap)) partial++; else outFull++; }
+        if (pendingReqs.some((r) => r.user_id === e.user_id && r.starts_on <= iso && r.ends_on >= iso)) pending++;
+      }
+      rows.push({
+        eng: e, shiftName: shift?.name ?? '—', sortOrder: shift?.sort_order ?? 999,
+        sched, outFull, partial, pending,
+      });
+    }
+    rows.sort((a, b) => a.sortOrder - b.sortOrder || a.eng.full_name.localeCompare(b.eng.full_name));
+    noShift.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    return { rows, noShift };
+  }, [engineers, requests, dates, crewByShiftId, shiftById]);
+
+  const fmtH = (n: number) => String(Math.round(n * 10) / 10);
+  const totalExpected = rows.reduce((s, r) => s + (r.sched - r.outFull) * hrs, 0);
+  const totalTarget   = rows.reduce((s, r) => s + r.sched * hrs, 0);
+
+  const inputStyle = {
+    borderColor: 'var(--color-border)', background: 'var(--color-card)',
+    fontSize: 11, padding: '0.1rem 0.3rem',
+  } as const;
+  const cellPad = { padding: '0.15rem 0.5rem' } as const;
+
+  return (
+    <div>
+      <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline gap-2 flex-wrap">
+        <span>Staffing vs labor model</span>
+        <span style={{ textTransform: 'none', fontStyle: 'italic', letterSpacing: 0 }}>
+          expected COVE doc-hours for the range
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap mb-2 t-small">
+        <input
+          type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+          className="border rounded t-text t-mono" style={inputStyle}
+        />
+        <span className="t-muted">→</span>
+        <input
+          type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)}
+          className="border rounded t-text t-mono" style={inputStyle}
+        />
+        <span className="t-muted" style={{ fontSize: 10 }}>
+          {dates.length}d{clamped ? ` (capped at ${MAX_DAYS})` : ''}
+        </span>
+        {presets.map((p) => {
+          const active = from === p.from && to === p.to;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => { setFrom(p.from); setTo(p.to); }}
+              style={{
+                padding: '0.05rem 0.4rem',
+                border: '1px solid var(--color-border)',
+                borderRadius: 999,
+                background: active ? 'var(--color-accent)' : 'var(--color-card)',
+                color: active ? 'white' : 'var(--color-text-muted)',
+                fontWeight: active ? 600 : 400,
+                fontSize: 10,
+                cursor: 'pointer',
+              }}
+            >{p.label}</button>
+          );
+        })}
+        <span className="t-muted flex items-center gap-1" style={{ marginLeft: 'auto', fontSize: 10 }}>
+          <input
+            type="number" min={1} max={12} step={0.25}
+            value={hrsStr} onChange={(e) => setHrsStr(e.target.value)}
+            className="border rounded t-text t-mono" style={{ ...inputStyle, width: 52 }}
+          />
+          doc-hrs / worked day
+        </span>
+      </div>
+
+      <table className="t-small" style={{ borderCollapse: 'collapse' }}>
+        <thead>
+          <tr
+            className="t-muted uppercase tracking-wider"
+            style={{ fontSize: 9, borderBottom: '1px solid var(--color-border)' }}
+          >
+            <th style={{ ...cellPad, textAlign: 'left' }}>Engineer</th>
+            <th style={{ ...cellPad, textAlign: 'left' }}>Shift</th>
+            <th style={{ ...cellPad, textAlign: 'right' }} title="Scheduled crew days in the range">Days</th>
+            <th style={{ ...cellPad, textAlign: 'left' }}>Out</th>
+            <th style={{ ...cellPad, textAlign: 'right' }}>Doc hrs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const expected = (r.sched - r.outFull) * hrs;
+            const target   = r.sched * hrs;
+            const short    = r.outFull > 0;
+            return (
+              <tr
+                key={r.eng.user_id}
+                style={{
+                  borderBottom: '1px solid var(--color-border-soft)',
+                  background: short ? 'rgba(217,119,6,0.06)' : undefined,
+                }}
+              >
+                <td style={cellPad}>{shortName(r.eng.full_name)}</td>
+                <td className="t-muted" style={{ ...cellPad, fontSize: 10 }}>{r.shiftName}</td>
+                <td className="t-mono" style={{ ...cellPad, textAlign: 'right' }}>{r.sched}</td>
+                <td style={cellPad}>
+                  {short
+                    ? <span style={{ color: 'var(--color-warn, #d97706)', fontWeight: 600 }}>{r.outFull}d</span>
+                    : <span className="t-muted">—</span>}
+                  {r.partial > 0 && <span className="t-muted" style={{ fontSize: 10 }}> · {r.partial} partial</span>}
+                  {r.pending > 0 && <span style={{ color: 'var(--color-accent)', fontSize: 10 }}> · +{r.pending} pending</span>}
+                </td>
+                <td className="t-mono" style={{ ...cellPad, textAlign: 'right' }}>
+                  <span style={{ fontWeight: 600, color: short ? 'var(--color-warn, #d97706)' : 'var(--color-text)' }}>
+                    {fmtH(expected)}
+                  </span>
+                  {short && <span className="t-muted"> / {fmtH(target)}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ fontWeight: 600 }}>
+            <td style={cellPad} colSpan={3}>Total</td>
+            <td style={cellPad} />
+            <td className="t-mono" style={{ ...cellPad, textAlign: 'right' }}>
+              {fmtH(totalExpected)}
+              {totalExpected !== totalTarget && <span className="t-muted" style={{ fontWeight: 400 }}> / {fmtH(totalTarget)}</span>}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div className="t-muted" style={{ fontSize: 9, marginTop: 4, fontStyle: 'italic' }}>
+        Full-day absences (any approved type) subtract {fmtH(hrs)} h · partial days count as worked ·
+        pending shown but not subtracted
+      </div>
+      {noShift.length > 0 && (
+        <div className="t-muted" style={{ fontSize: 9, marginTop: 2 }}>
+          No shift assigned — excluded from hours: {noShift.map((e) => shortName(e.full_name)).join(', ')}
+        </div>
+      )}
+    </div>
   );
 }
 
