@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './lib/auth';
+import { authLink } from './lib/supabase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Login from './routes/Login';
+import SetPassword from './routes/SetPassword';
 import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
 import EngineerProfile from './routes/engineer/Profile';
@@ -26,6 +28,22 @@ import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
+/** Invite / password-reset action links land on the app root with a hash the
+ *  supabase client consumes (creating a session) and strips. supabase.ts
+ *  captured the hash's type/error before that; this one-shot redirect steers
+ *  those arrivals onto /set-password — including expired-link errors, which
+ *  arrive session-less and render the explanation there. */
+function AuthLinkRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!authLink.consumed && (authLink.type || authLink.errorCode)) {
+      authLink.consumed = true; // one-shot; also guards StrictMode double-run
+      navigate('/set-password', { replace: true });
+    }
+  }, [navigate]);
   return null;
 }
 
@@ -99,11 +117,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <AuthLinkRedirect />
       <ErrorBoundary>
       <Routes>
         <Route path="/login"   element={<PublicOnly><Login /></PublicOnly>} />
         {/* Public, login-free field capture — gated by the URL token, not auth. */}
         <Route path="/field/receipt" element={<FieldReceipt />} />
+        {/* Invite / reset landing — bare on purpose: expired links arrive
+            session-less (must render), fresh links arrive WITH a session
+            (must not bounce to the dashboard before the password is set). */}
+        <Route path="/set-password" element={<SetPassword />} />
         {/* Canonical UPark addresses — every site page carries its site
             prefix so a shared/bookmarked URL always says which site it is. */}
         <Route path="/upark/manager" element={<Protected><RequireSite site="upark"><RequireManagerArea><Manager /></RequireManagerArea></RequireSite></Protected>} />

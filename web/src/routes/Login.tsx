@@ -97,7 +97,7 @@ export default function Login() {
 
         {mode === 'password' && (
           <p className="mt-4 text-xs text-gray-500">
-            No password yet? Ask an admin to set one for you, or use Magic link.
+            No password yet? Ask your admin or manager for an invite link to set your own, or use Magic link.
           </p>
         )}
       </form>

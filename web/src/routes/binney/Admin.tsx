@@ -16,7 +16,11 @@ export default function BinneyAdmin() {
 
   const isAdmin = me.data?.role === 'admin';
   const isLead  = me.data?.is_lead === true;
-  const canAccess = isAdmin || isLead;
+  // Managers (role or is_manager flag) get view-only access so they can use
+  // the credential panels (set password / invite link) in User Profiles.
+  const isManagerish =
+    me.data?.role === 'manager' || me.data?.role === 'director' || me.data?.is_manager === true;
+  const canAccess = isAdmin || isLead || isManagerish;
 
   return (
     <div className="min-h-screen t-bg">

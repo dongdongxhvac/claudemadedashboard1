@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer,
   DISCIPLINES, ROLES,
@@ -7,6 +8,7 @@ import {
 } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
 import { useUparkUserIds } from '../../hooks/useSiteScope';
+import { useMe } from '../../hooks/useMe';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -35,6 +37,69 @@ function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
   }
 }
 
+// ── Credential/activity helpers (invite links + account activity log) ──────
+// Who may set passwords, generate invite links and read the activity log.
+// Matches the edge functions' gate: admin/manager/director roles or the
+// is_manager permission flag. (Leads and engineers see none of it.)
+function useCanCredential(): boolean {
+  const me = useMe();
+  return !!me.data && me.data.active &&
+    (['admin', 'manager', 'director'].includes(me.data.role) || me.data.is_manager === true);
+}
+
+/** Last sign-in per user via the manager-gated get_auth_activity() RPC
+ *  (auth.users isn't client-readable). Map of user_id → ISO timestamp. */
+function useAuthActivity(enabled: boolean) {
+  return useQuery({
+    queryKey: ['auth_activity'],
+    enabled,
+    queryFn: async (): Promise<Map<string, string | null>> => {
+      const { data, error } = await supabase.rpc('get_auth_activity');
+      if (error) throw error;
+      const m = new Map<string, string | null>();
+      for (const r of (data ?? []) as { user_id: string; last_sign_in_at: string | null }[]) {
+        m.set(r.user_id, r.last_sign_in_at);
+      }
+      return m;
+    },
+    staleTime: 60_000,
+  });
+}
+
+type AccountEvent = {
+  id: string;
+  target_user_id: string;
+  actor_user_id: string | null;
+  event: 'invite_link_generated' | 'reset_link_generated' | 'password_set' | 'auth_account_created' | 'signed_in';
+  detail: string | null;
+  created_at: string;
+  actor?: { full_name: string } | null;
+  target?: { full_name: string } | null;
+};
+
+const EVENT_LABELS: Record<AccountEvent['event'], string> = {
+  invite_link_generated: 'Invite link generated',
+  reset_link_generated:  'Reset link generated',
+  password_set:          'Password set',
+  auth_account_created:  'Account created',
+  signed_in:             'Signed in',
+};
+
+/** "3d ago" style relative timestamp for the activity surfaces. */
+function fmtAgo(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return 'just now';
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 60) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: boolean }) {
   const q = useAllUsers();
   const shiftsQ = useShifts();
@@ -44,6 +109,8 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<Filter>(canManageUsers ? 'active' : 'engineer');
+  const canCredential = useCanCredential();
+  const activityQ = useAuthActivity(canCredential);
 
   const FILTERS = canManageUsers ? FILTERS_ADMIN : FILTERS_LEAD;
 
@@ -144,12 +211,13 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
                 <th className="py-2 px-2">Title</th>
                 <th className="py-2 px-2">Shift</th>
                 <th className="py-2 px-2">Email · sign-in</th>
+                {canCredential && <th className="py-2 px-2">Last sign-in</th>}
                 <th className="py-2 pl-2"></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={6} className="py-6 text-center t-text t-muted italic">
+                <tr><td colSpan={canCredential ? 7 : 6} className="py-6 text-center t-text t-muted italic">
                   No users match this filter.
                 </td></tr>
               )}
@@ -216,6 +284,16 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
                         <span className="t-small t-muted italic">— not set —</span>
                       )}
                     </td>
+                    {canCredential && (
+                      <td className="py-2 px-2 t-small t-muted whitespace-nowrap"
+                        title={(() => {
+                          const ts = activityQ.data?.get(r.user_id);
+                          return ts ? new Date(ts).toLocaleString() : 'Never signed in';
+                        })()}
+                      >
+                        {fmtAgo(activityQ.data?.get(r.user_id))}
+                      </td>
+                    )}
                     <td className="py-2 pl-2 whitespace-nowrap">
                       <button
                         onClick={() => setEditing(r)}
@@ -248,6 +326,10 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
           </table>
         </div>
       </div>
+
+      {canCredential && (
+        <AccountActivityFeed userIds={new Set(allRows.map((r) => r.user_id))} />
+      )}
 
       {editing && (
         <EditDrawer
@@ -608,7 +690,12 @@ function EditDrawer({
 
         </fieldset>
 
-        {!readOnly && <PasswordPanel userId={row.user_id} email={email} />}
+        {/* Credential panels self-gate on admin/manager (useCanCredential) —
+            managers get them inside the otherwise view-only drawer; leads
+            and engineers see none of them. */}
+        <PasswordPanel userId={row.user_id} email={email} />
+        <InviteLinkPanel userId={row.user_id} email={email} />
+        <AccountActivityPanel userId={row.user_id} />
 
         {!readOnly && (
           <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
@@ -856,6 +943,8 @@ function AddUserDrawer({
 // Useful when corporate email filters block magic links (e.g. Mimecast).
 // ============================================================================
 function PasswordPanel({ userId, email }: { userId: string; email: string }) {
+  const canCredential = useCanCredential();
+  const qc = useQueryClient();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [status, setStatus]     = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
@@ -883,7 +972,10 @@ function PasswordPanel({ userId, email }: { userId: string; email: string }) {
     setMessage(created
       ? 'Password set. Auth account created — user can now sign in with email + password.'
       : 'Password updated.');
+    qc.invalidateQueries({ queryKey: ['user_account_events'] });
   };
+
+  if (!canCredential) return null;
 
   return (
     <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
@@ -925,6 +1017,224 @@ function PasswordPanel({ userId, email }: { userId: string; email: string }) {
           {status === 'error' && <span className="t-small t-danger">{message}</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// InviteLinkPanel — generate a one-time link (admin-invite-link edge fn) the
+// user opens to set their own password. Copy-to-clipboard pattern follows
+// MroFieldLink. Self-gated to admin/manager like PasswordPanel.
+// ============================================================================
+function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
+  const canCredential = useCanCredential();
+  const qc = useQueryClient();
+  const [link, setLink]     = useState<string | null>(null);
+  const [kind, setKind]     = useState<'invite' | 'recovery' | null>(null);
+  const [status, setStatus] = useState<'idle' | 'working' | 'error'>('idle');
+  const [message, setMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = async () => {
+    if (!email.trim()) {
+      setStatus('error');
+      setMessage('Set a sign-in email first (and save), then return to generate a link.');
+      return;
+    }
+    setStatus('working');
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke('admin-invite-link', {
+      body: { target_user_id: userId, redirect_to: `${location.origin}/set-password` },
+    });
+    if (error) {
+      const ctx = (error as { context?: { error?: string } }).context;
+      setStatus('error');
+      setMessage(ctx?.error ?? error.message);
+      return;
+    }
+    const res = data as { action_link?: string; kind?: 'invite' | 'recovery' };
+    if (!res?.action_link) {
+      setStatus('error');
+      setMessage('No link returned — try again.');
+      return;
+    }
+    setLink(res.action_link);
+    setKind(res.kind ?? 'invite');
+    setStatus('idle');
+    setCopied(false);
+    qc.invalidateQueries({ queryKey: ['user_account_events'] });
+  };
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setMessage('Copy failed — select the link text and copy manually.');
+    }
+  };
+
+  if (!canCredential) return null;
+
+  return (
+    <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+      <span className="t-small t-muted uppercase tracking-wider block">Invite link</span>
+      <p className="t-small t-muted mt-0.5 mb-2">
+        Generate a one-time link this user opens to set their own password — send it by
+        text/Teams. Each new link replaces the old one, and links expire quickly. Don't
+        open it yourself: it signs you in as them.
+      </p>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={status === 'working'}
+            className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {status === 'working' ? 'Generating…' : link ? 'Generate new link' : 'Generate invite link'}
+          </button>
+          {status === 'error' && <span className="t-small t-danger">{message}</span>}
+        </div>
+        {link && (
+          <div>
+            <div className="t-small t-muted mb-1">
+              {kind === 'recovery'
+                ? 'Password reset link — this user already has an account.'
+                : 'Invite link — first sign-in, they pick their own password.'}
+            </div>
+            <div className="flex items-center gap-2">
+              <code
+                className="t-small flex-1 px-2 py-1 rounded border"
+                style={{
+                  borderColor: 'var(--color-border)', background: 'var(--color-bg)',
+                  overflowWrap: 'anywhere', maxHeight: 64, overflow: 'auto',
+                }}
+              >
+                {link}
+              </code>
+              <button
+                type="button"
+                onClick={copy}
+                className="t-small px-2 py-1 rounded border shrink-0"
+                style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+              >
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// AccountActivityPanel — per-user credential + sign-in history from
+// user_account_events (0103). Sign-ins are recorded by a DB trigger on
+// auth.users.last_sign_in_at. Self-gated to admin/manager.
+// ============================================================================
+function AccountActivityPanel({ userId }: { userId: string }) {
+  const canCredential = useCanCredential();
+  const q = useQuery({
+    queryKey: ['user_account_events', userId],
+    enabled: canCredential,
+    queryFn: async (): Promise<AccountEvent[]> => {
+      const { data, error } = await supabase
+        .from('user_account_events')
+        .select('*, actor:users!user_account_events_actor_user_id_fkey(full_name)')
+        .eq('target_user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as AccountEvent[];
+    },
+    staleTime: 30_000,
+  });
+
+  if (!canCredential) return null;
+
+  return (
+    <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+      <span className="t-small t-muted uppercase tracking-wider block mb-1">Account activity</span>
+      {q.isLoading ? (
+        <p className="t-small t-muted italic">Loading…</p>
+      ) : (q.data ?? []).length === 0 ? (
+        <p className="t-small t-muted italic">No account activity recorded yet.</p>
+      ) : (
+        <ul className="space-y-0.5" style={{ maxHeight: 180, overflow: 'auto' }}>
+          {(q.data ?? []).map((e) => (
+            <li key={e.id} className="t-small flex items-baseline gap-2">
+              <span className="t-muted t-mono shrink-0" style={{ minWidth: 64 }} title={new Date(e.created_at).toLocaleString()}>
+                {fmtAgo(e.created_at)}
+              </span>
+              <span>{EVENT_LABELS[e.event] ?? e.event}</span>
+              {e.actor?.full_name && <span className="t-muted">by {e.actor.full_name}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// AccountActivityFeed — site-wide credential-event feed under the users table.
+// Sign-ins are excluded here (they'd flood it) — they live in each user's
+// drawer panel + the Last sign-in column. Collapsed by default.
+// ============================================================================
+function AccountActivityFeed({ userIds }: { userIds: Set<string> }) {
+  const [open, setOpen] = useState(false);
+  const q = useQuery({
+    queryKey: ['user_account_events', 'feed'],
+    enabled: open,
+    queryFn: async (): Promise<AccountEvent[]> => {
+      const { data, error } = await supabase
+        .from('user_account_events')
+        .select('*, actor:users!user_account_events_actor_user_id_fkey(full_name), target:users!user_account_events_target_user_id_fkey(full_name)')
+        .neq('event', 'signed_in')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as AccountEvent[];
+    },
+    staleTime: 30_000,
+  });
+
+  const rows = (q.data ?? []).filter((e) => userIds.has(e.target_user_id));
+
+  return (
+    <div className="t-card mt-4" style={{ padding: '0.75rem 1rem' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="t-small t-muted uppercase tracking-wider flex items-center gap-2"
+      >
+        <span>{open ? '▾' : '▸'}</span> Account activity feed
+      </button>
+      {open && (
+        q.isLoading ? (
+          <p className="t-small t-muted italic mt-2">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="t-small t-muted italic mt-2">No credential activity yet.</p>
+        ) : (
+          <ul className="space-y-0.5 mt-2" style={{ maxHeight: 240, overflow: 'auto' }}>
+            {rows.map((e) => (
+              <li key={e.id} className="t-small flex items-baseline gap-2 flex-wrap">
+                <span className="t-muted t-mono shrink-0" style={{ minWidth: 64 }} title={new Date(e.created_at).toLocaleString()}>
+                  {fmtAgo(e.created_at)}
+                </span>
+                <span className="font-medium">{e.target?.full_name ?? '?'}</span>
+                <span>{EVENT_LABELS[e.event] ?? e.event}</span>
+                {e.actor?.full_name && <span className="t-muted">by {e.actor.full_name}</span>}
+              </li>
+            ))}
+          </ul>
+        )
+      )}
     </div>
   );
 }

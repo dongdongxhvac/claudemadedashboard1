@@ -7,8 +7,11 @@
 //
 // Request:   POST { target_user_id: uuid, new_password: string }
 // Auth:      caller's JWT (Authorization: Bearer ...) must map to a row in
-//            public.users with role='admin' and active=true.
+//            public.users with active=true and role in (admin, manager,
+//            director) OR is_manager=true. (Widened from admin-only when
+//            managers gained credential powers alongside admin-invite-link.)
 // Response:  200 { ok: true }  |  4xx { error: string }
+// Side effect: logs a password_set event into user_account_events.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -36,7 +39,7 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return json(401, { error: "missing bearer token" });
 
-  // 1) Verify caller is an authenticated admin.
+  // 1) Verify caller is an authenticated admin or manager.
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -45,12 +48,15 @@ Deno.serve(async (req) => {
 
   const { data: callerRow, error: callerErr } = await callerClient
     .from("users")
-    .select("id, role, active")
+    .select("id, role, active, is_manager")
     .eq("auth_user_id", who.user.id)
     .maybeSingle();
   if (callerErr) return json(500, { error: callerErr.message });
-  if (!callerRow || !callerRow.active || callerRow.role !== "admin") {
-    return json(403, { error: "admin only" });
+  const callerAllowed =
+    callerRow && callerRow.active &&
+    (["admin", "manager", "director"].includes(callerRow.role) || callerRow.is_manager === true);
+  if (!callerAllowed) {
+    return json(403, { error: "admin or manager only" });
   }
 
   // 2) Parse + validate input.
@@ -66,6 +72,16 @@ Deno.serve(async (req) => {
   //    If they don't have one yet (never received a magic link), create an
   //    auth.users row for them now, link it, then set the password.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // Activity-log helper (best-effort — never blocks the main operation).
+  const logEvent = async (detail: string) => {
+    await admin.from("user_account_events").insert({
+      target_user_id,
+      actor_user_id: callerRow.id,
+      event: "password_set",
+      detail,
+    });
+  };
 
   const { data: targetRow, error: targetErr } = await admin
     .from("users")
@@ -119,6 +135,7 @@ Deno.serve(async (req) => {
         password: new_password,
       });
       if (updErr) return json(500, { error: `password update on relinked auth user failed: ${updErr.message}` });
+      await logEvent("relinked existing auth account");
       return json(200, { ok: true, created_auth_user: false, relinked: true });
     }
 
@@ -137,6 +154,7 @@ Deno.serve(async (req) => {
       .update({ auth_user_id, updated_at: new Date().toISOString() })
       .eq("id", target_user_id);
     if (linkErr) return json(500, { error: linkErr.message });
+    await logEvent("created auth account");
     return json(200, { ok: true, created_auth_user: true });
   }
 
@@ -146,5 +164,6 @@ Deno.serve(async (req) => {
   });
   if (updErr) return json(500, { error: updErr.message });
 
+  await logEvent("password changed");
   return json(200, { ok: true, created_auth_user: false });
 });
