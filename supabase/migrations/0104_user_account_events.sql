@@ -1,4 +1,4 @@
--- 0103 — User account activity log (invite links, password sets, sign-ins).
+-- 0104 — User account activity log (invite links, password sets, sign-ins).
 --
 -- Backs the "Account activity" panel + admin activity feed in the User
 -- Profiles tabs (both sites) and the Last sign-in column.

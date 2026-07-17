@@ -1152,7 +1152,7 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
 
 // ============================================================================
 // AccountActivityPanel — per-user credential + sign-in history from
-// user_account_events (0103). Sign-ins are recorded by a DB trigger on
+// user_account_events (0104). Sign-ins are recorded by a DB trigger on
 // auth.users.last_sign_in_at. Self-gated to admin/manager.
 // ============================================================================
 function AccountActivityPanel({ userId }: { userId: string }) {
