@@ -24,6 +24,7 @@ import {
 } from './hooks/useBinneyPto';
 import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
+import { BMR_HOLIDAYS } from './bmrHolidays';
 import { useShifts } from '../../hooks/useShifts';
 import {
   useOncallParticipants, useOncallSettings,
@@ -1333,21 +1334,25 @@ function CapHeatmap({ requests, onPickDate }: {
   requests: PtoRequest[];
   onPickDate?: (iso: string) => void;
 }) {
-  // Horizon picker — 4 / 9 / 13 weeks (1mo / 2mo / 3mo).
+  // Horizon picker — 4 / 9 / 13 FUTURE weeks (1mo / 2mo / 3mo). On top of
+  // that, PAST_WEEKS weeks of history always render before the current week
+  // so last week's call-outs stay visible (faded, not clickable) — useful
+  // when reconciling documented hours in COVE after the fact.
   const [weeks, setWeeks] = useState<4 | 9 | 13>(9);
+  const PAST_WEEKS = 2;
   const today = todayIso();
 
-  // Calendar grid aligns to Mon-Sun rows so day-of-week labels stay stable;
-  // past cells of the current week render as blank spacers ("start from today"
-  // visually without breaking the calendar structure).
+  // Calendar grid aligns to Mon-Sun rows so day-of-week labels stay stable.
+  // Start = Monday of the current week, minus the history window.
   const start = useMemo(() => {
     const d = new Date(today + 'T00:00:00');
     const dow = d.getDay();
     const back = (dow + 6) % 7;
-    d.setDate(d.getDate() - back);
+    d.setDate(d.getDate() - back - PAST_WEEKS * 7);
     return d.toISOString().slice(0, 10);
   }, [today]);
-  const totalDays = weeks * 7;
+  const totalWeeks = weeks + PAST_WEEKS;
+  const totalDays = totalWeeks * 7;
 
   // Per-day list of engineers on vacation (approved or pending). Store
   // {name, status} so we can build initials + tooltip with status hints.
@@ -1398,6 +1403,18 @@ function CapHeatmap({ requests, onPickDate }: {
     return m;
   }, [requests]);
 
+  // BMR-observed holiday lookup (see bmrHolidays.ts). Marker only — outlines
+  // the cell + names the day in the tooltip; never counts toward the cap.
+  // Duplicate dates (actual + observed colliding) join their names.
+  const holidayByDay = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const h of BMR_HOLIDAYS) {
+      const cur = m.get(h.date);
+      m.set(h.date, cur ? `${cur} / ${h.name}` : h.name);
+    }
+    return m;
+  }, []);
+
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   type Cell = {
     iso: string;
@@ -1409,6 +1426,7 @@ function CapHeatmap({ requests, onPickDate }: {
     people: DayInfo[];
     sick: DayInfo[];
     other: DayInfo[];
+    holiday: string | null;
   };
   const cells: Cell[] = [];
   for (let i = 0; i < totalDays; i++) {
@@ -1427,6 +1445,7 @@ function CapHeatmap({ requests, onPickDate }: {
       people:    byDay.get(iso) ?? [],
       sick:      sickByDay.get(iso) ?? [],
       other:     otherByDay.get(iso) ?? [],
+      holiday:   holidayByDay.get(iso) ?? null,
     });
   }
 
@@ -1436,7 +1455,7 @@ function CapHeatmap({ requests, onPickDate }: {
   const todayCol = cells.find((c) => c.isToday)?.col ?? -1;
   const weekLabels: { col: number; month: string; day: number }[] = [];
   let lastMonth = '';
-  for (let c = 0; c < weeks; c++) {
+  for (let c = 0; c < totalWeeks; c++) {
     const monthDate = new Date(cells[c * 7].iso + 'T00:00:00');
     const m = monthDate.toLocaleString(undefined, { month: 'short' });
     weekLabels.push({ col: c, month: m === lastMonth ? '' : m, day: monthDate.getDate() });
@@ -1444,8 +1463,9 @@ function CapHeatmap({ requests, onPickDate }: {
   }
 
   // Slightly more saturated palette so the eye reads cap-pinning quickly.
-  const color = (count: number, past: boolean): string => {
-    if (past) return 'rgba(148,163,184,0.10)'; // slate-300, very faint
+  // Past cells use the SAME palette — the 0.4 opacity on the cell fades them
+  // — so the two history weeks still show who was out, not just grey.
+  const color = (count: number): string => {
     if (count <= 0) return 'rgba(34,197,94,0.18)';   // soft green
     if (count === 1) return 'rgba(234,179,8,0.30)';  // amber
     if (count === 2) return 'rgba(234,88,12,0.45)';  // orange — cap pinned
@@ -1468,6 +1488,7 @@ function CapHeatmap({ requests, onPickDate }: {
     const nice = new Date(cell.iso + 'T00:00:00')
       .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     const date = `${nice} · ${cell.iso}${cell.isToday ? ' (today)' : ''}${cell.isPast ? ' (past)' : ''}`;
+    const holLine = cell.holiday ? `\n★ BMR holiday — ${cell.holiday}` : '';
     const sickLine = cell.sick.length > 0
       ? `\nSick: ${cell.sick.map((p) => `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`).join(', ')}`
       : '';
@@ -1478,20 +1499,20 @@ function CapHeatmap({ requests, onPickDate }: {
       // Binney covers all 7 days (two 4×10 crews), so weekend cells get the
       // same click-to-add affordance as weekdays.
       const base = cell.isPast
-        ? `${date}\n(past — no vacation)`
-        : `${date}\nNo one on vacation — click to add`;
+        ? `${date}${holLine}\n(past — no vacation)`
+        : `${date}${holLine}\nNo one on vacation — click to add`;
       return base + sickLine + otherLine;
     }
     const names = cell.people.map((p) =>
       `${p.name}${p.status === 'pending' ? ' (pending)' : ''}`
     ).join(', ');
-    return `${date}\nVacation: ${names}${sickLine}${otherLine}${cell.isPast ? '' : '\n(click to add another PTO)'}`;
+    return `${date}${holLine}\nVacation: ${names}${sickLine}${otherLine}${cell.isPast ? '' : '\n(click to add another PTO)'}`;
   };
 
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline justify-between gap-2 flex-wrap">
-        <span>Vacation cap heatmap · next {weeks} weeks</span>
+        <span>Vacation cap heatmap · prev {PAST_WEEKS}w + next {weeks}w</span>
         <span style={{ textTransform: 'none', display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
           {([4, 9, 13] as const).map((w) => (
             <button
@@ -1530,6 +1551,10 @@ function CapHeatmap({ requests, onPickDate }: {
           <span style={{ width: 7, height: 7, borderRadius: 2, background: '#8b5cf6', border: '1px solid rgba(0,0,0,0.15)' }} />
           <span>leave</span>
         </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 12, height: 12, borderRadius: 2, border: '2px solid #10b981', background: 'transparent', boxSizing: 'border-box' }} />
+          <span>BMR holiday</span>
+        </span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -1545,7 +1570,7 @@ function CapHeatmap({ requests, onPickDate }: {
         {/* Heatmap grid */}
         <div>
           {/* Month labels row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gap: 3, marginBottom: 1 }}>
             {weekLabels.map((w) => (
               <div key={w.col} className="t-muted" style={{ fontSize: 10, height: 14, textAlign: 'left' }}>
                 {w.month}
@@ -1553,7 +1578,7 @@ function CapHeatmap({ requests, onPickDate }: {
             ))}
           </div>
           {/* Week-start (Monday) date row — locates any date without hovering */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gap: 3, marginBottom: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gap: 3, marginBottom: 4 }}>
             {weekLabels.map((w) => (
               <div
                 key={w.col}
@@ -1567,7 +1592,7 @@ function CapHeatmap({ requests, onPickDate }: {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks}, 26px)`, gridTemplateRows: 'repeat(7, 26px)', gap: 3, gridAutoFlow: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gridTemplateRows: 'repeat(7, 26px)', gap: 3, gridAutoFlow: 'column' }}>
             {cells.map((cell) => {
               const count = cell.people.length;
               const label = cellLabel(cell.people);
@@ -1585,10 +1610,16 @@ function CapHeatmap({ requests, onPickDate }: {
                     position: 'relative',
                     width: 26, height: 26, padding: 0,
                     borderRadius: 3,
-                    background: color(count, cell.isPast),
+                    background: color(count),
                     // No weekend dimming — Binney's crews work Sat + Sun.
                     opacity: cell.isPast ? 0.4 : 1,
-                    border: cell.isToday ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.08)',
+                    // Today's accent ring wins over the holiday outline; the
+                    // tooltip still names the holiday either way.
+                    border: cell.isToday
+                      ? '2px solid var(--color-accent)'
+                      : cell.holiday
+                        ? '2px solid #10b981'
+                        : '1px solid rgba(0,0,0,0.08)',
                     cursor: clickable ? 'pointer' : 'default',
                     fontSize: label.length > 2 ? 10 : label.length === 2 ? 11 : 13,
                     fontWeight: 700,

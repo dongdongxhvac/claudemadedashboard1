@@ -187,7 +187,10 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: 'warn',
               title: 'The system knows nothing about public holidays',
               text:
-                'There is no holiday calendar anywhere in PTO. A federal holiday sitting inside a date range is billed as an ordinary working day when hours are auto-calculated. Check the figure yourself on any range that spans one.',
+                'There is no holiday calendar anywhere in PTO. A federal holiday sitting inside a date range is billed as an ordinary working day when hours are auto-calculated. Check the figure yourself on any range that spans one.' +
+                (s.binney
+                  ? ' One visual exception: the coverage heatmap outlines BMR-observed holidays in green so you can see them while booking — but the hours math still ignores them.'
+                  : ''),
             },
             {
               kind: 'note',
@@ -581,7 +584,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               text:
                 'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. Weeks run Monday to Sunday down each column. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation.' +
                 (s.binney
-                  ? ' Every column is labelled with the date of its Monday under the month row — the current week’s date is highlighted — and hovering any cell shows the full date, so you can locate the exact day to book or check without counting squares.'
+                  ? ' Every column is labelled with the date of its Monday under the month row — the current week’s date is highlighted — and hovering any cell shows the full date, so you can locate the exact day to book or check without counting squares. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.'
                   : ''),
             },
             {
@@ -592,7 +595,15 @@ export function buildManual(site: ManualSite): Chapter[] {
                 ['Amber', '1 person'],
                 ['Orange', '2 people — cap pinned, that day is full'],
                 ['Red', '3 or more — only possible via an override'],
-                ['Faint grey', 'A past day'],
+                s.binney
+                  ? ['Faded colours', 'A past day — the two history weeks keep their colours for reference, but are not clickable']
+                  : ['Faint grey', 'A past day'],
+                ...(s.binney
+                  ? [[
+                      'Green outline',
+                      'A BMR-observed building holiday — hover the cell for its name. Calendar marker only: it is not PTO, does not count toward the cap, and is unrelated to the Floating Holiday PTO type',
+                    ]]
+                  : []),
                 ['Red dot, top-right', 'Someone is sick that day. Does not count toward the cap or change the colour'],
                 ['Purple square, bottom-right', 'Someone is on bereavement, leave, short-term or jury duty. Does not count toward the cap'],
               ],
