@@ -1,7 +1,25 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v21 — repo and live are identical.
+// This file was deployed VERBATIM as v22 — repo and live are identical.
+//
+// v22 (2026-07-18): 'amended' event (trigger v4, migration 0105) — editing
+// an APPROVED request's dates/hours/type now updates the calendar:
+//   * Binney PA feed: CANCEL feed email with the OLD values (payload
+//     prev_record) so the flow's cancel branch can delete the old event,
+//     then a REQUEST feed email with the new values.
+//   * .ics path: METHOD:REQUEST, same UID, SEQUENCE bumped — M365 replaces
+//     the event in place. SEQUENCE is epoch seconds on EVERY .ics send:
+//     iTIP discards lower-sequence messages, so all sends must stay
+//     monotonic once any send uses a big number.
+//   * No notification email — the calendar change is the message.
+//   * PA_CANCEL_READY (env→Vault, default false): CANCEL feed legs are
+//     SKIPPED until the PA flow has its action Condition + delete branch —
+//     an ungated CANCEL feed email would CREATE a ghost event, because the
+//     current flow creates an event for every matching email. Flip with
+//     select set_app_secret('PA_CANCEL_READY', 'true') once the branch
+//     works. This also fixed the pre-existing retract path, which had been
+//     creating ghost events since the feed email shipped.
 //
 // v21 (2026-07-17): Mimecast-friendly links — the styled button in the HTML
 // part is replaced by a bare anchor whose VISIBLE TEXT IS THE URL ITSELF
@@ -109,6 +127,24 @@ async function binneyLive(admin: ReturnType<typeof createClient>): Promise<boole
   return v.toLowerCase() === "true";
 }
 
+/** PA_CANCEL_READY — flip to 'true' ONLY once the Power Automate flow has a
+ *  Condition on PTO_DATA's action field and a working delete branch. Until
+ *  then the flow creates an event for EVERY feed email, so a CANCEL feed
+ *  email would materialize a GHOST event on the group calendar instead of
+ *  removing one (review finding 2026-07-18 — this also bit the pre-existing
+ *  retract path). While false, CANCEL feed legs are skipped entirely: a
+ *  retraction/date-edit leaves the old event in place (stale, but strictly
+ *  better than a ghost). Same env-then-Vault resolution as BINNEY_LIVE:
+ *    select set_app_secret('PA_CANCEL_READY', 'true');  */
+async function paCancelReady(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  let v = (Deno.env.get("PA_CANCEL_READY") ?? "").trim();
+  if (!v) {
+    const { data } = await admin.rpc("get_app_secret", { k: "PA_CANCEL_READY" });
+    v = ((data as string) ?? "").trim();
+  }
+  return v.toLowerCase() === "true";
+}
+
 type PtoRecord = {
   id: string;
   user_id: string;
@@ -127,8 +163,10 @@ type PtoRecord = {
 
 type Payload = {
   type: "pto_request";
-  event: "submitted" | "decided" | "retracted";
+  event: "submitted" | "decided" | "retracted" | "amended";
   prev_status?: string | null;
+  /** On 'amended': the pre-edit values, for cancelling the old event. */
+  prev_record?: { starts_on: string; ends_on: string; hours: number; type: string } | null;
   record: PtoRecord;
   dry_run?: boolean;
   override_to?: string[];
@@ -221,6 +259,10 @@ function icsAddDays(iso: string, days: number): string {
 
 function buildIcs(opts: {
   method: "REQUEST" | "CANCEL";
+  /** Omit for the defaults (REQUEST 0 / CANCEL 1). An amended REQUEST passes
+   *  epoch seconds: same UID + higher SEQUENCE makes M365 replace the event
+   *  in place instead of duplicating it. */
+  sequence?: number;
   uid: string;
   summary: string;
   description: string;
@@ -250,7 +292,7 @@ function buildIcs(opts: {
     "TRANSP:TRANSPARENT",
     "X-MICROSOFT-CDO-BUSYSTATUS:FREE",
     "X-MICROSOFT-DISALLOW-COUNTER:TRUE",
-    `SEQUENCE:${opts.method === "CANCEL" ? 1 : 0}`,
+    `SEQUENCE:${opts.sequence ?? (opts.method === "CANCEL" ? 1 : 0)}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
@@ -292,7 +334,7 @@ Deno.serve(async (req: Request) => {
   if (payload.type !== "pto_request" || !payload.record?.id) {
     return json(400, { error: "unknown payload" });
   }
-  if (!["submitted", "decided", "retracted"].includes(payload.event)) {
+  if (!["submitted", "decided", "retracted", "amended"].includes(payload.event)) {
     return json(400, { error: "unknown event" });
   }
 
@@ -392,13 +434,16 @@ Deno.serve(async (req: Request) => {
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
       `\n\n${dashUrl}`);
 
-    let inviteAction: "REQUEST" | "CANCEL" | null = null;
+    let inviteAction: "REQUEST" | "CANCEL" | "AMEND" | null = null;
     if (payload.event === "decided" && r.status === "approved") {
       inviteAction = "REQUEST";
     } else if (payload.event === "retracted") {
       inviteAction = "CANCEL";
     } else if (payload.event === "decided" && r.status === "denied" && payload.prev_status === "approved") {
       inviteAction = "CANCEL";
+    } else if (payload.event === "amended") {
+      // Approved request's dates/hours/type edited — replace the event.
+      inviteAction = "AMEND";
     }
 
     const live = site.code === "binney" ? await binneyLive(admin) : true;
@@ -435,10 +480,16 @@ Deno.serve(async (req: Request) => {
       if (calTo.length) calTo = forced;
       if (paFeedTo.length) paFeedTo = forced;
     }
-    if (payload.event === "retracted") effectiveTo = [];
+    // 'retracted' and 'amended' send no notification email — the calendar
+    // change is the message.
+    if (payload.event === "retracted" || payload.event === "amended") effectiveTo = [];
 
     // Develop mode: no Binney manager notification emails until launch.
     if (site.code === "binney" && !live) effectiveTo = [];
+
+    // CANCEL feed legs only once the PA flow can actually process them —
+    // see paCancelReady(). null = no feed recipients, gate irrelevant.
+    const cancelReady = paFeedTo.length > 0 ? await paCancelReady(admin) : null;
 
     if (payload.dry_run) {
       return json(200, {
@@ -446,6 +497,7 @@ Deno.serve(async (req: Request) => {
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
         pa_feed: paFeedTo.length ? paFeedTo : null,
+        pa_cancel_ready: cancelReady,
         binney_live: site.code === "binney" ? live : null,
       });
     }
@@ -498,29 +550,70 @@ Deno.serve(async (req: Request) => {
 
       // Binney PA feed: body-only, NO .ics — Power Automate parses the
       // PTO_DATA line and writes the event to the group calendar. Subject
-      // must keep containing "PTO" (the flow's trigger filter).
+      // must keep containing "PTO" (the flow's trigger filter). An AMEND
+      // becomes two feed emails: CANCEL with the OLD values (so the flow's
+      // cancel branch can find and delete the old event), then REQUEST with
+      // the new ones. Sent in that order over one SMTP session.
       if (inviteAction && paFeedTo.length > 0) {
-        const feedSubject = asciiSafe(
-          (inviteAction === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${tl}) ${range}`,
-        );
-        await client.send({
-          from: `${site.name} Dashboard <${gmailUser}>`,
-          to: paFeedTo,
-          subject: feedSubject,
-          content: asciiSafe(
-            (inviteAction === "CANCEL"
-              ? `PTO retracted - remove from the group calendar.`
-              : `Approved PTO - group calendar sync record.`) +
-            `\n\n${who} - ${tl} ${range} (${r.hours}h)` +
-            `\n\nPTO_DATA|action:${inviteAction}|id:${r.id}|starts:${r.starts_on}|ends:${r.ends_on}|hours:${r.hours}|engineer:${who}|type:${tl}`,
-          ),
-        });
-        paFeedSentTo = paFeedTo;
+        type FeedSend = { action: "REQUEST" | "CANCEL"; s: string; e: string; h: number; t: string; note: string };
+        const feedSends: FeedSend[] = [];
+        if (inviteAction === "AMEND") {
+          const p = payload.prev_record;
+          // CANCEL leg only when the flow can process it — otherwise it would
+          // CREATE a ghost event on the old dates (see paCancelReady()).
+          if (p && cancelReady === true) {
+            feedSends.push({
+              action: "CANCEL", s: p.starts_on, e: p.ends_on, h: p.hours, t: typeLabel(p.type),
+              note: "PTO dates changed - remove the old event.",
+            });
+          }
+          feedSends.push({
+            action: "REQUEST", s: r.starts_on, e: r.ends_on, h: r.hours, t: tl,
+            note: "Approved PTO (updated) - group calendar sync record.",
+          });
+        } else if (inviteAction === "CANCEL") {
+          // Same gate: an ungated CANCEL feed email becomes a ghost event.
+          if (cancelReady === true) {
+            feedSends.push({
+              action: "CANCEL", s: r.starts_on, e: r.ends_on, h: r.hours, t: tl,
+              note: "PTO retracted - remove from the group calendar.",
+            });
+          }
+        } else {
+          feedSends.push({
+            action: "REQUEST", s: r.starts_on, e: r.ends_on, h: r.hours, t: tl,
+            note: "Approved PTO - group calendar sync record.",
+          });
+        }
+        for (const f of feedSends) {
+          const fRange = fmtRange(f.s, f.e);
+          await client.send({
+            from: `${site.name} Dashboard <${gmailUser}>`,
+            to: paFeedTo,
+            subject: asciiSafe(
+              (f.action === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${f.t}) ${fRange}`,
+            ),
+            content: asciiSafe(
+              `${f.note}\n\n${who} - ${f.t} ${fRange} (${f.h}h)` +
+              `\n\nPTO_DATA|action:${f.action}|id:${r.id}|starts:${f.s}|ends:${f.e}|hours:${f.h}|engineer:${who}|type:${f.t}`,
+            ),
+          });
+        }
+        if (feedSends.length > 0) paFeedSentTo = paFeedTo;
       }
 
       if (inviteAction && calTo.length > 0) {
+        // AMEND ships as METHOD:REQUEST with the same UID and a bumped
+        // SEQUENCE — M365 replaces the event in place. SEQUENCE is epoch
+        // seconds on EVERY send (review finding 2026-07-18): iTIP receivers
+        // discard messages whose sequence is lower than the stored event's,
+        // so once any send uses a big number, all later sends (a CANCEL
+        // after an amend, a re-approval) must be at least as high. Epoch
+        // seconds is monotonic and stateless.
+        const icsMethod = inviteAction === "CANCEL" ? "CANCEL" : "REQUEST";
         const ics = buildIcs({
-          method: inviteAction,
+          method: icsMethod,
+          sequence: Math.floor(Date.now() / 1000),
           uid: `pto-${r.id}@claudemadedashboard1.vercel.app`,
           // Title format (user 2026-07-17): "PTO - <name> (<type> <hours>h)"
           // — keep in step with the PA flow's Subject expression.
@@ -537,7 +630,8 @@ Deno.serve(async (req: Request) => {
           attendees: calTo,
         });
         const invSubject = asciiSafe(
-          (inviteAction === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${tl}) ${range}`,
+          (inviteAction === "CANCEL" ? "Canceled: " : inviteAction === "AMEND" ? "Updated: " : "") +
+          `PTO - ${who} (${tl}) ${range}`,
         );
         await client.send({
           from: `${site.name} Dashboard <${gmailUser}>`,
@@ -548,13 +642,15 @@ Deno.serve(async (req: Request) => {
           content: asciiSafe(
             inviteAction === "CANCEL"
               ? `This PTO was retracted - the calendar event is cancelled.\n\n${who} - ${tl} ${range}`
+              : inviteAction === "AMEND"
+              ? `PTO updated - the calendar event moves to the new dates.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't update it, open invite.ics.`
               : `Approved PTO - calendar invite attached.\n\n${who} - ${tl} ${range}\n\nIf your mail client doesn't show Accept, open invite.ics.`,
           ),
           attachments: [{
             filename: "invite.ics",
             content: btoa(ics),
             encoding: "base64",
-            contentType: `text/calendar; method=${inviteAction}; charset=utf-8`,
+            contentType: `text/calendar; method=${icsMethod}; charset=utf-8`,
           }],
         });
         inviteSentTo = calTo;

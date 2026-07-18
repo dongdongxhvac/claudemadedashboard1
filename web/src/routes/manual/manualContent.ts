@@ -35,7 +35,7 @@ export type Block =
 export type Topic = { id: string; title: string; blocks: Block[] };
 export type Chapter = { id: string; title: string; summary: string; topics: Topic[] };
 
-export const LAST_UPDATED = '2026-07-17';
+export const LAST_UPDATED = '2026-07-18';
 
 export const SITE_LABEL: Record<ManualSite, string> = {
   upark: 'UPark',
@@ -673,7 +673,8 @@ export function buildManual(site: ManualSite): Chapter[] {
                 ['An engineer submits a request', 'Managers at that engineer’s home site. The engineer gets no confirmation', 'Nothing'],
                 ['A request is approved or denied', 'Those same managers plus the engineer. The decider gets a copy of their own decision', 'An approval sends an invite. A denial after an approval cancels it'],
                 ['An approved request is cancelled', 'Nobody', 'A calendar cancellation — that is the only notice anyone gets'],
-                ['Anything else — editing dates, hours, type, reason; withdrawing a pending request; deleting', 'Nobody', 'Nothing'],
+                ['An APPROVED request’s dates, hours or type are edited', 'Nobody', 'The calendar event moves to the new dates — the old event is removed and replaced. Editing a request that is already fully in the past stays silent'],
+                ['Anything else — editing the reason, editing a pending request, withdrawing, deleting', 'Nobody', 'Nothing'],
               ],
             },
             {
