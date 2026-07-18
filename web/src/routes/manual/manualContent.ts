@@ -557,7 +557,7 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'p',
               text: s.binney
-                ? 'The attendance roll shows today plus the next six CALENDAR days — a full week, Saturday and Sunday included, because weekends are real workdays here. On any given day it hides the crews that are not scheduled, so you only see who is meant to be in. The "No shift" group is the exception and always shows. If the screen is too narrow for all seven day cards, the row scrolls sideways.'
+                ? 'The attendance roll shows today plus the next six CALENDAR days — a full week, Saturday and Sunday included, because weekends are real workdays here. On any given day it hides the crews that are not scheduled, so you only see who is meant to be in. The "No shift" group is the exception and always shows. If the screen is too narrow for all seven day cards, the row scrolls sideways. Busy cards cap how many chips they show — Wednesday lists BOTH crews, so it collapses behind a "+N more" toggle; anyone who is out or partial is always kept visible, the cap only ever hides healthy "in" chips.'
                 : 'The attendance roll shows today plus the next two WEEKdays — Saturday and Sunday are skipped.',
             },
             ...(s.binney
@@ -582,10 +582,10 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'p',
               text:
-                'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. Weeks run Monday to Sunday down each column. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation.' +
+                'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. ' +
                 (s.binney
-                  ? ' Every column is labelled with the date of its Monday under the month row — the current week’s date is highlighted — and hovering any cell shows the full date, so you can locate the exact day to book or check without counting squares. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.'
-                  : ''),
+                  ? 'Each week is one ROW: days run Monday to Sunday across the top, and every row is labelled on the left with its Monday date — the current week highlighted — so you can locate the exact day to book or check without counting squares; hovering any cell shows the full date. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.'
+                  : 'Weeks run Monday to Sunday down each column. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation.'),
             },
             {
               kind: 'table',
@@ -616,15 +616,6 @@ export function buildManual(site: ManualSite): Chapter[] {
                   ? ' At Binney weekend squares look and behave exactly like weekdays. At UPark they are faded to half opacity.'
                   : ' Weekend squares are faded to about half opacity, but they are still clickable.'),
             },
-            ...(s.binney
-              ? [
-                  {
-                    kind: 'p' as const,
-                    text:
-                      'Next to the heatmap, the "Staffing vs labor model" block turns absences into hours. Pick a date range — the This wk / Next wk presets cover the Sunday-to-Saturday labor week — and it lists, per engineer, scheduled crew days, absences, and expected documented COVE hours at 8.5 per worked day: a full 4×10 week is 34, one full day out is 3 × 8.5 = 25.5. Partial days count as worked, pending requests are shown but not subtracted, and the per-day figure is editable right in the block if the model changes. Engineers with no shift assigned are listed underneath and left out of the hours.',
-                  },
-                ]
-              : []),
             {
               kind: 'p',
               text: 'The Conflicts strip flags three things against approved, upcoming PTO:',

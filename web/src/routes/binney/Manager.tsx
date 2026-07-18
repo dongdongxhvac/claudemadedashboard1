@@ -25,7 +25,10 @@ export default function BinneyManager() {
   return (
     <div className="min-h-screen t-bg">
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        {/* max-w-[1600px] (not 7xl): the PTO coverage row (rotated heatmap +
+            7-day roll) needs ~1450px to show the whole week without an inner
+            scrollbar. Binney-only — UPark's manager page keeps 7xl. */}
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
           <div>
             <div className="flex items-baseline gap-3">
               <h1 className="t-section-title">Binney St · Dashboard</h1>
@@ -50,7 +53,7 @@ export default function BinneyManager() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
         {siteMissing ? (
           <p className="t-text t-danger">
             Binney St site row not found (sites.code = 'binney'). Apply migration 0072 /

@@ -340,63 +340,70 @@ export function BinneyPtoPanel() {
             </div>
           )}
 
-          {/* Top row: 7-day attendance roll — today (featured) + the next 6
-              calendar days, so both crew rotations are visible a full week
-              out. */}
-          <TodayAttendance
-            engineers={engineersQ.data ?? []}
-            shifts={shiftsQ.data ?? []}
-            allApproved={buckets.all.filter((r) => r.status === 'approved')}
-          />
-
-          {/* Heatmap in its own row (room for the date labels) with the
-              staffing-vs-labor-model range checker beside it. */}
-          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: '0 0 auto' }}>
+          {/* Coverage section: rotated heatmap (weeks as rows, Mon–Sun
+              across the top) on the left, 7-day attendance roll beside it.
+              StaffingForecast (staffing vs labor model) is PARKED — still
+              defined below, removed from the layout 2026-07-17 at the
+              user's request; likely to return. */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            {/* Pinned to the grid's width (34 labels + 4 gap + 7×40 cells +
+                18 gaps = 336) — otherwise the title/legend rows set the
+                flex-basis and starve the roll beside it. */}
+            <div style={{ flex: '0 0 336px', width: 336 }}>
               <CapHeatmap
                 requests={buckets.all}
                 onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
               />
             </div>
-            <div style={{ flex: '1 1 460px', minWidth: 380 }}>
-              <StaffingForecast
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TodayAttendance
                 engineers={engineersQ.data ?? []}
                 shifts={shiftsQ.data ?? []}
-                requests={buckets.all}
+                allApproved={buckets.all.filter((r) => r.status === 'approved')}
               />
             </div>
           </div>
 
-          {/* Upcoming approved, grouped */}
-          {buckets.upcoming.length > 0 && (
-            <UpcomingGroupedList
-              rows={buckets.upcoming.filter((r) => r.ends_on >= todayIso())}
-              onCancel={(id) => {
-                if (confirm('Cancel this approved PTO?')) cancel.mutate(id);
-              }}
-              onEdit={(r) => setEditingRequest(r)}
-              onDelete={(id) => {
-                if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
-              }}
-            />
-          )}
-
-          {/* Balances — rendered even with zero pto_balances rows: the grid
-              synthesizes "not set" placeholder rows per engineer, which is
-              the entry path for seeding allotments. */}
-          {(engineersQ.data ?? []).length > 0 && (
-            <BalancesGrid
-              summaries={summaryQ.data ?? []}
-              allRequests={buckets.all}
-              engineers={engineersQ.data ?? []}
-              crewByUser={crewByUserId}
-              onEdit={(s) => setShowEditBalance(s)}
-              onEditRequest={(r) => setEditingRequest(r)}
-              onDeleteRequest={(id) => {
-                if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
-              }}
-            />
-          )}
+          {/* Upcoming approved + balances share one band: list on the left,
+              balances grid filling the rest. Either side alone goes full
+              width; on narrow viewports they wrap to stacked. */}
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* 380px basis leaves the balances grid ≥ ~950px inside the
+                1600px container, enough for its two half-tables to sit
+                side by side instead of stacking. */}
+            {buckets.upcoming.length > 0 && (
+              <div style={{ flex: '0 1 380px', minWidth: 300 }}>
+                <UpcomingGroupedList
+                  rows={buckets.upcoming.filter((r) => r.ends_on >= todayIso())}
+                  onCancel={(id) => {
+                    if (confirm('Cancel this approved PTO?')) cancel.mutate(id);
+                  }}
+                  onEdit={(r) => setEditingRequest(r)}
+                  onDelete={(id) => {
+                    if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
+                  }}
+                />
+              </div>
+            )}
+            {/* Balances — rendered even with zero pto_balances rows: the grid
+                synthesizes "not set" placeholder rows per engineer, which is
+                the entry path for seeding allotments. */}
+            {(engineersQ.data ?? []).length > 0 && (
+              <div style={{ flex: '1 1 640px', minWidth: 0 }}>
+                <BalancesGrid
+                  summaries={summaryQ.data ?? []}
+                  allRequests={buckets.all}
+                  engineers={engineersQ.data ?? []}
+                  crewByUser={crewByUserId}
+                  onEdit={(s) => setShowEditBalance(s)}
+                  onEditRequest={(r) => setEditingRequest(r)}
+                  onDeleteRequest={(id) => {
+                    if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Calendar-invite recipient list (manager-editable) */}
           <PtoCalRecipientsEditor siteCode="binney" />
@@ -865,15 +872,18 @@ function TodayAttendance({
     setLogTarget({ engineer: eng, dateIso, dayLabel });
   };
 
-  // 7 columns: today (wider, featured) + 6 preview days. On viewports too
-  // narrow for the row, it scrolls horizontally instead of squeezing — PC is
-  // the primary target, phone is backup.
+  // 7 columns: today (wider, featured) + 6 preview days. Shares its section
+  // row with the rotated heatmap (pinned at 336px), so the minimums are
+  // tight: 220 + 6×135 + 60 gaps = 1090px, which fits unscrolled beside the
+  // heatmap inside the 1600px page container on a 1536px laptop and up.
+  // Smaller windows scroll horizontally instead of squeezing — PC is the
+  // primary target, phone is backup.
   return (
     <div style={{ overflowX: 'auto' }}>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1.6fr) repeat(6, minmax(168px, 1fr))',
+          gridTemplateColumns: 'minmax(220px, 1.5fr) repeat(6, minmax(135px, 1fr))',
           gap: 10,
           alignItems: 'flex-start',
         }}
@@ -918,11 +928,48 @@ function DayAttendanceGroup({
   onLogClick: (eng: EngineerRow, iso: string, label: string) => void;
   isPrimary: boolean;
 }) {
-  // Today's chips & labels are full size; the two secondary columns drop a
-  // step down so they read as "preview" without losing legibility. All three
-  // cells share the same card container so the 4-cell row reads as one band.
-  const headerSize    = isPrimary ? '0.85rem' : '0.78rem';
-  const shiftLabelMin = isPrimary ? 48 : 36;
+  // Today's chips & labels are full size; the secondary columns drop a step
+  // down so they read as "preview" without losing legibility.
+  const headerSize = isPrimary ? '0.85rem' : '0.78rem';
+
+  // Capped cards ("capped + expand" UX): Wednesday lists BOTH crews (~2× the
+  // chips of other days), which would balloon that card and wreck the row.
+  // Over-cap cards collapse behind a "+N more" toggle. Engineers who are
+  // out/partial are ALWAYS kept visible — the cap only hides healthy "in"
+  // chips, so collapsed cards never mask an absence. The remaining in-chip
+  // budget is dealt round-robin across the crew groups so no crew renders as
+  // a bare label and the visible sample isn't biased to the first crew; each
+  // group shows a muted "+n" for its own hidden share.
+  const CHIP_CAP = isPrimary ? 14 : 10;
+  const [expanded, setExpanded] = useState(false);
+  const visibleGroups = shiftGroups.filter((g) => crewWorksOn(g.crew, day.iso));
+  const allEngineers  = visibleGroups.flatMap((g) => g.engineers);
+  const overCap = allEngineers.length > CHIP_CAP;
+  let shownIds: Set<string> | null = null;   // null = show everyone
+  if (overCap && !expanded) {
+    const ids = new Set<string>();
+    for (const e of allEngineers) {
+      if (ptoLookup.get(`${e.user_id}|${day.iso}`)) ids.add(e.user_id);
+    }
+    // In-chip budget: at least one per group (so every crew keeps a face)
+    // and at least a few overall so a bad day still reads as staffed.
+    let budget = Math.max(CHIP_CAP - ids.size, visibleGroups.length, 4);
+    const queues = visibleGroups.map((g) => g.engineers.filter((e) => !ids.has(e.user_id)));
+    let dealt = true;
+    while (budget > 0 && dealt) {
+      dealt = false;
+      for (const q of queues) {
+        if (budget <= 0) break;
+        const e = q.shift();
+        if (e) { ids.add(e.user_id); budget--; dealt = true; }
+      }
+    }
+    // If the cap wouldn't actually hide anyone (e.g. most of the card is
+    // out-chips), fall back to show-all so no "+0 more" ghost renders.
+    shownIds = ids.size >= allEngineers.length ? null : ids;
+  }
+  const hiddenCount = shownIds ? allEngineers.length - shownIds.size : 0;
+
   return (
     <div
       style={{
@@ -953,37 +1000,71 @@ function DayAttendanceGroup({
           )}
         </span>
       </div>
-      <div className="space-y-1">
+      <div className="space-y-2">
         {/* Hide a crew's whole row on days its rotation doesn't work —
             the '_noshift' bucket (crew undefined) shows every day. */}
-        {shiftGroups.filter((g) => crewWorksOn(g.crew, day.iso)).map((g) => (
-          <div key={g.shift_id} className="flex items-baseline gap-2 flex-wrap">
-            <span
-              className="t-muted uppercase tracking-wider"
-              style={{ fontSize: 9, minWidth: shiftLabelMin }}
-            >
-              {g.label}
-            </span>
-            <div className="flex flex-wrap gap-1">
-              {g.engineers.map((eng) => {
-                const pto = ptoLookup.get(`${eng.user_id}|${day.iso}`) ?? null;
-                return (
-                  <DayChip
-                    key={eng.user_id}
-                    engineer={eng}
-                    pto={pto}
-                    dateIso={day.iso}
-                    dayLabel={day.label}
-                    disabled={disabled}
-                    onLogClick={onLogClick}
-                    isPrimary={isPrimary}
-                  />
-                );
-              })}
+        {visibleGroups.map((g) => {
+          const shown = shownIds;   // const capture so TS narrows in closures
+          const engs = shown
+            ? g.engineers.filter((e) => shown.has(e.user_id))
+            : g.engineers;
+          const hiddenInGroup = g.engineers.length - engs.length;
+          return (
+            <div key={g.shift_id}>
+              {/* Label sits tight on top of its chip group (2px) — as a
+                  side column it wrapped onto its own line with a visible
+                  gap in the narrow 7-day cards. Group-to-group spacing
+                  (8px, space-y-2 above) is wider than label-to-chips, so
+                  each label reads as belonging to the chips below it. */}
+              <div
+                className="t-muted uppercase tracking-wider"
+                style={{ fontSize: 9, marginBottom: 2, lineHeight: 1.2 }}
+              >
+                {g.label}
+              </div>
+              <div className="flex flex-wrap gap-1" style={{ alignItems: 'center' }}>
+                {engs.map((eng) => {
+                  const pto = ptoLookup.get(`${eng.user_id}|${day.iso}`) ?? null;
+                  return (
+                    <DayChip
+                      key={eng.user_id}
+                      engineer={eng}
+                      pto={pto}
+                      dateIso={day.iso}
+                      dayLabel={day.label}
+                      disabled={disabled}
+                      onLogClick={onLogClick}
+                      isPrimary={isPrimary}
+                    />
+                  );
+                })}
+                {hiddenInGroup > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    className="t-muted hover:t-accent"
+                    style={{ fontSize: 9, lineHeight: 1, whiteSpace: 'nowrap' }}
+                    title={`${hiddenInGroup} more on ${g.label} (all in) — click to expand`}
+                  >
+                    +{hiddenInGroup}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {(expanded || hiddenCount > 0) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="t-accent hover:underline"
+          style={{ marginTop: 4, fontSize: 10, fontWeight: 600 }}
+          title={expanded ? 'Collapse back to the compact view' : `Show the ${hiddenCount} hidden engineers (all of them are in — anyone out always shows)`}
+        >
+          {expanded ? 'show less ▴' : `+${hiddenCount} more ▾`}
+        </button>
+      )}
     </div>
   );
 }
@@ -1342,8 +1423,8 @@ function CapHeatmap({ requests, onPickDate }: {
   const PAST_WEEKS = 2;
   const today = todayIso();
 
-  // Calendar grid aligns to Mon-Sun rows so day-of-week labels stay stable.
-  // Start = Monday of the current week, minus the history window.
+  // Calendar grid aligns weeks to Mon–Sun so the day-of-week header stays
+  // stable. Start = Monday of the current week, minus the history window.
   const start = useMemo(() => {
     const d = new Date(today + 'T00:00:00');
     const dow = d.getDay();
@@ -1415,6 +1496,12 @@ function CapHeatmap({ requests, onPickDate }: {
     return m;
   }, []);
 
+  // Cell geometry: wider than tall so two engineers' initials ("J·E") fit
+  // legibly on cap-pinned days; height stays compact to keep 11+ week rows
+  // on screen.
+  const CELL_W = 40;
+  const CELL_H = 26;
+
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   type Cell = {
     iso: string;
@@ -1449,17 +1536,14 @@ function CapHeatmap({ requests, onPickDate }: {
     });
   }
 
-  // Column headers: month name at each month boundary, plus the Monday
-  // day-of-month for EVERY column so a specific date can be located without
-  // hovering cell by cell. The column containing today gets accent styling.
-  const todayCol = cells.find((c) => c.isToday)?.col ?? -1;
-  const weekLabels: { col: number; month: string; day: number }[] = [];
-  let lastMonth = '';
+  // Row labels — the grid is rotated (days across the top, weeks stacked
+  // down), so each week row is labelled with its Monday date as m/d
+  // ("7/13") and any date can be located without hovering cell by cell.
+  // The current week's row gets accent styling.
+  const todayRow = cells.find((c) => c.isToday)?.col ?? -1;
+  const weekLabels: { col: number; label: string }[] = [];
   for (let c = 0; c < totalWeeks; c++) {
-    const monthDate = new Date(cells[c * 7].iso + 'T00:00:00');
-    const m = monthDate.toLocaleString(undefined, { month: 'short' });
-    weekLabels.push({ col: c, month: m === lastMonth ? '' : m, day: monthDate.getDate() });
-    lastMonth = m;
+    weekLabels.push({ col: c, label: fmtMd(cells[c * 7].iso) });
   }
 
   // Slightly more saturated palette so the eye reads cap-pinning quickly.
@@ -1472,14 +1556,36 @@ function CapHeatmap({ requests, onPickDate }: {
     return 'rgba(220,38,38,0.50)';                   // red — over cap (override)
   };
 
-  // Compact in-cell label: 1 person → 1 initial, 2 → 2 letters, 3+ → number.
-  const cellLabel = (people: DayInfo[]): string => {
-    if (people.length === 0) return '';
-    if (people.length === 1) return (people[0].name[0] ?? '?').toUpperCase();
-    if (people.length === 2) {
-      return people.map((p) => (p.name[0] ?? '?').toUpperCase()).join('·');
-    }
-    return String(people.length);
+  // In-cell label covers vacation AND sick people. Initials = first LETTER
+  // of the first and last name words — words without letters are skipped
+  // ("301 Tommy" → "T") — so numbers in a cell always mean head-counts,
+  // never someone's name.
+  //   Everyone fits (≤ ~3 short initials): per-person initials, sick ones
+  //   rendered red. Otherwise: vacation head-count as a bare number (the
+  //   cap colours) plus a red "+n" sick count. Sick NEVER changes the cell
+  //   colour — the 2-engineer cap stays vacation-only.
+  const initialsOf = (name: string): string => {
+    const words = name.trim().split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
+    if (words.length === 0) return '?';
+    const first = (w: string) => w.match(/[A-Za-z]/)![0].toUpperCase();
+    if (words.length === 1) return first(words[0]);
+    return first(words[0]) + first(words[words.length - 1]);
+  };
+  type LabelPart = { text: string; sick?: boolean };
+  const cellParts = (vac: DayInfo[], sick: DayInfo[]): LabelPart[] => {
+    if (vac.length === 0 && sick.length === 0) return [];
+    // Prefer initials for everyone; fall back to counts when the combined
+    // text would overflow the 40px cell.
+    const initials: LabelPart[] = [
+      ...vac.map((p) => ({ text: initialsOf(p.name) })),
+      ...sick.map((p) => ({ text: initialsOf(p.name), sick: true })),
+    ];
+    const len = initials.reduce((s, p) => s + p.text.length, 0) + initials.length - 1;
+    if (len <= 6) return initials;
+    const out: LabelPart[] = [];
+    if (vac.length > 0) out.push({ text: String(vac.length) });
+    if (sick.length > 0) out.push({ text: `+${sick.length}`, sick: true });
+    return out;
   };
 
   const tooltip = (cell: Cell): string => {
@@ -1512,7 +1618,10 @@ function CapHeatmap({ requests, onPickDate }: {
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline justify-between gap-2 flex-wrap">
-        <span>Vacation cap heatmap · prev {PAST_WEEKS}w + next {weeks}w</span>
+        {/* Short title — the column is pinned at 246px; the prev-{PAST_WEEKS}w
+            history shows as the faded rows above the accent-marked current
+            week, so it doesn't need to be spelled out here. */}
+        <span>Vacation cap heatmap</span>
         <span style={{ textTransform: 'none', display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
           {([4, 9, 13] as const).map((w) => (
             <button
@@ -1538,7 +1647,7 @@ function CapHeatmap({ requests, onPickDate }: {
       {/* Legend chips — kept on one line. Click hint moved to a tiny
           footer below the grid so the legend doesn't wrap. The vacation
           colours show the cap count; the red dot flags sick (uncapped). */}
-      <div className="t-small t-muted mb-2 flex items-center gap-2" style={{ fontSize: 10 }}>
+      <div className="t-small t-muted mb-2 flex items-center gap-2" style={{ fontSize: 10, flexWrap: 'wrap' }}>
         <LegendChip color="rgba(34,197,94,0.18)" label="0" />
         <LegendChip color="rgba(234,179,8,0.30)" label="1" />
         <LegendChip color="rgba(234,88,12,0.45)" label="2 cap" />
@@ -1558,44 +1667,41 @@ function CapHeatmap({ requests, onPickDate }: {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-        {/* Day-of-week labels column — paddingTop matches the two header
-            rows (month 14+1 + date 11+4) so Mon aligns with the first row. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 30 }}>
-          {dayLabels.map((d) => (
-            <div key={d} className="t-muted" style={{ fontSize: 10, height: 26, lineHeight: '26px', textAlign: 'right', width: 28 }}>
-              {d}
+        {/* Week-label column — one label per week ROW (Monday's m/d date).
+            paddingTop matches the day-of-week header row (14 + 4 margin). */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingTop: 18 }}>
+          {weekLabels.map((w) => (
+            <div
+              key={w.col}
+              className="t-mono"
+              style={{
+                fontSize: 9, height: 26, lineHeight: '26px', textAlign: 'right', width: 34,
+                color: w.col === todayRow ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                fontWeight: w.col === todayRow ? 700 : 400,
+              }}
+            >
+              {w.label}
             </div>
           ))}
         </div>
-        {/* Heatmap grid */}
+        {/* Heatmap grid — rotated: days Mon–Sun across, weeks stacked down */}
         <div>
-          {/* Month labels row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gap: 3, marginBottom: 1 }}>
-            {weekLabels.map((w) => (
-              <div key={w.col} className="t-muted" style={{ fontSize: 10, height: 14, textAlign: 'left' }}>
-                {w.month}
+          {/* Day-of-week header row */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL_W}px)`, gap: 3, marginBottom: 4 }}>
+            {dayLabels.map((d) => (
+              <div key={d} className="t-muted" style={{ fontSize: 9, height: 14, lineHeight: '14px', textAlign: 'center' }}>
+                {d}
               </div>
             ))}
           </div>
-          {/* Week-start (Monday) date row — locates any date without hovering */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gap: 3, marginBottom: 4 }}>
-            {weekLabels.map((w) => (
-              <div
-                key={w.col}
-                style={{
-                  fontSize: 9, height: 11, lineHeight: '11px', textAlign: 'left',
-                  color: w.col === todayCol ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                  fontWeight: w.col === todayCol ? 700 : 400,
-                }}
-              >
-                {w.day}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalWeeks}, 26px)`, gridTemplateRows: 'repeat(7, 26px)', gap: 3, gridAutoFlow: 'column' }}>
+          {/* Row-major flow: cells are in date order, so each 7-cell run is
+              one Mon–Sun week row. */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL_W}px)`, gridTemplateRows: `repeat(${totalWeeks}, ${CELL_H}px)`, gap: 3 }}>
             {cells.map((cell) => {
               const count = cell.people.length;
-              const label = cellLabel(cell.people);
+              const parts = cellParts(cell.people, cell.sick);
+              // Approximate rendered length (chars + separators) for sizing.
+              const labelLen = parts.reduce((s, p) => s + p.text.length + 1, -1);
               const clickable = !cell.isPast && !!onPickDate;
               const hasSick = cell.sick.length > 0;
               const hasOther = cell.other.length > 0;
@@ -1608,7 +1714,7 @@ function CapHeatmap({ requests, onPickDate }: {
                   title={tooltip(cell)}
                   style={{
                     position: 'relative',
-                    width: 26, height: 26, padding: 0,
+                    width: CELL_W, height: CELL_H, padding: 0,
                     borderRadius: 3,
                     background: color(count),
                     // No weekend dimming — Binney's crews work Sat + Sun.
@@ -1621,14 +1727,27 @@ function CapHeatmap({ requests, onPickDate }: {
                         ? '2px solid #10b981'
                         : '1px solid rgba(0,0,0,0.08)',
                     cursor: clickable ? 'pointer' : 'default',
-                    fontSize: label.length > 2 ? 10 : label.length === 2 ? 11 : 13,
+                    // "TS" and counts render full size; longer combos like
+                    // "TS·JM" step down to fit the 40px cell.
+                    fontSize: labelLen >= 4 ? 10 : 13,
                     fontWeight: 700,
                     color: count >= 2 ? 'white' : 'var(--color-text)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     lineHeight: 1,
                   }}
                 >
-                  {label}
+                  {parts.map((p, i) => (
+                    <Fragment key={i}>
+                      {/* No middot before a "+n" sick count — "2+1" reads
+                          as one expression. */}
+                      {i > 0 && !p.text.startsWith('+') && (
+                        <span style={{ opacity: 0.6 }}>·</span>
+                      )}
+                      <span style={p.sick ? { color: '#dc2626' } : undefined}>
+                        {p.text}
+                      </span>
+                    </Fragment>
+                  ))}
                   {hasSick && (
                     // Non-counting sick marker: red corner dot. Shows count if
                     // more than one person is sick that day.
@@ -1687,6 +1806,14 @@ function LegendChip({ color, label }: { color: string; label: string }) {
 
 // ───────────────────────────── Staffing vs labor model (range checker)
 //
+// ⚠ PARKED — removed from the layout 2026-07-17 at the user's request but
+// kept working (and exported, so tsc doesn't flag it unused) because it is
+// expected to return. To re-add, render:
+//   <StaffingForecast engineers={engineersQ.data ?? []}
+//                     shifts={shiftsQ.data ?? []} requests={buckets.all} />
+// (it previously sat beside CapHeatmap) and restore the manual paragraph
+// (see git history of manualContent.ts).
+//
 // Manager workflow: pick a date range and compare expected documented hours
 // per engineer against the labor model. Binney runs 4×10s and a worked day
 // documents ~8.5 h in COVE, so a full week is 4 × 8.5 = 34 h and one full-day
@@ -1695,7 +1822,7 @@ function LegendChip({ color, label }: { color: string; label: string }) {
 // change.
 const DEFAULT_DOC_HRS_PER_DAY = 8.5;
 
-function StaffingForecast({ engineers, shifts, requests }: {
+export function StaffingForecast({ engineers, shifts, requests }: {
   engineers: EngineerRow[];
   shifts: { id: string; name: string; sort_order: number; crew?: Crew }[];
   requests: PtoRequest[];

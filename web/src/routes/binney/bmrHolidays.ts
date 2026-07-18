@@ -8,8 +8,10 @@
 // ⚠ Seeded from the standard private-sector list (federal minus Columbus +
 // Veterans Day, plus Day after Thanksgiving + Christmas Eve) — VERIFY against
 // BMR's published holiday calendar and edit here. Dates are matched as exact
-// YYYY-MM-DD strings. Weekend holidays list both the actual date and the
-// weekday BMR would observe, same convention as lib/holidays.ts.
+// YYYY-MM-DD strings. Only the day BMR OBSERVES is listed (per user,
+// 2026-07-17): when a holiday falls on a weekend, just the shifted weekday
+// appears — e.g. Jul 4 2026 (Sat) marks only Fri Jul 3. "(obs)" in the name
+// flags a shifted date.
 //
 // Kept in the Binney route tree (not lib/holidays.ts) per the isolate-new-
 // features rule: UPark's on-call holiday logic stays untouched.
@@ -24,7 +26,6 @@ export const BMR_HOLIDAYS: BmrHoliday[] = [
   { name: 'Memorial Day',           date: '2026-05-25' },
   { name: 'Juneteenth',             date: '2026-06-19' },
   { name: 'Independence Day (obs)', date: '2026-07-03' }, // 4th is Sat
-  { name: 'Independence Day',       date: '2026-07-04' },
   { name: 'Labor Day',              date: '2026-09-07' },
   { name: 'Thanksgiving',           date: '2026-11-26' },
   { name: 'Day after Thanksgiving', date: '2026-11-27' },
@@ -37,18 +38,14 @@ export const BMR_HOLIDAYS: BmrHoliday[] = [
   { name: 'Presidents Day',         date: '2027-02-15' },
   { name: 'Memorial Day',           date: '2027-05-31' },
   { name: 'Juneteenth (obs)',       date: '2027-06-18' }, // 19th is Sat
-  { name: 'Juneteenth',             date: '2027-06-19' },
-  { name: 'Independence Day',       date: '2027-07-04' },
   { name: 'Independence Day (obs)', date: '2027-07-05' }, // 4th is Sun
   { name: 'Labor Day',              date: '2027-09-06' },
   { name: 'Thanksgiving',           date: '2027-11-25' },
   { name: 'Day after Thanksgiving', date: '2027-11-26' },
   { name: 'Christmas Eve (obs)',    date: '2027-12-23' }, // Eve slides to Thu
   { name: 'Christmas Day (obs)',    date: '2027-12-24' }, // 25th is Sat
-  { name: 'Christmas Day',          date: '2027-12-25' },
   { name: "New Year's Day (obs)",   date: '2027-12-31' }, // Jan 1 2028 is Sat
 
   // ---- 2028 (boundary) ----
-  { name: "New Year's Day",         date: '2028-01-01' },
   { name: 'MLK Jr. Day',            date: '2028-01-17' },
 ];
