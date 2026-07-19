@@ -4,11 +4,10 @@
 // scopes every read to engineer_profiles.home_site_id = Binney and stamps new
 // users with the Binney site.
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer,
-  DISCIPLINES, ROLES,
+  ROLES,
   type EngineerRow, type Role, type Discipline,
 } from './hooks/useBinneyEngineers';
 import { useShifts } from '../../hooks/useShifts';
@@ -16,23 +15,25 @@ import { useMe } from '../../hooks/useMe';
 import { supabase } from '../../lib/supabase';
 
 type Crew = 'saturday' | 'sunday' | null;
-type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew';
+type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew' | 'other_crew';
 const FILTERS_ADMIN: { key: Filter; label: string }[] = [
-  { key: 'active',   label: 'All active' },
-  { key: 'sat_crew', label: 'Saturday crew' },
-  { key: 'sun_crew', label: 'Sunday crew' },
-  { key: 'engineer', label: 'Engineers' },
-  { key: 'manager',  label: 'Managers' },
-  { key: 'director', label: 'Directors' },
-  { key: 'admin',    label: 'Admins' },
-  { key: 'inactive', label: 'Inactive' },
+  { key: 'active',     label: 'All active' },
+  { key: 'sat_crew',   label: 'Saturday crew' },
+  { key: 'sun_crew',   label: 'Sunday crew' },
+  { key: 'other_crew', label: 'Other crew' },
+  { key: 'engineer',   label: 'Engineers' },
+  { key: 'manager',    label: 'Managers' },
+  { key: 'director',   label: 'Directors' },
+  { key: 'admin',      label: 'Admins' },
+  { key: 'inactive',   label: 'Inactive' },
 ];
 // Leads only see engineers (active + inactive). No managers / directors / admins.
 const FILTERS_LEAD: { key: Filter; label: string }[] = [
-  { key: 'engineer', label: 'Engineers' },
-  { key: 'sat_crew', label: 'Saturday crew' },
-  { key: 'sun_crew', label: 'Sunday crew' },
-  { key: 'inactive', label: 'Inactive engineers' },
+  { key: 'engineer',   label: 'Engineers' },
+  { key: 'sat_crew',   label: 'Saturday crew' },
+  { key: 'sun_crew',   label: 'Sunday crew' },
+  { key: 'other_crew', label: 'Other crew' },
+  { key: 'inactive',   label: 'Inactive engineers' },
 ];
 
 // Crew comes from shifts.crew via the person's shift — same source of truth
@@ -47,6 +48,10 @@ function applyFilter(rows: EngineerRow[], f: Filter, crewOf: (r: EngineerRow) =>
     case 'inactive': return rows.filter((r) => !r.active);
     case 'sat_crew': return rows.filter((r) => r.active && crewOf(r) === 'saturday');
     case 'sun_crew': return rows.filter((r) => r.active && crewOf(r) === 'sunday');
+    // Engineers on neither weekend crew: Mon–Fri shifts (crew null) and the
+    // no-shift bucket. Role-restricted so managers/admins (who never have a
+    // shift) don't flood the list.
+    case 'other_crew': return rows.filter((r) => r.active && r.role === 'engineer' && crewOf(r) === null);
   }
 }
 
@@ -139,7 +144,7 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
     const crewOf = (r: EngineerRow): Crew => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null);
     const c: Record<Filter, number> = {
       active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0,
-      sat_crew: 0, sun_crew: 0,
+      sat_crew: 0, sun_crew: 0, other_crew: 0,
     };
     for (const r of allRows) {
       if (r.active) {
@@ -150,6 +155,7 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
         else if (r.role === 'admin')    c.admin++;
         if (crewOf(r) === 'saturday') c.sat_crew++;
         else if (crewOf(r) === 'sunday') c.sun_crew++;
+        else if (r.role === 'engineer') c.other_crew++;
       } else {
         c.inactive++;
       }
@@ -324,18 +330,6 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
                       >
                         {canManageUsers ? 'Edit' : 'View'}
                       </button>
-                      <Link
-                        to={`/engineer/${r.user_id}/profile`}
-                        className="t-small px-2 py-0.5 rounded border inline-block"
-                        style={{
-                          color: 'var(--color-accent)',
-                          borderColor: 'var(--color-border)',
-                          background: 'var(--color-card)',
-                        }}
-                        title="Preview the RPG profile this user would see (if Visible is on)"
-                      >
-                        Profile →
-                      </Link>
                     </td>
                   </tr>
                 );
@@ -443,17 +437,12 @@ function EditDrawer({
 }) {
   const [fullName, setFullName] = useState<string>(row.full_name);
   const [title, setTitle] = useState<string>(row.title ?? '');
-  const [cmmsName, setCmmsName] = useState<string>(row.cmms_assignee_name ?? '');
-  const [plantlogUsername, setPlantlogUsername] = useState<string>(row.plantlog_username ?? '');
   const [email, setEmail] = useState<string>(row.email ?? '');
   const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [role, setRole] = useState<Role>(row.role);
   const [shiftId, setShiftId] = useState<string>(row.shift_id ?? '');
   const [isLead, setIsLead] = useState<boolean>(row.is_lead);
   const [isManager, setIsManager] = useState<boolean>(row.is_manager);
-  const [discipline, setDiscipline] = useState<EngineerRow['discipline']>(row.discipline);
-  const [level, setLevel] = useState<number>(row.level);
-  const [notes, setNotes] = useState<string>(row.notes ?? '');
   const [active, setActive] = useState<boolean>(row.active);
   const [saving, setSaving] = useState(false);
 
@@ -465,14 +454,12 @@ function EditDrawer({
     try {
       await onSave(
         {
+          // Discipline / level / notes were dropped from this form
+          // (2026-07-18, per user) — omitting the keys leaves any existing
+          // DB values untouched.
           title: title.trim() || null,
-          cmms_assignee_name: cmmsName.trim() || null,
-          plantlog_username: plantlogUsername.trim() || null,
           shift_id: shiftId || null,
           is_lead: isLead,
-          discipline,
-          level,
-          notes: notes.trim() || null,
         },
         {
           full_name: fullName.trim() || row.full_name,
@@ -638,73 +625,11 @@ function EditDrawer({
           />
         </label>
 
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">CMMS assignee name</span>
-          <input
-            type="text"
-            value={cmmsName}
-            onChange={(e) => setCmmsName(e.target.value)}
-            placeholder="exact spelling from CMMS exports (engineers only)"
-            className="w-full border rounded px-2 py-1 t-text t-mono"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
-          <p className="t-small t-muted mt-1">
-            Must match the <code>Assigned To</code> column in PM CSV exports exactly. Only relevant for engineers; XP won't accumulate if this doesn't match.
-          </p>
-        </label>
-
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Plantlog username</span>
-          <input
-            type="text"
-            value={plantlogUsername}
-            onChange={(e) => setPlantlogUsername(e.target.value)}
-            placeholder='exact username from plantlog (e.g. "Bgonzalez", "Mdonovan")'
-            className="w-full border rounded px-2 py-1 t-text t-mono"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
-          <p className="t-small t-muted mt-1">
-            Maps plantlog activity (rounds, readings) to this profile so the §06 panel can show full names. Engineers only.
-          </p>
-        </label>
-
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Discipline</span>
-          <select
-            value={discipline ?? ''}
-            onChange={(e) => setDiscipline((e.target.value || null) as EngineerRow['discipline'])}
-            className="w-full border rounded px-2 py-1 t-text"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          >
-            <option value="">— none —</option>
-            {DISCIPLINES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-        </label>
-
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Level (1–10)</span>
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={level}
-            onChange={(e) => setLevel(Number(e.target.value))}
-            className="w-24 border rounded px-2 py-1 t-text t-mono"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
-        </label>
-
-        <label className="block mb-4">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Notes</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={4}
-            placeholder="Anything you want to remember about this user..."
-            className="w-full border rounded px-2 py-1 t-text"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
-        </label>
+        {/* CMMS assignee name + Plantlog username HIDDEN for now
+            (2026-07-18, per user) — Binney has no COVE PM pipeline or
+            plantlog integration yet. Restore the two <label> blocks from
+            git history (and re-add their state + patch keys) when a Binney
+            data source lands. DB columns are untouched. */}
 
         </fieldset>
 
@@ -781,26 +706,23 @@ function AddUserDrawer({
 }) {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<Role>('engineer');
-  const [cmmsName, setCmmsName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [hiringDate, setHiringDate] = useState('');
-  const [discipline, setDiscipline] = useState<Discipline | ''>('');
-  const [cmmsTouched, setCmmsTouched] = useState(false);
-
-  const cmmsRequired = role === 'engineer';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) return;
-    if (cmmsRequired && !cmmsName.trim()) return;
     await onSubmit({
       full_name: fullName,
-      cmms_assignee_name: cmmsName,
+      // CMMS name + discipline HIDDEN from this form (2026-07-18, per
+      // user) — no Binney COVE pipeline yet. Empty string is trimmed to
+      // null by useAddEngineer; both stay settable in the DB.
+      cmms_assignee_name: '',
       email: email.trim() || null,
       phone: phone.trim() || null,
       hiring_date: hiringDate || null,
-      discipline: discipline || null,
+      discipline: null,
       role,
     });
   };
@@ -836,10 +758,7 @@ function AddUserDrawer({
             type="text"
             required
             value={fullName}
-            onChange={(e) => {
-              setFullName(e.target.value);
-              if (!cmmsTouched) setCmmsName(e.target.value);
-            }}
+            onChange={(e) => setFullName(e.target.value)}
             placeholder="Robert Atkinson"
             autoFocus
             className="w-full border rounded px-2 py-1 t-text"
@@ -857,28 +776,6 @@ function AddUserDrawer({
           >
             {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
-        </label>
-
-        <label className="block mb-3">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">
-            CMMS assignee name {cmmsRequired && <span style={{ color: 'var(--color-danger)' }}>*</span>}
-          </span>
-          <input
-            type="text"
-            required={cmmsRequired}
-            value={cmmsName}
-            onChange={(e) => {
-              setCmmsName(e.target.value);
-              setCmmsTouched(true);
-            }}
-            placeholder={cmmsRequired ? 'exact spelling from CMMS exports' : '(optional for non-engineers)'}
-            className="w-full border rounded px-2 py-1 t-text t-mono"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          />
-          <p className="t-small t-muted mt-1">
-            Must match the <code>Assigned To</code> column in PM CSV exports exactly.
-            XP won't accumulate if this doesn't match.
-          </p>
         </label>
 
         <label className="block mb-3">
@@ -919,19 +816,6 @@ function AddUserDrawer({
           />
         </label>
 
-        <label className="block mb-4">
-          <span className="t-small t-muted uppercase tracking-wider block mb-1">Discipline</span>
-          <select
-            value={discipline}
-            onChange={(e) => setDiscipline(e.target.value as Discipline | '')}
-            className="border rounded px-2 py-1 t-text"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-          >
-            <option value="">— none —</option>
-            {DISCIPLINES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-        </label>
-
         {error && (
           <p className="t-small t-danger mb-3 whitespace-pre-wrap">{error}</p>
         )}
@@ -944,7 +828,7 @@ function AddUserDrawer({
           </button>
           <button
             type="submit"
-            disabled={submitting || !fullName.trim() || (cmmsRequired && !cmmsName.trim())}
+            disabled={submitting || !fullName.trim()}
             className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
             style={{ background: 'var(--color-accent)' }}
           >
