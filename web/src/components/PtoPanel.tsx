@@ -2476,6 +2476,33 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
   const [outFrom, setOutFrom]           = useState<string>((request.out_from  ?? '').slice(0, 5));
   const [outUntil, setOutUntil]         = useState<string>((request.out_until ?? '').slice(0, 5));
   const [err, setErr]                   = useState<string | null>(null);
+  const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false);
+
+  // Known-gap fix (2026-07-19): hours RE-COMPUTE when the dates change
+  // (rate × weekdays in range, same as Add PTO — UPark is 5×8) instead of
+  // silently keeping the original figure and mis-charging the balance.
+  // Reverting the dates restores the record's own hours; typing in the
+  // Hours box always wins; partial-day rows are left alone (their hours
+  // are custom by nature).
+  const dailyHoursQ = useEngineerPtoDailyHours(request.user_id);
+  const dailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 8;
+  const computedHours = useMemo(() => {
+    const days = daysBetween(startsOn, endsOn);
+    if (days <= 0) return 0;
+    let weekdays = 0;
+    const cur = new Date(startsOn + 'T00:00:00');
+    for (let i = 0; i < days; i++) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) weekdays++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return weekdays * dailyHours;
+  }, [startsOn, endsOn, dailyHours]);
+  const datesChanged = startsOn !== request.starts_on || endsOn !== request.ends_on;
+  useEffect(() => {
+    if (hoursManuallyEdited || outFrom || outUntil) return;
+    setHours(datesChanged ? String(computedHours) : String(request.hours));
+  }, [datesChanged, computedHours, hoursManuallyEdited, outFrom, outUntil, request.hours]);
 
   // Live balance for this engineer (same card as Add and Quick modals).
   const summaryQ = usePtoSummary();
@@ -2613,9 +2640,11 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
           </label>
 
           <label className="block col-span-2">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Hours</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">
+              Hours <span className="t-muted normal-case" style={{ textTransform: 'none' }}>(re-computes with dates — type to override)</span>
+            </span>
             <input type="number" min={0.25} step={0.25}
-              value={hours} onChange={(e) => setHours(e.target.value)}
+              value={hours} onChange={(e) => { setHours(e.target.value); setHoursManuallyEdited(true); }}
               className="w-32 border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
