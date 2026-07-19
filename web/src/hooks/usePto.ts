@@ -305,6 +305,52 @@ export function checkVacationCap(
   return { exceeded: conflicts.length >= 2, conflicts };
 }
 
+// ── Duplicate guard: the SAME engineer's own pending/approved requests
+// that overlap a proposed range. Every entry form calls this to refuse a
+// double-booking (full-day vs full-day) or to warn about a stack that
+// involves a partial day — a morning appointment plus an afternoon
+// call-out is legitimate. Denied/cancelled rows never block: they are
+// history, not bookings. Any type counts — a sick day already covers the
+// date, so a vacation on top of it is still a double-booking.
+
+export type OwnOverlap = {
+  id: string;
+  type: PtoType;
+  starts_on: string;
+  ends_on: string;
+  status: PtoStatus;
+  /** The existing row is a partial day (out_from / out_until set). */
+  partial: boolean;
+};
+
+export function findOwnOverlaps(
+  requests: PtoRequest[],
+  userId: string | null,
+  startsOn: string,
+  endsOn: string,
+  excludeRequestId?: string | null,
+): OwnOverlap[] {
+  if (!userId || !startsOn || !endsOn || endsOn < startsOn) return [];
+  const out: OwnOverlap[] = [];
+  for (const r of requests) {
+    if (r.user_id !== userId) continue;
+    if (excludeRequestId && r.id === excludeRequestId) continue;
+    if (r.status !== 'approved' && r.status !== 'pending') continue;
+    // overlap iff starts <= other.ends AND ends >= other.starts
+    if (startsOn <= r.ends_on && endsOn >= r.starts_on) {
+      out.push({
+        id: r.id,
+        type: r.type,
+        starts_on: r.starts_on,
+        ends_on: r.ends_on,
+        status: r.status,
+        partial: isPartialDay(r),
+      });
+    }
+  }
+  return out;
+}
+
 // ── Mutations
 
 export type SubmitPtoInput = {

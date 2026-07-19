@@ -294,7 +294,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                   : 'Scroll to the bottom of the page, past your PMs, work orders, NPMs and overtime, to the "My time off" box. On a phone it is at the bottom of the "Mine" tab, not "Now".',
                 'Click "+ Request PTO" at the top right of the box. The same button turns into "Cancel" to close the form again.',
                 'Pick the Type. The form opens on Vacation even though Sick is first in the list — if you are logging a sick day you must change it yourself.',
-                'Set From and To. Both dates count: Monday to Friday is 5 days off, not 4. For a single day, put the same date in both. Past dates are allowed, so you can file yesterday’s sick day.',
+                'Set From and To. Both dates count: Monday to Friday is 5 days off, not 4. For a single day, put the same date in both. Past dates are allowed, so you can file yesterday’s sick day. If you already have a pending or approved request covering any of those dates, Submit is refused and the clashing request is named — if it is pending you can cancel it yourself below; an approved one needs a manager. The exception: an existing PARTIAL-day entry does not refuse — your request stacks on it with an orange warning instead.',
                 'Leave Hours blank to accept the automatic figure. The grey number in the box is only a placeholder — the Submit button always shows the hours that will actually be filed. ' +
                   (s.binney
                     ? 'At Binney it fills ' + s.day + 'h for every day in the range, weekends included, because both crews work weekends.'
@@ -307,9 +307,9 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'note',
               tone: 'warn',
-              title: 'Only two things can block your Submit',
+              title: 'Only three things can block your Submit',
               text:
-                'An end date earlier than the start, and hours of zero or less. Nothing else is checked — not your balance, not duplicates, not the cap.' +
+                'An end date earlier than the start, hours of zero or less, and a double-booking — a pending or approved request of your own already covering any of the dates (a partial-day entry stacks with a warning instead). Nothing else is checked — not your balance, not the cap.' +
                 (s.binney
                   ? ''
                   : ' The one that bites at UPark: a Saturday-or-Sunday-only request auto-calculates to 0h and is refused with "Hours must be > 0." Type the hours in by hand.'),
@@ -749,7 +749,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                 'The historical guard mutes EVERY email about a request whose last day has already passed — filing yesterday’s sick day notifies no manager at submit, and the approval or denial afterwards notifies nobody either. Late-filed requests are only ever found by opening the queue. The engineer’s year log does show "by <manager>" on the denied row, and hovering that name reveals the denial note — but that is a mouse-only tooltip, invisible on a phone, and blank if no note was typed. For a late-filed sick day that gets denied, still tell them in person.',
                 'Approving a request erases any review note already on it, and stamps the new approver over the original reviewer.',
                 'The pending queue never empties itself, and sorts by the date off rather than by who has waited longest.',
-                'Nothing prevents the same engineer being booked off twice for the same day, or a duplicate week being entered twice. Catching duplicates is a human job.',
+                'Double-booking is refused by every entry form: if the engineer already has a pending or approved entry covering any of the dates, the save is blocked and the clashing entry is named — edit or cancel that one instead. The exception is partial days, which may legitimately stack (a morning appointment plus an afternoon call-out) and save with an orange warning instead. The database itself still accepts duplicates — imports and direct SQL bypass the guard, and so can a save fired in the first moments before the request lists finish loading.',
                 'Balance checks warn but never block. Every pending card shows the live math before you click Approve — "160h of 160h left → −40h after approval — exceeds balance", in red — and the manager Add PTO / Log PTO forms forecast "⚠ after submit … (over by Nh)" as you type (vacation and sick only). But nothing refuses the write: click past the red text and 200h against a 160h allotment goes through, on screen and in the database. Two places still show no warning at all — the engineer’s own request form (only the balance chips above it), and the manager Edit modal, which does no overdraw forecast when you change dates or hours.',
                 'While the site roster is still loading, the cap warning on the engineer form fails OPEN and briefly checks against BOTH sites’ vacations. The UPark manager panel fails the same way — on first paint its lists render unfiltered and can flash Binney people. The Binney manager panel fails the other way: its lists wait for the roster and show nothing at all until it arrives. Either way, do not trust the first paint.',
                 'The site split is a screen convenience, not a security boundary. Any signed-in account can read every PTO record at both sites, and the database would let a ' + s.label + ' manager edit the other site’s PTO. Cross-site mix-ups will be UI mistakes, never database refusals.',

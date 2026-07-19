@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabase';
 import {
   usePtoRequests, usePtoSummary, usePtoRealtime,
   useSubmitPto, useCancelPto, useEngineerPtoDailyHours,
-  checkVacationCap, ptoTypeLabel, PTO_ENGINEER_TYPE_OPTIONS,
+  checkVacationCap, findOwnOverlaps, ptoTypeLabel, PTO_ENGINEER_TYPE_OPTIONS,
   type PtoRequest, type PtoType,
 } from '../hooks/usePto';
 import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
@@ -71,6 +71,15 @@ function daysBetween(a: string, b: string): number {
   return Math.round(
     (new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86_400_000,
   ) + 1;
+}
+
+/** "2026-07-20" → "7/20"; used by the duplicate-guard messages. */
+function fmtMdShort(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+function fmtRangeShort(a: string, b: string): string {
+  return a === b ? fmtMdShort(a) : `${fmtMdShort(a)} – ${fmtMdShort(b)}`;
 }
 
 export function MyPtoSection({ userId, compact = false }: { userId: string; compact?: boolean }) {
@@ -152,6 +161,9 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
           allRequests={siteUserIds
             ? (reqQ.data ?? []).filter((r) => siteUserIds.has(r.user_id))
             : (reqQ.data ?? [])}
+          // Own rows, never site-filtered — the duplicate guard must not
+          // lose them to a site-scope race or query error.
+          ownRequests={myRequests}
           dailyHours={dailyHours}
           countAllDays={countAllDays}
           onDone={() => setShowForm(false)}
@@ -255,10 +267,14 @@ function PendingMineList({ rows }: { rows: PtoRequest[] }) {
 }
 
 function RequestForm({
-  userId, allRequests, dailyHours, countAllDays, onDone,
+  userId, allRequests, ownRequests, dailyHours, countAllDays, onDone,
 }: {
   userId: string;
+  /** Site-scoped — feeds the vacation-cap warning only. */
   allRequests: PtoRequest[];
+  /** The requester's OWN rows, unfiltered by site — feeds the duplicate
+   *  guard, which must never lose rows to a site-scope race/error. */
+  ownRequests: PtoRequest[];
   dailyHours: number;
   countAllDays: boolean;
   onDone: () => void;
@@ -293,10 +309,29 @@ function RequestForm({
     ? checkVacationCap(allRequests, userId, startsOn, endsOn)
     : { exceeded: false, conflicts: [] as { user_full_name: string | null }[] };
 
+  // Duplicate guard — the engineer's own pending/approved entries covering
+  // any of these dates. A full-day overlap blocks Submit outright; this
+  // form has no partial-day fields, so overlapping an existing PARTIAL row
+  // is allowed with a heads-up (stacking around a morning appointment).
+  // Runs on ownRequests (unfiltered), NOT the site-scoped allRequests.
+  const ownOverlaps = useMemo(
+    () => (startsOn && endsOn ? findOwnOverlaps(ownRequests, userId, startsOn, endsOn) : []),
+    [ownRequests, userId, startsOn, endsOn],
+  );
+  const hardDupes = ownOverlaps.filter((o) => !o.partial);
+
   const onSubmit = async () => {
     setErr(null);
     if (endsOn < startsOn) { setErr("End date can't be before start date."); return; }
     if (finalHours <= 0)   { setErr('Hours must be > 0.'); return; }
+    if (hardDupes.length > 0) {
+      setErr(
+        `You're already booked off these dates: ${hardDupes
+          .map((o) => `${ptoTypeLabel(o.type)} ${fmtRangeShort(o.starts_on, o.ends_on)} (${o.status})`)
+          .join('; ')}. If it's pending you can cancel it below; an approved entry needs a manager.`,
+      );
+      return;
+    }
     try {
       await submit.mutateAsync({
         user_id: userId,
@@ -347,6 +382,20 @@ function RequestForm({
         />
       </Field>
 
+      {ownOverlaps.length > 0 && (
+        <div className="t-small" style={{
+          padding: '0.4rem 0.6rem',
+          background: hardDupes.length > 0 ? 'rgba(220,38,38,0.10)' : 'rgba(217,119,6,0.08)',
+          color: hardDupes.length > 0 ? 'var(--color-danger)' : '#9a3412',
+          borderRadius: 4,
+        }}>
+          {hardDupes.length > 0 ? '⛔ Already booked off these dates: ' : '⚠ Overlaps your partial-day entry: '}
+          {ownOverlaps
+            .map((o) => `${ptoTypeLabel(o.type)} ${fmtRangeShort(o.starts_on, o.ends_on)} (${o.status})${o.partial ? ' · partial' : ''}`)
+            .join('; ')}.
+          {hardDupes.length > 0 ? ' Submit is blocked — if it\'s pending cancel it below; an approved entry needs a manager.' : ' Submitting will stack both.'}
+        </div>
+      )}
       {cap.exceeded && (
         <div className="t-small" style={{
           padding: '0.4rem 0.6rem', background: 'rgba(234,88,12,0.1)',

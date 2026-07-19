@@ -11,12 +11,12 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
-  checkVacationCap, ptoTypeLabel, useEngineerPtoDailyHours,
+  checkVacationCap, findOwnOverlaps, ptoTypeLabel, useEngineerPtoDailyHours,
   PTO_MANAGER_TYPE_OPTIONS, PTO_OTHER_LEAVE_TYPES, SICK_ACCRUAL,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
-  type PtoRequestSource,
+  type PtoRequestSource, type OwnOverlap,
 } from '../hooks/usePto';
 import { useEngineers, type EngineerRow } from '../hooks/useEngineers';
 import { useShifts } from '../hooks/useShifts';
@@ -1035,6 +1035,30 @@ function shortName(full: string): string {
 // call-out channel). Optional out_from / out_until time fields for partial
 // days; hours auto-adjust (8 full / 4 partial) but stay editable.
 
+/** Duplicate-guard notice shared by Add / Quick / Edit. Red = blocking
+ *  (full-day double-booking); amber = stacking with a partial-day entry,
+ *  which is allowed (morning appointment + afternoon call-out). */
+function OwnOverlapNotice({ overlaps, hard }: { overlaps: OwnOverlap[]; hard: boolean }) {
+  if (overlaps.length === 0) return null;
+  return (
+    <div
+      className="mt-3 p-2 rounded t-small"
+      style={{
+        background: hard ? 'rgba(220,38,38,0.10)' : 'rgba(217,119,6,0.08)',
+        color: hard ? 'var(--color-danger)' : '#9a3412',
+      }}
+    >
+      {/* Direction-neutral: either the existing row or the NEW entry may be
+          the partial one — don't claim which. */}
+      {hard ? <strong>Already booked off these dates. </strong> : <strong>Partial-day overlap. </strong>}
+      {overlaps
+        .map((o) => `${ptoTypeLabel(o.type)} ${fmtRange(o.starts_on, o.ends_on)} (${o.status})${o.partial ? ' · partial' : ''}`)
+        .join('; ')}.
+      {hard ? ' Edit or delete the existing entry instead of double-booking.' : ' Saving keeps both.'}
+    </div>
+  );
+}
+
 function QuickPtoModal({
   engineer, dateIso, dayLabel, onClose,
 }: {
@@ -1068,6 +1092,17 @@ function QuickPtoModal({
     const reqs = (capReqQ.data ?? []).filter((r) => !capUparkIds || capUparkIds.has(r.user_id));
     return checkVacationCap(reqs, engineer.user_id, dateIso, dateIso);
   }, [type, capReqQ.data, capUparkIds, engineer.user_id, dateIso]);
+
+  // Duplicate guard — mostly catches a PENDING entry already covering this
+  // day (approved ones disable the chip that opens this modal). Full-day
+  // vs full-day blocks; partial-day stacking is allowed with a warning.
+  // No site filter needed: the engineer's own rows are their own.
+  const dupIsPartial = !!outFrom || !!outUntil;
+  const ownOverlaps = useMemo(
+    () => findOwnOverlaps(capReqQ.data ?? [], engineer.user_id, dateIso, dateIso),
+    [capReqQ.data, engineer.user_id, dateIso],
+  );
+  const hardDupes = dupIsPartial ? [] : ownOverlaps.filter((o) => !o.partial);
 
   // Live balance card — same as AddPtoModal. Engineer is locked here so
   // we always know who to look up.
@@ -1113,6 +1148,10 @@ function QuickPtoModal({
     if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
     if (type === 'vacation' && cap.exceeded && !overrideReason.trim()) {
       setErr('2-engineer vacation cap is exceeded — provide an override reason to log this.');
+      return;
+    }
+    if (hardDupes.length > 0) {
+      setErr('Already booked off this day — edit or delete the existing entry instead of double-booking.');
       return;
     }
 
@@ -1165,6 +1204,8 @@ function QuickPtoModal({
         <p className="t-small t-muted mb-3">
           <strong>{engineer.full_name}</strong> · {dayLabel}
         </p>
+
+        <OwnOverlapNotice overlaps={ownOverlaps} hard={hardDupes.length > 0} />
 
         {/* Live balance — engineer is locked so the card always shows.
             Personal removed per ops decision (not offered). */}
@@ -2155,6 +2196,16 @@ function AddPtoModal({
     ? checkVacationCap(allRequests, userId, startsOn, endsOn)
     : { exceeded: false, conflicts: [] as CapConflict[] };
 
+  // Duplicate guard — the picked engineer's own pending/approved entries
+  // on these dates. Full-day vs full-day blocks the save; any overlap
+  // involving a partial day saves with a warning.
+  const dupIsPartial = !!outFrom || !!outUntil;
+  const ownOverlaps = useMemo(
+    () => (userId && startsOn && endsOn ? findOwnOverlaps(allRequests, userId, startsOn, endsOn) : []),
+    [allRequests, userId, startsOn, endsOn],
+  );
+  const hardDupes = dupIsPartial ? [] : ownOverlaps.filter((o) => !o.partial);
+
   const onSave = async () => {
     setErr(null);
     if (!userId)         { setErr('Pick an engineer.'); return; }
@@ -2169,6 +2220,10 @@ function AddPtoModal({
     }
     if (outFrom && outUntil && outUntil <= outFrom) {
       setErr('"Out until" must be later than "Out from".');
+      return;
+    }
+    if (hardDupes.length > 0) {
+      setErr('Already booked off these dates — edit or delete the existing entry instead of double-booking.');
       return;
     }
 
@@ -2406,6 +2461,8 @@ function AddPtoModal({
           </label>
         </div>
 
+        <OwnOverlapNotice overlaps={ownOverlaps} hard={hardDupes.length > 0} />
+
         {/* Cap warning */}
         {type === 'vacation' && cap.exceeded && (
           <div className="mt-3 p-2 rounded" style={{ background: 'rgba(220,38,38,0.10)' }}>
@@ -2504,6 +2561,30 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
     setHours(datesChanged ? String(computedHours) : String(request.hours));
   }, [datesChanged, computedHours, hoursManuallyEdited, outFrom, outUntil, request.hours]);
 
+  // Duplicate guard — date edits must not slide this entry onto another of
+  // the engineer's bookings. Excludes the row being edited, and only
+  // guards while the edited row itself stays pending/approved (a row being
+  // denied or cancelled here can't double-book anything).
+  const editReqQ = usePtoRequests();
+  const dupIsPartial = !!outFrom || !!outUntil;
+  const guardActive = status === 'approved' || status === 'pending';
+  const ownOverlaps = useMemo(
+    () => (guardActive && endsOn >= startsOn
+      ? findOwnOverlaps(editReqQ.data ?? [], request.user_id, startsOn, endsOn, request.id)
+      : []),
+    [guardActive, editReqQ.data, request.user_id, startsOn, endsOn, request.id],
+  );
+  // Hard-block only edits that CREATE a live overlap: a date change, or
+  // reactivating a denied/cancelled row onto occupied dates. Metadata
+  // fixes on a PRE-EXISTING duplicate pair (hours, reason, pending →
+  // approved with untouched dates) must stay saveable — otherwise legacy
+  // duplicates could never be repaired. The amber notice still shows.
+  const reactivating = guardActive
+    && request.status !== 'approved' && request.status !== 'pending';
+  const hardDupes = (dupIsPartial || !(datesChanged || reactivating))
+    ? []
+    : ownOverlaps.filter((o) => !o.partial);
+
   // Live balance for this engineer (same card as Add and Quick modals).
   const summaryQ = usePtoSummary();
   const currentYear = new Date().getFullYear();
@@ -2523,6 +2604,10 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
     if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
     if (outFrom && outUntil && outUntil <= outFrom) {
       setErr('"Out until" must be later than "Out from".');
+      return;
+    }
+    if (hardDupes.length > 0) {
+      setErr('These dates now overlap another of this engineer\'s entries — adjust the dates, or edit/delete the other entry first.');
       return;
     }
     try {
@@ -2705,6 +2790,8 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
             />
           </label>
         </div>
+
+        <OwnOverlapNotice overlaps={ownOverlaps} hard={hardDupes.length > 0} />
 
         {err && <p className="t-small t-danger mt-2">{err}</p>}
 
