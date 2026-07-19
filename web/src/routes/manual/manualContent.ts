@@ -35,7 +35,7 @@ export type Block =
 export type Topic = { id: string; title: string; blocks: Block[] };
 export type Chapter = { id: string; title: string; summary: string; topics: Topic[] };
 
-export const LAST_UPDATED = '2026-07-18';
+export const LAST_UPDATED = '2026-07-19';
 
 export const SITE_LABEL: Record<ManualSite, string> = {
   upark: 'UPark',
@@ -319,7 +319,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: 'info',
               title: 'You will not be stopped by the vacation cap',
               text:
-                'If two other engineers already have vacation on your dates you get an orange warning naming them, but Submit still works. Your manager makes the call at approval time. Be aware the names in that warning can belong to the other building — see "Known gaps".',
+                'If two other engineers already have vacation on your dates you get an orange warning naming them, but Submit still works. Your manager makes the call at approval time. The warning counts only engineers at your own building — the same picture your manager sees.',
             },
           ],
         },
@@ -751,8 +751,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                 'The pending queue never empties itself, and sorts by the date off rather than by who has waited longest.',
                 'Nothing prevents the same engineer being booked off twice for the same day, or a duplicate week being entered twice. Catching duplicates is a human job.',
                 'Nothing compares a request against the balance — not at submit, not at approval. A manager can approve 200h against a 160h allotment with no warning beyond a red chip afterwards.',
-                'The cap warning on the ENGINEER’s form counts vacation across BOTH sites, while every manager screen counts only its own site. A ' + s.label + ' engineer can be warned that the cap is met and shown two names from the other building — people they do not work with — while the manager reviewing that same request sees no conflict at all. The warning never blocks anything, but the two sides of the screen disagree.',
-                'While the site roster is still loading, the PTO lists fail OPEN and briefly render unfiltered — the panel can flash the other site’s people. Do not act on the first paint.',
+                'While the site roster is still loading, the PTO lists — and the cap warning on the engineer form — fail OPEN and briefly render unfiltered: the panel can flash the other site’s people. Do not act on the first paint.',
                 'The site split is a screen convenience, not a security boundary. Any signed-in account can read every PTO record at both sites, and the database would let a ' + s.label + ' manager edit the other site’s PTO. Cross-site mix-ups will be UI mistakes, never database refusals.',
                 'The engineer type list (four choices) is enforced by the dropdown only. The database does not check the type on an engineer’s own request.',
                 'A manager with no home site set on their profile receives NO PTO emails for any site, silently. An ENGINEER with no home site is treated as UPark. New people are added with a blank home site by default — fill it in.',

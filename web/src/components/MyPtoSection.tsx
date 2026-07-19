@@ -19,14 +19,44 @@
 // hooks Just Work because they use the same supabase client.
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 import {
   usePtoRequests, usePtoSummary, usePtoRealtime,
   useSubmitPto, useCancelPto, useEngineerPtoDailyHours,
   checkVacationCap, ptoTypeLabel, PTO_ENGINEER_TYPE_OPTIONS,
   type PtoRequest, type PtoType,
 } from '../hooks/usePto';
-import { useMySiteAccess } from '../hooks/useSiteScope';
+import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
+
+/** user_ids homed at the given site — scopes the vacation-cap warning to the
+ *  requester's OWN building, so a Binney engineer is never warned about two
+ *  UPark vacations (and vice versa). NULL home_site_id counts as UPark, the
+ *  0072 backfill default, matching useSiteScope's rule. Fails OPEN
+ *  (undefined) while loading: consumers render unscoped, the pre-fix
+ *  behavior. */
+function useSiteUserIds(site: SiteCode): Set<string> | undefined {
+  const q = useQuery({
+    queryKey: ['site_user_ids', site],
+    queryFn: async (): Promise<string[]> => {
+      const [siteRes, profRes] = await Promise.all([
+        supabase.from('sites').select('id, code'),
+        supabase.from('engineer_profiles').select('user_id, home_site_id'),
+      ]);
+      if (siteRes.error) throw siteRes.error;
+      if (profRes.error) throw profRes.error;
+      const siteId = (siteRes.data ?? []).find((s) => s.code === site)?.id ?? null;
+      return (profRes.data ?? [])
+        .filter((p) => site === 'upark'
+          ? (p.home_site_id === null || (siteId !== null && p.home_site_id === siteId))
+          : (siteId !== null && p.home_site_id === siteId))
+        .map((p) => p.user_id as string);
+    },
+    staleTime: 60_000,
+  });
+  return useMemo(() => (q.data ? new Set(q.data) : undefined), [q.data]);
+}
 
 // Engineer self-serve exposes vacation, sick, floater (holiday) and jury
 // duty. The rest (bereavement/leave/short-term/unpaid) are manager-add only.
@@ -56,6 +86,11 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
   const overrideQ = useEngineerPtoDailyHours(userId);
   const dailyHours = overrideQ.data != null ? overrideQ.data : (homeSite === 'binney' ? 10 : 8);
   const countAllDays = homeSite === 'binney';
+
+  // Scope the cap warning to the engineer's own building — the manager
+  // panels are site-scoped, so an unscoped warning here named people from
+  // the other site that the reviewing manager would never see.
+  const siteUserIds = useSiteUserIds(homeSite);
 
   const year = new Date().getFullYear();
 
@@ -112,7 +147,11 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
       {showForm && (
         <RequestForm
           userId={userId}
-          allRequests={reqQ.data ?? []}
+          // Site-scoped so the cap warning matches what the manager panel
+          // sees; unscoped (fail-open) only while the roster set loads.
+          allRequests={siteUserIds
+            ? (reqQ.data ?? []).filter((r) => siteUserIds.has(r.user_id))
+            : (reqQ.data ?? [])}
           dailyHours={dailyHours}
           countAllDays={countAllDays}
           onDone={() => setShowForm(false)}
