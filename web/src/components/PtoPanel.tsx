@@ -1054,6 +1054,21 @@ function QuickPtoModal({
   const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false);
   const [err, setErr]                 = useState<string | null>(null);
 
+  // Vacation cap check — this form saves straight to APPROVED, so it must
+  // run the same 2-engineer gate as Add PTO: an over-cap save requires a
+  // logged override reason and stamps cap_override. (Closed the "quick
+  // call-out skips the cap" known gap, 2026-07-19.) The shared request
+  // hook is unscoped, so filter to UPark people the same way the panel
+  // does — fail-open while the id set loads.
+  const capReqQ = usePtoRequests();
+  const capUparkIds = useUparkUserIds();
+  const [overrideReason, setOverrideReason] = useState('');
+  const cap = useMemo(() => {
+    if (type !== 'vacation') return { exceeded: false, conflicts: [] as CapConflict[] };
+    const reqs = (capReqQ.data ?? []).filter((r) => !capUparkIds || capUparkIds.has(r.user_id));
+    return checkVacationCap(reqs, engineer.user_id, dateIso, dateIso);
+  }, [type, capReqQ.data, capUparkIds, engineer.user_id, dateIso]);
+
   // Live balance card — same as AddPtoModal. Engineer is locked here so
   // we always know who to look up.
   const summaryQ = usePtoSummary();
@@ -1096,6 +1111,10 @@ function QuickPtoModal({
     }
     const h = Number(hours);
     if (!Number.isFinite(h) || h <= 0) { setErr('Hours must be > 0.'); return; }
+    if (type === 'vacation' && cap.exceeded && !overrideReason.trim()) {
+      setErr('2-engineer vacation cap is exceeded — provide an override reason to log this.');
+      return;
+    }
 
     try {
       await submit.mutateAsync({
@@ -1110,6 +1129,8 @@ function QuickPtoModal({
         request_source_detail: sourceDetail.trim() || null,
         out_from:  outFrom  || null,
         out_until: outUntil || null,
+        cap_override:        type === 'vacation' && cap.exceeded,
+        cap_override_reason: type === 'vacation' && cap.exceeded ? overrideReason.trim() : null,
       });
       onClose();
     } catch (e) {
@@ -1273,6 +1294,33 @@ function QuickPtoModal({
         {isPartial && (
           <p className="t-small t-muted mt-2">
             Partial day — {engineer.full_name.split(' ')[0]} will be counted as in (partial) on the Coverage panel. Hours auto-set to {dailyHours / 2}h (half a {dailyHours}h day); override above if needed.
+          </p>
+        )}
+
+        {/* Cap warning — same gate as Add PTO; this form saves as approved
+            directly, so the override reason is always required over-cap. */}
+        {type === 'vacation' && cap.exceeded && (
+          <div className="mt-3 p-2 rounded" style={{ background: 'rgba(220,38,38,0.10)' }}>
+            <p className="t-small" style={{ color: 'var(--color-danger)' }}>
+              <strong>2-engineer cap exceeded.</strong>{' '}
+              {cap.conflicts.map((c) => c.user_full_name).join(', ')} already off this date.
+            </p>
+            <label className="block mt-2">
+              <span className="t-small uppercase tracking-wider block mb-1" style={{ color: 'var(--color-danger)' }}>Override reason (logged)</span>
+              <input
+                type="text"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder="e.g. urgent family matter — already arranged coverage"
+                className="w-full border rounded px-2 py-1 t-small"
+                style={{ borderColor: 'var(--color-danger)', background: 'var(--color-card)' }}
+              />
+            </label>
+          </div>
+        )}
+        {type === 'vacation' && !cap.exceeded && cap.conflicts.length > 0 && (
+          <p className="t-small t-muted mt-2">
+            Note: {cap.conflicts.map((c) => c.user_full_name).join(', ')} also off this date (within 2-engineer cap).
           </p>
         )}
 
