@@ -8,7 +8,6 @@ import { useIsAdmin } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
 import { SiteSwitcher } from './SiteSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
-import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { useBinneySiteId } from './hooks/useBinneySiteId';
 import { useBinneyUserIds } from './hooks/useBinneyPto';
 
@@ -61,8 +60,10 @@ export default function BinneyManager() {
           </p>
         ) : (
           <>
+            {/* AnnouncementComposer removed 2026-07-18 per user — the
+                "+ Post announcement" button isn't part of the Binney
+                workflow. UPark's manager page still has its own. */}
             <FocusBoardBanner siteCode="binney" />
-            <AnnouncementComposer siteCode="binney" />
             {rosterEmpty && (
               <p className="t-small t-muted">
                 No engineers are homed at Binney St yet — the PTO panel below will stay
