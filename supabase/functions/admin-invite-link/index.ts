@@ -1,25 +1,31 @@
 // admin-invite-link — generate a one-time link the target user opens to set
-// their own password.
+// their own password, and OPTIONALLY email it to them.
 //
 // Why this exists: corporate email filters (e.g. Mimecast) block Supabase's
-// own emails, so links are handed over out-of-band: an admin/manager clicks
-// "Generate invite link" in User Profiles, copies the returned link and sends
-// it by text/Teams. Opening it signs the user in and lands them on
-// /set-password (see web/src/routes/SetPassword.tsx). generateLink never
-// sends email.
+// own auth emails, so links are handed over out-of-band: an admin/manager
+// clicks "Generate invite link" in User Profiles, copies the returned link
+// and sends it by text/Teams. Opening it signs the user in and lands them on
+// /set-password (see web/src/routes/SetPassword.tsx).
 //
-// Request:   POST { target_user_id: uuid, redirect_to?: string }
+// deliver_email (2026-07-19): a second button asks us to email the link to
+// the target ourselves, via the same Gmail SMTP + per-site sender + Mimecast-
+// friendly plain-link format as notify-pto (anchor text == href, no styled
+// buttons). This bypasses Supabase's blocked mailer. The link we email is the
+// /set-password app link, which is spent only when the user clicks Continue —
+// so email preloading can't burn it (unlike the raw GoTrue action_link).
+// Email failure never fails the request: the link is already generated and
+// returned, so the admin can still copy/paste as a fallback.
+//
+// Request:   POST { target_user_id: uuid, redirect_to?: string, deliver_email?: bool }
 // Auth:      caller's JWT must map to public.users with active=true and
 //            role in (admin, manager, director) OR is_manager=true.
-// Response:  200 { ok: true, action_link: string, kind: 'invite'|'recovery', email }
-//            'invite'   = target had no auth account (one is created at
-//                         generate time — LINKED badge flips immediately)
-//            'recovery' = target already has an account; link lets them set
-//                         a new password (doubles as password reset).
+// Response:  200 { ok, link, action_link, kind:'invite'|'recovery', email,
+//                  emailed?: bool, emailed_to?, email_error? }
 // Side effects: links drifted/created auth users into public.users
-// (auth_user_id), and logs an event row into user_account_events.
+// (auth_user_id), logs an event row into user_account_events.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -36,6 +42,21 @@ function json(status: number, body: unknown) {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
+}
+
+/** Non-ASCII in a denomailer 1.6 subject breaks header folding — keep subject
+ *  + text part ASCII (same rule as notify-pto). */
+function asciiSafe(s: string): string {
+  return s
+    .replace(/[·]/g, "-")
+    .replace(/[—–]/g, "-")
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^\x20-\x7E\n\r\t]/g, "?");
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]);
 }
 
 Deno.serve(async (req) => {
@@ -64,11 +85,12 @@ Deno.serve(async (req) => {
   if (!callerAllowed) return json(403, { error: "admin or manager only" });
 
   // 2) Parse + validate input.
-  let body: { target_user_id?: string; redirect_to?: string };
+  let body: { target_user_id?: string; redirect_to?: string; deliver_email?: boolean };
   try { body = await req.json(); } catch { return json(400, { error: "invalid json" }); }
 
   const target_user_id = (body.target_user_id ?? "").trim();
   const redirect_to    = (body.redirect_to ?? "").trim() || null;
+  const deliver_email  = body.deliver_email === true;
   if (!target_user_id) return json(400, { error: "target_user_id required" });
 
   // 3) Look up the target. Decide invite (no auth account) vs recovery.
@@ -76,7 +98,7 @@ Deno.serve(async (req) => {
 
   const { data: targetRow, error: targetErr } = await admin
     .from("users")
-    .select("id, email, auth_user_id")
+    .select("id, email, full_name, auth_user_id, engineer_profiles(home_site_id)")
     .eq("id", target_user_id)
     .maybeSingle();
   if (targetErr) return json(500, { error: targetErr.message });
@@ -157,12 +179,98 @@ Deno.serve(async (req) => {
   const app_link = hashedToken && redirect_to
     ? `${redirect_to}?token_hash=${encodeURIComponent(hashedToken)}&type=${kind}`
     : null;
+  const bestLink = app_link ?? linkRes.data.properties.action_link;
+
+  // 7) Optionally email the link to the target (Mimecast-friendly, per-site
+  //    sender). Never fails the request — the link is already returned.
+  let emailed = false;
+  let emailed_to: string | null = null;
+  let email_error: string | null = null;
+  if (deliver_email) {
+    try {
+      // Per-site sender: target's home site (NULL = UPark, same rule as the
+      // frontend). Picks GMAIL_USER_<SITE>, falls back to the default pair.
+      type EpRow = { home_site_id: string | null };
+      const ep = Array.isArray(targetRow.engineer_profiles)
+        ? (targetRow.engineer_profiles as EpRow[])[0]
+        : (targetRow.engineer_profiles as EpRow | null);
+      const { data: sites } = await admin.from("sites").select("id, code, name");
+      const upark = (sites ?? []).find((s) => s.code === "upark");
+      const site = (sites ?? []).find((s) => s.id === ep?.home_site_id) ?? upark;
+      const siteName = (site?.name as string) ?? "Operations";
+
+      async function lookupCreds(userKey: string, passKey: string): Promise<{ user: string; pass: string }> {
+        let user = Deno.env.get(userKey) ?? "";
+        let pass = Deno.env.get(passKey) ?? "";
+        if (!user || !pass) {
+          const [u, p] = await Promise.all([
+            admin.rpc("get_app_secret", { k: userKey }),
+            admin.rpc("get_app_secret", { k: passKey }),
+          ]);
+          user = user || ((u.data as string) ?? "");
+          pass = pass || ((p.data as string) ?? "");
+        }
+        return { user: user.trim(), pass: pass.replace(/\s+/g, "") };
+      }
+      const siteSuffix = ((site?.code as string) ?? "").toUpperCase();
+      let creds = siteSuffix
+        ? await lookupCreds(`GMAIL_USER_${siteSuffix}`, `GMAIL_APP_PASSWORD_${siteSuffix}`)
+        : { user: "", pass: "" };
+      if (!creds.user || !creds.pass) {
+        creds = await lookupCreds("GMAIL_USER", "GMAIL_APP_PASSWORD");
+      }
+      if (!creds.user || !creds.pass) throw new Error("gmail credentials not configured");
+
+      const who = (targetRow.full_name as string)?.trim() || "there";
+      const verb = kind === "recovery" ? "reset your password" : "set your password";
+      const subject = asciiSafe(`Set your ${siteName} dashboard password`);
+      const text = asciiSafe(
+        `Hi ${who},\n\n` +
+        `You have access to the ${siteName} operations dashboard. Open this link to ${verb}:\n\n` +
+        `${bestLink}\n\n` +
+        `The link is single-use and expires soon. If it does not work, ask your manager to send a new one.`,
+      );
+      const html =
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;font-size:14px;">` +
+        `<p>Hi ${escapeHtml(who)},</p>` +
+        `<p>You have access to the ${escapeHtml(siteName)} operations dashboard. ` +
+        `Open this link to ${verb}:</p>` +
+        `<p><a href="${bestLink}">${escapeHtml(bestLink)}</a></p>` +
+        `<p>The link is single-use and expires soon. If it does not work, ask your manager to send a new one.</p>` +
+        `</div>`;
+
+      const client = new SMTPClient({
+        connection: {
+          hostname: "smtp.gmail.com", port: 465, tls: true,
+          auth: { username: creds.user, password: creds.pass },
+        },
+      });
+      try {
+        await client.send({
+          from: `${siteName} Dashboard <${creds.user}>`,
+          to: email,
+          subject,
+          content: text,
+          html,
+        });
+      } finally {
+        try { await client.close(); } catch { /* already closed */ }
+      }
+      emailed = true;
+      emailed_to = email;
+    } catch (e) {
+      email_error = e instanceof Error ? e.message : String(e);
+    }
+  }
 
   return json(200, {
     ok: true,
-    link: app_link ?? linkRes.data.properties.action_link,
+    link: bestLink,
     action_link: linkRes.data.properties.action_link,
     kind,
     email,
+    emailed,
+    emailed_to,
+    email_error,
   });
 });

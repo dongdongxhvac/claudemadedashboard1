@@ -933,20 +933,26 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
   const qc = useQueryClient();
   const [link, setLink]     = useState<string | null>(null);
   const [kind, setKind]     = useState<'invite' | 'recovery' | null>(null);
-  const [status, setStatus] = useState<'idle' | 'working' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'working' | 'emailing' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [sent, setSent]     = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const generate = async () => {
+  const generate = async (deliverEmail: boolean) => {
     if (!email.trim()) {
       setStatus('error');
       setMessage('Set a sign-in email first (and save), then return to generate a link.');
       return;
     }
-    setStatus('working');
+    setStatus(deliverEmail ? 'emailing' : 'working');
     setMessage(null);
+    setSent(null);
     const { data, error } = await supabase.functions.invoke('admin-invite-link', {
-      body: { target_user_id: userId, redirect_to: `${location.origin}/set-password` },
+      body: {
+        target_user_id: userId,
+        redirect_to: `${location.origin}/set-password`,
+        deliver_email: deliverEmail,
+      },
     });
     if (error) {
       const ctx = (error as { context?: { error?: string } }).context;
@@ -954,7 +960,10 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
       setMessage(ctx?.error ?? error.message);
       return;
     }
-    const res = data as { link?: string; action_link?: string; kind?: 'invite' | 'recovery' };
+    const res = data as {
+      link?: string; action_link?: string; kind?: 'invite' | 'recovery';
+      emailed?: boolean; emailed_to?: string; email_error?: string;
+    };
     const bestLink = res?.link ?? res?.action_link;
     if (!bestLink) {
       setStatus('error');
@@ -965,6 +974,10 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
     setKind(res.kind ?? 'invite');
     setStatus('idle');
     setCopied(false);
+    if (deliverEmail) {
+      if (res.emailed) setSent(res.emailed_to ?? email);
+      else setMessage(`Emailing failed (${res.email_error ?? 'unknown'}). Copy the link below and send it another way.`);
+    }
     qc.invalidateQueries({ queryKey: ['user_account_events'] });
   };
 
@@ -985,22 +998,34 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
     <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
       <span className="t-small t-muted uppercase tracking-wider block">Invite link</span>
       <p className="t-small t-muted mt-0.5 mb-2">
-        Generate a one-time link this user opens to set their own password — send it by
-        text/Teams. Each new link replaces the old one, and links expire quickly. Don't
-        open it yourself: it signs you in as them.
+        Generate a one-time link this user opens to set their own password. Copy it and send by
+        text/Teams, or email it to them directly. Each new link replaces the old one, and links
+        expire quickly. Don't open it yourself: it signs you in as them.
       </p>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={generate}
-            disabled={status === 'working'}
+            onClick={() => generate(false)}
+            disabled={status === 'working' || status === 'emailing'}
             className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
             style={{ background: 'var(--color-accent)' }}
           >
             {status === 'working' ? 'Generating…' : link ? 'Generate new link' : 'Generate invite link'}
           </button>
+          <button
+            type="button"
+            onClick={() => generate(true)}
+            disabled={status === 'working' || status === 'emailing'}
+            title={`Generate a fresh link and email it to ${email || 'the user'}`}
+            className="t-small px-3 py-1 rounded font-medium border disabled:opacity-50"
+            style={{ color: 'var(--color-accent)', borderColor: 'var(--color-accent)', background: 'var(--color-card)' }}
+          >
+            {status === 'emailing' ? 'Sending…' : 'Email link to user'}
+          </button>
           {status === 'error' && <span className="t-small t-danger">{message}</span>}
+          {sent && <span className="t-small" style={{ color: 'var(--color-success, #16a34a)' }}>✓ Emailed to {sent}</span>}
+          {status === 'idle' && message && !sent && <span className="t-small t-danger">{message}</span>}
         </div>
         {link && (
           <div>
