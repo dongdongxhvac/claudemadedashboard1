@@ -367,6 +367,18 @@ export type SubmitPtoInput = {
   out_until?: string | null;
 };
 
+/** pto_requests_no_overlap (Postgres 23P01) -> a readable message. The
+ *  findOwnOverlaps guard refuses this in the form first; this is the backstop
+ *  for a race or a first-paint submit that slips past the client guard. */
+function throwPtoError(error: { code?: string } | null): void {
+  if (error?.code === '23P01') {
+    throw new Error(
+      'That engineer already has PTO booked on one or more of those dates. Refresh to see the existing entry.',
+    );
+  }
+  if (error) throw error;
+}
+
 export function useSubmitPto() {
   const qc = useQueryClient();
   return useMutation({
@@ -396,7 +408,7 @@ export function useSubmitPto() {
       };
       const { data, error } = await supabase
         .from('pto_requests').insert(payload).select().single();
-      if (error) throw error;
+      throwPtoError(error);
       return data;
     },
     onSuccess: () => {
@@ -428,7 +440,7 @@ export function useReviewPto() {
       if (input.cap_override !== undefined)        patch.cap_override        = input.cap_override;
       if (input.cap_override_reason !== undefined) patch.cap_override_reason = input.cap_override_reason;
       const { error } = await supabase.from('pto_requests').update(patch).eq('id', input.id);
-      if (error) throw error;
+      throwPtoError(error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY_REQUESTS });
@@ -463,7 +475,7 @@ export function useUpdatePto() {
         .from('pto_requests')
         .update(input.patch)
         .eq('id', input.id);
-      if (error) throw error;
+      throwPtoError(error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY_REQUESTS });
