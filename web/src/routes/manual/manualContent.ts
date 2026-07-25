@@ -665,7 +665,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               head: ['When', 'Who gets an email', 'Calendar'],
               rows: [
                 ['An engineer submits a request', 'Managers at that engineer’s home site. The engineer gets no confirmation', 'Nothing'],
-                ['A request is approved or denied', 'Those same managers plus the engineer. The decider gets a copy of their own decision', 'An approval sends an invite. A denial after an approval cancels it'],
+                ['A request is approved or denied', 'Two separate emails: the managers get the decision notice, and the engineer gets their own personal one — "Your PTO approved/denied" — at both sites. It fires no matter how the PTO was entered: self-serve, the manager Add PTO form, or a click on the roll or heatmap. A manager booking their own PTO gets just the personal copy', 'An approval sends an invite. A denial after an approval cancels it'],
                 ['An approved request is cancelled', 'Nobody', 'A calendar cancellation — that is the only notice anyone gets'],
                 ['An APPROVED request’s dates, hours or type are edited', 'Nobody', 'The calendar event moves to the new dates — the old event is removed and replaced. Editing a request that is already fully in the past stays silent'],
                 ['Anything else — editing the reason, editing a pending request, withdrawing, deleting', 'Nobody', 'Nothing'],
@@ -674,7 +674,7 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'bullets',
               items: [
-                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a plain written-out link to the manager dashboard (deliberately not a styled button — corporate mail filters treat those as phishing bait). Decision emails also name the decider: "Approved by <name>" or "Denied by <name>".',
+                'Subjects read "[PTO — ' + s.label + '] New request — <engineer> — <type> <dates>", or "Approved" / "Denied" once decided; the engineer’s personal copy reads "Your PTO approved/denied — <type> <dates>" and links to their own time-off page instead of the manager dashboard. The body is a small table: engineer, type, dates with day count and hours, plus partial day and reason when filled in, and a plain written-out link (deliberately not a styled button — corporate mail filters treat those as phishing bait). Decision emails also name the decider: "Approved by <name>" or "Denied by <name>".',
                 'A manager adding PTO already marked Approved skips the "new request" email and goes straight to the decision email.',
                 'Who counts as a "manager" for email is the Manager on/off switch on each user profile — not the role badge. Someone whose role says Manager with the switch off gets NO email; a lead engineer with the switch on does. Only an Admin can flip it.',
                 'If email or the invite fails for any reason, the PTO still saves. A silent email failure leaves no sign in the app.',

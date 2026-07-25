@@ -1,7 +1,20 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v22 — repo and live are identical.
+// This file was deployed VERBATIM as v23 — repo and live are identical.
+//
+// v23 (2026-07-25): personalized engineer decision email, BOTH sites.
+// On 'decided' the engineer whose PTO it is now gets their own email —
+// subject "[PTO - <site>] Your PTO approved/denied - <type> <range>",
+// second-person heading, link to their /engineer page — instead of being
+// CC'd on the manager notification. The manager email now goes to managers
+// ONLY (a manager booking their own PTO gets just the personal copy).
+// Covers every entry path that lands on 'decided': engineer self-serve
+// approval/denial, manager Add PTO saved as approved, and the roll/heatmap
+// QuickPto call-out (INSERT approved → trigger fires 'decided').
+// Binney develop mode (BINNEY_LIVE=false) suppresses the engineer email
+// like every other notification. override_to / PTO_QA_FORCE_TO redirect it
+// too; dry_run reports engineer_to + engineer_subject.
 //
 // v22 (2026-07-18): 'amended' event (trigger v4, migration 0105) — editing
 // an APPROVED request's dates/hours/type now updates the calendar:
@@ -60,7 +73,9 @@
 // 1) NOTIFICATION EMAILS (site-aware)
 //    'submitted' → active is_manager users homed at the requester's site
 //                  (engineer_profiles.home_site_id; NULL = UPark).
-//    'decided'   → those managers PLUS the requester.
+//    'decided'   → those managers (manager-style email) PLUS a separate
+//                  personalized "Your PTO was approved/denied" email to the
+//                  engineer whose PTO it is (v23; both sites).
 //    NOTE: is_manager is ALSO a permission flag — current_user_is_manager()
 //    (migration 0031) gates buildings/on-call proposal publishing, MRO
 //    receipt capture + billing, and overtime management. NEVER flip it just
@@ -378,12 +393,19 @@ Deno.serve(async (req: Request) => {
       .map((m) => (m.email ?? "").trim())
       .filter((e) => /@/.test(e));
 
+    // v23: the manager notification goes to managers ONLY. The engineer whose
+    // PTO it is gets their own personalized "Your PTO was approved/denied"
+    // email on 'decided' (both sites) instead of being CC'd on the manager
+    // blast. If the PTO owner is themselves a manager, they're excluded from
+    // the manager copy so they get exactly one email — the personal one.
+    const engineerEmail = (requester?.email ?? "").trim();
     const recipients = new Set(managerEmails.map((e) => e.toLowerCase()));
-    if (payload.event === "decided") {
-      const reqEmail = (requester?.email ?? "").trim();
-      if (/@/.test(reqEmail)) recipients.add(reqEmail.toLowerCase());
+    if (payload.event === "decided" && /@/.test(engineerEmail)) {
+      recipients.delete(engineerEmail.toLowerCase());
     }
     const resolvedTo = [...recipients];
+    const resolvedEngineerTo =
+      payload.event === "decided" && /@/.test(engineerEmail) ? [engineerEmail] : [];
 
     const who = r.user_full_name ?? requester?.full_name ?? "Unknown";
     const range = fmtRange(r.starts_on, r.ends_on);
@@ -434,6 +456,32 @@ Deno.serve(async (req: Request) => {
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
       `\n\n${dashUrl}`);
 
+    // Personalized engineer email (v23, 'decided' only). Same table minus the
+    // redundant "Engineer" row, second-person heading, and the link points at
+    // the engineer's own page, not the manager dashboard. Subject + text stay
+    // ASCII-safe (denomailer folds non-ASCII subjects into raw MIME).
+    const engDashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/engineer" : "/upark/engineer"}`;
+    const engSubject = asciiSafe(
+      `[PTO - ${site.name}] Your PTO ${decision.toLowerCase()} - ${tl} ${range}`);
+    const engHeading = `Your PTO was ${decision.toLowerCase()}`;
+    const engRows = rows.filter(([k]) => k !== "Engineer");
+    const engHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 560px;">
+        <h2 style="margin:0 0 12px 0;">${escapeHtml(engHeading)}</h2>
+        <table style="border-collapse: collapse; font-size: 14px;">
+          ${engRows.map(([k, v]) =>
+            `<tr><td style="padding: 4px 12px 4px 0; color:#666;">${escapeHtml(k)}</td><td><strong>${escapeHtml(String(v))}</strong></td></tr>`
+          ).join("")}
+        </table>
+        <p style="margin-top:16px;">
+          Your time off page:<br/>
+          <a href="${engDashUrl}">${engDashUrl}</a>
+        </p>
+      </div>`;
+    const engText = asciiSafe(`${engHeading}\n\n` +
+      engRows.map(([k, v]) => `${k}: ${v}`).join("\n") +
+      `\n\n${engDashUrl}`);
+
     let inviteAction: "REQUEST" | "CANCEL" | "AMEND" | null = null;
     if (payload.event === "decided" && r.status === "approved") {
       inviteAction = "REQUEST";
@@ -474,18 +522,24 @@ Deno.serve(async (req: Request) => {
     }
 
     let effectiveTo = payload.override_to?.length ? payload.override_to : resolvedTo;
+    // QA overrides redirect the engineer email too, so both templates can be
+    // inspected without emailing the real engineer.
+    let engineerTo = resolvedEngineerTo;
+    if (payload.override_to?.length && engineerTo.length) engineerTo = payload.override_to;
     if (QA_FORCE_TO) {
       const forced = QA_FORCE_TO.split(",").map((s) => s.trim()).filter(Boolean);
       effectiveTo = forced;
+      if (engineerTo.length) engineerTo = forced;
       if (calTo.length) calTo = forced;
       if (paFeedTo.length) paFeedTo = forced;
     }
     // 'retracted' and 'amended' send no notification email — the calendar
-    // change is the message.
+    // change is the message. (engineerTo is already [] for those events.)
     if (payload.event === "retracted" || payload.event === "amended") effectiveTo = [];
 
-    // Develop mode: no Binney manager notification emails until launch.
-    if (site.code === "binney" && !live) effectiveTo = [];
+    // Develop mode: no Binney notification emails (manager or engineer)
+    // until launch.
+    if (site.code === "binney" && !live) { effectiveTo = []; engineerTo = []; }
 
     // CANCEL feed legs only once the PA flow can actually process them —
     // see paCancelReady(). null = no feed recipients, gate irrelevant.
@@ -495,13 +549,16 @@ Deno.serve(async (req: Request) => {
       return json(200, {
         ok: true, dry_run: true, event: payload.event, site: site.code,
         subject, resolved_to: resolvedTo, effective_to: effectiveTo,
+        engineer_subject: resolvedEngineerTo.length ? engSubject : null,
+        engineer_to: engineerTo.length ? engineerTo : null,
         invite: inviteAction ? { action: inviteAction, to: calTo } : null,
         pa_feed: paFeedTo.length ? paFeedTo : null,
         pa_cancel_ready: cancelReady,
         binney_live: site.code === "binney" ? live : null,
       });
     }
-    if (effectiveTo.length === 0 && !(inviteAction && (calTo.length || paFeedTo.length))) {
+    if (effectiveTo.length === 0 && engineerTo.length === 0 &&
+        !(inviteAction && (calTo.length || paFeedTo.length))) {
       return json(200, { ok: true, skipped: "no recipients" });
     }
 
@@ -537,6 +594,7 @@ Deno.serve(async (req: Request) => {
     });
     let inviteSentTo: string[] = [];
     let paFeedSentTo: string[] = [];
+    let engineerSentTo: string[] = [];
     try {
       if (effectiveTo.length > 0) {
         await client.send({
@@ -546,6 +604,18 @@ Deno.serve(async (req: Request) => {
           content: text,
           html,
         });
+      }
+
+      // Personalized engineer copy (v23): "Your PTO was approved/denied".
+      if (engineerTo.length > 0) {
+        await client.send({
+          from: `${site.name} Dashboard <${gmailUser}>`,
+          to: engineerTo,
+          subject: engSubject,
+          content: engText,
+          html: engHtml,
+        });
+        engineerSentTo = engineerTo;
       }
 
       // Binney PA feed: body-only, NO .ics — Power Automate parses the
@@ -661,7 +731,8 @@ Deno.serve(async (req: Request) => {
 
     return json(200, {
       ok: true, event: payload.event, site: site.code,
-      sent_to: effectiveTo, invite_sent_to: inviteSentTo,
+      sent_to: effectiveTo, engineer_sent_to: engineerSentTo,
+      invite_sent_to: inviteSentTo,
       pa_feed_sent_to: paFeedSentTo, invite_action: inviteAction,
     });
   } catch (e) {
