@@ -1,9 +1,12 @@
-// BMR-observed building holidays for the Binney St campus — the "client 11"
-// from the CBA math (the CBA grants 12 holidays, BMR observes 11, and the
-// difference is each engineer's one Floating Holiday, tracked as PTO type
-// 'holiday'). The coverage heatmap outlines these dates so managers see them
-// while booking/checking PTO; they do NOT affect the vacation cap or any
-// hours math.
+// BMR-observed building holidays — the "client 11" from the CBA math (the
+// CBA grants 12 holidays, BMR observes 11, and the difference is each
+// engineer's one Floating Holiday, tracked as PTO type 'holiday'). BMR is
+// the client at BOTH campuses, so this list is shared: the UPark and Binney
+// PTO cap heatmaps outline these dates so managers see them while
+// booking/checking PTO; they do NOT affect the vacation cap or any hours
+// math. (Moved from routes/binney/ 2026-07-25 when the Binney panel layout
+// was ported to UPark. Still separate from lib/holidays.ts — that file
+// drives UPark's on-call pay logic and must not change meaning.)
 //
 // ⚠ Seeded from the standard private-sector list (federal minus Columbus +
 // Veterans Day, plus Day after Thanksgiving + Christmas Eve) — VERIFY against
@@ -12,9 +15,6 @@
 // 2026-07-17): when a holiday falls on a weekend, just the shifted weekday
 // appears — e.g. Jul 4 2026 (Sat) marks only Fri Jul 3. "(obs)" in the name
 // flags a shifted date.
-//
-// Kept in the Binney route tree (not lib/holidays.ts) per the isolate-new-
-// features rule: UPark's on-call holiday logic stays untouched.
 
 export type BmrHoliday = { name: string; date: string };
 

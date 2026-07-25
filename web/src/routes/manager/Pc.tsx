@@ -141,7 +141,11 @@ export default function ManagerPc() {
   return (
     <div className="min-h-screen t-bg">
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        {/* max-w-[1600px] (was 7xl): the ported §12 PTO coverage row (rotated
+            heatmap 336px + 7-workday roll ≥1090px + gap) needs ~1450px to show
+            the whole band without an inner scrollbar — same width as Binney's
+            manager page. */}
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
           <div>
             <div className="flex items-baseline gap-3">
               <h1 className="t-section-title">UPark · PM Dashboard</h1>
@@ -182,7 +186,7 @@ export default function ManagerPc() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
         <FocusBoardBanner siteCode="upark" />
         <AnnouncementComposer siteCode="upark" />
         {pmQ.isLoading || woQ.isLoading ? (

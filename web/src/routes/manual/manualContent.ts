@@ -35,7 +35,7 @@ export type Block =
 export type Topic = { id: string; title: string; blocks: Block[] };
 export type Chapter = { id: string; title: string; summary: string; topics: Topic[] };
 
-export const LAST_UPDATED = '2026-07-19';
+export const LAST_UPDATED = '2026-07-25';
 
 export const SITE_LABEL: Record<ManualSite, string> = {
   upark: 'UPark',
@@ -558,7 +558,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               kind: 'p',
               text: s.binney
                 ? 'The attendance roll shows today plus the next six CALENDAR days — a full week, Saturday and Sunday included, because weekends are real workdays here. On any given day it hides the crews that are not scheduled, so you only see who is meant to be in. The "No shift" group is the exception and always shows. If the screen is too narrow for all seven day cards, the row scrolls sideways. Busy cards cap how many chips they show — Wednesday lists BOTH crews, so it collapses behind a "+N more" toggle; anyone who is out or partial is always kept visible, the cap only ever hides healthy "in" chips.'
-                : 'The attendance roll shows today plus the next two WEEKdays — Saturday and Sunday are skipped.',
+                : 'The attendance roll shows today plus the next six WEEKdays — Saturday and Sunday are skipped, so the seven day cards span about a week and a half. If the screen is too narrow for all seven cards, the row scrolls sideways. Busy cards cap how many chips they show behind a "+N more" toggle; anyone who is out or partial is always kept visible — the cap only ever hides healthy "in" chips.',
             },
             ...(s.binney
               ? [
@@ -583,9 +583,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               kind: 'p',
               text:
                 'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. ' +
-                (s.binney
-                  ? 'Each week is one ROW: days run Monday to Sunday across the top, and every row is labelled on the left with its Monday date — the current week highlighted — so you can locate the exact day to book or check without counting squares; hovering any cell shows the full date. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.'
-                  : 'Weeks run Monday to Sunday down each column. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation.'),
+                'Each week is one ROW: days run Monday to Sunday across the top, and every row is labelled on the left with its Monday date — the current week highlighted — so you can locate the exact day to book or check without counting squares; hovering any cell shows the full date. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.',
             },
             {
               kind: 'table',
@@ -595,15 +593,11 @@ export function buildManual(site: ManualSite): Chapter[] {
                 ['Amber', '1 person'],
                 ['Orange', '2 people — cap pinned, that day is full'],
                 ['Red', '3 or more — only possible via an override'],
-                s.binney
-                  ? ['Faded colours', 'A past day — the two history weeks keep their colours for reference, but are not clickable']
-                  : ['Faint grey', 'A past day'],
-                ...(s.binney
-                  ? [[
-                      'Green outline',
-                      'A BMR-observed building holiday — hover the cell for its name. Calendar marker only: it is not PTO, does not count toward the cap, and is unrelated to the Floating Holiday PTO type',
-                    ]]
-                  : []),
+                ['Faded colours', 'A past day — the two history weeks keep their colours for reference, but are not clickable'],
+                [
+                  'Green outline',
+                  'A BMR-observed building holiday — hover the cell for its name. Calendar marker only: it is not PTO, does not count toward the cap, and is unrelated to the Floating Holiday PTO type',
+                ],
                 ['Red dot, top-right', 'Someone is sick that day. Does not count toward the cap or change the colour'],
                 ['Purple square, bottom-right', 'Someone is on bereavement, leave, short-term or jury duty. Does not count toward the cap'],
               ],

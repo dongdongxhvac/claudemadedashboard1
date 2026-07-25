@@ -24,7 +24,7 @@ import {
 } from './hooks/useBinneyPto';
 import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
-import { BMR_HOLIDAYS } from './bmrHolidays';
+import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
 import { useShifts } from '../../hooks/useShifts';
 import {
   useOncallParticipants, useOncallSettings,
