@@ -323,8 +323,10 @@ def post_gql(body: dict) -> dict:
             "Chrome/148.0.0.0 Safari/537.36"
         ),
     }
-    if COOKIE:
-        headers["Cookie"] = COOKIE
+    # Cove's siteNetwork resolver authenticates via the cove_manage_auth cookie,
+    # not the Authorization header (which it ignores). Send the fresh session
+    # token as that cookie; the legacy static COVE_COOKIE env is no longer used.
+    headers["Cookie"] = f"cove_manage_auth={TOKEN}"
     resp = requests.post(GQL_URL, headers=headers, json=body, timeout=30)
     return resp.status_code, resp
 
