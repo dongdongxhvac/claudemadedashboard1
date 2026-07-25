@@ -612,7 +612,9 @@ export function buildManual(site: ManualSite): Chapter[] {
             },
             {
               kind: 'p',
-              text: 'The Conflicts strip flags three things against approved, upcoming PTO:',
+              text: s.binney
+                ? 'The Conflicts strip flags three things against approved, upcoming PTO:'
+                : 'The Conflicts strip flags four things against approved, upcoming PTO:',
             },
             {
               kind: 'table',
@@ -621,14 +623,23 @@ export function buildManual(site: ManualSite): Chapter[] {
                 ['On call that week', 'Red', 'A real double-booking'],
                 ['Signed up for overtime inside the PTO', 'Red', 'A real double-booking — but only while the OT post is still OPEN. Filled or closed posts stop being reported'],
                 ['Primary on a building', 'Amber', 'A standing reminder, not a clash — see below'],
+                ...(s.binney
+                  ? []
+                  : [[
+                      'Runs a building round',
+                      'Amber',
+                      'The engineer is the current holder of a daily round ("Runs the <round> round — assign coverage"). Same standing-reminder behavior as the primary-building line',
+                    ]]),
               ],
             },
             {
               kind: 'note',
               tone: 'warn',
-              title: 'The amber "assign coverage" line is not a clash',
+              title: 'The amber "assign coverage" lines are not clashes',
               text:
-                'It fires for EVERY upcoming approved PTO by anyone who is primary on any building, whatever the dates, and whether or not cover already exists. Only the red on-call and overtime lines represent an actual double-booking.',
+                'They fire for EVERY upcoming approved PTO by anyone who is primary on a building' +
+                (s.binney ? '' : ' or currently holds a round') +
+                ', whatever the dates, and whether or not cover already exists. Only the red on-call and overtime lines represent an actual double-booking.',
             },
             {
               kind: 'note',
@@ -658,7 +669,7 @@ export function buildManual(site: ManualSite): Chapter[] {
           blocks: [
             {
               kind: 'p',
-              text: 'Email fires on exactly three moments. Everything else is silent.',
+              text: 'Email fires on exactly four moments. Everything else is silent.',
             },
             {
               kind: 'table',
@@ -666,8 +677,8 @@ export function buildManual(site: ManualSite): Chapter[] {
               rows: [
                 ['An engineer submits a request', 'Managers at that engineer’s home site. The engineer gets no confirmation', 'Nothing'],
                 ['A request is approved or denied', 'Two separate emails: the managers get the decision notice, and the engineer gets their own personal one — "Your PTO approved/denied" — at both sites. It fires no matter how the PTO was entered: self-serve, the manager Add PTO form, or a click on the roll or heatmap. A manager booking their own PTO gets just the personal copy', 'An approval sends an invite. A denial after an approval cancels it'],
-                ['An approved request is cancelled', 'Nobody', 'A calendar cancellation — that is the only notice anyone gets'],
-                ['An APPROVED request’s dates, hours or type are edited', 'Nobody', 'The calendar event moves to the new dates — the old event is removed and replaced. Editing a request that is already fully in the past stays silent'],
+                ['An approved request is cancelled', 'The engineer gets a personal "Your PTO cancelled" email. Managers get nothing', 'A calendar cancellation — that is the managers’ only notice'],
+                ['An APPROVED request’s dates, hours or type are edited', 'The engineer gets a personal "Your PTO changed" email showing the new dates and what they were before. Managers get nothing', 'The calendar event moves to the new dates — the old event is removed and replaced. Editing a request that is already fully in the past stays silent'],
                 ['Anything else — editing the reason, editing a pending request, withdrawing, deleting', 'Nobody', 'Nothing'],
               ],
             },

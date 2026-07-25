@@ -1,7 +1,14 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v23 — repo and live are identical.
+// This file was deployed VERBATIM as v24 — repo and live are identical.
+//
+// v24 (2026-07-25): engineer courtesy email on 'retracted' ("Your PTO
+// cancelled") and 'amended' ("Your PTO changed" + a Previously row from
+// prev_record). Managers still get NO notification email for those two
+// events — the calendar CANCEL/update remains their message. The engineer
+// rows are built explicitly so a cancellation never reads "cancelled by
+// <original approver>" (reviewed_by is the approver, not the canceller).
 //
 // v23 (2026-07-25): personalized engineer decision email, BOTH sites.
 // On 'decided' the engineer whose PTO it is now gets their own email —
@@ -404,8 +411,12 @@ Deno.serve(async (req: Request) => {
       recipients.delete(engineerEmail.toLowerCase());
     }
     const resolvedTo = [...recipients];
+    // v24: the engineer also gets a courtesy copy on 'retracted' ("cancelled")
+    // and 'amended' ("changed") — managers still get no notification email
+    // for those; the calendar change remains their message.
     const resolvedEngineerTo =
-      payload.event === "decided" && /@/.test(engineerEmail) ? [engineerEmail] : [];
+      ["decided", "retracted", "amended"].includes(payload.event) && /@/.test(engineerEmail)
+        ? [engineerEmail] : [];
 
     const who = r.user_full_name ?? requester?.full_name ?? "Unknown";
     const range = fmtRange(r.starts_on, r.ends_on);
@@ -456,15 +467,37 @@ Deno.serve(async (req: Request) => {
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
       `\n\n${dashUrl}`);
 
-    // Personalized engineer email (v23, 'decided' only). Same table minus the
-    // redundant "Engineer" row, second-person heading, and the link points at
-    // the engineer's own page, not the manager dashboard. Subject + text stay
+    // Personalized engineer email (v23 'decided'; v24 adds 'retracted' +
+    // 'amended'). Explicit rows — no "Engineer" row (it's about them), no
+    // "cancelled by <reviewer>" trap (reviewed_by is the original approver,
+    // not whoever cancelled). Second-person heading; link points at the
+    // engineer's own page, not the manager dashboard. Subject + text stay
     // ASCII-safe (denomailer folds non-ASCII subjects into raw MIME).
     const engDashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/engineer" : "/upark/engineer"}`;
+    const engWord =
+      payload.event === "retracted" ? "cancelled"
+      : payload.event === "amended" ? "changed"
+      : decision.toLowerCase();
     const engSubject = asciiSafe(
-      `[PTO - ${site.name}] Your PTO ${decision.toLowerCase()} - ${tl} ${range}`);
-    const engHeading = `Your PTO was ${decision.toLowerCase()}`;
-    const engRows = rows.filter(([k]) => k !== "Engineer");
+      `[PTO - ${site.name}] Your PTO ${engWord} - ${tl} ${range}`);
+    const engHeading = `Your PTO was ${engWord}`;
+    const engRows: [string, string][] = [
+      ["Type", tl],
+      ["Dates", `${range} (${r.days} day${r.days === 1 ? "" : "s"} - ${r.hours}h)`],
+    ];
+    if (partial) engRows.push(["Partial day", partial]);
+    if (r.reason) engRows.push(["Reason", r.reason]);
+    if (payload.event === "retracted") {
+      engRows.push(["Status", "Cancelled - removed from the calendar"]);
+    } else if (payload.event === "amended") {
+      const p = payload.prev_record;
+      if (p) engRows.push(["Previously", `${typeLabel(p.type)} ${fmtRange(p.starts_on, p.ends_on)} (${p.hours}h)`]);
+      engRows.push(["Status", "Updated - the calendar event moves to the new dates"]);
+    } else {
+      engRows.push(["Decision", decision]);
+      if (r.reviewed_by_name) engRows.push([`${decision} by`, r.reviewed_by_name]);
+      if (r.review_note) engRows.push(["Note", r.review_note]);
+    }
     const engHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 560px;">
         <h2 style="margin:0 0 12px 0;">${escapeHtml(engHeading)}</h2>
@@ -533,8 +566,9 @@ Deno.serve(async (req: Request) => {
       if (calTo.length) calTo = forced;
       if (paFeedTo.length) paFeedTo = forced;
     }
-    // 'retracted' and 'amended' send no notification email — the calendar
-    // change is the message. (engineerTo is already [] for those events.)
+    // 'retracted' and 'amended' send no MANAGER notification email — the
+    // calendar change is their message. The engineer's courtesy copy
+    // (engineerTo) still goes out (v24).
     if (payload.event === "retracted" || payload.event === "amended") effectiveTo = [];
 
     // Develop mode: no Binney notification emails (manager or engineer)

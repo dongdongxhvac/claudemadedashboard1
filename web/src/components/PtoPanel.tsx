@@ -27,6 +27,7 @@ import {
 import { useOvertimePosts, type OvertimePost } from '../hooks/useOvertime';
 import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks/useBuildingAssignments';
 import { useBuildings, type Building } from '../hooks/useBuildings';
+import { useRounds, type Round } from '../hooks/useRounds';
 import { useUparkUserIds } from '../hooks/useSiteScope';
 import { BMR_HOLIDAYS } from '../lib/bmrHolidays';
 import { Section } from './Section';
@@ -94,12 +95,13 @@ function PtoTypeOptions({ options, ensure }: { options: PtoType[]; ensure?: PtoT
 }
 
 // ── Conflict detection: surface approved PTO that overlaps an on-call
-// week, an OT signup, or covers a primary-building assignment so the
-// manager knows what to backfill.
+// week, an OT signup, covers a primary-building assignment, or belongs to
+// the current holder of a daily building round, so the manager knows what
+// to backfill.
 
 type Conflict = {
   pto: PtoRequest;
-  kind: 'oncall' | 'overtime' | 'primary_building';
+  kind: 'oncall' | 'overtime' | 'primary_building' | 'round';
   severity: 'high' | 'medium';
   detail: string;
 };
@@ -113,6 +115,7 @@ function computeConflicts(
   oncallWeeks: { user_id: string; week_start: string; week_end: string }[],
   otSignups: { user_id: string; post: OvertimePost }[],
   primaryByUser: Map<string, Building[]>,
+  roundsByUser: Map<string, Round[]>,
 ): Conflict[] {
   const out: Conflict[] = [];
   for (const p of approved) {
@@ -150,6 +153,18 @@ function computeConflicts(
         kind: 'primary_building',
         severity: 'medium',
         detail: `Primary on ${prims.map((b) => b.short_code ?? b.code).join(', ')} — assign coverage`,
+      });
+    }
+    // Building rounds — the engineer currently holds a daily round, so every
+    // PTO day leaves that round unwalked. Standing assignment (no end date),
+    // so it flags once per PTO, like primary buildings.
+    const rnds = roundsByUser.get(p.user_id);
+    if (rnds && rnds.length > 0) {
+      out.push({
+        pto: p,
+        kind: 'round',
+        severity: 'medium',
+        detail: `Runs the ${rnds.map((rd) => rd.name).join(', ')} round${rnds.length === 1 ? '' : 's'} — assign coverage`,
       });
     }
   }
@@ -200,6 +215,7 @@ export function PtoPanel() {
   const otPostsQ       = useOvertimePosts();
   const assignmentsQ   = useCurrentBuildingAssignments();
   const buildingsQ     = useBuildings();
+  const roundsQ        = useRounds();
 
   // Scope §12 to UPark-homed people (NULL home_site = UPark; see
   // useSiteScope.ts). Without this, engineers seeded for other sites
@@ -281,9 +297,22 @@ export function PtoPanel() {
     return m;
   }, [assignmentsQ.data, buildingsQ.data]);
 
+  // Current round holders (rounds.round_assignments with ends_on NULL) —
+  // one engineer can hold several rounds.
+  const roundsByUser = useMemo(() => {
+    const m = new Map<string, Round[]>();
+    for (const rd of roundsQ.data ?? []) {
+      if (!rd.current) continue;
+      const cur = m.get(rd.current.user_id) ?? [];
+      cur.push(rd);
+      m.set(rd.current.user_id, cur);
+    }
+    return m;
+  }, [roundsQ.data]);
+
   const conflicts = useMemo(
-    () => computeConflicts(buckets.upcoming, oncallWeeks, otSignups, primaryByUser),
-    [buckets.upcoming, oncallWeeks, otSignups, primaryByUser],
+    () => computeConflicts(buckets.upcoming, oncallWeeks, otSignups, primaryByUser, roundsByUser),
+    [buckets.upcoming, oncallWeeks, otSignups, primaryByUser, roundsByUser],
   );
 
   const [showAdd, setShowAdd]               = useState(false);
