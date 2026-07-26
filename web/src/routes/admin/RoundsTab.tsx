@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useShifts, useShiftsRealtime, fmtShiftTime, type Shift } from '../../hooks/useShifts';
 import { useBuildings, useBuildingsRealtime, type Building } from '../../hooks/useBuildings';
+import { useUparkUserIds, useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
   useRounds, useRoundsRealtime,
   useRoundsNotes, useRoundsNotesRealtime,
@@ -60,9 +61,42 @@ export function RoundsTab() {
   useRoundsNotesRealtime();
   useAdminProposalsRealtime();
 
-  const engineersQ = useEngineers();
-  const shiftsQ    = useShifts();
-  const buildingsQ = useBuildings();
+  const engineersQRaw = useEngineers();
+  const shiftsQRaw    = useShifts();
+  const buildingsQRaw = useBuildings();
+  // Scope to UPark: engineers/buildings/shifts are shared tables and carry
+  // Binney rows since the 0093 seed (NULL home_site/site_id = UPark; Binney's
+  // crew shifts carry shifts.crew, UPark's are crew-NULL). Shadowing the
+  // query objects keeps the whole tab body untouched. Fails open while the
+  // id sets load — brief unfiltered flash, same as PtoPanel's scoping.
+  const uparkIds = useUparkUserIds();
+  const uparkBldgIds = useUparkBuildingIds();
+  const engineersQ = useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
+  // Shifts have no site column: UPark's are crew-NULL, but so is Binney's
+  // "Mon-Fri 6A" day shift — so ALSO exclude any shift a non-UPark engineer
+  // is assigned to.
+  const binneyShiftIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!uparkIds) return set; // fail-open with the rest of the scoping
+    for (const e of engineersQRaw.data ?? []) {
+      if (e.shift_id && !uparkIds.has(e.user_id)) set.add(e.shift_id);
+    }
+    return set;
+  }, [engineersQRaw.data, uparkIds]);
+  const shiftsQ = useMemo(
+    () => ({
+      ...shiftsQRaw,
+      data: shiftsQRaw.data?.filter((s) => (s.crew ?? null) === null && !binneyShiftIds.has(s.id)),
+    }),
+    [shiftsQRaw, binneyShiftIds],
+  );
+  const buildingsQ = useMemo(
+    () => ({ ...buildingsQRaw, data: buildingsQRaw.data?.filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)) }),
+    [buildingsQRaw, uparkBldgIds],
+  );
   const roundsQ    = useRounds();
   const notesQ     = useRoundsNotes();
   const pendingQ   = usePendingProposal<RoundsProposalPayload>('rounds');
