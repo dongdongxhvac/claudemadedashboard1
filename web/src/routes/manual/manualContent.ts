@@ -730,9 +730,52 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'note',
               tone: 'danger',
-              title: 'Two ways to strand a calendar entry',
+              title: 'Delete strands calendar entries',
               text:
-                'Changing the dates on an already-approved PTO does NOT re-issue the invite — the original stays on everyone’s calendar showing the OLD dates. And Delete sends nothing, so a deleted approved entry leaves its invite on every calendar forever. To correct a calendar you must Cancel the approved request (which sends the cancellation) and re-enter it.',
+                'Changing the dates on an already-approved PTO DOES move the calendar event to the new dates (and emails the engineer). But Delete sends nothing — a deleted approved entry leaves its invite on every calendar forever. To remove an approved entry from calendars, Cancel it (which sends the cancellation); use Delete only for genuine mistakes that never reached a calendar.',
+            },
+          ],
+        },
+
+        // ------------------------------------------------------------------
+        {
+          id: 'pto-ukg-reconcile',
+          title: 'UKG reconciliation — the payroll check',
+          blocks: [
+            {
+              kind: 'p',
+              text:
+                'The company did not buy UKG’s PTO module. UKG is the payroll system of record, and managers key PTO into it BY HAND — this dashboard is the working interface, but at the end of the day UKG is the legal record. Hand-keying means gaps, and a gap here is a payroll error. The reconcile tool finds them.',
+            },
+            {
+              kind: 'steps',
+              items: [
+                'Export the time-off report from UKG as an Excel file — one report per site.',
+                'Open the UPark Admin page → "PTO vs UKG" tab — it hosts the reconcile for BOTH sites; you pick the site inside the tab.',
+                'Pick the site the report covers, then choose the file. The compare window is the report’s own date span.',
+                'Check the column chips: Employee, Date and Hours must all show a detected header. If one reads "✗ missing", the export format changed — send the file to the admin so the detector can be updated.',
+                'Read the tiles, worst first: red is the one to fix in UKG.',
+              ],
+            },
+            {
+              kind: 'table',
+              head: ['Section', 'Means', 'What to do'],
+              rows: [
+                ['Red — in dashboard, missing from UKG', 'Approved PTO with no UKG entry. This is the payroll keying error the tool exists to catch', 'Key it into UKG'],
+                ['Violet — hours or type mismatch', 'Both systems have the day but disagree on hours (beyond a quarter-hour) or leave type', 'Decide which side is right and correct it'],
+                ['Amber — in UKG, not in dashboard', 'UKG has an entry the dashboard never recorded', 'Backfill the dashboard, or question the UKG entry'],
+                ['Unmatched UKG names', 'A name in the report that matches nobody on the site roster (spelling, legal vs preferred name)', 'Fix the spelling in UKG, or note the alias'],
+                ['Unknown pay codes', 'A UKG code the tool doesn’t recognize. Hours still compare; only the type check is skipped', 'Ask the admin to add the code to the map'],
+              ],
+            },
+            {
+              kind: 'bullets',
+              items: [
+                'Multi-day PTO is compared day by day: the request’s total hours are spread across its counted days (weekdays at UPark, every day at Binney), so manager-adjusted totals still reconcile correctly. Adjacent gap days are shown as one range.',
+                'Pending requests are excluded on purpose — they are not supposed to be in UKG until approved. They are listed in a collapsed section so you know the tool saw them.',
+                'Binney comparison starts at 2026-07-13 — dashboard PTO history begins there. UKG rows before that date are noted and skipped, not flagged.',
+                'Nothing is saved. The reconcile is a point-in-time check; use "Export gaps (CSV)" to keep a copy or attach it to an email.',
+              ],
             },
           ],
         },

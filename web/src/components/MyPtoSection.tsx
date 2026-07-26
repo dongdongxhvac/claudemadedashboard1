@@ -35,8 +35,10 @@ import { PtoYearLog } from './PtoPanel';
  *  UPark vacations (and vice versa). NULL home_site_id counts as UPark, the
  *  0072 backfill default, matching useSiteScope's rule. Fails OPEN
  *  (undefined) while loading: consumers render unscoped, the pre-fix
- *  behavior. */
-function useSiteUserIds(site: SiteCode): Set<string> | undefined {
+ *  behavior. Exported for the admin "PTO vs UKG" reconcile tab — the only
+ *  both-sites-correct site-roster helper in the app. */
+// eslint-disable-next-line react-refresh/only-export-components -- deliberate shared hook; moving it would touch every PTO import site
+export function useSiteUserIds(site: SiteCode): Set<string> | undefined {
   const q = useQuery({
     queryKey: ['site_user_ids', site],
     queryFn: async (): Promise<string[]> => {

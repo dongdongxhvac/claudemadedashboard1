@@ -11,8 +11,9 @@ import { RoundsTab } from './RoundsTab';
 import { WeeklyUpdateTab } from './WeeklyUpdateTab';
 import { WaterBillingTab } from './WaterBillingTab';
 import { MroBillingTab } from './MroBillingTab';
+import { UkgReconcileTab } from './UkgReconcileTab';
 
-type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly' | 'water' | 'mro';
+type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly' | 'water' | 'mro' | 'ukg';
 
 export default function Admin() {
   const { session, signOut } = useAuth();
@@ -96,6 +97,9 @@ export default function Admin() {
               <TabButton active={tab === 'mro'} onClick={() => setTab('mro')}>
                 MRO Billing
               </TabButton>
+              <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
+                PTO vs UKG
+              </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
             {tab === 'users'             && <UserProfilesTab canManageUsers={isAdmin} />}
@@ -106,6 +110,7 @@ export default function Admin() {
             {tab === 'weekly'            && <WeeklyUpdateTab />}
             {tab === 'water'             && <WaterBillingTab />}
             {tab === 'mro'               && <MroBillingTab />}
+            {tab === 'ukg'               && <UkgReconcileTab />}
           </div>
         )}
       </main>
