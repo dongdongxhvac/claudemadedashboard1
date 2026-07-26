@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCanAccessAdmin } from '../../hooks/useMe';
 import { useBuildings } from '../../hooks/useBuildings';
+import { useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
   useWaterMeterReadings,
   useAddWaterReading,
@@ -76,7 +77,14 @@ export function WaterBillingTab() {
   useWaterMetersRealtime();
   const canEdit = useCanAccessAdmin();
   const readingsQ = useWaterMeterReadings();
-  const buildingsQ = useBuildings();
+  const buildingsQRaw = useBuildings();
+  // Scope to UPark — the shared hook carries Binney's 28 buildings since the
+  // 0093 seed (NULL site_id = UPark). Fails open while the id set loads.
+  const uparkBldgIds = useUparkBuildingIds();
+  const buildingsQ = useMemo(
+    () => ({ ...buildingsQRaw, data: buildingsQRaw.data?.filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)) }),
+    [buildingsQRaw, uparkBldgIds],
+  );
   const del = useDeleteWaterReading();
 
   const [defStart, defEnd] = useMemo(() => lastMonthRange(), []);

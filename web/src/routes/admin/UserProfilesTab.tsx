@@ -102,7 +102,7 @@ function fmtAgo(iso: string | null | undefined): string {
 
 export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: boolean }) {
   const q = useAllUsers();
-  const shiftsQ = useShifts();
+  const shiftsQRaw = useShifts();
   const updateProfile = useUpdateEngineerProfile();
   const updateUser = useUpdateUser();
   const addEngineer = useAddEngineer();
@@ -118,6 +118,25 @@ export function UserProfilesTab({ canManageUsers = true }: { canManageUsers?: bo
   // Binney people are managed from /binney/admin, one click away via the
   // → Binney St nav link. Fails open while the id set loads.
   const uparkIds = useUparkUserIds();
+
+  // Shift dropdown scoped the same way: shifts have no site column — drop
+  // crewed shifts (Binney's rotations) AND any shift a non-UPark engineer
+  // is assigned to (catches Binney's crew-NULL "Mon-Fri 6A" day shift).
+  const binneyShiftIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!uparkIds) return set;
+    for (const r of q.data ?? []) {
+      if (r.shift_id && !uparkIds.has(r.user_id)) set.add(r.shift_id);
+    }
+    return set;
+  }, [q.data, uparkIds]);
+  const shiftsQ = useMemo(
+    () => ({
+      ...shiftsQRaw,
+      data: shiftsQRaw.data?.filter((s) => (s.crew ?? null) === null && !binneyShiftIds.has(s.id)),
+    }),
+    [shiftsQRaw, binneyShiftIds],
+  );
 
   // Leads only ever see engineer rows (active + inactive).
   const allRows = (q.data ?? [])

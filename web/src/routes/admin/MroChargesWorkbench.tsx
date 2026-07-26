@@ -5,6 +5,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMe } from '../../hooks/useMe';
 import { useBuildings } from '../../hooks/useBuildings';
+import { useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
   useMroCharges, useMroChargesRealtime, useUpdateMroCharge,
   useUploadReceiptForCharge, useDetachReceipt, useVerifyCharge, useMarkChargeException,
@@ -29,7 +30,14 @@ export function MroChargesWorkbench() {
   useMroChargesRealtime();
   const [tab, setTab] = useState<MroChargeStatus | 'all'>('unreviewed');
   const chargesQ = useMroCharges(tab === 'all' ? undefined : tab);
-  const buildingsQ = useBuildings();
+  const buildingsQRaw = useBuildings();
+  // Scope to UPark — the shared hook carries Binney's 28 buildings since the
+  // 0093 seed (NULL site_id = UPark). Fails open while the id set loads.
+  const uparkBldgIds = useUparkBuildingIds();
+  const buildingsQ = useMemo(
+    () => ({ ...buildingsQRaw, data: buildingsQRaw.data?.filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)) }),
+    [buildingsQRaw, uparkBldgIds],
+  );
 
   const buildings = useMemo(
     () => (buildingsQ.data ?? []).filter((b) => b.active)

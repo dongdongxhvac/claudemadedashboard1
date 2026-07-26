@@ -26,6 +26,7 @@ import {
 } from '../hooks/useOvertime';
 import { useBuildings } from '../hooks/useBuildings';
 import { useEngineers } from '../hooks/useEngineers';
+import { useUparkUserIds, useUparkBuildingIds } from '../hooks/useSiteScope';
 import { useMe } from '../hooks/useMe';
 import {
   useOncallParticipants,
@@ -92,8 +93,21 @@ export function OvertimePanel() {
   useOvertimeRealtime();
   const postsQ     = useOvertimePosts();
   const meQ        = useMe();
-  const buildingsQ = useBuildings();
-  const engineersQ = useEngineers();
+  const buildingsQRaw = useBuildings();
+  const engineersQRaw = useEngineers();
+  // Scope to UPark — the shared hooks carry Binney rows since the 0093 seed
+  // (NULL home_site/site_id = UPark). Feeds the assign-engineer modal list
+  // and the post building dropdown. Fails open while the id sets load.
+  const uparkIds = useUparkUserIds();
+  const uparkBldgIds = useUparkBuildingIds();
+  const buildingsQ = useMemo(
+    () => ({ ...buildingsQRaw, data: buildingsQRaw.data?.filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)) }),
+    [buildingsQRaw, uparkBldgIds],
+  );
+  const engineersQ = useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
   const cancelPost   = useCancelOvertimePost();
   const restorePost  = useRestoreOvertimePost();
   const archivePast  = useArchivePastOvertimePosts();

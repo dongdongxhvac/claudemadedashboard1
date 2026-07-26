@@ -7,7 +7,7 @@
 //   * "LOTO" — when a lockout/tagout was applied + by which engineer.
 //     LOTO removal happens via the close dialog or an explicit "Remove
 //     LOTO" button on the issue row.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   useUpsertEquipmentIssue,
   ISSUE_STATUSES,
@@ -19,6 +19,7 @@ import {
   type LotoType,
 } from '../../hooks/useBuildingKb';
 import { useEngineers } from '../../hooks/useEngineers';
+import { useUparkUserIds } from '../../hooks/useSiteScope';
 
 function todayLocalISO(): string {
   return new Date().toLocaleDateString('en-CA');
@@ -42,7 +43,15 @@ export function IssueForm({
   onClose: () => void;
 }) {
   const upsert = useUpsertEquipmentIssue();
-  const engineersQ = useEngineers();
+  const engineersQRaw = useEngineers();
+  // Scope to UPark — shared hook carries Binney rows since the 0093 seed
+  // (NULL home_site = UPark); the buildings KB is UPark-only. Fails open
+  // while the id set loads.
+  const uparkIds = useUparkUserIds();
+  const engineersQ = useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
 
   const [status, setStatus]             = useState<IssueStatus>(existing?.status ?? 'down_cm');
   const [detail, setDetail]             = useState(existing?.detail ?? '');

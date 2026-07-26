@@ -28,6 +28,7 @@ import {
   type OncallProposalPayload, type PublishedProposal,
 } from '../../hooks/useAdminProposals';
 import { useEngineers } from '../../hooks/useEngineers';
+import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe } from '../../hooks/useMe';
 import { weekContainsHoliday } from '../../lib/holidays';
 
@@ -153,7 +154,14 @@ export function OncallTab() {
   useAdminProposalsRealtime();
   const participantsQ = useOncallParticipants();
   const settingsQ = useOncallSettings();
-  const engineersQ = useEngineers();
+  const engineersQRaw = useEngineers();
+  // Scope to UPark — the shared hook carries Binney rows since the 0093 seed
+  // (NULL home_site = UPark). Fails open while the id set loads.
+  const uparkIds = useUparkUserIds();
+  const engineersQ = useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
   const pendingQ = usePendingProposal<OncallProposalPayload>('oncall');
   const historyQ = usePublishedProposalHistory<OncallProposalPayload>('oncall', 20);
   const notesQ = useOncallNotes();

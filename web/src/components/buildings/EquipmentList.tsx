@@ -31,9 +31,22 @@ import {
   type EffectiveEquipmentStatus,
 } from '../../hooks/useBuildingKb';
 import { useEngineers } from '../../hooks/useEngineers';
+import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { EquipmentForm } from './EquipmentForm';
 import { IssueForm } from './IssueForm';
 import { IssueCloseDialog } from './IssueCloseDialog';
+
+/** Scope the shared engineers hook to UPark — it carries Binney rows since
+ *  the 0093 seed (NULL home_site = UPark). The buildings KB is UPark-only.
+ *  Fails open while the id set loads. */
+function useUparkEngineers() {
+  const engineersQRaw = useEngineers();
+  const uparkIds = useUparkUserIds();
+  return useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
+}
 
 type CategoryKey = EquipmentCategory | '_uncat';
 
@@ -64,7 +77,7 @@ export function EquipmentList({
   const eqQ = useBuildingEquipment(buildingId);
   const issQ = useBuildingOpenIssues(buildingId);
   const del = useDeleteBuildingEquipment();
-  const engineersQ = useEngineers();
+  const engineersQ = useUparkEngineers();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
@@ -902,7 +915,7 @@ function IssueRow({
 }) {
   const del = useDeleteEquipmentIssue();
   const removeLoto = useRemoveLoto();
-  const engineersQ = useEngineers();
+  const engineersQ = useUparkEngineers();
   const tone = equipmentStatusTone(issue.status);
   const accent =
     tone === 'bad' ? 'var(--color-danger)' : 'var(--color-warn, #d97706)';

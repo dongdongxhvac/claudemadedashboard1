@@ -29,6 +29,7 @@ import {
   type CoverageOverride, type OverrideKind,
 } from '../../hooks/useOncallCoverageOverrides';
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
+import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe } from '../../hooks/useMe';
 
 // ============================================================================
@@ -223,7 +224,14 @@ export function OncallExperimentTab() {
   const participantsQ = useOncallParticipants();
   const settingsQ     = useOncallSettings();
   const overridesQ    = useCoverageOverrides();
-  const engineersQ    = useEngineers();
+  const engineersQRaw = useEngineers();
+  // Scope to UPark — the shared hook carries Binney rows since the 0093 seed
+  // (NULL home_site = UPark). Fails open while the id set loads.
+  const uparkIds = useUparkUserIds();
+  const engineersQ = useMemo(
+    () => ({ ...engineersQRaw, data: engineersQRaw.data?.filter((e) => !uparkIds || uparkIds.has(e.user_id)) }),
+    [engineersQRaw, uparkIds],
+  );
   const meQ           = useMe();
 
   const me = meQ.data;
