@@ -63,8 +63,10 @@ function fmtRange(start: string, end: string): string {
   return start === end ? fmtMd(start) : `${fmtMd(start)}–${fmtMd(end)}`;
 }
 
-export function UkgReconcileTab() {
-  const [site, setSite] = useState<SiteCode>('upark');
+/** Mounted once per site admin page (UPark admin and Binney admin each have
+ *  their own tab) — the site is fixed per mount, matching the one-UKG-report-
+ *  per-site workflow. */
+export function UkgReconcileTab({ site }: { site: SiteCode }) {
   const [parsed, setParsed] = useState<ParsedUkg | null>(null);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -98,16 +100,6 @@ export function UkgReconcileTab() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read the file.');
     }
-  };
-
-  const pickSite = (s: SiteCode) => {
-    if (s === site) return;
-    // Reports are per-site — switching sites clears the loaded file.
-    setSite(s);
-    setParsed(null);
-    setFileName('');
-    setError(null);
-    if (fileRef.current) fileRef.current.value = '';
   };
 
   const result: ReconcileResult | null = useMemo(() => {
@@ -177,32 +169,13 @@ export function UkgReconcileTab() {
           <div className="t-small t-muted uppercase tracking-wider">
             PTO vs UKG — payroll reconciliation
           </div>
-          <div className="flex items-center gap-2">
-            {(['upark', 'binney'] as SiteCode[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => pickSite(s)}
-                className="t-small"
-                style={{
-                  padding: '3px 12px', borderRadius: 999,
-                  border: '1px solid var(--color-border)',
-                  background: s === site ? 'var(--color-accent)' : 'var(--color-card)',
-                  color: s === site ? 'white' : 'var(--color-text-muted)',
-                  fontWeight: s === site ? 600 : 400,
-                }}
-              >
-                {s === 'upark' ? 'UPark' : 'Binney St'}
-              </button>
-            ))}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
-              className="t-small"
-            />
-          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+            className="t-small"
+          />
         </div>
         <p className="t-small t-muted" style={{ margin: 0 }}>
           UKG is the payroll system of record; managers key PTO into it by hand. Drop the UKG

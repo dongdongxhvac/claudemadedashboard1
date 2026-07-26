@@ -110,7 +110,7 @@ export default function Admin() {
             {tab === 'weekly'            && <WeeklyUpdateTab />}
             {tab === 'water'             && <WaterBillingTab />}
             {tab === 'mro'               && <MroBillingTab />}
-            {tab === 'ukg'               && <UkgReconcileTab />}
+            {tab === 'ukg'               && <UkgReconcileTab site="upark" />}
           </div>
         )}
       </main>

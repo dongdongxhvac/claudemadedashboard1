@@ -1,16 +1,20 @@
-// Binney St admin — first pass: a slim single-tab shell hosting the
-// duplicated Binney User Profiles view (onboarding Binney techs). Mirrors the
-// UPark routes/admin/Admin.tsx gating: full access for admins, view-only
-// engineer list for leads.
+// Binney St admin — tabbed shell (User Profiles + PTO vs UKG), mirroring the
+// UPark routes/admin/Admin.tsx pattern and gating: full access for admins,
+// view-only engineer list for leads.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { BinneyUserProfilesTab } from './BinneyUserProfilesTab';
+import { UkgReconcileTab } from '../admin/UkgReconcileTab';
 import { SiteSwitcher } from './SiteSwitcher';
+
+type Tab = 'users' | 'ukg';
 
 export default function BinneyAdmin() {
   const { session, signOut } = useAuth();
   const me = useMe();
+  const [tab, setTab] = useState<Tab>('users');
 
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -60,21 +64,40 @@ export default function BinneyAdmin() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              <span
-                className="px-3 py-2 t-text"
-                style={{
-                  borderBottom: '2px solid var(--color-accent)',
-                  color: 'var(--color-accent)',
-                  fontWeight: 500,
-                }}
-              >
+              <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
                 User Profiles {!isAdmin && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
-              </span>
+              </TabButton>
+              <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
+                PTO vs UKG
+              </TabButton>
             </div>
-            <BinneyUserProfilesTab canManageUsers={isAdmin} />
+            {tab === 'users' && <BinneyUserProfilesTab canManageUsers={isAdmin} />}
+            {tab === 'ukg'   && <UkgReconcileTab site="binney" />}
           </div>
         )}
       </main>
     </div>
+  );
+}
+
+function TabButton({
+  children, active, onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-2 t-text"
+      style={{
+        borderBottom: active ? '2px solid var(--color-accent)' : '2px solid transparent',
+        color: active ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        fontWeight: active ? 500 : 400,
+      }}
+    >
+      {children}
+    </button>
   );
 }

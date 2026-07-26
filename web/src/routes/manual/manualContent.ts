@@ -751,8 +751,8 @@ export function buildManual(site: ManualSite): Chapter[] {
               kind: 'steps',
               items: [
                 'Export the time-off report from UKG as an Excel file — one report per site.',
-                'Open the UPark Admin page → "PTO vs UKG" tab — it hosts the reconcile for BOTH sites; you pick the site inside the tab.',
-                'Pick the site the report covers, then choose the file. The compare window is the report’s own date span.',
+                'Open ' + s.label + '’s own Admin page → the "PTO vs UKG" tab. Each site’s admin has its own tab, fixed to that site.',
+                'Choose the file. The compare window is the report’s own date span.',
                 'Check the column chips: Employee, Date and Hours must all show a detected header. If one reads "✗ missing", the export format changed — send the file to the admin so the detector can be updated.',
                 'Read the tiles, worst first: red is the one to fix in UKG.',
               ],
