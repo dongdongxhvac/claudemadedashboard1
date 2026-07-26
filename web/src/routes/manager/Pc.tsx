@@ -162,17 +162,17 @@ export default function ManagerPc() {
           </div>
           <div className="flex items-center gap-4">
             <OncallBadge />
+            {isAdmin && (
+              <Link to="/upark/admin" className="t-small t-accent hover:underline">
+                Admin
+              </Link>
+            )}
             <Link to="/buildings" className="t-small t-accent hover:underline">
               Buildings
             </Link>
             {siteAccess.canSeeAllSites && (
               <Link to="/training" className="t-small t-accent hover:underline">
                 Training
-              </Link>
-            )}
-            {isAdmin && (
-              <Link to="/upark/admin" className="t-small t-accent hover:underline">
-                Admin
               </Link>
             )}
             <Link to="/upark/manual" className="t-small t-accent hover:underline">

@@ -76,11 +76,11 @@ export default function Admin() {
               <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
                 User Profiles {!isAdmin && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
               </TabButton>
+              <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
+                PTO vs UKG
+              </TabButton>
               <TabButton active={tab === 'oncall'} onClick={() => setTab('oncall')}>
                 On-call
-              </TabButton>
-              <TabButton active={tab === 'oncall_experiment'} onClick={() => setTab('oncall_experiment')}>
-                Temp Coverage <span className="t-small ml-1 px-1 rounded" style={{ background: 'rgba(168,85,247,0.18)', color: '#7e22ce', fontSize: 9, fontWeight: 600, letterSpacing: '0.5px' }}>EXP</span>
               </TabButton>
               <TabButton active={tab === 'buildings'} onClick={() => setTab('buildings')}>
                 Bldg Assign
@@ -97,8 +97,8 @@ export default function Admin() {
               <TabButton active={tab === 'mro'} onClick={() => setTab('mro')}>
                 MRO Billing
               </TabButton>
-              <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
-                PTO vs UKG
+              <TabButton active={tab === 'oncall_experiment'} onClick={() => setTab('oncall_experiment')}>
+                Temp Coverage <span className="t-small ml-1 px-1 rounded" style={{ background: 'rgba(168,85,247,0.18)', color: '#7e22ce', fontSize: 9, fontWeight: 600, letterSpacing: '0.5px' }}>EXP</span>
               </TabButton>
               <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
             </div>
