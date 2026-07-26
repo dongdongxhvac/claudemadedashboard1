@@ -187,13 +187,12 @@ export default function ManagerPc() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
-        <FocusBoardBanner siteCode="upark" />
         {/* §12 at the very top — PTO is the page's most-used panel (user
-            2026-07-12); the announcement button + §00 stat cards moved BELOW
-            it (user 2026-07-25) so the page opens straight on the PTO band.
-            FocusBoardBanner stays first: it only renders when there's an
-            active announcement that needs eyes. */}
+            2026-07-12); the announcement banner + button and the §00 stat
+            cards all moved BELOW it (user 2026-07-25) so the page opens
+            straight on the PTO band. */}
         <PtoPanel />
+        <FocusBoardBanner siteCode="upark" />
         <AnnouncementComposer siteCode="upark" />
         {pmQ.isLoading || woQ.isLoading ? (
           <p className="text-gray-500">Loading current snapshot...</p>
