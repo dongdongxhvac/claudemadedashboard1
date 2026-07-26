@@ -1,7 +1,20 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v24 — repo and live are identical.
+// This file was deployed VERBATIM as v25 — repo and live are identical.
+//
+// v25 (2026-07-25): QUIET HOURS — no overnight phone dings. Events arriving
+// 9pm-6am ET are parked verbatim in pto_notify_queue (migration 0109)
+// instead of sending; a pg_cron job POSTs {type:'flush_queue'} every 10
+// minutes and the flush delivers everything once the window ends, so held
+// mail lands ~6:00am as the crews start (Binney 6A 06:00, UPark 07:00).
+// EVERYTHING is held: manager + engineer emails, .ics invites, PA feed.
+// Window = Vault key PTO_QUIET_HOURS ("21-6" default when unset, "off"
+// disables; env var wins) — change with
+//   select set_app_secret('PTO_QUIET_HOURS', '22-6');
+// dry_run bypasses the hold. Caveat (accepted): a queued event re-reads the
+// record at flush time, so overnight approve-then-cancel delivers both
+// emails back to back in the morning.
 //
 // v24 (2026-07-25): engineer courtesy email on 'retracted' ("Your PTO
 // cancelled") and 'amended' ("Your PTO changed" + a Previously row from
@@ -167,6 +180,34 @@ async function paCancelReady(admin: ReturnType<typeof createClient>): Promise<bo
   return v.toLowerCase() === "true";
 }
 
+type SupaAdmin = ReturnType<typeof createClient>;
+
+/** Quiet hours (v25) — no overnight phone dings. Events arriving inside the
+ *  window are parked verbatim in pto_notify_queue; the pg_cron job
+ *  (migration 0109) POSTs {type:'flush_queue'} every 10 minutes and the
+ *  flush branch below delivers everything once the window ends. Window from
+ *  Vault key PTO_QUIET_HOURS (env wins): "21-6" = 9pm-6am ET (the default
+ *  when unset), "off" disables the hold entirely. */
+async function quietWindow(admin: SupaAdmin): Promise<{ start: number; end: number } | null> {
+  let v = (Deno.env.get("PTO_QUIET_HOURS") ?? "").trim();
+  if (!v) {
+    const { data } = await admin.rpc("get_app_secret", { k: "PTO_QUIET_HOURS" });
+    v = ((data as string) ?? "").trim();
+  }
+  if (v.toLowerCase() === "off") return null;
+  const m = v.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (m) return { start: Number(m[1]) % 24, end: Number(m[2]) % 24 };
+  return { start: 21, end: 6 };
+}
+
+/** DST-safe: the hour is read in America/New_York, not UTC. */
+function inQuietHours(w: { start: number; end: number }): boolean {
+  const h = Number(new Intl.DateTimeFormat("en-US", {
+    hour: "numeric", hour12: false, timeZone: "America/New_York",
+  }).format(new Date())) % 24;
+  return w.start > w.end ? h >= w.start || h < w.end : h >= w.start && h < w.end;
+}
+
 type PtoRecord = {
   id: string;
   user_id: string;
@@ -193,6 +234,9 @@ type Payload = {
   dry_run?: boolean;
   override_to?: string[];
 };
+
+/** Sent by the pg_cron flush job (migration 0109), never by the trigger. */
+type FlushPayload = { type: "flush_queue" };
 
 const TYPE_LABELS: Record<string, string> = {
   vacation: "Vacation",
@@ -351,8 +395,56 @@ async function calRecipients(
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  let payload: Payload;
+  let payload: Payload | FlushPayload;
   try { payload = await req.json(); } catch { return json(400, { error: "invalid json" }); }
+
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // Queue flush — pg_cron every 10 minutes (migration 0109). No-op while
+  // still inside quiet hours or when the queue is empty. Rows are claimed
+  // atomically (sent_at stamped before sending) so an overlapping flush can
+  // never double-send; a failed send releases the claim and bumps attempts,
+  // and rows with 5+ attempts are skipped as poison pills.
+  if (payload.type === "flush_queue") {
+    try {
+      const w = await quietWindow(admin);
+      if (w && inQuietHours(w)) return json(200, { ok: true, skipped: "quiet hours" });
+      const { data: rows, error: qErr } = await admin
+        .from("pto_notify_queue")
+        .select("id, payload, attempts")
+        .is("sent_at", null)
+        .lt("attempts", 5)
+        .order("id")
+        .limit(25);
+      if (qErr) throw qErr;
+      let flushed = 0, failed = 0;
+      for (const row of (rows ?? []) as { id: number; payload: Payload; attempts: number }[]) {
+        const { data: claimed } = await admin
+          .from("pto_notify_queue")
+          .update({ sent_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .is("sent_at", null)
+          .select("id");
+        if (!claimed || claimed.length === 0) continue; // another flush got it
+        try {
+          const resp = await handlePtoEvent(row.payload, admin);
+          if (resp.status !== 200) throw new Error(`handler ${resp.status}: ${await resp.text()}`);
+          flushed++;
+        } catch (e) {
+          failed++;
+          await admin.from("pto_notify_queue").update({
+            sent_at: null,
+            attempts: row.attempts + 1,
+            last_error: String((e as Error).message ?? e).slice(0, 500),
+          }).eq("id", row.id);
+        }
+      }
+      return json(200, { ok: true, flushed, failed });
+    } catch (e) {
+      return json(500, { error: (e as Error).message });
+    }
+  }
+
   if (payload.type !== "pto_request" || !payload.record?.id) {
     return json(400, { error: "unknown payload" });
   }
@@ -360,8 +452,25 @@ Deno.serve(async (req: Request) => {
     return json(400, { error: "unknown event" });
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+  // Quiet hours (v25): park the event instead of sending. dry_run bypasses
+  // the hold so QA probes always show the resolved recipient plan.
+  if (!payload.dry_run) {
+    try {
+      const w = await quietWindow(admin);
+      if (w && inQuietHours(w)) {
+        const { error } = await admin.from("pto_notify_queue").insert({ payload });
+        if (error) throw error;
+        return json(200, { ok: true, queued: true });
+      }
+    } catch (e) {
+      return json(500, { error: (e as Error).message });
+    }
+  }
 
+  return await handlePtoEvent(payload, admin);
+});
+
+async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Response> {
   try {
     const { data: reqRows, error: reqErr } = await admin
       .from("v_pto_requests_enriched")
@@ -772,4 +881,4 @@ Deno.serve(async (req: Request) => {
   } catch (e) {
     return json(500, { error: (e as Error).message });
   }
-});
+}
