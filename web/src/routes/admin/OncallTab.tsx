@@ -533,6 +533,36 @@ export function OncallTab() {
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
                 />
               </label>
+              <button
+                type="button"
+                onClick={() => setStartFriday(addDaysIso(startFriday, draft.length * 7))}
+                disabled={!startFriday || draft.length === 0}
+                className="t-small px-3 py-1 rounded border disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                title="Advance the start Friday by one full cycle (one week per engineer in the rotation). Everyone keeps exactly the same weeks — the window just slides forward one cycle."
+              >
+                Move forward 1 cycle ▸
+              </button>
+              {(() => {
+                // Re-anchoring off a cycle boundary silently hands every
+                // engineer a different week (the 09/18 incident) — warn
+                // while composing. Only meaningful when the roster size is
+                // unchanged; adding/removing people reshuffles regardless.
+                const liveStart = settingsQ.data?.start_friday;
+                if (!liveStart || !startFriday) return null;
+                if (draft.length === 0 || draft.length !== liveRows.length) return null;
+                const span = draft.length * 7;
+                const diff = Math.round((new Date(startFriday + 'T00:00:00').getTime()
+                  - new Date(liveStart + 'T00:00:00').getTime()) / 86_400_000);
+                if (((diff % span) + span) % span === 0) return null;
+                return (
+                  <p className="t-small" style={{ flexBasis: '100%', color: '#a16207', margin: 0 }}>
+                    ⚠ {startFriday} is {diff} days from the published anchor ({liveStart}) — not a whole number
+                    of cycles ({draft.length} weeks), so every engineer would land on different weeks than
+                    published. Use “Move forward 1 cycle” to slide the window without reassigning anyone.
+                  </p>
+                );
+              })()}
               <label className="block">
                 <span className="t-small t-muted uppercase tracking-wider block mb-1">Rotations per engineer</span>
                 <input
