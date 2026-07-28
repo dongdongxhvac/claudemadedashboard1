@@ -296,16 +296,20 @@ export function OncallTab() {
     }
   };
 
-  // Export the LIVE schedule to Excel: a flat chronological 'Schedule' sheet
-  // plus the on-screen 'Grid'. Derived with the same round-robin math as
-  // RotationTable.cellInfo so the file matches the pixels — including the
-  // +1 preview cycle, which is never materialized in oncall_rotations.
+  // Export the LIVE schedule to Excel, shaped like the wall calendar the
+  // shop already prints ("ON CALL 2026": one row per engineer, one column
+  // per rotation, MM/DD - MM/DD cells, holiday weeks in red). Sheet 1 is
+  // that calendar; sheet 2 is a flat chronological list for filtering.
+  // Both ROLL FORWARD automatically: columns start at the cycle containing
+  // today (not the historical anchor Friday), so the printout never leads
+  // with months of finished weeks and needs no republish to stay fresh.
+  // Same round-robin math as RotationTable.cellInfo, incl. the +1 preview
+  // cycle that is never materialized in oncall_rotations.
   const onExportXlsx = async () => {
     const start = liveSettings.start_friday;
     if (!start || liveRows.length === 0) return;
     const N = liveRows.length;
     const R = liveSettings.rotations_per_engineer;
-    const visibleCycles = R + 1; // +1 preview, same as RotationTable
     // Local date, not the screen's UTC todayIso — a persisted file stamped
     // with tomorrow's date on an evening export reads as wrong forever.
     const localToday = new Date().toLocaleDateString('en-CA');
@@ -313,18 +317,68 @@ export function OncallTab() {
     // fills), which the plain 'xlsx' package silently drops.
     const XLSX = await import('xlsx-js-style');
 
+    // First visible cycle = the one containing today (clamped into range).
+    const daysSinceStart = Math.round(
+      (new Date(localToday + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86_400_000);
+    const currentCycle = daysSinceStart < 0 ? 0
+      : Math.min(Math.floor(Math.floor(daysSinceStart / 7) / N), R);
+    const cycles: number[] = [];
+    for (let c = currentCycle; c <= R; c++) cycles.push(c); // R = +1 preview
+
+    const weekOf = (cycle: number, i: number) => addDaysIso(start, (cycle * N + i) * 7);
+    const isPastWeek = (weekStart: string) => addDaysIso(weekStart, 7) <= localToday;
+
+    // Paper sheet uses first names; disambiguate collisions with a last initial.
+    const firstCounts = new Map<string, number>();
+    for (const p of liveRows) {
+      const f = p.full_name.split(' ')[0];
+      firstCounts.set(f, (firstCounts.get(f) ?? 0) + 1);
+    }
+    const shortName = (full: string) => {
+      const parts = full.split(' ');
+      return (firstCounts.get(parts[0]) ?? 0) > 1 && parts[1]
+        ? `${parts[0]} ${parts[1][0]}.` : parts[0];
+    };
+
+    // ---- Sheet 1: the wall calendar --------------------------------------
+    // Title carries the covered date range (per user, clearer than a bare
+    // year since the rolled-forward window usually straddles two years).
+    const rangeStart = weekOf(currentCycle, 0);
+    const rangeEnd = addDaysIso(weekOf(R, N - 1), 7);
+    const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+    const cal: string[][] = [[`ON CALL ${mdy(rangeStart)} – ${mdy(rangeEnd)}`]];
+    liveRows.forEach((p, i) => {
+      cal.push([
+        shortName(p.full_name),
+        ...cycles.map((c) => {
+          const ws = weekOf(c, i);
+          if (p.effective_from && p.effective_from > ws) return '—';
+          return `${fmtMd(ws)} - ${fmtMd(addDaysIso(ws, 7))}`;
+        }),
+      ]);
+    });
+    cal.push([]);
+    const noteRows: number[] = [];
+    for (const n of liveNotes) {
+      if (n.body.trim()) { noteRows.push(cal.length); cal.push([n.body.trim()]); }
+    }
+    const wsCal = XLSX.utils.aoa_to_sheet(cal);
+    wsCal['!cols'] = [{ wch: 12 }, ...cycles.map(() => ({ wch: 15 }))];
+    wsCal['!rows'] = cal.map((_, r) => (r === 0 ? { hpt: 24 } : { hpt: 20 }));
+
+    // ---- Sheet 2: flat forward-looking list -------------------------------
     const flat: string[][] = [];
     flat.push(['UPark — On-call schedule']);
-    flat.push([`Start Friday ${start} · ${R} rotations/engineer · handover Fridays 7:00am · exported ${localToday}`]);
-    for (const n of liveNotes) if (n.body.trim()) flat.push([`Note: ${n.body.trim()}`]);
+    flat.push([`Handover Fridays 7:00am · anchor ${start} · ${R} rotations/engineer · exported ${localToday}`]);
     flat.push([]);
     const flatHeaderRow = flat.length; // remembered for the styling pass
     flat.push(['Week start (Fri)', 'Week end (Fri)', 'Engineer', 'Status', 'Holiday in week']);
     const weeks: { weekStart: string; name: string }[] = [];
-    for (let cycle = -1; cycle < visibleCycles; cycle++) {
+    for (const cycle of cycles) {
       liveRows.forEach((p, i) => {
-        const weekStart = addDaysIso(start, (cycle * N + i) * 7);
+        const weekStart = weekOf(cycle, i);
         if (p.effective_from && p.effective_from > weekStart) return; // pre-effective gap
+        if (isPastWeek(weekStart)) return; // roll forward: finished weeks stay out
         weeks.push({ weekStart, name: p.full_name });
       });
     }
@@ -334,31 +388,14 @@ export function OncallTab() {
         w.weekStart,
         addDaysIso(w.weekStart, 7),
         w.name,
-        isActiveWeek(w.weekStart, localToday) ? 'CURRENT' : w.weekStart < localToday ? 'past' : '',
+        isActiveWeek(w.weekStart, localToday) ? 'CURRENT' : '',
         weekContainsHoliday(w.weekStart)?.name ?? '',
       ]);
     }
     const wsFlat = XLSX.utils.aoa_to_sheet(flat);
     wsFlat['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 9 }, { wch: 16 }];
 
-    const grid: string[][] = [
-      ['Engineer', 'Prev', ...Array.from({ length: visibleCycles }, (_, c) =>
-        c === visibleCycles - 1 ? '+1 preview' : `Cycle ${c + 1}`)],
-    ];
-    liveRows.forEach((p, i) => {
-      const row = [p.full_name];
-      for (let cycle = -1; cycle < visibleCycles; cycle++) {
-        const weekStart = addDaysIso(start, (cycle * N + i) * 7);
-        row.push(p.effective_from && p.effective_from > weekStart
-          ? '—'
-          : `${fmtMd(weekStart)}–${fmtMd(addDaysIso(weekStart, 7))}`);
-      }
-      grid.push(row);
-    });
-    const wsGrid = XLSX.utils.aoa_to_sheet(grid);
-    wsGrid['!cols'] = [{ wch: 20 }, ...Array.from({ length: visibleCycles + 1 }, () => ({ wch: 13 }))];
-
-    // ---- styling: borders + bold headers + banded rows + CURRENT highlight
+    // ---- styling ----------------------------------------------------------
     const gray = { rgb: '9CA3AF' };
     const border = {
       top: { style: 'thin', color: gray }, bottom: { style: 'thin', color: gray },
@@ -375,6 +412,35 @@ export function OncallTab() {
       if (!ws[addr]) ws[addr] = { t: 's', v: '' };
       (ws[addr] as { s?: object }).s = s;
     };
+
+    // Calendar sheet: big centered title, bold name column, bordered week
+    // cells; holiday weeks red+bold (like the paper), current week green,
+    // already-finished weeks muted gray.
+    style(wsCal, 0, 0, { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } });
+    wsCal['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cycles.length } }];
+    liveRows.forEach((_p, i) => {
+      const r = 1 + i;
+      style(wsCal, r, 0, { font: { bold: true }, border, alignment: { horizontal: 'center', vertical: 'center' } });
+      cycles.forEach((c, ci) => {
+        const ws = weekOf(c, i);
+        const holiday = !!weekContainsHoliday(ws);
+        const current = isActiveWeek(ws, localToday);
+        style(wsCal, r, 1 + ci, {
+          border,
+          font: {
+            bold: holiday || current,
+            color: holiday ? { rgb: 'B91C1C' } : isPastWeek(ws) ? { rgb: '9CA3AF' } : undefined,
+          },
+          fill: current ? { patternType: 'solid', fgColor: { rgb: 'DCFCE7' } } : undefined,
+          alignment: { horizontal: 'center', vertical: 'center' },
+        });
+      });
+    });
+    for (const r of noteRows) {
+      style(wsCal, r, 0, { font: { italic: true, color: { rgb: '6B7280' } } });
+    }
+
+    // Flat sheet: header + banded bordered rows, CURRENT highlighted.
     style(wsFlat, 0, 0, { font: { bold: true, sz: 14 } });
     for (let c = 0; c < 5; c++) style(wsFlat, flatHeaderRow, c, headStyle);
     weeks.forEach((w, i) => {
@@ -389,21 +455,11 @@ export function OncallTab() {
         });
       }
     });
-    const gridCols = visibleCycles + 2; // Engineer + Prev + cycles(incl. preview)
-    for (let c = 0; c < gridCols; c++) style(wsGrid, 0, c, headStyle);
-    liveRows.forEach((_, i) => {
-      for (let c = 0; c < gridCols; c++) {
-        style(wsGrid, 1 + i, c, {
-          border,
-          fill: i % 2 === 1 ? bandFill : undefined,
-          alignment: { horizontal: c === 0 ? 'left' : 'center' },
-        });
-      }
-    });
 
     const wb = XLSX.utils.book_new();
+    // Sheet names can't contain "/" so the date range lives in the title cell.
+    XLSX.utils.book_append_sheet(wb, wsCal, 'On-call calendar');
     XLSX.utils.book_append_sheet(wb, wsFlat, 'Schedule');
-    XLSX.utils.book_append_sheet(wb, wsGrid, 'Grid');
     XLSX.writeFile(wb, `upark-oncall_${localToday}.xlsx`);
   };
 
