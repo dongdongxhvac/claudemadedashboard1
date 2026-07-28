@@ -419,12 +419,14 @@ export function PtoPanel() {
           {/* Upcoming approved + balances share one band: list on the left,
               balances grid filling the rest. Either side alone goes full
               width; on narrow viewports they wrap to stacked. */}
-          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            {/* 380px basis leaves the balances grid ≥ ~950px inside the
-                1600px container, enough for its two half-tables to sit
-                side by side instead of stacking. */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* 300px basis + 16px gap leaves the balances grid ~1130px on a
+                1536px (14") laptop — enough for its two half-tables to sit
+                side by side there too, not just on a full monitor. Rows in
+                the upcoming list are single-line to survive the narrow
+                column. */}
             {buckets.upcoming.length > 0 && (
-              <div style={{ flex: '0 1 380px', minWidth: 300 }}>
+              <div style={{ flex: '0 1 300px', minWidth: 260 }}>
                 <UpcomingGroupedList
                   rows={buckets.upcoming.filter((r) => r.ends_on >= todayIso())}
                   onCancel={(id) => {
@@ -718,7 +720,7 @@ function UpcomingGroupedList({ rows, ...actions }: { rows: PtoRequest[] } & Upco
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">Upcoming approved</div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {groups.thisWeek.length > 0  && <UpcomingBucket label="This week"  rows={groups.thisWeek}  {...actions} />}
         {groups.thisMonth.length > 0 && <UpcomingBucket label="This month" rows={groups.thisMonth} {...actions} />}
         {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     {...actions} />}
@@ -737,26 +739,30 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
         {rows.map((r) => (
           <li
             key={r.id}
-            className="t-small flex items-baseline gap-2 flex-wrap"
+            className="t-small flex items-center gap-1.5"
+            title={`${r.user_full_name ?? '?'} — ${ptoTypeLabel(r.type)} ${fmtRange(r.starts_on, r.ends_on)} (${r.days}d · ${r.hours}h)${r.reason ? ` · ${r.reason}` : ''}`}
             style={{
-              padding: '0.3rem 0.6rem',
+              padding: '0.15rem 0.5rem',
               borderLeft: `3px solid ${PTO_TYPE_COLOR[r.type]}`,
               background: PTO_TYPE_BG[r.type],
               borderRadius: 4,
+              whiteSpace: 'nowrap',
             }}
           >
-            <strong style={{ minWidth: 130 }}>{r.user_full_name ?? '?'}</strong>
-            <span className="t-muted" style={{ minWidth: 70 }}>{ptoTypeLabel(r.type)}</span>
-            <span className="t-mono">{fmtRange(r.starts_on, r.ends_on)} <span className="t-muted">({r.days}d · {r.hours}h)</span></span>
-            {r.reason && <span className="t-muted">· {r.reason}</span>}
+            {/* Single-line row: name ellipsizes, everything else is fixed.
+                Type lives in the border color + the row tooltip — no room
+                for a text label in the 300px column. */}
+            <strong style={{ flex: '0 1 auto', minWidth: 40, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.user_full_name ?? '?'}</strong>
+            <span className="t-mono" style={{ flexShrink: 0 }}>{fmtRange(r.starts_on, r.ends_on)}</span>
+            <span className="t-muted" style={{ flexShrink: 0, fontSize: '0.7rem' }}>{r.days}d·{r.hours}h</span>
             {r.cap_override && (
               <span
-                className="px-1 py-0.5 rounded"
-                style={{ background: 'rgba(234,88,12,0.15)', color: '#c2410c', fontSize: 9, fontWeight: 600 }}
+                className="px-1 rounded"
+                style={{ background: 'rgba(234,88,12,0.15)', color: '#c2410c', fontSize: 9, fontWeight: 600, flexShrink: 0 }}
                 title={`Cap override: ${r.cap_override_reason ?? ''}`}
-              >OVERRIDE</span>
+              >OVR</span>
             )}
-            <span className="ml-auto" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            <span className="ml-auto" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
               <button
                 onClick={() => onEdit(r)}
                 className="t-muted hover:t-accent"
@@ -2096,9 +2102,9 @@ function BalancesGrid({
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
       </div>
-      <div className="flex flex-wrap items-start" style={{ columnGap: '1.75rem', rowGap: '1rem' }}>
+      <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
-      <div key={hi} style={hi > 0 ? { borderLeft: '1px solid var(--color-border)', paddingLeft: '1.75rem' } : undefined}>
+      <div key={hi} style={hi > 0 ? { borderLeft: '1px solid var(--color-border)', paddingLeft: '1.25rem' } : undefined}>
       {half.label && (
         <div className="t-small t-muted uppercase tracking-wider mb-1">{half.label}</div>
       )}
@@ -2111,13 +2117,13 @@ function BalancesGrid({
             <th className="py-1 pr-3">
               <button type="button" onClick={() => onSort('name')} className="hover:t-accent" title="Sort by name">Engineer{sortArrow('name')}</button>
             </th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+            <th className="py-1 px-1.5 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
               <button type="button" onClick={() => onSort('vacation')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Vacation{sortArrow('vacation')}</button>
             </th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+            <th className="py-1 px-1.5 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
               <button type="button" onClick={() => onSort('sick')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Sick{sortArrow('sick')}</button>
             </th>
-            <th className="py-1 px-2 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+            <th className="py-1 px-1.5 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
               <button type="button" onClick={() => onSort('holiday')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Fl. Holiday{sortArrow('holiday')}</button>
             </th>
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
@@ -2197,7 +2203,7 @@ function BalancesGrid({
 function BalanceCell({ remaining, used, alloted }: { remaining: number; used: number; alloted: number }) {
   if (alloted === 0) {
     return (
-      <td className="py-1 px-2 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
+      <td className="py-1 px-1.5 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
     );
   }
   // Red only when the balance is truly low (< 4h, incl. negatives) — per
@@ -2205,7 +2211,7 @@ function BalanceCell({ remaining, used, alloted }: { remaining: number; used: nu
   const low = remaining < 4;
   const color = low ? 'var(--color-danger)' : 'var(--color-text)';
   return (
-    <td className="py-1 px-2 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+    <td className="py-1 px-1.5 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
       <span style={{ color, fontWeight: low ? 600 : 400 }}>{remaining}h</span>
       <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 4 }}>{used}/{alloted}</span>
     </td>
