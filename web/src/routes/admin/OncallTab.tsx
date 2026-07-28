@@ -309,13 +309,16 @@ export function OncallTab() {
     // Local date, not the screen's UTC todayIso — a persisted file stamped
     // with tomorrow's date on an evening export reads as wrong forever.
     const localToday = new Date().toLocaleDateString('en-CA');
-    const XLSX = await import('xlsx');
+    // xlsx-js-style = same SheetJS API but keeps cell styles (borders, bold,
+    // fills), which the plain 'xlsx' package silently drops.
+    const XLSX = await import('xlsx-js-style');
 
     const flat: string[][] = [];
     flat.push(['UPark — On-call schedule']);
     flat.push([`Start Friday ${start} · ${R} rotations/engineer · handover Fridays 7:00am · exported ${localToday}`]);
     for (const n of liveNotes) if (n.body.trim()) flat.push([`Note: ${n.body.trim()}`]);
     flat.push([]);
+    const flatHeaderRow = flat.length; // remembered for the styling pass
     flat.push(['Week start (Fri)', 'Week end (Fri)', 'Engineer', 'Status', 'Holiday in week']);
     const weeks: { weekStart: string; name: string }[] = [];
     for (let cycle = -1; cycle < visibleCycles; cycle++) {
@@ -354,6 +357,49 @@ export function OncallTab() {
     });
     const wsGrid = XLSX.utils.aoa_to_sheet(grid);
     wsGrid['!cols'] = [{ wch: 20 }, ...Array.from({ length: visibleCycles + 1 }, () => ({ wch: 13 }))];
+
+    // ---- styling: borders + bold headers + banded rows + CURRENT highlight
+    const gray = { rgb: '9CA3AF' };
+    const border = {
+      top: { style: 'thin', color: gray }, bottom: { style: 'thin', color: gray },
+      left: { style: 'thin', color: gray }, right: { style: 'thin', color: gray },
+    };
+    const headStyle = {
+      font: { bold: true }, border,
+      fill: { patternType: 'solid', fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'center' },
+    };
+    const bandFill = { patternType: 'solid', fgColor: { rgb: 'F3F4F6' } };
+    const style = (ws: Record<string, unknown>, r: number, c: number, s: object) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      (ws[addr] as { s?: object }).s = s;
+    };
+    style(wsFlat, 0, 0, { font: { bold: true, sz: 14 } });
+    for (let c = 0; c < 5; c++) style(wsFlat, flatHeaderRow, c, headStyle);
+    weeks.forEach((w, i) => {
+      const current = isActiveWeek(w.weekStart, localToday);
+      for (let c = 0; c < 5; c++) {
+        style(wsFlat, flatHeaderRow + 1 + i, c, {
+          border,
+          font: current ? { bold: true } : undefined,
+          fill: current ? { patternType: 'solid', fgColor: { rgb: 'DCFCE7' } }
+            : i % 2 === 1 ? bandFill : undefined,
+          alignment: { horizontal: c === 2 ? 'left' : 'center' },
+        });
+      }
+    });
+    const gridCols = visibleCycles + 2; // Engineer + Prev + cycles(incl. preview)
+    for (let c = 0; c < gridCols; c++) style(wsGrid, 0, c, headStyle);
+    liveRows.forEach((_, i) => {
+      for (let c = 0; c < gridCols; c++) {
+        style(wsGrid, 1 + i, c, {
+          border,
+          fill: i % 2 === 1 ? bandFill : undefined,
+          alignment: { horizontal: c === 0 ? 'left' : 'center' },
+        });
+      }
+    });
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsFlat, 'Schedule');

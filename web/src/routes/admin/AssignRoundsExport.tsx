@@ -4,9 +4,14 @@
 // (modeled on Sean's "Building & Round Assignments" workbook):
 //   Block 1: Engineer | Start Time | Lunch Out | Lunch In | End Time |
 //            Assigned Buildings | Phone Number   — grouped by shift,
-//            leads first; building numbers as a comma list.
+//            leads first; building numbers as a comma list (lead rows bold).
 //   Block 2+: one "<SHIFT> ROUNDS" block per shift:
-//            Engineer | Buildings (in walk order), one row per round.
+//            Round | Engineer | Buildings (in walk order).
+//
+// Uses xlsx-js-style (a styling-capable fork of the repo's SheetJS 0.18.5,
+// same API) so the file gets real table borders, bold headers, and banded
+// rows — the plain 'xlsx' package silently drops all styling. Lazy-loaded
+// on click, same convention as the other exports.
 //
 // Self-contained on purpose: it loads its own data via the same read hooks +
 // UPark scoping both tabs use (react-query dedupes the fetches), so either
@@ -40,6 +45,13 @@ function byLeadThenName(a: EngineerRow, b: EngineerRow): number {
   return a.full_name.localeCompare(b.full_name);
 }
 
+/** Row metadata recorded while building the AoA, consumed by the styling
+ *  pass. band = alternating gray fill; lead = bold building list. */
+type RowKind =
+  | { k: 'title' } | { k: 'sub' } | { k: 'blank' }
+  | { k: 'head7' } | { k: 'data7'; band: boolean; lead: boolean }
+  | { k: 'blockTitle' } | { k: 'head6' } | { k: 'data6'; band: boolean };
+
 export function AssignRoundsExportButton() {
   const engineersQ = useEngineers();
   const shiftsQ = useShifts();
@@ -56,8 +68,7 @@ export function AssignRoundsExportButton() {
   const ready = !!(engineersQ.data && shiftsQ.data && buildingsQ.data
     && assignmentsQ.data && roundsQ.data && uparkIds && uparkBldgIds);
 
-  // Same UPark scoping recipe as BuildingsTab/RoundsTab (fails open while
-  // the id sets load — matches the tabs' behavior).
+  // Same UPark scoping recipe as BuildingsTab/RoundsTab.
   const scoped = useMemo(() => {
     const engineersAll = engineersQ.data ?? [];
     const engineers = engineersAll.filter((e) =>
@@ -94,70 +105,137 @@ export function AssignRoundsExportButton() {
       return [...pick('primary'), ...pick('backup')].join(', ');
     };
 
-    const aoa: (string | number)[][] = [];
-    aoa.push(['UPark — Building & Round Assignments']);
-    aoa.push([`Exported ${new Date().toLocaleDateString()} (live published state)`]);
-    aoa.push([]);
-    aoa.push(['Engineer', 'Start Time', 'Lunch Out', 'Lunch In', 'End Time', 'Assigned Buildings', 'Phone Number']);
+    const aoa: string[][] = [];
+    const kinds: RowKind[] = [];
+    const push = (row: string[], kind: RowKind) => { aoa.push(row); kinds.push(kind); };
 
-    const engineerRow = (e: EngineerRow, s: Shift | null): (string | number)[] => [
-      e.full_name,
-      fmtTimeSheet(s?.start_time ?? null),
-      fmtTimeSheet(s?.lunch_out ?? null),
-      fmtTimeSheet(s?.lunch_in ?? null),
-      fmtTimeSheet(s?.end_time ?? null),
-      listFor(e.user_id),
-      e.phone ?? '',
-    ];
+    push(['UPark — Building & Round Assignments'], { k: 'title' });
+    push([`Exported ${new Date().toLocaleDateString()} (live published state)`], { k: 'sub' });
+    push([], { k: 'blank' });
+    push(['Engineer', 'Start Time', 'Lunch Out', 'Lunch In', 'End Time', 'Assigned Buildings', 'Phone Number'], { k: 'head7' });
+
+    let band = false;
+    const pushEngineer = (e: EngineerRow, s: Shift | null) => {
+      push([
+        e.full_name,
+        fmtTimeSheet(s?.start_time ?? null),
+        fmtTimeSheet(s?.lunch_out ?? null),
+        fmtTimeSheet(s?.lunch_in ?? null),
+        fmtTimeSheet(s?.end_time ?? null),
+        listFor(e.user_id),
+        e.phone ?? '',
+      ], { k: 'data7', band, lead: e.is_lead });
+      band = !band;
+    };
     for (const s of shifts) {
       for (const e of engineers.filter((x) => x.shift_id === s.id).sort(byLeadThenName)) {
-        aoa.push(engineerRow(e, s));
+        pushEngineer(e, s);
       }
     }
     const noShift = engineers.filter((e) => e.shift_id == null
       || !shifts.some((s) => s.id === e.shift_id));
-    for (const e of noShift.sort(byLeadThenName)) aoa.push(engineerRow(e, null));
+    for (const e of noShift.sort(byLeadThenName)) pushEngineer(e, null);
 
     // Rounds blocks, one per shift that has rounds (walk order preserved).
+    // Stop list goes in column F, under the wide "Assigned Buildings" column.
     const rounds = (roundsQ.data ?? []).filter((r) =>
       r.shift_id === null || shifts.some((s) => s.id === r.shift_id));
-    const roundBlocks: { label: string; times: string; rounds: Round[] }[] = [];
+    const roundBlocks: { label: string; rounds: Round[] }[] = [];
     for (const s of shifts) {
       const rs = rounds.filter((r) => r.shift_id === s.id);
       if (rs.length > 0) {
         roundBlocks.push({
-          label: `${s.name.toUpperCase()} SHIFT ROUNDS`,
-          times: `${fmtTimeSheet(s.start_time)} – ${fmtTimeSheet(s.end_time)}`,
+          label: `${s.name.toUpperCase()} SHIFT ROUNDS · ${fmtTimeSheet(s.start_time)} – ${fmtTimeSheet(s.end_time)}`,
           rounds: rs,
         });
       }
     }
     const orphanRounds = rounds.filter((r) => r.shift_id === null);
     if (orphanRounds.length > 0) {
-      roundBlocks.push({ label: 'ROUNDS (NO SHIFT)', times: '', rounds: orphanRounds });
+      roundBlocks.push({ label: 'ROUNDS (NO SHIFT)', rounds: orphanRounds });
     }
-    // Rounds rows put the stop list in column F so it lines up under the wide
-    // "Assigned Buildings" column instead of overflowing the narrow time cols.
     for (const block of roundBlocks) {
-      aoa.push([]);
-      aoa.push([block.times ? `${block.label} · ${block.times}` : block.label]);
-      aoa.push(['Round', 'Engineer', '', '', '', 'Buildings (in walk order)']);
+      push([], { k: 'blank' });
+      push([block.label], { k: 'blockTitle' });
+      push(['Round', 'Engineer', '', '', '', 'Buildings (in walk order)'], { k: 'head6' });
+      let rband = false;
       for (const r of block.rounds.slice().sort((a, b) => a.sort_order - b.sort_order)) {
-        aoa.push([
+        push([
           r.name,
           r.current?.full_name ?? '—',
           '', '', '',
           r.stops.map((st) => st.short_code ?? st.code).join(', '),
-        ]);
+        ], { k: 'data6', band: rband });
+        rband = !rband;
       }
     }
 
-    const XLSX = await import('xlsx');
+    const XLSX = await import('xlsx-js-style');
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [
       { wch: 20 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
       { wch: 46 }, { wch: 16 },
     ];
+
+    // ---- styling pass -------------------------------------------------
+    const gray = { rgb: '9CA3AF' };
+    const border = {
+      top: { style: 'thin', color: gray }, bottom: { style: 'thin', color: gray },
+      left: { style: 'thin', color: gray }, right: { style: 'thin', color: gray },
+    };
+    const headStyle = {
+      font: { bold: true }, border,
+      fill: { patternType: 'solid', fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    };
+    const cellStyle = (banded: boolean, horizontal: string, bold = false) => ({
+      font: bold ? { bold: true } : undefined,
+      border,
+      fill: banded ? { patternType: 'solid', fgColor: { rgb: 'F3F4F6' } } : undefined,
+      alignment: { horizontal, vertical: 'center' },
+    });
+    const setCell = (r: number, c: number, style: object) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      (ws[addr] as { s?: object }).s = style;
+    };
+
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
+    kinds.forEach((kind, r) => {
+      switch (kind.k) {
+        case 'title':
+          setCell(r, 0, { font: { bold: true, sz: 14 } });
+          break;
+        case 'blockTitle':
+          setCell(r, 0, { font: { bold: true } });
+          merges.push({ s: { r, c: 0 }, e: { r, c: 5 } });
+          break;
+        case 'head7':
+          for (let c = 0; c < 7; c++) setCell(r, c, headStyle);
+          break;
+        case 'data7': {
+          const aligns = ['left', 'center', 'center', 'center', 'center', 'center', 'left'];
+          for (let c = 0; c < 7; c++) {
+            setCell(r, c, cellStyle(kind.band, aligns[c], c === 5 && kind.lead));
+          }
+          break;
+        }
+        case 'head6':
+          for (let c = 0; c < 6; c++) setCell(r, c, headStyle);
+          merges.push({ s: { r, c: 1 }, e: { r, c: 4 } });
+          break;
+        case 'data6':
+          setCell(r, 0, cellStyle(kind.band, 'left'));
+          for (let c = 1; c < 5; c++) setCell(r, c, cellStyle(kind.band, 'left'));
+          setCell(r, 5, cellStyle(kind.band, 'center'));
+          merges.push({ s: { r, c: 1 }, e: { r, c: 4 } });
+          break;
+        default:
+          break;
+      }
+    });
+    ws['!merges'] = merges;
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Assignments & Rounds');
     const today = new Date().toLocaleDateString('en-CA');
