@@ -296,6 +296,71 @@ export function OncallTab() {
     }
   };
 
+  // Export the LIVE schedule to Excel: a flat chronological 'Schedule' sheet
+  // plus the on-screen 'Grid'. Derived with the same round-robin math as
+  // RotationTable.cellInfo so the file matches the pixels — including the
+  // +1 preview cycle, which is never materialized in oncall_rotations.
+  const onExportXlsx = async () => {
+    const start = liveSettings.start_friday;
+    if (!start || liveRows.length === 0) return;
+    const N = liveRows.length;
+    const R = liveSettings.rotations_per_engineer;
+    const visibleCycles = R + 1; // +1 preview, same as RotationTable
+    // Local date, not the screen's UTC todayIso — a persisted file stamped
+    // with tomorrow's date on an evening export reads as wrong forever.
+    const localToday = new Date().toLocaleDateString('en-CA');
+    const XLSX = await import('xlsx');
+
+    const flat: string[][] = [];
+    flat.push(['UPark — On-call schedule']);
+    flat.push([`Start Friday ${start} · ${R} rotations/engineer · handover Fridays 7:00am · exported ${localToday}`]);
+    for (const n of liveNotes) if (n.body.trim()) flat.push([`Note: ${n.body.trim()}`]);
+    flat.push([]);
+    flat.push(['Week start (Fri)', 'Week end (Fri)', 'Engineer', 'Status', 'Holiday in week']);
+    const weeks: { weekStart: string; name: string }[] = [];
+    for (let cycle = -1; cycle < visibleCycles; cycle++) {
+      liveRows.forEach((p, i) => {
+        const weekStart = addDaysIso(start, (cycle * N + i) * 7);
+        if (p.effective_from && p.effective_from > weekStart) return; // pre-effective gap
+        weeks.push({ weekStart, name: p.full_name });
+      });
+    }
+    weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    for (const w of weeks) {
+      flat.push([
+        w.weekStart,
+        addDaysIso(w.weekStart, 7),
+        w.name,
+        isActiveWeek(w.weekStart, localToday) ? 'CURRENT' : w.weekStart < localToday ? 'past' : '',
+        weekContainsHoliday(w.weekStart)?.name ?? '',
+      ]);
+    }
+    const wsFlat = XLSX.utils.aoa_to_sheet(flat);
+    wsFlat['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 9 }, { wch: 16 }];
+
+    const grid: string[][] = [
+      ['Engineer', 'Prev', ...Array.from({ length: visibleCycles }, (_, c) =>
+        c === visibleCycles - 1 ? '+1 preview' : `Cycle ${c + 1}`)],
+    ];
+    liveRows.forEach((p, i) => {
+      const row = [p.full_name];
+      for (let cycle = -1; cycle < visibleCycles; cycle++) {
+        const weekStart = addDaysIso(start, (cycle * N + i) * 7);
+        row.push(p.effective_from && p.effective_from > weekStart
+          ? '—'
+          : `${fmtMd(weekStart)}–${fmtMd(addDaysIso(weekStart, 7))}`);
+      }
+      grid.push(row);
+    });
+    const wsGrid = XLSX.utils.aoa_to_sheet(grid);
+    wsGrid['!cols'] = [{ wch: 20 }, ...Array.from({ length: visibleCycles + 1 }, () => ({ wch: 13 }))];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsFlat, 'Schedule');
+    XLSX.utils.book_append_sheet(wb, wsGrid, 'Grid');
+    XLSX.writeFile(wb, `upark-oncall_${localToday}.xlsx`);
+  };
+
   if (participantsQ.isLoading || settingsQ.isLoading || me.isLoading) {
     return <p className="t-text t-muted">Loading on-call schedule…</p>;
   }
@@ -340,6 +405,7 @@ export function OncallTab() {
           settings={topSettings}
           participantCount={topRows.length}
           updatedAt={settingsQ.data?.updated_at ?? null}
+          onExport={onExportXlsx}
           onStartEdit={onStartEdit}
           onCancel={onCancel}
           onSubmit={onSubmit}
@@ -469,7 +535,7 @@ export function OncallTab() {
 // ============================================================================
 function LiveHeader({
   editing, canPropose, hasPending, participantCount,
-  updatedAt, onStartEdit, onCancel, onSubmit, submitting,
+  updatedAt, onExport, onStartEdit, onCancel, onSubmit, submitting,
   notes, notesMode, onChangeNote,
 }: {
   editing: boolean;
@@ -478,6 +544,7 @@ function LiveHeader({
   settings: DisplaySettings;
   participantCount: number;
   updatedAt: string | null;
+  onExport: () => void;
   onStartEdit: () => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -540,6 +607,14 @@ function LiveHeader({
         <div className="flex items-center gap-2 oncall-no-print">
           {!editing ? (
             <>
+              <button
+                onClick={onExport}
+                className="t-small px-3 py-1 rounded border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                title="Download the live schedule as Excel (flat list + grid)"
+              >
+                ⤓ Excel
+              </button>
               <button
                 onClick={() => window.print()}
                 className="t-small px-3 py-1 rounded border"

@@ -23,7 +23,7 @@ import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { AnnouncementComposer } from '../../components/AnnouncementComposer';
 import { OncallBadge } from '../../components/OncallBadge';
 import { useFocusBoardRealtime } from '../../hooks/useFocusBoard';
-import { useIsAdmin } from '../../hooks/useMe';
+import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { Link } from 'react-router-dom';
 
@@ -110,7 +110,9 @@ export default function ManagerPc() {
   const { session, signOut } = useAuth();
   useSnapshotRealtime();
   useFocusBoardRealtime();
-  const isAdmin = useIsAdmin();
+  // Link-gate matches the Admin page's own access rule (admin | lead |
+  // manager-ish) — managers get a view-only Admin page, so they get the link.
+  const canOpenAdmin = useCanOpenAdminPage();
   const siteAccess = useMySiteAccess();
   const pmQ = useCurrentPmRows();
   const woQ = useCurrentWoRows();
@@ -162,7 +164,7 @@ export default function ManagerPc() {
           </div>
           <div className="flex items-center gap-4">
             <OncallBadge />
-            {isAdmin && (
+            {canOpenAdmin && (
               <Link to="/upark/admin" className="t-small t-accent hover:underline">
                 Admin
               </Link>

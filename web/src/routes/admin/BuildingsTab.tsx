@@ -31,6 +31,7 @@ import {
   type BuildingsProposalPayload, type PublishedProposal,
 } from '../../hooks/useAdminProposals';
 import { useMe } from '../../hooks/useMe';
+import { AssignRoundsExportButton } from './AssignRoundsExport';
 
 type ChipDisplay = { key: string; building: Building; sourceLiveId: string | null; isNew: boolean };
 
@@ -273,6 +274,27 @@ export function BuildingsTab() {
   const onCancel = () => { setEditing(false); setActionError(null); };
   const onSubmit = async () => {
     setActionError(null);
+    // Coverage is lead-only — but only NEWLY-ADDED violations block submit.
+    // Pre-existing rows (sourceLiveId set) ride through unchanged: blocking
+    // them would freeze every proposal until a bundled cleanup, and the
+    // snapshot also deliberately round-trips invisible rows held by
+    // inactive/other-site users, which no chip on screen could ever fix.
+    // The compose banner lists the visible legacy ones instead.
+    const leadIds = new Set(engineers.filter((e) => e.is_lead).map((e) => e.user_id));
+    const engById = new Map(engineers.map((e) => [e.user_id, e]));
+    const violations = draftAssignments.filter((a) =>
+      a.role_in_building === 'backup'
+      && a.sourceLiveId === null       // added in this draft
+      && engById.has(a.user_id)        // a visible, scoped engineer
+      && !leadIds.has(a.user_id));
+    if (violations.length > 0) {
+      const bldById = new Map(buildings.map((b) => [b.id, b]));
+      const list = violations.map((v) =>
+        `${engById.get(v.user_id)?.full_name ?? v.user_id} — ${
+          bldById.get(v.building_id)?.short_code ?? bldById.get(v.building_id)?.code ?? v.building_id}`).join('; ');
+      setActionError(`Coverage is lead-only. Remove these new coverage chips or move them to a lead (★): ${list}`);
+      return;
+    }
     try {
       await propose.mutateAsync({
         payload: {
@@ -351,6 +373,7 @@ export function BuildingsTab() {
             <div className="flex items-center gap-2 buildings-no-print">
               {!editing ? (
                 <>
+                  <AssignRoundsExportButton />
                   <button
                     onClick={() => window.print()}
                     className="t-small px-3 py-1 rounded border"
@@ -398,6 +421,27 @@ export function BuildingsTab() {
             <p className="t-small">
               <b>Composing draft</b> · changes are local until you Submit for review. Then a manager publishes them.
             </p>
+            {(() => {
+              // Coverage is lead-only for NEW chips; list the visible legacy
+              // violations so they get cleaned up over time without blocking.
+              const legacy = draftAssignments.filter((a) => {
+                if (a.role_in_building !== 'backup' || a.sourceLiveId === null) return false;
+                const e = engineers.find((x) => x.user_id === a.user_id);
+                return !!e && !e.is_lead;
+              });
+              if (legacy.length === 0) return null;
+              const label = (a: DraftAssignment) => {
+                const e = engineers.find((x) => x.user_id === a.user_id);
+                const b = buildings.find((x) => x.id === a.building_id);
+                return `${e?.full_name ?? '?'} — ${b?.short_code ?? b?.code ?? '?'}`;
+              };
+              return (
+                <p className="t-small mt-1" style={{ color: '#a16207' }}>
+                  Coverage is now lead-only (★). {legacy.length} existing coverage chip{legacy.length === 1 ? '' : 's'} predate{legacy.length === 1 ? 's' : ''} the
+                  rule and won't block submitting — hand them to a lead or remove them when convenient: {legacy.map(label).join('; ')}.
+                </p>
+              );
+            })()}
             <div className="mt-2">
               <input
                 type="text"
@@ -895,10 +939,22 @@ function ChipMenu(props: {
   const [role, setRole] = useState<'primary' | 'backup'>(defaultRole === 'manager' ? 'primary' : defaultRole);
   const [err, setErr] = useState<string | null>(null);
 
+  // Coverage (backup) is a lead-engineer role: non-leads may only hold
+  // primaries. Existing violating chips still open with their saved role so
+  // reassignment isn't silently rewritten — but saving them as coverage is
+  // blocked below, which steers cleanup toward leads.
+  const selectedIsLead = (
+    lockedEngineer ?? engineers.find((e) => e.user_id === engineerId) ?? null
+  )?.is_lead === true;
+
   const handleSave = () => {
     setErr(null);
     if (!engineerId || !buildingId) {
       setErr('Pick an engineer and a building.');
+      return;
+    }
+    if (role === 'backup' && !selectedIsLead) {
+      setErr('Coverage is lead-only — non-lead engineers can only be Primary.');
       return;
     }
     onSave({ building_id: buildingId, user_id: engineerId, role_in_building: role });
@@ -970,8 +1026,15 @@ function ChipMenu(props: {
             <input type="radio" name="role" checked={role === 'primary'} onChange={() => setRole('primary')} />
             Primary
           </label>
-          <label className="t-small inline-flex items-center gap-1 cursor-pointer">
-            <input type="radio" name="role" checked={role === 'backup'}  onChange={() => setRole('backup')} />
+          <label
+            className={`t-small inline-flex items-center gap-1 ${selectedIsLead ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+            title={selectedIsLead ? undefined : 'Coverage is lead-only (★) — non-lead engineers can only be Primary.'}
+          >
+            <input
+              type="radio" name="role" checked={role === 'backup'}
+              disabled={!selectedIsLead}
+              onChange={() => setRole('backup')}
+            />
             Coverage
           </label>
         </fieldset>

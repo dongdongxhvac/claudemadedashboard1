@@ -4,7 +4,7 @@
 // has those data sources.
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import { useIsAdmin } from '../../hooks/useMe';
+import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
 import { SiteSwitcher } from './SiteSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -13,7 +13,9 @@ import { useBinneyUserIds } from './hooks/useBinneyPto';
 
 export default function BinneyManager() {
   const { session, signOut } = useAuth();
-  const isAdmin = useIsAdmin();
+  // Same link-vs-page gate fix as UPark's Pc.tsx: managers can open the
+  // (view-only) Admin page, so show them the link.
+  const canOpenAdmin = useCanOpenAdminPage();
   const siteQ = useBinneySiteId();
   const idsQ = useBinneyUserIds();
 
@@ -36,7 +38,7 @@ export default function BinneyManager() {
             <p className="t-small t-muted">{today} · first pass — PTO only</p>
           </div>
           <div className="flex items-center gap-4">
-            {isAdmin && (
+            {canOpenAdmin && (
               <Link to="/binney/admin" className="t-small t-accent hover:underline">
                 Admin
               </Link>
@@ -68,7 +70,7 @@ export default function BinneyManager() {
               <p className="t-small t-muted">
                 No engineers are homed at Binney St yet — the PTO panel below will stay
                 empty until the roster is loaded.
-                {isAdmin && (
+                {canOpenAdmin && (
                   <>
                     {' '}Add techs in <Link to="/binney/admin" className="t-accent hover:underline">Binney Admin</Link>.
                   </>

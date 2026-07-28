@@ -55,3 +55,15 @@ export function useCanAccessAdmin(): boolean {
   if (!me) return false;
   return me.role === 'admin' || me.is_lead === true;
 }
+
+/** Who may OPEN the /admin page at all — mirrors Admin.tsx's canAccess
+ *  (admin | lead | manager-ish, managers view-only). Used for the header
+ *  "Admin" link on the manager pages. Deliberately separate from
+ *  useCanAccessAdmin above, which many panels use as an EDIT gate — widening
+ *  that one would hand managers edit powers across the buildings KB. */
+export function useCanOpenAdminPage(): boolean {
+  const me = useMe().data;
+  if (!me) return false;
+  return me.role === 'admin' || me.role === 'manager' || me.role === 'director'
+    || me.is_manager === true || me.is_lead === true;
+}

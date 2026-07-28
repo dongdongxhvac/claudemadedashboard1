@@ -31,6 +31,7 @@ import {
   type RoundsProposalPayload, type PublishedProposal,
 } from '../../hooks/useAdminProposals';
 import { useMe } from '../../hooks/useMe';
+import { AssignRoundsExportButton } from './AssignRoundsExport';
 
 type MenuKey = string;
 
@@ -317,6 +318,7 @@ export function RoundsTab() {
             <div className="flex items-center gap-2 rounds-no-print">
               {!editing ? (
                 <>
+                  <AssignRoundsExportButton />
                   <button
                     onClick={() => window.print()}
                     className="t-small px-3 py-1 rounded border"
