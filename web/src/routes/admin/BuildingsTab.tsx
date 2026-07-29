@@ -195,7 +195,10 @@ export function BuildingsTab() {
   const pending = pendingQ.data ?? null;
   const hasPending = pending !== null;
   const canPropose = !!(me.data && (me.data.role === 'admin' || me.data.is_lead || me.data.is_manager));
-  const isManager = me.data?.is_manager === true;
+  // "Manager-ish" reviewers: mirrors current_user_is_manager() after 0112 —
+  // admins/directors can publish/reject, not just is_manager accounts.
+  const isManager = !!(me.data && (me.data.is_manager === true
+    || me.data.role === 'admin' || me.data.role === 'director'));
   const isProposer = pending && me.data ? pending.proposed_by_user_id === me.data.id : false;
 
   // What does the top card show?
