@@ -41,6 +41,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [queryClient]);
 
+  // Max session age: force a fresh login 7 days after the last real sign-in
+  // (per user 2026-07-28) — Supabase refresh tokens otherwise keep a session
+  // alive forever. Checked against auth's last_sign_in_at, which updates on
+  // password/magic-link sign-ins but NOT on silent token refreshes. The TV
+  // kiosk account (users.role = 'tv') is exempt so the shop displays survive
+  // unattended. Fails OPEN on the role lookup: wrongly keeping a session
+  // beats locking everyone out on a flaky query. Note last_sign_in_at is
+  // per-user, not per-device — signing in on your phone resets the desktop's
+  // clock too; close enough for the intent.
+  useEffect(() => {
+    if (!session) return;
+    const MAX_SESSION_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+    let cancelled = false;
+    const check = async () => {
+      const lastSignIn = session.user.last_sign_in_at;
+      if (!lastSignIn) return;
+      const age = Date.now() - new Date(lastSignIn).getTime();
+      if (!Number.isFinite(age) || age <= MAX_SESSION_AGE_MS) return;
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+      if (cancelled || error) return;
+      if (data?.role === 'tv') return;
+      await supabase.auth.signOut();
+    };
+    check();
+    const t = setInterval(check, 60 * 60 * 1000); // catch long-lived tabs
+    return () => { cancelled = true; clearInterval(t); };
+  }, [session]);
+
   const signInWithMagicLink = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
