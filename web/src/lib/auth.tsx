@@ -6,7 +6,6 @@ import { supabase } from './supabase';
 type AuthState = {
   session: Session | null;
   loading: boolean;
-  signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
@@ -73,15 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; clearInterval(t); };
   }, [session]);
 
-  const signInWithMagicLink = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      // Land on the role-aware home, which redirects based on the user's role.
-      options: { emailRedirectTo: window.location.origin + '/' },
-    });
-    return { error: error?.message ?? null };
-  };
-
+  // Magic-link sign-in was removed 2026-07-28 (user request) — Mimecast
+  // blocks emailed links on work inboxes and the 7-day session cap would
+  // have made the round-trip weekly. Passwords + invite links only.
   const signInWithPassword = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
@@ -92,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ session, loading, signInWithMagicLink, signInWithPassword, signOut }}>
+    <Ctx.Provider value={{ session, loading, signInWithPassword, signOut }}>
       {children}
     </Ctx.Provider>
   );

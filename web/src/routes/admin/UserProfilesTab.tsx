@@ -893,7 +893,7 @@ function AddUserDrawer({
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           />
           <p className="t-small t-muted mt-1">
-            Optional. Set this to let the user sign in via magic link.
+            Optional. Used as their sign-in email and for notifications.
           </p>
         </label>
 
@@ -959,7 +959,8 @@ function AddUserDrawer({
 
 // ============================================================================
 // PasswordPanel — admin sets/changes another user's password via Edge Function.
-// Useful when corporate email filters block magic links (e.g. Mimecast).
+// The only sign-in path since magic links were removed (2026-07-28); also
+// avoids the email round-trip that corporate filters (Mimecast) block.
 // ============================================================================
 function PasswordPanel({ userId, email }: { userId: string; email: string }) {
   const canCredential = useCanCredential();
@@ -1000,8 +1001,8 @@ function PasswordPanel({ userId, email }: { userId: string; email: string }) {
     <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
       <span className="t-small t-muted uppercase tracking-wider block">Password</span>
       <p className="t-small t-muted mt-0.5 mb-2">
-        Set a password for this user. They can then sign in via the Password tab on /login
-        without an email round-trip — useful when corporate filters block magic links.
+        Set a password for this user — passwords are the only way to sign in.
+        No email round-trip, so corporate filters (Mimecast) can't block it.
       </p>
       <div className="flex flex-col gap-2">
         <input
