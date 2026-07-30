@@ -1051,25 +1051,27 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
   const qc = useQueryClient();
   const [link, setLink]     = useState<string | null>(null);
   const [kind, setKind]     = useState<'invite' | 'recovery' | null>(null);
-  const [status, setStatus] = useState<'idle' | 'working' | 'emailing' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'working' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
-  const [sent, setSent]     = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mailHint, setMailHint] = useState(false);
 
-  const generate = async (deliverEmail: boolean) => {
+  // The server-side "Email link to user" delivery was removed 2026-07-29
+  // (user request): it sends as external mail, which Mimecast rewrites and
+  // blocks on work inboxes. Delivery is Copy or the admin's own Outlook.
+  const generate = async () => {
     if (!email.trim()) {
       setStatus('error');
       setMessage('Set a sign-in email first (and save), then return to generate a link.');
       return;
     }
-    setStatus(deliverEmail ? 'emailing' : 'working');
+    setStatus('working');
     setMessage(null);
-    setSent(null);
     const { data, error } = await supabase.functions.invoke('admin-invite-link', {
       body: {
         target_user_id: userId,
         redirect_to: `${location.origin}/set-password`,
-        deliver_email: deliverEmail,
+        deliver_email: false,
       },
     });
     if (error) {
@@ -1080,7 +1082,6 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
     }
     const res = data as {
       link?: string; action_link?: string; kind?: 'invite' | 'recovery';
-      emailed?: boolean; emailed_to?: string; email_error?: string;
     };
     const bestLink = res?.link ?? res?.action_link;
     if (!bestLink) {
@@ -1092,12 +1093,7 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
     setKind(res.kind ?? 'invite');
     setStatus('idle');
     setCopied(false);
-    // Report email outcome. A send failure still returns the link, so the
-    // admin can fall back to copy/paste.
-    if (deliverEmail) {
-      if (res.emailed) setSent(res.emailed_to ?? email);
-      else setMessage(`Emailing failed (${res.email_error ?? 'unknown'}). Copy the link below and send it another way.`);
-    }
+    setMailHint(false);
     qc.invalidateQueries({ queryKey: ['user_account_events'] });
   };
 
@@ -1115,9 +1111,15 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
   // mailto: opens the admin's OWN mail client (Outlook) pre-filled — they
   // review and press Send themselves. Mail sent colleague-to-colleague stays
   // internal, so it usually bypasses Mimecast's inbound link rewriting that
-  // blocks links the server-side sender (Gmail SMTP) delivers to work inboxes.
-  const openInMailClient = () => {
+  // blocks links a server-side sender delivers to work inboxes.
+  //
+  // mailto can only carry PLAIN text, and Outlook does not linkify inserted
+  // URLs — so we ALSO stage a rich-HTML copy of the same message (real
+  // <a href>) on the clipboard: Ctrl+A then Ctrl+V in the draft body swaps
+  // in the clickable version before sending.
+  const openInMailClient = async () => {
     if (!link) return;
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const subject = 'COVE Dashboard — set your password';
     const body = [
       'Hi,',
@@ -1129,6 +1131,21 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
       'It expires quickly — if it stops working, ask me for a fresh one.',
       `After setting it, sign in at ${location.origin} with your email and password.`,
     ].join('\r\n');
+    const html =
+      `<p>Hi,</p>` +
+      `<p>Use this one-time link to set your password for the COVE Dashboard:</p>` +
+      `<p><a href="${esc(link)}">${esc(link)}</a></p>` +
+      `<p>It expires quickly — if it stops working, ask me for a fresh one.<br>` +
+      `After setting it, sign in at <a href="${esc(location.origin)}">${esc(location.origin)}</a> with your email and password.</p>`;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html':  new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([body], { type: 'text/plain' }),
+      })]);
+      setMailHint(true);
+    } catch {
+      setMailHint(false); // rich copy is best-effort; the plain draft still works
+    }
     window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -1139,34 +1156,23 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
       <span className="t-small t-muted uppercase tracking-wider block">Invite link</span>
       <p className="t-small t-muted mt-0.5 mb-2">
         Generate a one-time link this user opens to set their own password. Copy it and send by
-        text/Teams, email it directly, or open it in your own Outlook and press Send (internal
-        mail usually clears Mimecast). Each new link replaces the old one, and links
-        expire quickly. Don't open it yourself: it signs you in as them.
+        text/Teams, or open it in your own Outlook and press Send (internal mail usually clears
+        Mimecast). Each new link replaces the old one, and links expire quickly. Don't open it
+        yourself: it signs you in as them.
       </p>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => generate(false)}
-            disabled={status === 'working' || status === 'emailing'}
+            onClick={generate}
+            disabled={status === 'working'}
             className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
             style={{ background: 'var(--color-accent)' }}
           >
             {status === 'working' ? 'Generating…' : link ? 'Generate new link' : 'Generate invite link'}
           </button>
-          <button
-            type="button"
-            onClick={() => generate(true)}
-            disabled={status === 'working' || status === 'emailing'}
-            title={`Generate a fresh link and email it to ${email || 'the user'}`}
-            className="t-small px-3 py-1 rounded font-medium border disabled:opacity-50"
-            style={{ color: 'var(--color-accent)', borderColor: 'var(--color-accent)', background: 'var(--color-card)' }}
-          >
-            {status === 'emailing' ? 'Sending…' : 'Email link to user'}
-          </button>
           {status === 'error' && <span className="t-small t-danger">{message}</span>}
-          {sent && <span className="t-small" style={{ color: 'var(--color-success, #16a34a)' }}>✓ Emailed to {sent}</span>}
-          {status === 'idle' && message && !sent && <span className="t-small t-danger">{message}</span>}
+          {status === 'idle' && message && <span className="t-small t-danger">{message}</span>}
         </div>
         {link && (
           <div>
@@ -1206,6 +1212,13 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
                 ✉ Open in Outlook
               </button>
             </div>
+            {mailHint && (
+              <p className="t-small mt-1" style={{ color: '#a16207' }}>
+                Outlook opened with the plain message. For a <b>clickable</b> link, click into the
+                email body and press <b>Ctrl+A</b> then <b>Ctrl+V</b> — a hyperlinked copy of the
+                same message is on your clipboard — then Send.
+              </p>
+            )}
           </div>
         )}
       </div>
