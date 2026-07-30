@@ -993,6 +993,26 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
     }
   };
 
+  // mailto: opens the admin's OWN mail client (Outlook) pre-filled — they
+  // review and press Send themselves. Mail sent colleague-to-colleague stays
+  // internal, so it usually bypasses Mimecast's inbound link rewriting that
+  // blocks links the server-side sender (Gmail SMTP) delivers to work inboxes.
+  const openInMailClient = () => {
+    if (!link) return;
+    const subject = 'COVE Dashboard — set your password';
+    const body = [
+      'Hi,',
+      '',
+      'Use this one-time link to set your password for the COVE Dashboard:',
+      '',
+      link,
+      '',
+      'It expires quickly — if it stops working, ask me for a fresh one.',
+      `After setting it, sign in at ${location.origin} with your email and password.`,
+    ].join('\r\n');
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   if (!canCredential) return null;
 
   return (
@@ -1000,7 +1020,8 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
       <span className="t-small t-muted uppercase tracking-wider block">Invite link</span>
       <p className="t-small t-muted mt-0.5 mb-2">
         Generate a one-time link this user opens to set their own password. Copy it and send by
-        text/Teams, or email it to them directly. Each new link replaces the old one, and links
+        text/Teams, email it directly, or open it in your own Outlook and press Send (internal
+        mail usually clears Mimecast). Each new link replaces the old one, and links
         expire quickly. Don't open it yourself: it signs you in as them.
       </p>
       <div className="flex flex-col gap-2">
@@ -1052,6 +1073,18 @@ function InviteLinkPanel({ userId, email }: { userId: string; email: string }) {
                 style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
               >
                 {copied ? '✓ Copied' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                onClick={openInMailClient}
+                disabled={!email.trim()}
+                title={email.trim()
+                  ? `Open your mail app with a pre-filled message to ${email} — you press Send`
+                  : 'Set a sign-in email first'}
+                className="t-small px-2 py-1 rounded border shrink-0 disabled:opacity-40"
+                style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+              >
+                ✉ Open in Outlook
               </button>
             </div>
           </div>
