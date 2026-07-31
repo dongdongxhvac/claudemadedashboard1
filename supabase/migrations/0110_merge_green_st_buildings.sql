@@ -1,5 +1,11 @@
 -- 0110: Merge the Green St trio into one building record.
 --
+-- ⚠ CORRECTION (2026-07-29, migration 0113): the trio premise was wrong —
+-- only Building 10 (10 Green St) and 20 Sidney Street are one building.
+-- "Garage - 30 Pilgrim Street" is separate and was RESTORED by 0113
+-- (reactivated, Evan's primary reopened, Dariusz's coverage moved back).
+-- The Building-10 half of this migration stands.
+--
 -- Per the site: "Building 10" (10 Green St), "20 Sidney Street" and
 -- "Garage - 30 Pilgrim Street" are one physical structure. Survivor =
 -- 20 Sidney Street; Building 10 and Garage-30 are retired.
