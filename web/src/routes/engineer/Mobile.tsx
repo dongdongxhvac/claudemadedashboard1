@@ -98,11 +98,11 @@ export default function EngineerMobile() {
           <Link to="/buildings" className="t-small t-accent hover:underline">
             Buildings
           </Link>
-          {(me.data?.role === 'admin' || me.data?.is_lead === true) && (
-            <Link to="/admin" className="t-small t-accent hover:underline">
-              {me.data?.role === 'admin' ? 'Admin' : 'Admin (lead)'}
-            </Link>
-          )}
+          {/* No Admin link on the phone surface (removed 2026-07-29 per user):
+              the admin tabs are desktop-density pages, and leads should do
+              proposal work from a PC. Leads still get "Admin (lead)" in the
+              desk view (Pc.tsx). The role==='admin' case was dead code here —
+              non-engineers are redirected off this page above. */}
           <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
         </div>
       </header>
