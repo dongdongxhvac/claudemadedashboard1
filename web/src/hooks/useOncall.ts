@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { dealRotationWeeks } from '../lib/oncallRotation';
 
 export type OncallRotation = {
   id: string;
@@ -31,11 +32,11 @@ function effectiveOncallDate(now: Date): string {
 
 /** Who is on-call at a given instant? Weeks run Friday 07:00 → Friday
  *  07:00 local (same cutover as effectiveOncallDate), anchored at
- *  settings.start_friday, one participant per week in sort_order,
- *  repeating forever. Mirrors the /tv rotation-grid math
- *  ((cycleIndex·N + sort_order − 1) weeks ⇒ week w → sort_order
- *  (w mod N) + 1). Returns null before the rotation start or when the
- *  rotation is unconfigured.
+ *  settings.start_friday, dealt over participants in sort_order by the
+ *  shared staged-join generator (lib/oncallRotation.ts — pointer walk that
+ *  skips not-yet-effective members; ≡ w mod N when everyone is effective).
+ *  Returns null before the rotation start, when unconfigured, or on a gap
+ *  week where nobody is eligible.
  *
  *  Used by §11 overtime (UPark rule: nobody signs up → the on-call tech
  *  covers it, so the assign modal highlights them). */
@@ -54,7 +55,12 @@ export function oncallParticipantAt(
   const days = Math.round(diffMs / 86_400_000);
   const week = Math.floor(days / 7);
   const ordered = [...participants].sort((a, b) => a.sort_order - b.sort_order);
-  return ordered[week % ordered.length] ?? null;
+  // Staged-join dealing (2026-07-29): the shared pointer-walk generator
+  // instead of week % N, so a member with a future effective_from slots in
+  // on their first eligible pass without shifting anyone else's weeks.
+  const deal = dealRotationWeeks(ordered, settings.start_friday, week + 1);
+  const idx = deal.get(week);
+  return idx === undefined ? null : ordered[idx] ?? null;
 }
 
 /** Current rotation (Friday 7am → next Friday 7am local) joined with engineer
@@ -318,89 +324,11 @@ export function useOncallParticipants() {
   });
 }
 
-/**
- * Bulk save: replaces oncall_participants, updates settings, and regenerates
- * the oncall_rotations rows for week_start >= start_friday based on a round-
- * robin over participants (sort_order) for `rotations_per_engineer` cycles.
- * Slots whose week_start falls before a participant's effective_from are
- * filtered out (the participant's row in the UI shows "—" for those cells).
- */
-export function useSaveOncallSchedule() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      start_friday: string;
-      rotations_per_engineer: number;
-      participants: { user_id: string; effective_from: string | null }[];
-    }) => {
-      const { start_friday, rotations_per_engineer, participants } = input;
-
-      // 1) Update settings row
-      const { error: se } = await supabase
-        .from('oncall_schedule_settings')
-        .update({
-          start_friday,
-          rotations_per_engineer,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', 'default');
-      if (se) throw se;
-
-      // 2) Replace oncall_participants: delete all, re-insert in new order.
-      //    Small N (≤ team size), so full-replace is fine.
-      const { error: de } = await supabase
-        .from('oncall_participants')
-        .delete()
-        .not('id', 'is', null); // matches every row
-      if (de) throw de;
-
-      if (participants.length > 0) {
-        const toInsert = participants.map((p, idx) => ({
-          user_id: p.user_id,
-          sort_order: idx + 1,
-          effective_from: p.effective_from,
-        }));
-        const { error: ie } = await supabase.from('oncall_participants').insert(toInsert);
-        if (ie) throw ie;
-      }
-
-      // 3) Compute the schedule rows in JS.
-      const rotationsToInsert: { week_start: string; primary_user_id: string }[] = [];
-      const N = participants.length;
-      const R = rotations_per_engineer;
-      for (let cycle = 0; cycle < R; cycle++) {
-        for (let i = 0; i < N; i++) {
-          const weekStart = addDaysIso(start_friday, (cycle * N + i) * 7);
-          const p = participants[i];
-          if (p.effective_from && p.effective_from > weekStart) continue; // pre-effective skip
-          rotationsToInsert.push({ week_start: weekStart, primary_user_id: p.user_id });
-        }
-      }
-
-      // 4) Delete existing rotations from start_friday onwards. Past rows stay.
-      const { error: drot } = await supabase
-        .from('oncall_rotations')
-        .delete()
-        .gte('week_start', start_friday);
-      if (drot) throw drot;
-
-      // 5) Insert the freshly computed rows.
-      if (rotationsToInsert.length > 0) {
-        const { error: irot } = await supabase
-          .from('oncall_rotations')
-          .insert(rotationsToInsert);
-        if (irot) throw irot;
-      }
-
-      return { rotationsWritten: rotationsToInsert.length };
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY_CURRENT });
-      qc.invalidateQueries({ queryKey: KEY_PARTICIPANTS });
-      qc.invalidateQueries({ queryKey: KEY_SETTINGS });
-    },
-  });
-}
+// useSaveOncallSchedule (the pre-proposal bulk-save mutation) was DELETED
+// 2026-07-31: it had zero callers since the propose→publish workflow shipped,
+// and it still wrote oncall_rotations with the old gap-week formula — the
+// last write path that contradicted the staged-join dealing (0114 /
+// lib/oncallRotation.ts). Publishing goes through publish_oncall_proposal.
 
 // ============================================================================
 // Oncall sticky notes (3 fixed slots, header scratch area)

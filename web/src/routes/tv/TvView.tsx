@@ -16,6 +16,7 @@
 // the standalone panel got displaced when BMS health moved in.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
+import { rotationWeeksByMember } from '../../lib/oncallRotation';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
 import { useCurrentPmRows, useCurrentLaborRows, useLaborDaily, useRecentPmCloses, useRecentWoCloses, useCurrentWoRows, woDaysSinceUpdate, WO_STALE_DAYS, type WoRow } from '../../hooks/useCurrentSnapshots';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
@@ -443,15 +444,6 @@ function OncallPanel({ participants, settings, notes, now }: {
       return `${y}-${m}-${day}`;
     })();
 
-    const isoOf = (offsetDays: number): string => {
-      const d = new Date(startD);
-      d.setDate(d.getDate() + offsetDays);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-
     const fmtRange = (weekStart: string): string => {
       const d1 = new Date(weekStart + 'T00:00:00');
       const d2 = new Date(d1); d2.setDate(d1.getDate() + 7);
@@ -488,13 +480,22 @@ function OncallPanel({ participants, settings, notes, now }: {
     for (let c = 0; c < cycles; c++) columns.push({ key: `c${c + 1}`, label: `CYCLE ${c + 1}`, cycleIndex: c });
     columns.push({ key: 'preview', label: '+1', cycleIndex: cycles });
 
-    // Build rows
-    const rows = participants.map((p) => {
+    // Build rows — staged-join dealing (2026-07-29): same pointer-walk
+    // generator as the admin grid, so a joiner with a future effective_from
+    // slots in at their position on their first eligible pass and nobody
+    // else's weeks move. '—' = no turn in the visible window.
+    const ordered = [...participants].sort((a, b) => a.sort_order - b.sort_order);
+    const wk = rotationWeeksByMember(
+      ordered.map((p) => ({ user_id: p.user_id, effective_from: p.effective_from })),
+      startIso,
+      cycles + 1,
+    );
+    const rows = ordered.map((p, pIdx) => {
       const cells = columns.map((col) => {
-        const offsetDays = (col.cycleIndex * N + p.sort_order - 1) * 7;
-        const weekStart = isoOf(offsetDays);
-        const beforeEffective = p.effective_from && weekStart < p.effective_from;
-        const isCurrent = weekStart === eff || (
+        const weekStart = col.cycleIndex === -1
+          ? wk.prev[pIdx]
+          : wk.forward[pIdx][col.cycleIndex] ?? null;
+        const isCurrent = !!weekStart && (weekStart === eff || (
           // window check: eff falls inside [weekStart, weekStart+7)
           weekStart <= eff && (() => {
             const d = new Date(weekStart + 'T00:00:00');
@@ -504,16 +505,16 @@ function OncallPanel({ participants, settings, notes, now }: {
             const day = String(d.getDate()).padStart(2, '0');
             return eff < `${y}-${m}-${day}`;
           })()
-        );
+        ));
         return {
           key: col.key,
-          weekStart,
-          range: beforeEffective ? '—' : fmtRange(weekStart),
-          isCurrent: !beforeEffective && isCurrent,
-          isHoliday: !beforeEffective && weekHasHoliday(weekStart),
+          weekStart: weekStart ?? '',
+          range: weekStart ? fmtRange(weekStart) : '—',
+          isCurrent,
+          isHoliday: !!weekStart && weekHasHoliday(weekStart),
           isPrev: col.cycleIndex === -1,
           isPreview: col.cycleIndex === cycles,
-          beforeEffective,
+          beforeEffective: !weekStart,
         };
       });
       const rowIsCurrent = cells.some((c) => c.isCurrent);

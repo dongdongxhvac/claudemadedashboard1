@@ -31,6 +31,7 @@ import {
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe } from '../../hooks/useMe';
+import { dealRotationWeeks, rotationWeeksByMember } from '../../lib/oncallRotation';
 
 // ============================================================================
 // Helpers
@@ -131,10 +132,13 @@ function computeEffectiveOncall(
   const ws = activeWeekStart(startFriday, todayIso);
   if (!ws) return null;
   const weekEndExclusive = addDaysIso(ws, 7);
-  const N = participants.length;
-  const diff = daysBetween(startFriday, ws);
-  const idx = (Math.floor(diff / 7)) % N;
-  const scheduled = participants[idx];
+  // Staged-join dealing (2026-07-31): same pointer-walk generator as the
+  // live On-call tab — not week % N, which re-deals everything the moment a
+  // joiner with a future effective_from enters the roster.
+  const week = Math.floor(daysBetween(startFriday, ws) / 7);
+  const deal = dealRotationWeeks(participants, startFriday, week + 1);
+  const dealtIdx = deal.get(week);
+  const scheduled = dealtIdx === undefined ? undefined : participants[dealtIdx];
   if (!scheduled) return null;
   const sched = { user_id: scheduled.user_id, full_name: scheduled.full_name };
 
@@ -558,13 +562,29 @@ function OverrideGrid({
 }) {
   const visibleCycles = rotations + 1;
   const columnIndices = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
-  const N = participants.length;
+
+  // Staged-join dealing (2026-07-31): same generator as the live On-call
+  // grid, so this sandbox's week cells line up with the published schedule
+  // (and with override starts_on matching) even with a pending joiner.
+  const weeksByMember = useMemo(
+    () => rotationWeeksByMember(participants, startFriday, visibleCycles),
+    [participants, startFriday, visibleCycles],
+  );
 
   function cellInfo(p: OncallParticipant, i: number, cycle: number) {
-    const weekStart = addDaysIso(startFriday, (cycle * N + i) * 7);
-    const weekEnd   = addDaysIso(weekStart, 7);
+    const weekStart = cycle === -1
+      ? weeksByMember.prev[i]
+      : weeksByMember.forward[i][cycle] ?? null;
+    if (!weekStart) {
+      return {
+        display: '—', weekStart: null, active: false,
+        preEffective: p.effective_from != null,
+        weekOverride: undefined as CoverageOverride | undefined,
+        dayOverrides: [] as CoverageOverride[],
+      };
+    }
+    const weekEnd = addDaysIso(weekStart, 7);
     const active = weekStart <= todayIso && todayIso < weekEnd;
-    const preEffective = p.effective_from != null && p.effective_from > weekStart;
 
     // Find any week-level override matching this engineer's week.
     const weekOverride = overrides.find(
@@ -582,7 +602,7 @@ function OverrideGrid({
 
     return {
       display: `${fmtMd(weekStart)}–${fmtMd(weekEnd)}`,
-      weekStart, active, preEffective,
+      weekStart, active, preEffective: false,
       weekOverride, dayOverrides,
     };
   }
@@ -631,7 +651,7 @@ function OverrideGrid({
                   // Cells are clickable only when add-mode is available AND
                   // the cell isn't a past cycle (no point assigning coverage
                   // for a week that's already over).
-                  const clickable = !!onCellClick && !isPrev && !info.preEffective;
+                  const clickable = !!onCellClick && !isPrev && !info.preEffective && !!info.weekStart;
                   const coverName = info.weekOverride
                     ? shortName(engById.get(info.weekOverride.cover_user_id)?.full_name)
                     : null;
@@ -651,7 +671,7 @@ function OverrideGrid({
                       key={c}
                       className="py-1 px-1.5 text-center t-mono whitespace-nowrap"
                       title={clickable ? (tooltip ? `${tooltip}\n\nClick to add coverage` : 'Click to add coverage') : (tooltip || undefined)}
-                      onClick={clickable ? () => onCellClick!(p.user_id, info.weekStart) : undefined}
+                      onClick={clickable ? () => onCellClick!(p.user_id, info.weekStart!) : undefined}
                       style={{
                         cursor: clickable ? 'pointer' : undefined,
                         background: hasWeek
@@ -682,7 +702,8 @@ function OverrideGrid({
                         // instead of an opaque "N day swaps".
                         const byCover = new Map<string, string[]>();
                         for (const o of info.dayOverrides) {
-                          const dates = datesInRangeAndWeek(o.starts_on, o.ends_on, info.weekStart);
+                          // hasDay implies a real week (null-week cells carry no overrides)
+                          const dates = datesInRangeAndWeek(o.starts_on, o.ends_on, info.weekStart!);
                           const cur = byCover.get(o.cover_user_id) ?? [];
                           byCover.set(o.cover_user_id, [...cur, ...dates]);
                         }
@@ -760,15 +781,15 @@ function AddCoverageModal({
   };
 
   /** Given an engineer user_id, find their NEXT upcoming on-call Friday
-   *  (the first week whose end is in the future). null if not in rotation. */
+   *  (the first week whose end is in the future). null if not in rotation.
+   *  Staged-join dealing (2026-07-31) via the shared generator. */
   function nextOncallFridayFor(userId: string): string | null {
     if (!userId) return null;
     const i = participants.findIndex((p) => p.user_id === userId);
     if (i < 0) return null;
-    const N = participants.length;
     const today = new Date().toISOString().slice(0, 10);
-    for (let cycle = 0; cycle <= rotations + 1; cycle++) {
-      const w = addDaysIso(startFriday, (cycle * N + i) * 7);
+    const wk = rotationWeeksByMember(participants, startFriday, rotations + 2);
+    for (const w of wk.forward[i]) {
       if (addDaysIso(w, 7) > today) return w;
     }
     return null;
@@ -1020,18 +1041,15 @@ function AddCoverageModal({
   }, [participants.length, rotations, startFriday]);
 
   /** All upcoming on-call Fridays for a given engineer, oldest first.
-   *  Returns [] when the engineer isn't in the current rotation. */
+   *  Returns [] when the engineer isn't in the current rotation.
+   *  Staged-join dealing (2026-07-31) via the shared generator. */
   const onCallWeeksFor = (userId: string): string[] => {
     if (!userId) return [];
     const idx = participants.findIndex((p) => p.user_id === userId);
     if (idx < 0) return [];
-    const N = participants.length;
-    const out: string[] = [];
-    for (let cycle = 0; cycle <= rotations + 1; cycle++) {
-      out.push(addDaysIso(startFriday, (cycle * N + idx) * 7));
-    }
+    const wk = rotationWeeksByMember(participants, startFriday, rotations + 2);
     const today = new Date().toISOString().slice(0, 10);
-    return out.filter((w) => addDaysIso(w, 7) > today);
+    return wk.forward[idx].filter((w) => addDaysIso(w, 7) > today);
   };
 
   // When the engineer is locked from a grid click, narrow the week quick-pick

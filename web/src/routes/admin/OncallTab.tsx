@@ -10,9 +10,14 @@
 //   - Only one pending proposal per tab (DB unique partial index); the
 //     "Propose changes" button is disabled while one is open.
 //
-// Round-robin math (unchanged from v1.1): engineer[i] gets weekStart =
-// start_friday + (cycle*N + i)*7. effective_from filters pre-effective cells.
-// Preview cycle: R+1 columns rendered; only first R cycles get persisted.
+// Round-robin math (staged joins, 2026-07-31): weeks are dealt by the shared
+// pointer-walk generator in lib/oncallRotation.ts — the ordered roster is
+// walked one Friday at a time, skipping members whose effective_from is
+// after the week, so a joiner slots in at their position on their first
+// eligible pass and nobody else's weeks move. Identical to the old
+// start_friday + (cycle*N + i)*7 formula when everyone is effective. The
+// SQL twin deal_oncall_weeks() (migration 0114) materializes the same deal.
+// Preview column: each member's (R+1)-th turn, rendered italic.
 // Holiday weeks rendered in red (US federal calendar; weekContainsHoliday).
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -31,6 +36,7 @@ import { useEngineers } from '../../hooks/useEngineers';
 import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe } from '../../hooks/useMe';
 import { weekContainsHoliday } from '../../lib/holidays';
+import { dealRotationWeeks, rotationWeeksByMember } from '../../lib/oncallRotation';
 
 type Row = {
   user_id: string;
@@ -124,12 +130,13 @@ function computeOncallDiff(
     const m = new Map<string, string | null>();
     const start = srcSettings.start_friday;
     if (!start) return m;
-    const N = src.length;
+    // Same staged-join dealing as the grid, so diff highlights line up with
+    // what the cells actually display.
+    const wk = rotationWeeksByMember(src, start, visibleCycles);
     src.forEach((p, idx) => {
       for (const c of cycleRange) {
-        const weekStart = addDaysIso(start, (c * N + idx) * 7);
         m.set(`${p.user_id}:${c}`,
-          p.effective_from && p.effective_from > weekStart ? null : weekStart);
+          c === -1 ? wk.prev[idx] : wk.forward[idx][c] ?? null);
       }
     });
     return m;
@@ -303,11 +310,11 @@ export function OncallTab() {
   // shop already prints ("ON CALL 2026": one row per engineer, one column
   // per rotation, MM/DD - MM/DD cells, holiday weeks in red). Sheet 1 is
   // that calendar; sheet 2 is a flat chronological list for filtering.
-  // Both ROLL FORWARD automatically: columns start at the cycle containing
-  // today (not the historical anchor Friday), so the printout never leads
-  // with months of finished weeks and needs no republish to stay fresh.
-  // Same round-robin math as RotationTable.cellInfo, incl. the +1 preview
-  // cycle that is never materialized in oncall_rotations.
+  // Both ROLL FORWARD automatically: columns are each engineer's next turns
+  // (not calendar cycles from the anchor), so the printout never leads with
+  // months of finished weeks and needs no republish to stay fresh. Same
+  // staged-join dealing as RotationTable.cellInfo via lib/oncallRotation.ts;
+  // the far tail may extend past what publish materialized.
   const onExportXlsx = async () => {
     const start = liveSettings.start_friday;
     if (!start || liveRows.length === 0) return;
@@ -320,16 +327,38 @@ export function OncallTab() {
     // fills), which the plain 'xlsx' package silently drops.
     const XLSX = await import('xlsx-js-style');
 
-    // First visible cycle = the one containing today (clamped into range).
+    // Staged-join dealing (2026-07-29): deal enough weeks to cover
+    // anchor → today plus R+1 passes ahead, then keep only weeks that
+    // haven't fully finished — the export rolls forward automatically no
+    // matter how stale the anchor is, and joiners slot in without shifting
+    // anyone (same generator as the on-screen grid).
     const daysSinceStart = Math.round(
       (new Date(localToday + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86_400_000);
-    const currentCycle = daysSinceStart < 0 ? 0
-      : Math.min(Math.floor(Math.floor(daysSinceStart / 7) / N), R);
-    const cycles: number[] = [];
-    for (let c = currentCycle; c <= R; c++) cycles.push(c); // R = +1 preview
+    const horizon = Math.min(520, Math.max(0, Math.floor(daysSinceStart / 7)) + (R + 2) * N);
+    const deal = dealRotationWeeks(liveRows, start, horizon);
+    const upcoming: { weekStart: string; idx: number }[] = [];
+    for (let w = 0; w < horizon; w++) {
+      const idx = deal.get(w);
+      if (idx === undefined) continue; // gap week (nobody eligible)
+      const weekStart = addDaysIso(start, w * 7);
+      if (addDaysIso(weekStart, 7) > localToday) upcoming.push({ weekStart, idx });
+    }
+    if (upcoming.length === 0) {
+      alert('Nothing to export — the rotation anchor is too old. Republish the schedule first.');
+      return;
+    }
 
-    const weekOf = (cycle: number, i: number) => addDaysIso(start, (cycle * N + i) * 7);
-    const isPastWeek = (weekStart: string) => addDaysIso(weekStart, 7) <= localToday;
+    // Wall-calendar columns: each engineer's next turns, up to R+1 shown.
+    const perMember: string[][] = Array.from({ length: N }, () => []);
+    for (const a of upcoming) {
+      if (perMember[a.idx].length < R + 1) perMember[a.idx].push(a.weekStart);
+    }
+    const numCols = Math.max(1, ...perMember.map((l) => l.length));
+    // Trim the flat sheet + title range to the calendar's actual window so
+    // the two sheets in the file agree on coverage.
+    const lastShown = perMember.reduce(
+      (max, l) => (l.length > 0 && l[l.length - 1] > max ? l[l.length - 1] : max), '');
+    const shown = upcoming.filter((a) => a.weekStart <= lastShown);
 
     // Paper sheet uses first names; disambiguate collisions with a last initial.
     const firstCounts = new Map<string, number>();
@@ -346,17 +375,16 @@ export function OncallTab() {
     // ---- Sheet 1: the wall calendar --------------------------------------
     // Title carries the covered date range (per user, clearer than a bare
     // year since the rolled-forward window usually straddles two years).
-    const rangeStart = weekOf(currentCycle, 0);
-    const rangeEnd = addDaysIso(weekOf(R, N - 1), 7);
+    const rangeStart = shown[0].weekStart;
+    const rangeEnd = addDaysIso(shown[shown.length - 1].weekStart, 7);
     const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
     const cal: string[][] = [[`ON CALL ${mdy(rangeStart)} – ${mdy(rangeEnd)}`]];
     liveRows.forEach((p, i) => {
       cal.push([
         shortName(p.full_name),
-        ...cycles.map((c) => {
-          const ws = weekOf(c, i);
-          if (p.effective_from && p.effective_from > ws) return '—';
-          return `${fmtMd(ws)} - ${fmtMd(addDaysIso(ws, 7))}`;
+        ...Array.from({ length: numCols }, (_, k) => {
+          const ws = perMember[i][k];
+          return ws ? `${fmtMd(ws)} - ${fmtMd(addDaysIso(ws, 7))}` : '—';
         }),
       ]);
     });
@@ -366,7 +394,7 @@ export function OncallTab() {
       if (n.body.trim()) { noteRows.push(cal.length); cal.push([n.body.trim()]); }
     }
     const wsCal = XLSX.utils.aoa_to_sheet(cal);
-    wsCal['!cols'] = [{ wch: 12 }, ...cycles.map(() => ({ wch: 15 }))];
+    wsCal['!cols'] = [{ wch: 12 }, ...Array.from({ length: numCols }, () => ({ wch: 15 }))];
     wsCal['!rows'] = cal.map((_, r) => (r === 0 ? { hpt: 24 } : { hpt: 20 }));
 
     // ---- Sheet 2: flat forward-looking list -------------------------------
@@ -376,16 +404,10 @@ export function OncallTab() {
     flat.push([]);
     const flatHeaderRow = flat.length; // remembered for the styling pass
     flat.push(['Week start (Fri)', 'Week end (Fri)', 'Engineer', 'Status', 'Holiday in week']);
-    const weeks: { weekStart: string; name: string }[] = [];
-    for (const cycle of cycles) {
-      liveRows.forEach((p, i) => {
-        const weekStart = weekOf(cycle, i);
-        if (p.effective_from && p.effective_from > weekStart) return; // pre-effective gap
-        if (isPastWeek(weekStart)) return; // roll forward: finished weeks stay out
-        weeks.push({ weekStart, name: p.full_name });
-      });
-    }
-    weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    const weeks: { weekStart: string; name: string }[] = shown.map((a) => ({
+      weekStart: a.weekStart,
+      name: liveRows[a.idx].full_name,
+    }));
     for (const w of weeks) {
       flat.push([
         w.weekStart,
@@ -418,26 +440,26 @@ export function OncallTab() {
 
     // Calendar sheet: big centered title, bold name column, bordered week
     // cells; holiday weeks red+bold (like the paper), current week green,
-    // already-finished weeks muted gray.
+    // '—' cells (no turn in the window / pre-effective joiner) muted gray.
     style(wsCal, 0, 0, { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } });
-    wsCal['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cycles.length } }];
+    wsCal['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numCols } }];
     liveRows.forEach((_p, i) => {
       const r = 1 + i;
       style(wsCal, r, 0, { font: { bold: true }, border, alignment: { horizontal: 'center', vertical: 'center' } });
-      cycles.forEach((c, ci) => {
-        const ws = weekOf(c, i);
-        const holiday = !!weekContainsHoliday(ws);
-        const current = isActiveWeek(ws, localToday);
-        style(wsCal, r, 1 + ci, {
+      for (let k = 0; k < numCols; k++) {
+        const ws = perMember[i][k];
+        const holiday = !!ws && !!weekContainsHoliday(ws);
+        const current = !!ws && isActiveWeek(ws, localToday);
+        style(wsCal, r, 1 + k, {
           border,
           font: {
             bold: holiday || current,
-            color: holiday ? { rgb: 'B91C1C' } : isPastWeek(ws) ? { rgb: '9CA3AF' } : undefined,
+            color: holiday ? { rgb: 'B91C1C' } : !ws ? { rgb: '9CA3AF' } : undefined,
           },
           fill: current ? { patternType: 'solid', fgColor: { rgb: 'DCFCE7' } } : undefined,
           alignment: { horizontal: 'center', vertical: 'center' },
         });
-      });
+      }
     });
     for (const r of noteRows) {
       style(wsCal, r, 0, { font: { italic: true, color: { rgb: '6B7280' } } });
@@ -536,34 +558,56 @@ export function OncallTab() {
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
                 />
               </label>
-              <button
-                type="button"
-                onClick={() => setStartFriday(addDaysIso(startFriday, draft.length * 7))}
-                disabled={!startFriday || draft.length === 0}
-                className="t-small px-3 py-1 rounded border disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-                title="Advance the start Friday by one full cycle (one week per engineer in the rotation). Everyone keeps exactly the same weeks — the window just slides forward one cycle."
-              >
-                Move forward 1 cycle ▸
-              </button>
               {(() => {
-                // Re-anchoring off a cycle boundary silently hands every
-                // engineer a different week (the 09/18 incident) — warn
-                // while composing. Only meaningful when the roster size is
-                // unchanged; adding/removing people reshuffles regardless.
-                const liveStart = settingsQ.data?.start_friday;
-                if (!liveStart || !startFriday) return null;
-                if (draft.length === 0 || draft.length !== liveRows.length) return null;
-                const span = draft.length * 7;
-                const diff = Math.round((new Date(startFriday + 'T00:00:00').getTime()
-                  - new Date(liveStart + 'T00:00:00').getTime()) / 86_400_000);
-                if (((diff % span) + span) % span === 0) return null;
+                // "Move forward 1 cycle" and the cycle-alignment warning both
+                // assume the fixed mod-N deal — which only holds when NO
+                // participant carries an effective_from (staged joins make
+                // the deal history-dependent, so shifting the anchor CAN
+                // reassign weeks even by whole cycles). Gate both on that.
+                const hasStagedJoin = draft.some((p) => p.effective_from)
+                  || liveRows.some((p) => p.effective_from);
                 return (
-                  <p className="t-small" style={{ flexBasis: '100%', color: '#a16207', margin: 0 }}>
-                    ⚠ {startFriday} is {diff} days from the published anchor ({liveStart}) — not a whole number
-                    of cycles ({draft.length} weeks), so every engineer would land on different weeks than
-                    published. Use “Move forward 1 cycle” to slide the window without reassigning anyone.
-                  </p>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setStartFriday(addDaysIso(startFriday, draft.length * 7))}
+                      disabled={!startFriday || draft.length === 0 || hasStagedJoin}
+                      className="t-small px-3 py-1 rounded border disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                      title={hasStagedJoin
+                        ? 'Unavailable while a staged join (eff from) is in the rotation — moving the anchor would re-deal weeks. Set Start Friday manually and verify the grid below.'
+                        : 'Advance the start Friday by one full cycle (one week per engineer in the rotation). Everyone keeps exactly the same weeks — the window just slides forward one cycle.'}
+                    >
+                      Move forward 1 cycle ▸
+                    </button>
+                    {(() => {
+                      const liveStart = settingsQ.data?.start_friday;
+                      if (!liveStart || !startFriday || draft.length === 0) return null;
+                      if (hasStagedJoin) {
+                        if (startFriday === liveStart) return null;
+                        return (
+                          <p className="t-small" style={{ flexBasis: '100%', color: '#a16207', margin: 0 }}>
+                            ⚠ A staged join (eff from) is in the rotation, so moving the anchor re-deals
+                            weeks — the cycle-alignment shortcut doesn't apply. Compare the grid below
+                            against the published schedule before submitting.
+                          </p>
+                        );
+                      }
+                      // Fixed-roster case: mod-N alignment check (the 09/18 incident).
+                      if (draft.length !== liveRows.length) return null;
+                      const span = draft.length * 7;
+                      const diff = Math.round((new Date(startFriday + 'T00:00:00').getTime()
+                        - new Date(liveStart + 'T00:00:00').getTime()) / 86_400_000);
+                      if (((diff % span) + span) % span === 0) return null;
+                      return (
+                        <p className="t-small" style={{ flexBasis: '100%', color: '#a16207', margin: 0 }}>
+                          ⚠ {startFriday} is {diff} days from the published anchor ({liveStart}) — not a whole number
+                          of cycles ({draft.length} weeks), so every engineer would land on different weeks than
+                          published. Use “Move forward 1 cycle” to slide the window without reassigning anyone.
+                        </p>
+                      );
+                    })()}
+                  </>
                 );
               })()}
               <label className="block">
@@ -1285,13 +1329,24 @@ function RotationTable({
   const visibleCycles = settings.rotations_per_engineer + 1; // +1 preview
   const columnIndices = [-1, ...Array.from({ length: visibleCycles }, (_, i) => i)];
 
+  // Staged-join dealing (2026-07-29): weeks come from the shared pointer-walk
+  // generator — a member with a future effective_from slots in at their
+  // roster position on their first eligible pass, and nobody else's weeks
+  // move. Column c = the member's c-th dealt week; identical to the old
+  // fixed formula whenever everyone is effective.
+  const weeksByMember = useMemo(
+    () => settings.start_friday
+      ? rotationWeeksByMember(rows, settings.start_friday, visibleCycles)
+      : null,
+    [rows, settings.start_friday, visibleCycles],
+  );
+
   function cellInfo(p: Row, i: number, cycle: number) {
-    const start = settings.start_friday;
-    if (!start) return { display: '—', preEffective: false, active: false, holiday: null as ReturnType<typeof weekContainsHoliday> };
-    const N = rows.length;
-    const weekStart = addDaysIso(start, (cycle * N + i) * 7);
-    if (p.effective_from && p.effective_from > weekStart) {
-      return { display: '—', preEffective: true, active: false, holiday: null };
+    const weekStart = weeksByMember
+      ? (cycle === -1 ? weeksByMember.prev[i] : weeksByMember.forward[i][cycle] ?? null)
+      : null;
+    if (!weekStart) {
+      return { display: '—', preEffective: !!p.effective_from, active: false, holiday: null as ReturnType<typeof weekContainsHoliday> };
     }
     return {
       display: `${fmtMd(weekStart)}–${fmtMd(addDaysIso(weekStart, 7))}`,

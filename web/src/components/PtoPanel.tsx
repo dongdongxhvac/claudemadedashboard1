@@ -24,6 +24,7 @@ import {
   useOncallParticipants, useOncallSettings,
   addDaysIso, fmtMd as fmtMdOnc,
 } from '../hooks/useOncall';
+import { dealRotationWeeks } from '../lib/oncallRotation';
 import { useOvertimePosts, type OvertimePost } from '../hooks/useOvertime';
 import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks/useBuildingAssignments';
 import { useBuildings, type Building } from '../hooks/useBuildings';
@@ -257,19 +258,22 @@ export function PtoPanel() {
     return m;
   }, [engineers, shiftsQ.data]);
 
-  // Pre-compute on-call weeks for everyone in the rotation horizon.
+  // Pre-compute on-call weeks for everyone in the rotation horizon, using
+  // the shared staged-join dealer (lib/oncallRotation.ts) so conflict flags
+  // match the published schedule even when a joiner has a future
+  // effective_from (the old fixed c*N+i formula ignored it entirely).
   const oncallWeeks = useMemo(() => {
     const startFriday = settingsQ.data?.start_friday;
     const parts = participantsQ.data ?? [];
     if (!startFriday || parts.length === 0) return [];
     const N = parts.length;
     const cycles = settingsQ.data?.rotations_per_engineer ?? 4;
+    const deal = dealRotationWeeks(parts, startFriday, (cycles + 2) * N);
     const out: { user_id: string; week_start: string; week_end: string }[] = [];
-    for (let c = 0; c <= cycles + 1; c++) {
-      for (let i = 0; i < N; i++) {
-        const ws = addDaysIso(startFriday, (c * N + i) * 7);
-        out.push({ user_id: parts[i].user_id, week_start: ws, week_end: addDaysIso(ws, 6) });
-      }
+    for (const [w, idx] of deal) {
+      if (w < 0) continue;
+      const ws = addDaysIso(startFriday, w * 7);
+      out.push({ user_id: parts[idx].user_id, week_start: ws, week_end: addDaysIso(ws, 6) });
     }
     return out;
   }, [participantsQ.data, settingsQ.data]);
