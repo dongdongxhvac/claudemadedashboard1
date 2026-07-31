@@ -776,12 +776,12 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
                 onClick={() => onCancel(r.id)}
                 title="Cancel — keeps the record as cancelled, returns the hours, removes the calendar event"
                 style={{
-                  fontSize: 9.5, fontWeight: 600, lineHeight: 1,
-                  padding: '1px 6px', borderRadius: 3,
-                  border: '1px solid var(--color-danger)',
-                  color: 'var(--color-danger)', background: 'transparent',
+                  fontSize: 9, fontWeight: 600, lineHeight: 1,
+                  padding: '1px 4px', borderRadius: 3,
+                  border: '1px solid #eab6b6',
+                  color: '#d67070', background: 'transparent',
                 }}
-              >Cancel</button>
+              >Cxl</button>
               <button
                 onClick={() => onDelete(r.id)}
                 className="t-muted hover:t-danger"
@@ -2335,12 +2335,12 @@ export function PtoYearLog({
                       onClick={() => onCancel(r.id)}
                       title="Cancel — keeps the record as cancelled, returns the hours, removes the calendar event"
                       style={{
-                        fontSize: 9.5, fontWeight: 600, lineHeight: 1,
-                        padding: '1px 6px', borderRadius: 3,
-                        border: '1px solid var(--color-danger)',
-                        color: 'var(--color-danger)', background: 'transparent',
+                        fontSize: 9, fontWeight: 600, lineHeight: 1,
+                        padding: '1px 4px', borderRadius: 3,
+                        border: '1px solid #eab6b6',
+                        color: '#d67070', background: 'transparent',
                       }}
-                    >Cancel</button>
+                    >Cxl</button>
                   )}
                   {onEdit && (
                     <button

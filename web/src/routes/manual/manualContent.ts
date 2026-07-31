@@ -447,7 +447,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: 'info',
               title: 'Cancel versus Delete',
               text:
-                'Cancel keeps the row, marks it cancelled and leaves it greyed out in the engineer’s log — the audit trail survives, and cancelling an approved entry also clears the calendar. Delete (the trash) wipes the row permanently with no trace, and leaves any calendar invite stranded on everyone’s calendar forever. Use Cancel when someone changes their mind; Delete only for genuine mistakes and duplicates. The red-bordered Cancel button lives in two places: on every row of the "Upcoming approved" list, and on each current-or-future row of the engineer’s year log in the Balances drill-down (past rows never show it — history only gets edit/delete corrections).',
+                'Cancel keeps the row, marks it cancelled and leaves it greyed out in the engineer’s log — the audit trail survives, and cancelling an approved entry also clears the calendar. Delete (the trash) wipes the row permanently with no trace, and leaves any calendar invite stranded on everyone’s calendar forever. Use Cancel when someone changes their mind; Delete only for genuine mistakes and duplicates. Cancel is the small light-red "Cxl" button, in two places: on every row of the "Upcoming approved" list, and on each current-or-future row of the engineer’s year log in the Balances drill-down (past rows never show it — history only gets edit/delete corrections).',
             },
           ],
         },
