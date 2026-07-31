@@ -5,7 +5,7 @@
 // be building-level (equipment_id = null). The form lets you pick from
 // the building's equipment list or leave it general.
 import { useMemo, useState } from 'react';
-import { useCanAccessAdmin } from '../../hooks/useMe';
+import { useCanEditBuildings } from '../../hooks/useMe';
 import {
   useBuildingParts,
   useBuildingEquipment,
@@ -17,7 +17,7 @@ import {
 } from '../../hooks/useBuildingKb';
 
 export function PartsPanel({ buildingId }: { buildingId: string }) {
-  const canEdit = useCanAccessAdmin();
+  const canEdit = useCanEditBuildings();
   const partsQ = useBuildingParts(buildingId);
   const eqQ = useBuildingEquipment(buildingId);
   const del = useDeleteBuildingPart();

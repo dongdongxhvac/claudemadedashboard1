@@ -11,7 +11,7 @@
 // they're a backup affordance for new hires + infrequent visitors
 // (feedback_equipment_photo_is_backup.md).
 import { useMemo, useState } from 'react';
-import { useCanAccessAdmin } from '../../hooks/useMe';
+import { useCanEditBuildings } from '../../hooks/useMe';
 import {
   useBuildingEquipment,
   useDeleteBuildingEquipment,
@@ -73,7 +73,7 @@ export function EquipmentList({
    *  Building view never passes it, so its behavior is unchanged. */
   onlyEquipmentIds?: string[];
 }) {
-  const canEdit = useCanAccessAdmin();
+  const canEdit = useCanEditBuildings();
   const eqQ = useBuildingEquipment(buildingId);
   const issQ = useBuildingOpenIssues(buildingId);
   const del = useDeleteBuildingEquipment();

@@ -5,7 +5,7 @@
 // no toolbar. The walk-through use case is "type what Bobby is saying
 // before he moves on"; structure can come later.
 import { useEffect, useRef, useState } from 'react';
-import { useCanAccessAdmin } from '../../hooks/useMe';
+import { useCanEditBuildings } from '../../hooks/useMe';
 import {
   useUpsertBuildingSection,
   type BuildingSectionNote,
@@ -21,7 +21,7 @@ export function SectionEditor({
   sectionKey: SectionKey;
   note: BuildingSectionNote | undefined;
 }) {
-  const canEdit = useCanAccessAdmin();
+  const canEdit = useCanEditBuildings();
   const upsert = useUpsertBuildingSection();
 
   // Local draft state mirrors the saved body. We don't autosave on every

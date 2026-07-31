@@ -9,7 +9,7 @@
 // than via deep-link, so the index needs to be tap-friendly and scan-friendly.
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import { useMe, useCanAccessAdmin } from '../../hooks/useMe';
+import { useMe, useCanEditBuildings } from '../../hooks/useMe';
 import { useBuildings, useBuildingsRealtime } from '../../hooks/useBuildings';
 import { useUparkBuildingIds } from '../../hooks/useSiteScope';
 import {
@@ -35,7 +35,7 @@ function compareByShortCode(
 export default function BuildingsIndex() {
   const { signOut } = useAuth();
   const me = useMe();
-  const canEdit = useCanAccessAdmin();
+  const canEdit = useCanEditBuildings();
   const buildingsQ = useBuildings();
   const countsQ    = useBuildingEquipmentCountsMap();
   useBuildingsRealtime();

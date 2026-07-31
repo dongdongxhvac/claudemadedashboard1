@@ -7,7 +7,7 @@
 // Same edit-gating shape as equipment / parts: admin / manager / lead
 // can add/edit/delete via the form; everyone can view.
 import { useState } from 'react';
-import { useCanAccessAdmin } from '../../hooks/useMe';
+import { useCanEditBuildings } from '../../hooks/useMe';
 import {
   useBuildingProjects,
   useUpsertBuildingProject,
@@ -24,7 +24,7 @@ function fmtTime(utcIso: string): string {
 }
 
 export function ProjectsPanel({ buildingId }: { buildingId: string }) {
-  const canEdit = useCanAccessAdmin();
+  const canEdit = useCanEditBuildings();
   const projectsQ = useBuildingProjects(buildingId);
   const del = useDeleteBuildingProject();
   const [editingId, setEditingId] = useState<string | null>(null);

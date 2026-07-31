@@ -7,7 +7,7 @@
 // buildings — the same handful of vendors come back month after month, so
 // typing once should be enough.
 import { useMemo, useState } from 'react';
-import { useCanAccessAdmin } from '../../hooks/useMe';
+import { useCanEditBuildings } from '../../hooks/useMe';
 import {
   useBuildingVendorVisits,
   useVendorNameSuggestions,
@@ -31,7 +31,7 @@ function fmtVisitDate(iso: string): string {
 }
 
 export function VendorVisitsPanel({ buildingId }: { buildingId: string }) {
-  const canEditAll = useCanAccessAdmin();
+  const canEditAll = useCanEditBuildings();
   const visitsQ = useBuildingVendorVisits(buildingId, 90);
   const suggestionsQ = useVendorNameSuggestions();
   const insertVisit = useInsertVendorVisit();

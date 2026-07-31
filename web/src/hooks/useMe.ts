@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useIsMobile } from './useIsMobile';
 
 export type Me = {
   id: string;
@@ -54,6 +55,16 @@ export function useCanAccessAdmin(): boolean {
   const me = useMe().data;
   if (!me) return false;
   return me.role === 'admin' || me.is_lead === true;
+}
+
+/** Buildings-KB edit gate: admin/lead AND a desk-size viewport. Phones are
+ *  read-only on /buildings (per user 2026-07-29) — the KB's edit affordances
+ *  are desktop-density, and shop edits belong on a PC. Scope: the /buildings
+ *  surface only; dashboard/admin panels keep plain useCanAccessAdmin. */
+export function useCanEditBuildings(): boolean {
+  const canAccessAdmin = useCanAccessAdmin();
+  const isMobile = useIsMobile();
+  return canAccessAdmin && !isMobile;
 }
 
 /** Who may OPEN the /admin page at all — mirrors Admin.tsx's canAccess
