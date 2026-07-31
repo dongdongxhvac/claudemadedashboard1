@@ -35,7 +35,7 @@ export type Block =
 export type Topic = { id: string; title: string; blocks: Block[] };
 export type Chapter = { id: string; title: string; summary: string; topics: Topic[] };
 
-export const LAST_UPDATED = '2026-07-25';
+export const LAST_UPDATED = '2026-07-31';
 
 export const SITE_LABEL: Record<ManualSite, string> = {
   upark: 'UPark',
@@ -447,7 +447,7 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: 'info',
               title: 'Cancel versus Delete',
               text:
-                'Cancel (the ✕) keeps the row, marks it cancelled and leaves it greyed out in the engineer’s log — the audit trail survives, and cancelling an approved entry also clears the calendar. Delete (the trash) wipes the row permanently with no trace, and leaves any calendar invite stranded on everyone’s calendar forever. Use Cancel when someone changes their mind; Delete only for genuine mistakes and duplicates.',
+                'Cancel keeps the row, marks it cancelled and leaves it greyed out in the engineer’s log — the audit trail survives, and cancelling an approved entry also clears the calendar. Delete (the trash) wipes the row permanently with no trace, and leaves any calendar invite stranded on everyone’s calendar forever. Use Cancel when someone changes their mind; Delete only for genuine mistakes and duplicates. Cancel lives in two places: the ✕ on the "Upcoming approved" list, and a Cancel button on each current-or-future row of the engineer’s year log in the Balances drill-down (past rows never show it — history only gets edit/delete corrections).',
             },
           ],
         },

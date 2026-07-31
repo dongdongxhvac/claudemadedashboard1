@@ -454,6 +454,9 @@ export function PtoPanel() {
                   onDeleteRequest={(id) => {
                     if (confirm('Delete this PTO entry? This removes it from history — use Cancel instead if you want to keep an audit record.')) delPto.mutate(id);
                   }}
+                  onCancelRequest={(id) => {
+                    if (confirm('Cancel this PTO? The record stays as cancelled, the hours return to the balance, and the calendar event is removed.')) cancel.mutate(id);
+                  }}
                 />
               </div>
             )}
@@ -1980,7 +1983,7 @@ function fmtHireSeniority(hireIso: string | null): string {
 }
 
 function BalancesGrid({
-  summaries, allRequests, engineers, crewByUser, onEdit, onEditRequest, onDeleteRequest,
+  summaries, allRequests, engineers, crewByUser, onEdit, onEditRequest, onDeleteRequest, onCancelRequest,
 }: {
   summaries: PtoSummary[];
   allRequests: PtoRequest[];
@@ -1991,6 +1994,7 @@ function BalancesGrid({
   onEdit: (s: PtoSummary) => void;
   onEditRequest?: (r: PtoRequest) => void;
   onDeleteRequest?: (id: string) => void;
+  onCancelRequest?: (id: string) => void;
 }) {
   const currentYear = new Date().getFullYear();
   // Column sorting: name (default) or one of the three balances. A balance
@@ -2181,6 +2185,7 @@ function BalancesGrid({
                         year={currentYear}
                         onEdit={onEditRequest}
                         onDelete={onDeleteRequest}
+                        onCancel={onCancelRequest}
                       />
                     </td>
                   </tr>
@@ -2223,14 +2228,19 @@ function BalanceCell({ remaining, used, alloted }: { remaining: number; used: nu
  *  self-serve MyPtoSection (Phase 12b). When onEdit/onDelete are passed, the
  *  manager-only edit + delete icons render on each row. */
 export function PtoYearLog({
-  rows, year, onEdit, onDelete,
+  rows, year, onEdit, onDelete, onCancel,
 }: {
   rows: PtoRequest[];
   year: number;
   onEdit?: (r: PtoRequest) => void;
   onDelete?: (id: string) => void;
+  /** Cancel = the workflow action (keeps the audit row, returns the hours,
+   *  clears the calendars). Rendered as the PRIMARY button — bigger than the
+   *  edit/delete icons — but only on approved/pending rows whose last day is
+   *  today or later; past rows are history and only get record corrections. */
+  onCancel?: (id: string) => void;
 }) {
-  const canEdit = !!onEdit || !!onDelete;
+  const canEdit = !!onEdit || !!onDelete || !!onCancel;
   if (rows.length === 0) {
     return <p className="t-small t-muted italic">No PTO entries in {year}.</p>;
   }
@@ -2315,7 +2325,19 @@ export function PtoYearLog({
               )}
               {r.reason && <span className="t-muted truncate" style={{ maxWidth: 240 }}>· {r.reason}</span>}
               {canEdit && (
-                <span className="ml-auto" style={{ display: 'inline-flex', gap: 6 }}>
+                <span className="ml-auto" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  {onCancel && isLive && r.ends_on >= todayIso() && (
+                    <button
+                      onClick={() => onCancel(r.id)}
+                      title="Cancel — keeps the record as cancelled, returns the hours, removes the calendar event"
+                      style={{
+                        fontSize: 11, fontWeight: 600, lineHeight: 1,
+                        padding: '3px 10px', borderRadius: 4,
+                        border: '1px solid var(--color-danger)',
+                        color: 'var(--color-danger)', background: 'transparent',
+                      }}
+                    >Cancel</button>
+                  )}
                   {onEdit && (
                     <button
                       onClick={() => onEdit(r)}
