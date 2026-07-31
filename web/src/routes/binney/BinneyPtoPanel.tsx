@@ -722,10 +722,14 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
               >✎</button>
               <button
                 onClick={() => onCancel(r.id)}
-                className="t-muted hover:t-danger"
-                title="Cancel (keeps audit row)"
-                style={{ fontSize: 14, lineHeight: 1 }}
-              >×</button>
+                title="Cancel — keeps the record as cancelled, returns the hours, removes the calendar event"
+                style={{
+                  fontSize: 9.5, fontWeight: 600, lineHeight: 1,
+                  padding: '1px 6px', borderRadius: 3,
+                  border: '1px solid var(--color-danger)',
+                  color: 'var(--color-danger)', background: 'transparent',
+                }}
+              >Cancel</button>
               <button
                 onClick={() => onDelete(r.id)}
                 className="t-muted hover:t-danger"
@@ -2506,8 +2510,8 @@ export function PtoYearLog({
                       onClick={() => onCancel(r.id)}
                       title="Cancel — keeps the record as cancelled, returns the hours, removes the calendar event"
                       style={{
-                        fontSize: 11, fontWeight: 600, lineHeight: 1,
-                        padding: '3px 10px', borderRadius: 4,
+                        fontSize: 9.5, fontWeight: 600, lineHeight: 1,
+                        padding: '1px 6px', borderRadius: 3,
                         border: '1px solid var(--color-danger)',
                         color: 'var(--color-danger)', background: 'transparent',
                       }}
