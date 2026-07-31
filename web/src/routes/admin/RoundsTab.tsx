@@ -1272,8 +1272,14 @@ function RoundsHistorySection({
       </div>
     );
   }
-  // Silence unused warnings - these may be useful for richer diffs later
-  void engineersById; void buildingsById;
+  // Per-round diff helpers (parity with BuildingsHistorySection's "view
+  // diff" — this section shipped as a summary-only stub originally).
+  type PR = RoundsProposalPayload['rounds'][number];
+  const fmtEng = (uid: string | null) =>
+    uid ? (engineersById[uid]?.full_name ?? '(unknown)') : '(unassigned)';
+  const fmtStops = (r: PR) =>
+    r.stops.map((s) => buildingsById[s.building_id]?.short_code
+      ?? buildingsById[s.building_id]?.code ?? '?').join(', ');
   return (
     <div className="t-card rounds-no-print" style={{ padding: '0.5rem 1rem' }}>
       <button onClick={() => onOpenChange(!open)}
@@ -1292,12 +1298,31 @@ function RoundsHistorySection({
         <div className="mt-2 space-y-2">
           {history.map((entry, i) => {
             const prev = history[i + 1] ?? null;
-            const currIds = new Set((entry.payload.rounds ?? []).filter((r) => r.id).map((r) => r.id as string));
-            const prevIds = new Set((prev?.payload.rounds ?? []).filter((r) => r.id).map((r) => r.id as string));
-            const addedCount = prev ? Array.from(currIds).filter((id) => !prevIds.has(id)).length
-                                    + (entry.payload.rounds ?? []).filter((r) => r.id === null).length
-                                    : (entry.payload.rounds ?? []).length;
-            const removedCount = prev ? Array.from(prevIds).filter((id) => !currIds.has(id)).length : 0;
+            const curr = entry.payload.rounds ?? [];
+            const prevRounds = prev?.payload.rounds ?? [];
+            const prevById = new Map(prevRounds.filter((r) => r.id).map((r) => [r.id as string, r]));
+            const currIds = new Set(curr.filter((r) => r.id).map((r) => r.id as string));
+            // Added = brand-new (id null at propose time) or id unseen in the
+            // previous snapshot; removed = previous ids gone; changed = same
+            // round with a different engineer, stop list, or name.
+            const added = prev ? curr.filter((r) => r.id === null || !prevById.has(r.id as string)) : curr;
+            const removed = prev ? prevRounds.filter((r) => r.id && !currIds.has(r.id as string)) : [];
+            const changed: { round: RoundsProposalPayload['rounds'][number]; deltas: string[] }[] = prev
+              ? curr.flatMap((r) => {
+                  if (!r.id) return [];
+                  const p = prevById.get(r.id);
+                  if (!p) return [];
+                  const deltas: string[] = [];
+                  if (p.name !== r.name) deltas.push(`renamed “${p.name}” → “${r.name}”`);
+                  if ((p.assigned_user_id ?? null) !== (r.assigned_user_id ?? null)) {
+                    deltas.push(`engineer ${fmtEng(p.assigned_user_id)} → ${fmtEng(r.assigned_user_id)}`);
+                  }
+                  const ps = fmtStops(p);
+                  const cs = fmtStops(r);
+                  if (ps !== cs) deltas.push(`stops ${ps || '—'} → ${cs || '—'}`);
+                  return deltas.length > 0 ? [{ round: r, deltas }] : [];
+                })
+              : [];
             const reviewedAt = entry.reviewed_at
               ? new Date(entry.reviewed_at).toLocaleString(undefined, {
                   year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -1325,13 +1350,37 @@ function RoundsHistorySection({
                     </span>
                   </div>
                   <span className="t-small t-mono" style={{ color: '#a16207' }}>
-                    {prev ? `+${addedCount} · −${removedCount}` : `initial publish (${(entry.payload.rounds ?? []).length})`}
+                    {prev
+                      ? `+${added.length} · −${removed.length}${changed.length > 0 ? ` · ~${changed.length}` : ''}`
+                      : `initial publish (${curr.length})`}
                   </span>
                 </div>
                 {entry.note && (
                   <p className="t-small mt-1" style={{ color: 'var(--color-danger)', fontStyle: 'italic' }}>
                     "{entry.note}"
                   </p>
+                )}
+                {prev && (added.length > 0 || removed.length > 0 || changed.length > 0) && (
+                  <details className="mt-1">
+                    <summary className="t-small t-accent" style={{ cursor: 'pointer' }}>view diff</summary>
+                    <ul className="t-small mt-1" style={{ paddingLeft: '1.25rem', listStyle: 'disc' }}>
+                      {added.map((r, ai) => (
+                        <li key={`+${r.id ?? ai}`} style={{ color: '#15803d' }}>
+                          + {r.name} — {fmtEng(r.assigned_user_id)} · {fmtStops(r) || 'no stops'}
+                        </li>
+                      ))}
+                      {changed.map((c) => (
+                        <li key={`~${c.round.id}`} style={{ color: '#a16207' }}>
+                          ~ {c.round.name} — {c.deltas.join(' · ')}
+                        </li>
+                      ))}
+                      {removed.map((r) => (
+                        <li key={`-${r.id}`} style={{ color: 'var(--color-danger)', textDecoration: 'line-through' }}>
+                          − {r.name} — {fmtEng(r.assigned_user_id)} · {fmtStops(r) || 'no stops'}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
               </div>
             );
