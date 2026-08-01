@@ -96,13 +96,26 @@ export function rotationWeeksByMember(
   const forward: string[][] = Array.from({ length: n }, () => []);
   const prev: (string | null)[] = Array.from({ length: n }, () => null);
   if (n === 0) return { forward, prev };
-  const deal = dealRotationWeeks(roster, startFriday, passes * n, n);
-  for (let w = -n; w < passes * n; w++) {
+  // Horizon: passes·n weeks, EXTENDED past the latest effective_from (same
+  // rule as the SQL publish horizon, 0114b). Without this, a stale anchor
+  // eats the window before a staged joiner is even eligible and their row
+  // shows one or two cells with the rest '—'. Each member is capped at
+  // `passes` turns, so always-eligible members are unaffected.
+  let extra = 0;
+  for (const m of roster) {
+    if (!m.effective_from) continue;
+    const w = Math.ceil((new Date(m.effective_from + 'T00:00:00').getTime()
+      - new Date(startFriday + 'T00:00:00').getTime()) / (7 * 86_400_000));
+    if (w > extra) extra = w;
+  }
+  const horizon = Math.min(520, passes * n + Math.max(0, extra));
+  const deal = dealRotationWeeks(roster, startFriday, horizon, n);
+  for (let w = -n; w < horizon; w++) {
     const idx = deal.get(w);
     if (idx === undefined) continue;
     const weekStart = addDays(startFriday, w * 7);
     if (w < 0) prev[idx] = weekStart; // ascending scan → last one before 0 wins
-    else forward[idx].push(weekStart);
+    else if (forward[idx].length < passes) forward[idx].push(weekStart);
   }
   return { forward, prev };
 }
