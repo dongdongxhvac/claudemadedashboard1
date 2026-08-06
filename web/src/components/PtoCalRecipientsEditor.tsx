@@ -1,5 +1,5 @@
 // Manager-editable pto_cal_recipients — TWO lists per site since migration
-// 0102 added `kind` (read by notify-pto v19):
+// 0119 added `kind` (read by notify-pto v19):
 //   kind='feed'   — SHARED calendar sync inboxes. Binney: the Power Automate
 //                   feed (jie.lao) — a body-only PTO_DATA email goes here and
 //                   the PA flow writes the event onto the M365 group

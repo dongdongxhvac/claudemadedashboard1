@@ -1,4 +1,4 @@
--- Migration 0101 — Binney PTO invites: drop the O365 group address.
+-- Migration 0118 — Binney PTO invites: drop the O365 group address.
 --
 -- Supersedes migration 0100, which seeded the group as the sole invite
 -- recipient. That architecture didn't survive contact with M365/Mimecast:

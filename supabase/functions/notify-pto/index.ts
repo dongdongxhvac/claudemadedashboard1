@@ -69,7 +69,7 @@
 // Deploying a stale copy silently breaks the Power Automate flow (see
 // PTO_DATA below).
 //
-// v19 (2026-07-16): two recipient lists (migration 0102 adds kind):
+// v19 (2026-07-16): two recipient lists (migration 0119 adds kind):
 //   * kind='feed'   — SHARED calendar sync inboxes (admin-only in panel).
 //     Binney sends the body-only PTO_DATA email here (jie.lao); Power
 //     Automate writes the event onto the group calendar. Always on.
@@ -118,7 +118,7 @@
 //      * The flow strips %0D/%0A before parsing so wraps can't split a marker.
 //      * The first attachment is the "External Mail" banner (0.jpg), not the
 //        .ics — parse the BODY, never attachments.
-//    Recipients per site (v19, kinds from migration 0102):
+//    Recipients per site (v19, kinds from migration 0119):
 //      UPark  — .ics invite → home-site managers + the requesting engineer,
 //               plus kind='invite' extras. 'feed' rows are ignored until
 //               UPark gets its own PA flow.
@@ -365,7 +365,7 @@ function buildIcs(opts: {
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
-/** pto_cal_recipients split by kind (migration 0102):
+/** pto_cal_recipients split by kind (migration 0119):
  *  feed = shared-calendar sync inboxes (Binney PA flow; admin-only in panel),
  *  invite = personal-calendar .ics extras. PTO_CAL_TO_<SITE> env override
  *  (QA) replaces the site's primary list: feed at Binney, invite at UPark. */

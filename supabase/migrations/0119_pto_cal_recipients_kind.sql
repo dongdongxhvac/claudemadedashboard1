@@ -1,4 +1,4 @@
--- Migration 0102 — split pto_cal_recipients into two lists via a kind column.
+-- Migration 0119 — split pto_cal_recipients into two lists via a kind column.
 --
 --   kind = 'feed'   — SHARED calendar sync inboxes (Binney: the Power
 --                     Automate feed, currently jie.lao). ADMIN-ONLY writes.
