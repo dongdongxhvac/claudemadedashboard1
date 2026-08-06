@@ -1,4 +1,4 @@
--- Migration 0072 — Detect flapping BMS email alarms.
+-- Migration 0120 — Detect flapping BMS email alarms.
 --
 -- User direction 2026-06-06: if the same point goes Active → Quiet → Active
 -- (or oscillates further) within 20 minutes, flag it for manual review.

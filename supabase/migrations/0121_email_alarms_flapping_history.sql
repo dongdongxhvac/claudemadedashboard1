@@ -1,4 +1,4 @@
--- Migration 0073 — Past flapping incidents per (point × ET hour).
+-- Migration 0121 — Past flapping incidents per (point × ET hour).
 --
 -- The live v_email_alarms_flapping view answers "is this point flapping
 -- right now?" — 20-min trailing window. This view answers "did flapping

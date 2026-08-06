@@ -1,4 +1,4 @@
--- Migration 0021 — Snapshot retention (Phase 5.4)
+-- Migration 0023 — Snapshot retention (Phase 5.4)
 --
 -- The Phase 5 pollers ingest ~10K rows/day across labor_rows + pm_rows + wo_rows.
 -- Without pruning, the database fills Supabase's free tier in ~6 months. This
