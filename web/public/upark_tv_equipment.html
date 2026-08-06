@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>UPark · Equipment Attention</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#0f151e; --panel2:#131b26; --line:#1e2a3a;
+    --ink:#e6edf3; --dim:#7d8ea3; --faint:#4a5a6e;
+    --cyan:#22d3ee; --amber:#f5a524; --violet:#a78bfa;
+    --red:#ff5c66; --redsoft:#2a1418; --ambersoft:#291f10;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;overflow:hidden;
+    padding:26px 30px;display:flex;flex-direction:column;gap:18px;
+  }
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;
+    border-bottom:2px solid var(--line);padding-bottom:16px}
+  .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:34px;letter-spacing:-.5px}
+  .brand .sub{color:var(--cyan);font-size:20px;font-weight:600;margin-left:16px;letter-spacing:1px}
+  .counts{display:flex;gap:14px;align-items:center}
+  .chip{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;
+    padding:8px 18px;border-radius:10px;letter-spacing:.5px}
+  .chip.cm{background:var(--redsoft);color:var(--red);border:1px solid #4a2028}
+  .chip.deg{background:var(--ambersoft);color:var(--amber);border:1px solid #4a3a15}
+  .clock{text-align:right;color:var(--dim);font-size:17px;line-height:1.5}
+  .clock b{color:var(--ink);font-family:'Space Grotesk',sans-serif;font-size:22px}
+  /* list */
+  .list{flex:1;overflow:hidden;position:relative}
+  .scroll{display:flex;flex-direction:column;gap:10px;will-change:transform}
+  .row{display:grid;grid-template-columns:64px 150px 1fr 220px;gap:16px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-left-width:5px;
+    border-radius:10px;padding:14px 18px}
+  .row.cm{border-left-color:var(--red)}
+  .row.deg{border-left-color:var(--amber)}
+  .age{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;text-align:center;color:var(--dim)}
+  .age.old{color:var(--red)}
+  .age small{display:block;font-size:12px;color:var(--faint);font-weight:500}
+  .idcell .name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px}
+  .idcell .bldg{color:var(--dim);font-size:14px;margin-top:2px}
+  .mid .st{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;
+    padding:3px 11px;border-radius:6px;letter-spacing:.5px;margin-right:10px}
+  .st.cm{background:var(--redsoft);color:var(--red)}
+  .st.deg{background:var(--ambersoft);color:var(--amber)}
+  .loto{background:#1a1030;color:var(--violet);border:1px solid #38266b;
+    font-weight:600;font-size:12px;padding:2px 9px;border-radius:5px;margin-left:8px;letter-spacing:.5px}
+  .mid .detail{color:var(--ink);font-size:17px;margin-top:7px;line-height:1.35;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{text-align:right;font-size:15px}
+  .meta .wo{font-weight:600;color:var(--cyan)}
+  .meta .rsp{color:var(--dim);margin-top:3px}
+  .empty{color:var(--dim);font-size:22px;text-align:center;padding-top:80px}
+  .err{color:var(--red)}
+  footer{display:flex;justify-content:space-between;color:var(--faint);
+    font-size:13px;border-top:1px solid var(--line);padding-top:10px}
+  .live{color:#3fb950}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">UPARK<span class="sub">EQUIPMENT ATTENTION</span></div>
+    <div class="counts">
+      <div class="chip cm" id="cmCount">— CM</div>
+      <div class="chip deg" id="degCount">— DEG</div>
+    </div>
+    <div class="clock"><b id="time">--:--</b><br><span id="date"></span></div>
+  </header>
+
+  <div class="list"><div class="scroll" id="scroll"><div class="empty" id="loading">Loading…</div></div></div>
+
+  <footer>
+    <span>UPark Operations · equipment needing attention</span>
+    <span><span class="live" id="liveDot">● LIVE</span> · updated <span id="updated">—</span></span>
+  </footer>
+
+<script>
+const SUPABASE_URL = "https://iujuibvcahuapzowjtym.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1anVpYnZjYWh1YXB6b3dqdHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODk3MTcsImV4cCI6MjA5NDQ2NTcxN30.LlfxWpcdfwm70RoyHrtTQ63jEFWTivfw9kDpSWThfGI";
+const REFRESH_MS = 60000;   // re-pull every 60s
+const OLD_DAYS = 60;        // age turns red past this
+
+function esc(s){return (s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+async function load(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/tv_equipment_attention?select=*`,{
+      headers:{ apikey:ANON, Authorization:"Bearer "+ANON }
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const rows = await res.json();
+    render(rows);
+    document.getElementById("updated").textContent = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    document.getElementById("liveDot").className = "live";
+    document.getElementById("liveDot").textContent = "● LIVE";
+  }catch(e){
+    document.getElementById("liveDot").className = "err";
+    document.getElementById("liveDot").textContent = "● OFFLINE ("+e.message+")";
+  }
+}
+
+function render(rows){
+  const cm = rows.filter(r=>r.issue_status==='down_cm').length;
+  const deg = rows.filter(r=>r.issue_status==='degraded').length;
+  document.getElementById("cmCount").textContent = cm+" CM";
+  document.getElementById("degCount").textContent = deg+" DEG";
+
+  const scroll = document.getElementById("scroll");
+  if(!rows.length){ scroll.innerHTML = '<div class="empty">No equipment needs attention ✓</div>'; return; }
+
+  scroll.innerHTML = rows.map(r=>{
+    const cls = r.issue_status==='down_cm' ? 'cm' : 'deg';
+    const ageOld = (r.age_days||0) >= OLD_DAYS ? 'old' : '';
+    const loto = r.loto_type ? `<span class="loto">🔒 ${esc(r.loto_type.toUpperCase())}</span>` : '';
+    const wo = r.wo_number ? `<div class="wo">${esc(r.wo_number)}</div>` : '';
+    const rsp = r.rsp ? `<div class="rsp">${esc(r.rsp)}</div>` : '';
+    return `<div class="row ${cls}">
+      <div class="age ${ageOld}">${r.age_days??'—'}<small>days</small></div>
+      <div class="idcell"><div class="name">${esc(r.name)}</div><div class="bldg">${esc(r.building)}</div></div>
+      <div class="mid">
+        <span class="st ${cls}">${esc(r.status_label)}</span>${loto}
+        <div class="detail">${esc(r.detail)}</div>
+      </div>
+      <div class="meta">${wo}${rsp}</div>
+    </div>`;
+  }).join("");
+
+  // auto-scroll if taller than the viewport
+  startAutoScroll();
+}
+
+let scrollTimer=null;
+function startAutoScroll(){
+  const box=document.querySelector(".list"), s=document.getElementById("scroll");
+  if(scrollTimer){clearInterval(scrollTimer);scrollTimer=null;}
+  s.style.transform="translateY(0)";
+  const over = s.scrollHeight - box.clientHeight;
+  if(over<=0) return;
+  let y=0, dir=1;
+  scrollTimer=setInterval(()=>{
+    y+=dir*0.6;
+    if(y>=over){y=over;dir=-1;} if(y<=0){y=0;dir=1;}
+    s.style.transform=`translateY(${-y}px)`;
+  },30);
+}
+
+function tick(){
+  const n=new Date();
+  document.getElementById("time").textContent=n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  document.getElementById("date").textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+tick(); setInterval(tick,1000);
+load(); setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
