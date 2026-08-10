@@ -661,10 +661,10 @@ function usFederalHolidays(year: number): string[] {
 // Heartbeat staleness rule (weekday-aware) is copied from EmailAlarmsPanel —
 // keep them in sync if the rule changes.
 
-/** Returns true when the given vendor's last heartbeat is older than its
- *  vendor-specific tolerance. Copy of the rule in EmailAlarmsPanel.tsx —
- *  duplicated rather than imported to keep the TV view standalone. */
-function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
+/** Returns true when the last heartbeat is older than the weekday-aware
+ *  tolerance. Copy of the rule in EmailAlarmsPanel.tsx — duplicated rather
+ *  than imported to keep the TV view standalone. */
+function isHeartbeatStale(hoursSince: number): boolean {
   const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const dow = etNow.getDay();
   const hour = etNow.getHours();
@@ -732,7 +732,7 @@ function BmsHealthPanel() {
         key: `bms:${r.vendor}`,
         label: shortVendor(r.vendor),
         ageLabel: fmtAge(r.hours_since),
-        stale: isHeartbeatStale(r.vendor, r.hours_since),
+        stale: isHeartbeatStale(r.hours_since),
       });
     }
     // Plantlog AM + PM windows. Hidden on weekends entirely.

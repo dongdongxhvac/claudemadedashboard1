@@ -25,7 +25,7 @@ import { Section } from './Section';
 //   - Weekday past noon ET, expect today's HB (else >28h is stale)
 //   - Mon before noon ET, last expected HB was Friday (allow up to ~80h)
 //   - Sat/Sun, last expected HB was Friday
-function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
+function isHeartbeatStale(hoursSince: number): boolean {
   const now = new Date();
   const etNow = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
@@ -86,7 +86,7 @@ function HeartbeatTable({ rows }: { rows: BmsHeartbeat[] }) {
       </thead>
       <tbody>
         {rows.map((r) => {
-          const stale = isHeartbeatStale(r.vendor, r.hours_since);
+          const stale = isHeartbeatStale(r.hours_since);
           return (
             <tr key={r.vendor} style={{ borderTop: '1px solid var(--color-border-soft)' }}>
               <td className="py-1 pr-3">{r.vendor_label ?? r.vendor}</td>
@@ -116,7 +116,7 @@ export function EmailAlarmsPanel() {
   const hbRows = (hbQ.data ?? []).filter((r) => r.vendor !== 'power_automate');
   const totalSystems = hbRows.length;
   const staleCount = useMemo(
-    () => hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length,
+    () => hbRows.filter((r) => isHeartbeatStale(r.hours_since)).length,
     [hbRows],
   );
   const liveCount = totalSystems - staleCount;
