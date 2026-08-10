@@ -8,7 +8,6 @@ import { DueThisMonth } from '../../components/DueThisMonth';
 import { OpenPmsBreakdown } from '../../components/OpenPmsBreakdown';
 import { PlantlogRoundsPanel } from '../../components/PlantlogRoundsPanel';
 import { PlantlogWeeklyTestsPanel } from '../../components/PlantlogWeeklyTestsPanel';
-import { DeltaAlarmsPanel } from '../../components/DeltaAlarmsPanel';
 import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { EmailAlarmsHistoryPanel } from '../../components/EmailAlarmsHistoryPanel';
@@ -223,7 +222,6 @@ export default function ManagerPc() {
           <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
           <PlantlogRoundsPanel />
           <PlantlogWeeklyTestsPanel />
-          <DeltaAlarmsPanel />
           <EmailAlarmsPanel />
           <BmsEmailAlarmsPanel />
           <EmailAlarmsHistoryPanel />
