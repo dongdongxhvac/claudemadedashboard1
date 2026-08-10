@@ -35,7 +35,7 @@ sleep 5
 until curl -fsm 5 "$KIOSK_URL" >/dev/null 2>&1; do sleep 3; done
 
 while true; do
-  "$CHROME" --kiosk --noerrdialogs --disable-infobars \\
+  "$CHROME" --kiosk --password-store=basic --noerrdialogs --disable-infobars \\
     --disable-session-crashed-bubble --disable-features=Translate \\
     --autoplay-policy=no-user-gesture-required \\
     "$KIOSK_URL"
