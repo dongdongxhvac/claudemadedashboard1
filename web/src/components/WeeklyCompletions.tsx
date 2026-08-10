@@ -4,13 +4,17 @@
 // week-since-Monday count is naturally zero).
 //
 // Default window: trailing 7 days. Toggle bar offers Today / 7d / This wk /
-// Last wk / 30d. Per-card trend arrow compares against the immediately
-// preceding window. Sort selector lets the user reorder by metric.
+// Last wk / 30d. Hours are shown as "hrs / days worked", where days worked
+// come from PTO (Mon–Fri in window minus approved full-day PTO — see
+// lib/daysWorked). Sort selector lets the user reorder by metric.
 import { useMemo, useState } from 'react';
 import { useCurrentPmRows, useLaborDaily, useRecentPmCloses } from '../hooks/useCurrentSnapshots';
+import { usePtoRequests } from '../hooks/usePto';
+import { useUparkUserIds } from '../hooks/useSiteScope';
+import { daysWorkedByName } from '../lib/daysWorked';
 import {
   isNpm, isClosed,
-  PERIODS, windowFor, prevWindow,
+  PERIODS, windowFor,
   type Period,
 } from '../lib/dashboard';
 import { Section } from './Section';
@@ -30,8 +34,7 @@ type Card = {
   hours: number;
   npm: number;       // open NPM count (current state — not window-bound)
   npmHours: number;
-  prevCount: number; // for trend arrow
-  prevHours: number;
+  days: number;      // days worked in window (PTO-derived — see lib/daysWorked)
 };
 
 /** Local-midnight Date for a YYYY-MM-DD day string (avoids UTC shift). */
@@ -48,12 +51,14 @@ export function WeeklyCompletions({
 }) {
   const pmQ = useCurrentPmRows();
   // Phase 5.5: completed-PM counts come from the close-event log, not pm_rows
-  // (pm_rows no longer holds Completed rows). 40d covers the 30d window plus
-  // the prior-period trend arrow comparison.
+  // (pm_rows no longer holds Completed rows). 40d covers the 30d window.
   const closesQ = useRecentPmCloses(40);
   // Labor hours: per-tech-per-day from labor_daily view (end-of-day deltas).
   // Replaces the prior "sum overlapping weeks" approximation which double-counted.
   const laborDailyQ = useLaborDaily(40);
+  // Days worked come from PTO (same site-scoping rule as the coverage panel).
+  const ptoQ = usePtoRequests();
+  const uparkIds = useUparkUserIds();
 
   const [sort, setSort] = useState<Sort>('hours');
 
@@ -61,12 +66,12 @@ export function WeeklyCompletions({
     const pmRows = pmQ.data ?? [];
     const closes = closesQ.data ?? [];
     const laborDaily = laborDailyQ.data ?? [];
+    const ptoRows = (ptoQ.data ?? []).filter((r) => !uparkIds || uparkIds.has(r.user_id));
 
     // Anchor on the latest pm snapshot timestamp, falling back to "now".
     const snapshotTakenAt = pmRows[0]?.snapshot_taken_at;
     const anchor = snapshotTakenAt ? new Date(snapshotTakenAt) : new Date();
     const win  = windowFor(period, anchor);
-    const prev = prevWindow(win);
 
     // Open NPMs are a CURRENT-STATE metric — same across all windows.
     const openNpmByAssignee = new Map<string, { count: number; hours: number }>();
@@ -87,13 +92,13 @@ export function WeeklyCompletions({
         name: a,
         count: 0, hours: 0,
         npm: n?.count ?? 0, npmHours: n?.hours ?? 0,
-        prevCount: 0, prevHours: 0,
+        days: 0,
       };
     };
-    const bump = (a: string, bucket: 'cur' | 'prev', count = 0, hours = 0) => {
+    const bump = (a: string, count = 0, hours = 0) => {
       const card = cardByName.get(a) ?? blank(a);
-      if (bucket === 'cur')  { card.count    += count; card.hours    += hours; }
-      else                   { card.prevCount += count; card.prevHours += hours; }
+      card.count += count;
+      card.hours += hours;
       cardByName.set(a, card);
     };
 
@@ -102,8 +107,7 @@ export function WeeklyCompletions({
     for (const c of closes) {
       const d = new Date(c.completed_on);
       const a = (c.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
-      if (d >= win.start  && d < win.end)  bump(a, 'cur',  1, 0);
-      if (d >= prev.start && d < prev.end) bump(a, 'prev', 1, 0);
+      if (d >= win.start && d < win.end) bump(a, 1, 0);
     }
 
     // Labor hours: per-tech-per-day actual hours from labor_daily.
@@ -113,8 +117,7 @@ export function WeeklyCompletions({
       const d = dayDate(l.day_et);
       const a = (l.assigned_to_name ?? 'Unassigned').trim() || 'Unassigned';
       const hrs = l.hours_that_day ?? 0;
-      if (d >= win.start  && d < win.end)  bump(a, 'cur',  0, hrs);
-      if (d >= prev.start && d < prev.end) bump(a, 'prev', 0, hrs);
+      if (d >= win.start && d < win.end) bump(a, 0, hrs);
     }
 
     // Ensure assignees with open NPMs but no completions/labor still appear.
@@ -123,23 +126,23 @@ export function WeeklyCompletions({
     }
 
     const cards = Array.from(cardByName.values());
+    const daysMap = daysWorkedByName(cards.map((c) => c.name), ptoRows, win, anchor);
+    for (const c of cards) c.days = daysMap.get(c.name) ?? 0;
     sortCards(cards, sort);
 
     const totalCount     = cards.reduce((s, c) => s + c.count, 0);
     const totalHours     = cards.reduce((s, c) => s + c.hours, 0);
-    const totalPrevCount = cards.reduce((s, c) => s + c.prevCount, 0);
-    const totalPrevHours = cards.reduce((s, c) => s + c.prevHours, 0);
     const totalNpm       = cards.reduce((s, c) => s + c.npm, 0);
     const totalNpmHours  = cards.reduce((s, c) => s + c.npmHours, 0);
     const activeCount    = cards.filter((c) => c.count > 0).length;
 
     return {
-      cards, win, prev,
-      totalCount, totalHours, totalPrevCount, totalPrevHours,
+      cards, win,
+      totalCount, totalHours,
       totalNpm, totalNpmHours, activeCount,
       snapshotTakenAt,
     };
-  }, [pmQ.data, closesQ.data, laborDailyQ.data, period, sort]);
+  }, [pmQ.data, closesQ.data, laborDailyQ.data, ptoQ.data, uparkIds, period, sort]);
 
   if (pmQ.isLoading) return <Section title="§00 Crew performance" loading />;
 
@@ -206,14 +209,11 @@ export function WeeklyCompletions({
           label="Team total"
           value={data.totalCount}
           unit="PMs completed"
-          delta={data.totalCount - data.totalPrevCount}
         />
         <SummaryItem
           label="Labor hours"
           value={data.totalHours.toFixed(1)}
           unit="hours logged"
-          delta={data.totalHours - data.totalPrevHours}
-          fmtDelta={(d) => d.toFixed(1)}
         />
         <SummaryItem
           label="Active techs"
@@ -246,12 +246,15 @@ export function WeeklyCompletions({
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="t-comp-num">{c.count}</span>
                 <span className="t-small t-muted">PMs</span>
-                <TrendArrow delta={c.count - c.prevCount} />
               </div>
-              <div className="flex items-baseline gap-1">
+              <div
+                className="flex items-baseline gap-1"
+                title="Hours logged / days worked (Mon–Fri in window minus approved full-day PTO)"
+              >
                 <span className="t-comp-num">{c.hours.toFixed(1)}</span>
-                <span className="t-small t-muted">hours</span>
-                <TrendArrow delta={c.hours - c.prevHours} fmt={(d) => d.toFixed(1)} />
+                <span className="t-small t-muted">hrs /</span>
+                <span className="t-comp-num">{c.days}</span>
+                <span className="t-small t-muted">days</span>
               </div>
               <div
                 className="mt-1 pt-1"
@@ -298,40 +301,17 @@ function sortCards(cards: Card[], sort: Sort): void {
 }
 
 function SummaryItem({
-  label, value, unit, delta, fmtDelta,
+  label, value, unit,
 }: {
   label: string;
   value: number | string;
   unit: string;
-  delta?: number;
-  fmtDelta?: (d: number) => string;
 }) {
   return (
     <div className="flex items-baseline gap-2">
       <span className="text-[10px] uppercase tracking-wider text-gray-500">{label}</span>
       <span className="text-xl font-medium text-gray-900">{value}</span>
-      {delta !== undefined && <TrendArrow delta={delta} fmt={fmtDelta} />}
       <span className="text-[10px] uppercase tracking-wider text-gray-500">{unit}</span>
     </div>
-  );
-}
-
-function TrendArrow({ delta, fmt }: { delta: number; fmt?: (d: number) => string }) {
-  // Hide trend if both periods are zero (no signal).
-  if (delta === 0) return null;
-  const positive = delta > 0;
-  const text = fmt ? fmt(Math.abs(delta)) : String(Math.abs(Math.round(delta)));
-  return (
-    <span
-      className="t-small"
-      style={{
-        color: positive ? '#16a34a' : '#dc2626',
-        fontSize: 10,
-        fontWeight: 600,
-      }}
-      title={`vs prior period: ${positive ? '+' : '−'}${text}`}
-    >
-      {positive ? '▲' : '▼'}{text}
-    </span>
   );
 }

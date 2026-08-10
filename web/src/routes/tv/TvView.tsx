@@ -52,6 +52,7 @@ import {
 } from '../../hooks/usePto';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
+import { daysWorkedByName, type PtoDayRow } from '../../lib/daysWorked';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
 function formatDataAge(now: Date, ts: string | null | undefined): string {
@@ -97,7 +98,7 @@ export default function TvView() {
   const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
-  const closesQ     = useRecentPmCloses(14);       // 7d window + 7d prior for delta arrows
+  const closesQ     = useRecentPmCloses(14);       // crew table's trailing 7d window (+margin)
   const woClosesQ   = useRecentWoCloses(14);       // for the "recent closes" list (mixed w/ PMs)
   const woQ         = useCurrentWoRows();          // open WOs — stale 7d+ strip
   const laborDailyQ = useLaborDaily(14);
@@ -180,6 +181,7 @@ export default function TvView() {
           woCloses={woClosesQ.data ?? []}
           woRows={woQ.data ?? []}
           laborDaily={laborDailyQ.data ?? []}
+          pto={ptoRows}
           buildings={uparkBuildings}
           assignments={assignmentsQ.data ?? []}
           rounds={roundsQ.data ?? []}
@@ -325,7 +327,7 @@ function Panel({ title, children, accent, meta }: { title: string; children: Rea
  *  BuildingsPanel, surfaced again in the tall left panel so it's visible
  *  at glance height alongside the other workload-shape data. */
 function WorkloadPerformancePanel({
-  pmRows, laborRows, engineers, shifts, closes, woCloses, woRows, laborDaily, now,
+  pmRows, laborRows, engineers, shifts, closes, woCloses, woRows, laborDaily, pto, now,
   buildings, assignments, rounds,
 }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
@@ -336,6 +338,7 @@ function WorkloadPerformancePanel({
   woCloses: NonNullable<ReturnType<typeof useRecentWoCloses>['data']>;
   woRows: WoRow[];
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
+  pto: PtoDayRow[];
   buildings: Building[];
   assignments: BuildingAssignment[];
   rounds: NonNullable<ReturnType<typeof useRounds>['data']>;
@@ -393,7 +396,7 @@ function WorkloadPerformancePanel({
         )}
         <div className="tv-wp-divider" />
         <div className="tv-wp-crew-wrap">
-          <CrewSection closes={closes} laborDaily={laborDaily} now={now} />
+          <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} now={now} />
         </div>
         <div className="tv-wp-divider" />
         <div className="tv-wp-bldgs-wrap">
@@ -1058,47 +1061,45 @@ function EquipmentDownStripe({
  *  whole column is ONE grid — header row + separator + per-engineer rows
  *  all share the same column widths. Name column uses max-content so it
  *  hugs the widest engineer name (no big gap to the PMs number); the
- *  number/delta columns are fixed widths for vertical scan alignment. */
+ *  number columns are fixed widths for vertical scan alignment. */
 function CrewColumn({ rows, renderRow }: {
-  rows: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }[];
-  renderRow: (c: { name: string; pms: number; hours: number; pmsDelta: number; hoursDelta: number }) => React.ReactNode;
+  rows: { name: string; pms: number; hours: number; days: number }[];
+  renderRow: (c: { name: string; pms: number; hours: number; days: number }) => React.ReactNode;
 }) {
   if (rows.length === 0) return <div />;
   return (
     <div className="tv-crew-col">
-      {/* Header — display: contents so its 5 spans become direct grid
-          items in column 1-5 of the parent grid. */}
+      {/* Header — its 4 spans are direct grid items in column 1-4 of the
+          parent grid. */}
       <span />
       <span className="tv-crew-colhead">PMs</span>
-      <span />
       <span className="tv-crew-colhead">Hrs</span>
-      <span />
-      {/* Separator — spans all 5 columns, gives the panel its under-header
+      <span className="tv-crew-colhead">Days</span>
+      {/* Separator — spans all 4 columns, gives the panel its under-header
           border without forcing the header into its own non-aligned grid. */}
       <div className="tv-crew-sep" aria-hidden="true" />
-      {/* Per-engineer rows — each renderRow returns 5 sibling spans (via
+      {/* Per-engineer rows — each renderRow returns 4 sibling spans (via
           Fragment), all participating in the same parent grid. */}
       {rows.map(renderRow)}
     </div>
   );
 }
 
-function CrewSection({ closes, laborDaily, now }: {
+function CrewSection({ closes, laborDaily, pto, now }: {
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
+  pto: PtoDayRow[];
   now: Date;
 }) {
   const data = useMemo(() => {
-    const winEnd    = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const winStart  = addDays(winEnd, -7);
-    const priorEnd  = winStart;
-    const priorStart = addDays(priorEnd, -7);
+    const winEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const winStart = addDays(winEnd, -7);
 
-    type Acc = { pms: number; hours: number; pmsPrev: number; hoursPrev: number };
+    type Acc = { pms: number; hours: number };
     const byTech = new Map<string, Acc>();
     const get = (a: string): Acc => {
       let cur = byTech.get(a);
-      if (!cur) { cur = { pms: 0, hours: 0, pmsPrev: 0, hoursPrev: 0 }; byTech.set(a, cur); }
+      if (!cur) { cur = { pms: 0, hours: 0 }; byTech.set(a, cur); }
       return cur;
     };
 
@@ -1106,41 +1107,42 @@ function CrewSection({ closes, laborDaily, now }: {
     for (const c of closes) {
       const d = new Date(c.completed_on);
       const a = (c.assigned_to_name ?? '').trim() || 'Unassigned';
-      if (d >= winStart && d < winEnd)          get(a).pms++;
-      else if (d >= priorStart && d < priorEnd) get(a).pmsPrev++;
+      if (d >= winStart && d < winEnd) get(a).pms++;
     }
     // Labor hours (Phase 5.5): per-tech per-day from labor_daily view.
     for (const l of laborDaily) {
       const d = new Date(l.day_et + 'T00:00:00');
       const a = (l.assigned_to_name ?? '').trim() || 'Unassigned';
       const hrs = l.hours_that_day ?? 0;
-      if (d >= winStart && d < winEnd)          get(a).hours += hrs;
-      else if (d >= priorStart && d < priorEnd) get(a).hoursPrev += hrs;
+      if (d >= winStart && d < winEnd) get(a).hours += hrs;
     }
-    return Array.from(byTech.entries())
-      .map(([name, v]) => ({
+
+    const names = Array.from(byTech.keys());
+    // Days worked in the window, PTO-derived (see lib/daysWorked).
+    const daysMap = daysWorkedByName(names, pto, { start: winStart, end: winEnd }, now);
+
+    return names
+      .map((name) => ({
         name,
-        pms: v.pms,
-        hours: v.hours,
-        pmsDelta: v.pms - v.pmsPrev,
-        hoursDelta: v.hours - v.hoursPrev,
+        pms: byTech.get(name)!.pms,
+        hours: byTech.get(name)!.hours,
+        days: daysMap.get(name) ?? 0,
       }))
       .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
       .slice(0, 10);
-  }, [closes, laborDaily, now]);
+  }, [closes, laborDaily, pto, now]);
 
   const leftCol  = data.slice(0, 5);
   const rightCol = data.slice(5);
 
   const renderRow = (c: typeof data[number]) => (
-    // Fragment so the 5 spans become siblings under the column's parent
+    // Fragment so the 4 spans become siblings under the column's parent
     // grid — keeps name column hugging max content, numbers in fixed lanes.
     <Fragment key={c.name}>
       <span className="tv-crew-name">{shortName(c.name)}</span>
       <span className="tv-crew-num">{c.pms}</span>
-      <span className="tv-crew-deltacell"><Delta v={c.pmsDelta} /></span>
       <span className="tv-crew-num">{Math.round(c.hours)}</span>
-      <span className="tv-crew-deltacell"><Delta v={c.hoursDelta} decimals={0} /></span>
+      <span className="tv-crew-days">{c.days}</span>
     </Fragment>
   );
 
@@ -1156,19 +1158,6 @@ function CrewSection({ closes, laborDaily, now }: {
         </div>
       )}
     </div>
-  );
-}
-
-/** "+7" / "−14" — small color-coded text delta vs prior period. Null when below threshold. */
-function Delta({ v, decimals = 0 }: { v: number; decimals?: number }) {
-  const abs = Math.abs(v);
-  const threshold = decimals > 0 ? 0.05 : 0.5;
-  if (abs < threshold) return null;
-  const up = v > 0;
-  return (
-    <span className={`tv-crew-delta ${up ? 'up' : 'down'}`}>
-      {up ? '+' : '−'}{abs.toFixed(decimals)}
-    </span>
   );
 }
 
@@ -2583,7 +2572,7 @@ function TvStyles() {
       .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 0; }
       .tv-crew-col {
         display: grid;
-        grid-template-columns: max-content 1.8vw 1.4vw 2.0vw 1.4vw;
+        grid-template-columns: max-content 1.8vw 2.0vw 1.8vw;
         column-gap: 0.3vw;
         row-gap: 0.2vw;
         align-items: baseline;
@@ -2623,10 +2612,14 @@ function TvStyles() {
         font-size: 0.92vw;
         line-height: 1.2;
       }
-      .tv-crew-deltacell { text-align: left; font-size: 0.6vw; }
-      .tv-crew-delta { font-size: 0.6vw; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; opacity: 0.85; }
-      .tv-crew-delta.up   { color: #34d399; }
-      .tv-crew-delta.down { color: #f87171; }
+      .tv-crew-days {
+        color: #94a3b8;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 0.92vw;
+        line-height: 1.2;
+      }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
       .tv-crew-meta-sep { color: #334155; }
