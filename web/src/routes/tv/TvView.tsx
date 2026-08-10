@@ -6,7 +6,7 @@
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
 //   ├──────────────────┬──────────────────┬──────────────────────────────┤
 //   │ WORKLOAD +       │ BMS HEALTH       │ COVERAGE                     │
-//   │ PERFORMANCE      │ §08 + §09 + §10  │  §12 PTO next 3 days +       │
+//   │ PERFORMANCE      │ §08 + §09 + §10  │  §12 PTO next 5 work days +  │
 //   │  · Workload      ├──────────────────┤  §11 open OT posts           │
 //   │  · Crew 7d       │ BUILDINGS        ├──────────────────────────────┤
 //   │  · Recent closes │ (rounds + assign)│ ON-CALL SCHEDULE             │
@@ -137,6 +137,27 @@ export default function TvView() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
+  }, []);
+
+  // Kiosk: hide the mouse pointer after 30 s without movement. A nudge
+  // brings it back (class rule lives in TvStyles).
+  useEffect(() => {
+    let t: number | undefined;
+    const onMove = () => {
+      document.body.classList.remove('tv-cursor-hidden');
+      window.clearTimeout(t);
+      t = window.setTimeout(
+        () => document.body.classList.add('tv-cursor-hidden'),
+        30_000,
+      );
+    };
+    onMove();
+    window.addEventListener('mousemove', onMove);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.clearTimeout(t);
+      document.body.classList.remove('tv-cursor-hidden');
+    };
   }, []);
 
   return (
@@ -1571,7 +1592,7 @@ function tvBuildingLabel(p: OvertimePost): string {
   return p.building_short_code ?? p.building_code ?? p.building_label ?? '—';
 }
 
-/** Combined Coverage panel — §12 PTO (next 3 days) on top, §11 open OT
+/** Combined Coverage panel — §12 PTO (next 5 work days) on top, §11 open OT
  *  posts on the bottom. Replaces the standalone OvertimeTvPanel and the
  *  PtoOutStrip-on-OncallPanel approach so the shop floor has ONE place to
  *  scan for coverage gaps. */
@@ -1605,9 +1626,9 @@ function CoverageTvPanel({
     [open],
   );
   // Fewer rows visible than the standalone OT panel had — we share space
-  // with the 3-day PTO preview above. The "+N more" line still surfaces
-  // overflow so nothing gets silently hidden.
-  const visibleOt = sortedOt.slice(0, 4);
+  // with the 5-work-day PTO preview above. The "+N more" line still
+  // surfaces overflow so nothing gets silently hidden.
+  const visibleOt = sortedOt.slice(0, 3);
   const overflowOt = sortedOt.length - visibleOt.length;
 
   const catTotals = useMemo(() => {
@@ -1626,7 +1647,7 @@ function CoverageTvPanel({
     [engineers],
   );
 
-  // 3-day attendance preview: today + next 2 WORK days. UPark works
+  // 5-work-day attendance preview: today + next 4 WORK days. UPark works
   // Mon–Fri, so Saturday/Sunday are skipped. Today is always included
   // (even if it's a weekend) — managers still want a glance at any
   // weekend coverage / on-call situation. Partial-day rows DON'T
@@ -1662,11 +1683,11 @@ function CoverageTvPanel({
     };
     // Day 0 — today, always included.
     pushDay(today, 'today');
-    // Day 1, 2 — next two work days (skip Sat/Sun). Label "tmrw" only if
+    // Days 1–4 — next four work days (skip Sat/Sun). Label "tmrw" only if
     // the work day actually is tomorrow (Thu → Fri); otherwise use the
     // weekday name (Fri → Mon, not "tmrw").
     const cursor = new Date(today);
-    while (out.length < 3) {
+    while (out.length < 5) {
       cursor.setDate(cursor.getDate() + 1);
       const dow = cursor.getDay();
       if (dow === 0 || dow === 6) continue;
@@ -1696,7 +1717,7 @@ function CoverageTvPanel({
         </div>
       </div>
       <div className="tv-panel-body tv-cov-body">
-        {/* Top: 3-day attendance preview */}
+        {/* Top: 5-work-day attendance preview */}
         <div className="tv-cov-days">
           {days.map((d) => (
             <div key={d.iso} className="tv-cov-day">
@@ -2760,8 +2781,11 @@ function TvStyles() {
       }
       .tv-wkl-chip-major .tv-wkl-chip-count { color: #a78bfa; }
 
-      /* Coverage panel — combines §12 PTO (3-day attendance preview) on
-         top with §11 open OT posts on the bottom. */
+      /* Kiosk cursor hiding — toggled by the 30 s idle timer in TvView. */
+      .tv-cursor-hidden, .tv-cursor-hidden * { cursor: none !important; }
+
+      /* Coverage panel — combines §12 PTO (5-work-day attendance preview)
+         on top with §11 open OT posts on the bottom. */
       .tv-cov-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
       .tv-cov-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
       .tv-cov-days {
