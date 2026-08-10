@@ -13,7 +13,6 @@ import { useMemo } from 'react';
 import {
   useEmailAlarmsOpen,
   useEmailPollState,
-  useBmsHeartbeats,
   useCloseEmailAlarmManual,
   useFlappingEmailAlarms,
   type EmailAlarmOpen,
@@ -218,7 +217,6 @@ function ActiveAcrossVendorsTable({ rows }: { rows: EmailAlarmOpen[] }) {
 export function BmsEmailAlarmsPanel() {
   const openQ = useEmailAlarmsOpen();
   const stateQ = useEmailPollState();
-  const hbQ = useBmsHeartbeats();
 
   const totalActive = openQ.data?.length ?? 0;
   const vendorCount = useMemo(() => {
@@ -233,16 +231,6 @@ export function BmsEmailAlarmsPanel() {
     !stateQ.data ||
     stateQ.data.last_run_status !== 'ok' ||
     (lastRunMin !== null && lastRunMin > 15);
-
-  // PA heartbeat: upstream pipeline canary. If it goes stale, Power
-  // Automate itself is dead and the email feed is about to silence even
-  // if the poller is still running.
-  const paHb = useMemo(
-    () => (hbQ.data ?? []).find((r) => r.vendor === 'power_automate') ?? null,
-    [hbQ.data],
-  );
-  const paStale = paHb ? paHb.hours_since > 2.5 : null; // null = not configured yet; 30-min cadence with 2.5h tolerance
-  const paLastSeen = paHb?.last_seen_utc ?? null;
 
   const subtitle = (
     <span className="t-small t-muted">
@@ -260,15 +248,6 @@ export function BmsEmailAlarmsPanel() {
         </span>
         {lastRun && <span className="t-muted"> · last poll {fmtRelative(lastRun)}</span>}
       </span>
-      {paHb && (
-        <span className="ml-2">
-          · PA{' '}
-          <span style={{ color: paStale ? 'var(--color-danger)' : 'var(--color-ok, #10b981)' }}>
-            {paStale ? 'STALE' : '✓'}
-          </span>
-          {paLastSeen && <span className="t-muted"> {fmtRelative(paLastSeen)}</span>}
-        </span>
-      )}
     </span>
   );
 

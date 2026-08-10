@@ -25,12 +25,7 @@ import { Section } from './Section';
 //   - Weekday past noon ET, expect today's HB (else >28h is stale)
 //   - Mon before noon ET, last expected HB was Friday (allow up to ~80h)
 //   - Sat/Sun, last expected HB was Friday
-//
-// Power Automate heartbeat fires every 30 min, 24/7. Independent cadence,
-// no weekday logic. >2.5h is stale (covers 4-5 missed cycles — tolerates
-// transient PA delays but catches a real outage within ~2-3 h).
 function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
-  if (vendor === 'power_automate') return hoursSince > 2.5;
   const now = new Date();
   const etNow = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
@@ -116,7 +111,9 @@ export function EmailAlarmsPanel() {
   const hbQ = useBmsHeartbeats();
   const stateQ = useEmailPollState();
 
-  const hbRows = hbQ.data ?? [];
+  // power_automate hidden from this panel 2026-08-09 (per user) — the PA
+  // canary still writes heartbeats; it just isn't displayed.
+  const hbRows = (hbQ.data ?? []).filter((r) => r.vendor !== 'power_automate');
   const totalSystems = hbRows.length;
   const staleCount = useMemo(
     () => hbRows.filter((r) => isHeartbeatStale(r.vendor, r.hours_since)).length,
@@ -159,7 +156,7 @@ export function EmailAlarmsPanel() {
       </span>
       <br />
       <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>
-        stale rule: BMS HB &gt; 28h (Mon–Fri, weekday-aware) · PA HB &gt; 2.5h (30-min cadence)
+        stale rule: BMS HB &gt; 28h (Mon–Fri, weekday-aware)
       </span>
     </span>
   );
@@ -167,7 +164,7 @@ export function EmailAlarmsPanel() {
   return (
     <Section
       collapsible
-      title="§09 BMS heartbeats (4 BMS + Power Automate)"
+      title="§09 BMS heartbeats (4 BMS)"
       subtitle={subtitle}
       loading={hbQ.isLoading}
     >

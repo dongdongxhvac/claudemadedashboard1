@@ -630,7 +630,7 @@ function usFederalHolidays(year: number): string[] {
 // ============================================================================
 //
 // Two content rows inside one TV cell:
-//   Row 1: §09 Heartbeats   — per-vendor dot row (Siemens / Delta / 730/750 / PA …)
+//   Row 1: §09 Heartbeats   — per-vendor dot row (Siemens / Delta / 730/750 …)
 //   Row 2: §10 Email alarms — active count + per-vendor breakdown
 //
 // §08 Delta direct was retired from this panel 2026-06-04 — heartbeats already
@@ -644,7 +644,6 @@ function usFederalHolidays(year: number): string[] {
  *  vendor-specific tolerance. Copy of the rule in EmailAlarmsPanel.tsx —
  *  duplicated rather than imported to keep the TV view standalone. */
 function isHeartbeatStale(vendor: string, hoursSince: number): boolean {
-  if (vendor === 'power_automate') return hoursSince > 2.5;
   const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const dow = etNow.getDay();
   const hour = etNow.getHours();
@@ -663,7 +662,6 @@ const BMS_VENDOR_SHORT: Record<string, string> = {
   delta:                 'Delta',
   northeasttech_730_750: '730/750',
   northeast:             'NE Tech',
-  power_automate:        'PA',
 };
 function shortVendor(slug: string | null | undefined): string {
   if (!slug) return '—';
@@ -706,7 +704,9 @@ function BmsHealthPanel() {
   // green pending, post-deadline green ✓ or red ✗ with X/N count.
   const hbRows: HbDot[] = useMemo(() => {
     const out: HbDot[] = [];
-    for (const r of (hbQ.data ?? [])) {
+    // power_automate hidden 2026-08-09 (per user) — PA canary still writes
+    // heartbeats; the manager §09 panel hides it too.
+    for (const r of (hbQ.data ?? []).filter((r) => r.vendor !== 'power_automate')) {
       out.push({
         key: `bms:${r.vendor}`,
         label: shortVendor(r.vendor),
