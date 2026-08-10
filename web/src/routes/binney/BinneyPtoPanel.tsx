@@ -16,7 +16,7 @@ import {
   usePtoRequests, usePtoSummary, usePtoBuckets, usePtoRealtime,
   useSubmitPto, useReviewPto, useCancelPto, useUpdatePto, useDeletePto, useUpdatePtoBalance,
   checkVacationCap, findOwnOverlaps, ptoTypeLabel,
-  PTO_MANAGER_TYPE_OPTIONS, PTO_OTHER_LEAVE_TYPES,
+  PTO_MANAGER_TYPE_OPTIONS,
   PTO_REQUEST_SOURCE_LABELS, PTO_MANAGER_SOURCE_OPTIONS,
   isPartialDay, partialDayLabel,
   type PtoRequest, type PtoSummary, type PtoType, type PtoStatus, type CapConflict,
@@ -1566,14 +1566,15 @@ function CapHeatmap({ requests, onPickDate }: {
   // Sick is shown as a corner dot only — it never counts toward the vacation
   // cap colour, so the 2-engineer cap math stays untouched.
   const sickByDay = useMemo(() => groupByDay('sick'), [requests]);
-  // Other absence types (bereavement / leave / short-term / jury duty) — a
-  // second non-counting marker, labelled per type in the tooltip. Never
-  // touches the 2-engineer cap math.
+  // Every other absence type — floating holiday, bereavement, leave,
+  // short-term, jury duty, plus legacy unpaid/personal rows — a second
+  // non-counting marker, labelled per type in the tooltip. Catch-all by
+  // exclusion so no absence can silently miss the heatmap. Never touches
+  // the 2-engineer cap math.
   const otherByDay = useMemo(() => {
     const m = new Map<string, DayInfo[]>();
-    const otherSet = new Set<PtoType>(PTO_OTHER_LEAVE_TYPES);
     for (const r of requests) {
-      if (!otherSet.has(r.type)) continue;
+      if (r.type === 'vacation' || r.type === 'sick') continue;
       if (r.status !== 'approved' && r.status !== 'pending') continue;
       let cur = r.starts_on;
       while (cur <= r.ends_on) {
@@ -1762,7 +1763,7 @@ function CapHeatmap({ requests, onPickDate }: {
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 7, height: 7, borderRadius: 2, background: '#8b5cf6', border: '1px solid rgba(0,0,0,0.15)' }} />
-          <span>leave</span>
+          <span>other leave</span>
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 12, height: 12, borderRadius: 2, border: '2px solid #10b981', background: 'transparent', boxSizing: 'border-box' }} />

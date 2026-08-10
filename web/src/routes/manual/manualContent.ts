@@ -599,7 +599,12 @@ export function buildManual(site: ManualSite): Chapter[] {
                   'A BMR-observed building holiday — hover the cell for its name. Calendar marker only: it is not PTO, does not count toward the cap, and is unrelated to the Floating Holiday PTO type',
                 ],
                 ['Red dot, top-right', 'Someone is sick that day. Does not count toward the cap or change the colour'],
-                ['Purple square, bottom-right', 'Someone is on bereavement, leave, short-term or jury duty. Does not count toward the cap'],
+                [
+                  'Purple square, bottom-right',
+                  s.binney
+                    ? 'Someone is out on any other absence type — floating holiday, bereavement, leave, short-term, jury duty or a legacy unpaid/personal entry. Hover the cell for who and which type. Does not count toward the cap'
+                    : 'Someone is on bereavement, leave, short-term or jury duty. Does not count toward the cap',
+                ],
               ],
             },
             {

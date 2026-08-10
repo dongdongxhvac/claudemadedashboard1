@@ -54,12 +54,6 @@ export const PTO_MANAGER_TYPE_OPTIONS: PtoType[] = [
   'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty',
 ];
 
-/** Absence types shown on the coverage heatmap as a non-counting marker
- *  (they don't count toward the 2-engineer vacation cap). */
-export const PTO_OTHER_LEAVE_TYPES: PtoType[] = [
-  'bereavement', 'leave', 'short_term', 'jury_duty',
-];
-
 export type PtoRequestSource =
   | 'self_serve' | 'verbal' | 'phone' | 'text' | 'email' | 'team'
   | 'ontheclock_csv' | 'unknown' | 'other';
