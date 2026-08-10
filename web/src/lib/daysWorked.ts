@@ -23,13 +23,8 @@ function localIso(d: Date): string {
   return d.toLocaleDateString('en-CA');
 }
 
-/** Map from each input name (verbatim) → days worked in [start, end). */
-export function daysWorkedByName(
-  names: string[],
-  pto: PtoDayRow[],
-  win: { start: Date; end: Date },
-  now: Date,
-): Map<string, number> {
+/** Mon–Fri ISO dates inside [start, end), capped at end-of-today. */
+function weekdayIsos(win: { start: Date; end: Date }, now: Date): string[] {
   const cap = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const end = win.end < cap ? win.end : cap;
   const isoDays: string[] = [];
@@ -37,6 +32,23 @@ export function daysWorkedByName(
     const dow = d.getDay();
     if (dow >= 1 && dow <= 5) isoDays.push(localIso(d));
   }
+  return isoDays;
+}
+
+/** Workdays available in the window — the "full attendance" day count a
+ *  no-PTO engineer would have (5 for a trailing-7d window). */
+export function workdaysInWindow(win: { start: Date; end: Date }, now: Date): number {
+  return weekdayIsos(win, now).length;
+}
+
+/** Map from each input name (verbatim) → days worked in [start, end). */
+export function daysWorkedByName(
+  names: string[],
+  pto: PtoDayRow[],
+  win: { start: Date; end: Date },
+  now: Date,
+): Map<string, number> {
+  const isoDays = weekdayIsos(win, now);
 
   const byKey = new Map<string, PtoDayRow[]>();
   for (const r of pto) {

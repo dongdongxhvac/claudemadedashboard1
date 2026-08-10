@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import { useCurrentPmRows, useLaborDaily, useRecentPmCloses } from '../hooks/useCurrentSnapshots';
 import { usePtoRequests } from '../hooks/usePto';
 import { useUparkUserIds } from '../hooks/useSiteScope';
-import { daysWorkedByName } from '../lib/daysWorked';
+import { daysWorkedByName, workdaysInWindow } from '../lib/daysWorked';
 import {
   isNpm, isClosed,
   PERIODS, windowFor,
@@ -128,6 +128,7 @@ export function WeeklyCompletions({
     const cards = Array.from(cardByName.values());
     const daysMap = daysWorkedByName(cards.map((c) => c.name), ptoRows, win, anchor);
     for (const c of cards) c.days = daysMap.get(c.name) ?? 0;
+    const fullDays = workdaysInWindow(win, anchor); // full-attendance day count
     sortCards(cards, sort);
 
     const totalCount     = cards.reduce((s, c) => s + c.count, 0);
@@ -137,7 +138,7 @@ export function WeeklyCompletions({
     const activeCount    = cards.filter((c) => c.count > 0).length;
 
     return {
-      cards, win,
+      cards, win, fullDays,
       totalCount, totalHours,
       totalNpm, totalNpmHours, activeCount,
       snapshotTakenAt,
@@ -253,7 +254,12 @@ export function WeeklyCompletions({
               >
                 <span className="t-comp-num">{c.hours.toFixed(1)}</span>
                 <span className="t-small t-muted">hrs /</span>
-                <span className="t-comp-num">{c.days}</span>
+                <span
+                  className="t-comp-num"
+                  style={{ color: c.days >= data.fullDays ? '#16a34a' : '#d97706' }}
+                >
+                  {c.days}
+                </span>
                 <span className="t-small t-muted">days</span>
               </div>
               <div

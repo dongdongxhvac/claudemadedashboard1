@@ -52,7 +52,7 @@ import {
 } from '../../hooks/usePto';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
-import { daysWorkedByName, type PtoDayRow } from '../../lib/daysWorked';
+import { daysWorkedByName, workdaysInWindow, type PtoDayRow } from '../../lib/daysWorked';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
 function formatDataAge(now: Date, ts: string | null | undefined): string {
@@ -1069,16 +1069,15 @@ function CrewColumn({ rows, renderRow }: {
   if (rows.length === 0) return <div />;
   return (
     <div className="tv-crew-col">
-      {/* Header — its 4 spans are direct grid items in column 1-4 of the
+      {/* Header — its 3 spans are direct grid items in column 1-3 of the
           parent grid. */}
       <span />
       <span className="tv-crew-colhead">PMs</span>
-      <span className="tv-crew-colhead">Hrs</span>
-      <span className="tv-crew-colhead">Days</span>
-      {/* Separator — spans all 4 columns, gives the panel its under-header
+      <span className="tv-crew-colhead">Hrs/d</span>
+      {/* Separator — spans all 3 columns, gives the panel its under-header
           border without forcing the header into its own non-aligned grid. */}
       <div className="tv-crew-sep" aria-hidden="true" />
-      {/* Per-engineer rows — each renderRow returns 4 sibling spans (via
+      {/* Per-engineer rows — each renderRow returns 3 sibling spans (via
           Fragment), all participating in the same parent grid. */}
       {rows.map(renderRow)}
     </div>
@@ -1119,37 +1118,45 @@ function CrewSection({ closes, laborDaily, pto, now }: {
 
     const names = Array.from(byTech.keys());
     // Days worked in the window, PTO-derived (see lib/daysWorked).
-    const daysMap = daysWorkedByName(names, pto, { start: winStart, end: winEnd }, now);
+    const win = { start: winStart, end: winEnd };
+    const daysMap = daysWorkedByName(names, pto, win, now);
 
-    return names
-      .map((name) => ({
-        name,
-        pms: byTech.get(name)!.pms,
-        hours: byTech.get(name)!.hours,
-        days: daysMap.get(name) ?? 0,
-      }))
-      .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
-      .slice(0, 10);
+    return {
+      fullDays: workdaysInWindow(win, now), // 5 for a trailing-7d window
+      rows: names
+        .map((name) => ({
+          name,
+          pms: byTech.get(name)!.pms,
+          hours: byTech.get(name)!.hours,
+          days: daysMap.get(name) ?? 0,
+        }))
+        .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
+        .slice(0, 10),
+    };
   }, [closes, laborDaily, pto, now]);
 
-  const leftCol  = data.slice(0, 5);
-  const rightCol = data.slice(5);
+  const leftCol  = data.rows.slice(0, 5);
+  const rightCol = data.rows.slice(5);
 
-  const renderRow = (c: typeof data[number]) => (
-    // Fragment so the 4 spans become siblings under the column's parent
+  const renderRow = (c: typeof data.rows[number]) => (
+    // Fragment so the 3 spans become siblings under the column's parent
     // grid — keeps name column hugging max content, numbers in fixed lanes.
+    // Hours + days share one cell ("32/4") so they read as one hrs/days
+    // stat; right-aligned with tabular nums so hour digits still line up.
     <Fragment key={c.name}>
       <span className="tv-crew-name">{shortName(c.name)}</span>
       <span className="tv-crew-num">{c.pms}</span>
-      <span className="tv-crew-num">{Math.round(c.hours)}</span>
-      <span className="tv-crew-days">{c.days}</span>
+      <span className="tv-crew-num">
+        {Math.round(c.hours)}
+        <span className={`tv-crew-days ${c.days >= data.fullDays ? 'full' : 'short'}`}>/{c.days}</span>
+      </span>
     </Fragment>
   );
 
   return (
     <div className="tv-wp-crew">
       <div className="tv-workload-section-label">PMs closed · labor · last 7 days</div>
-      {data.length === 0 ? (
+      {data.rows.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
         <div className="tv-crew-2col">
@@ -2572,7 +2579,7 @@ function TvStyles() {
       .tv-crew-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2vw 0; }
       .tv-crew-col {
         display: grid;
-        grid-template-columns: max-content 1.8vw 2.0vw 1.8vw;
+        grid-template-columns: max-content 1.8vw 3.2vw;
         column-gap: 0.3vw;
         row-gap: 0.2vw;
         align-items: baseline;
@@ -2613,13 +2620,12 @@ function TvStyles() {
         line-height: 1.2;
       }
       .tv-crew-days {
-        color: #94a3b8;
-        text-align: right;
         font-variant-numeric: tabular-nums;
         font-weight: 600;
-        font-size: 0.92vw;
-        line-height: 1.2;
+        font-size: 0.68vw;
       }
+      .tv-crew-days.full  { color: #34d399; }
+      .tv-crew-days.short { color: #fbbf24; }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
       .tv-crew-meta-sep { color: #334155; }
