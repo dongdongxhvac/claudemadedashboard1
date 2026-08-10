@@ -1661,14 +1661,17 @@ function CapHeatmap({ requests, onPickDate }: {
     return 'rgba(220,38,38,0.50)';                   // red — over cap (override)
   };
 
-  // In-cell label covers vacation AND sick people. Initials = first LETTER
-  // of the first and last name words — words without letters are skipped
-  // ("301 Tommy" → "T") — so numbers in a cell always mean head-counts,
-  // never someone's name.
-  //   Everyone fits (≤ ~3 short initials): per-person initials, sick ones
-  //   rendered red. Otherwise: vacation head-count as a bare number (the
-  //   cap colours) plus a red "+n" sick count. Sick NEVER changes the cell
+  // In-cell label covers vacation, sick AND other-leave people. Initials =
+  // first LETTER of the first and last name words — words without letters
+  // are skipped ("301 Tommy" → "T") — so numbers in a cell always mean
+  // head-counts, never someone's name.
+  //   Fewer than 3 people out: per-person initials, sick rendered red,
+  //   other-leave purple (matching their corner markers). 3 or more:
+  //   vacation head-count as a bare number (the cap colours) plus red /
+  //   purple "+n" counts. Sick and other leave NEVER change the cell
   //   colour — the 2-engineer cap stays vacation-only.
+  const SICK_TEXT  = '#dc2626';
+  const OTHER_TEXT = '#8b5cf6';
   const initialsOf = (name: string): string => {
     const words = name.trim().split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
     if (words.length === 0) return '?';
@@ -1676,20 +1679,21 @@ function CapHeatmap({ requests, onPickDate }: {
     if (words.length === 1) return first(words[0]);
     return first(words[0]) + first(words[words.length - 1]);
   };
-  type LabelPart = { text: string; sick?: boolean };
-  const cellParts = (vac: DayInfo[], sick: DayInfo[]): LabelPart[] => {
-    if (vac.length === 0 && sick.length === 0) return [];
-    // Prefer initials for everyone; fall back to counts when the combined
-    // text would overflow the 40px cell.
-    const initials: LabelPart[] = [
-      ...vac.map((p) => ({ text: initialsOf(p.name) })),
-      ...sick.map((p) => ({ text: initialsOf(p.name), sick: true })),
-    ];
-    const len = initials.reduce((s, p) => s + p.text.length, 0) + initials.length - 1;
-    if (len <= 6) return initials;
+  type LabelPart = { text: string; color?: string };
+  const cellParts = (vac: DayInfo[], sick: DayInfo[], other: DayInfo[]): LabelPart[] => {
+    const total = vac.length + sick.length + other.length;
+    if (total === 0) return [];
+    if (total < 3) {
+      return [
+        ...vac.map((p) => ({ text: initialsOf(p.name) })),
+        ...sick.map((p) => ({ text: initialsOf(p.name), color: SICK_TEXT })),
+        ...other.map((p) => ({ text: initialsOf(p.name), color: OTHER_TEXT })),
+      ];
+    }
     const out: LabelPart[] = [];
-    if (vac.length > 0) out.push({ text: String(vac.length) });
-    if (sick.length > 0) out.push({ text: `+${sick.length}`, sick: true });
+    if (vac.length > 0)   out.push({ text: String(vac.length) });
+    if (sick.length > 0)  out.push({ text: `+${sick.length}`,  color: SICK_TEXT });
+    if (other.length > 0) out.push({ text: `+${other.length}`, color: OTHER_TEXT });
     return out;
   };
 
@@ -1804,7 +1808,7 @@ function CapHeatmap({ requests, onPickDate }: {
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL_W}px)`, gridTemplateRows: `repeat(${totalWeeks}, ${CELL_H}px)`, gap: 3 }}>
             {cells.map((cell) => {
               const count = cell.people.length;
-              const parts = cellParts(cell.people, cell.sick);
+              const parts = cellParts(cell.people, cell.sick, cell.other);
               // Approximate rendered length (chars + separators) for sizing.
               const labelLen = parts.reduce((s, p) => s + p.text.length + 1, -1);
               const clickable = !cell.isPast && !!onPickDate;
@@ -1848,7 +1852,7 @@ function CapHeatmap({ requests, onPickDate }: {
                       {i > 0 && !p.text.startsWith('+') && (
                         <span style={{ opacity: 0.6 }}>·</span>
                       )}
-                      <span style={p.sick ? { color: '#dc2626' } : undefined}>
+                      <span style={p.color ? { color: p.color } : undefined}>
                         {p.text}
                       </span>
                     </Fragment>
