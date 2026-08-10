@@ -389,8 +389,7 @@ function WorkloadPerformancePanel({
           <div className="tv-wo-stale-strip" title="Open WOs with no Cove update in 7+ days">
             <span className="tv-wo-stale-count">WO {WO_STALE_DAYS}d+ no update: {staleWos.length}</span>
             <span className="tv-wo-stale-list">
-              {staleWos.slice(0, 4).map((w) => `${w.id} ${w.days}d`).join(' · ')}
-              {staleWos.length > 4 ? ` +${staleWos.length - 4}` : ''}
+              {staleWos.map((w) => `${w.id} ${w.days}d`).join(' · ')}
             </span>
           </div>
         )}
@@ -2028,21 +2027,27 @@ function TvStyles() {
          Matches the §02 + watcher rule: no Cove update in 7+ days. */
       .tv-wo-stale-strip {
         flex: 0 0 auto;
-        display: flex; align-items: baseline; gap: 0.5vw;
+        display: flex; align-items: flex-start; gap: 0.5vw;
         min-width: 0;
         padding: 0.1vw 0.2vw;
         font-size: 0.72vw; line-height: 1.25;
-        white-space: nowrap; overflow: hidden;
+        overflow: hidden;
       }
       .tv-wo-stale-count {
         color: #f87171; font-weight: 700; flex: 0 0 auto;
         letter-spacing: 0.02em;
+        white-space: nowrap;
       }
       .tv-wo-stale-list {
         color: #94a3b8; font-family: 'JetBrains Mono', monospace;
         font-size: 0.68vw;
         flex: 1 1 auto; min-width: 0;
-        overflow: hidden; text-overflow: ellipsis;
+        /* Wrap to fit every WO, but never taller than 3 lines — clamp
+           ellipsizes the overflow if even 3 lines can't hold them all. */
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       .tv-wp-workload, .tv-wp-crew, .tv-wp-closes {
         display: flex; flex-direction: column; gap: 0.2vw; min-height: 0;
