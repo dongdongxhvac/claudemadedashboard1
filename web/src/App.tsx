@@ -17,6 +17,7 @@ import Training from './routes/training/Training';
 import Manual from './routes/manual/Manual';
 import BinneyManager from './routes/binney/Manager';
 import BinneyAdmin from './routes/binney/Admin';
+import BinneyEscortExp from './routes/binney/EscortExp';
 import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe } from './hooks/useMe';
@@ -160,6 +161,8 @@ export default function App() {
         {/* Binney St — isolated route tree (first pass: PTO only). */}
         <Route path="/binney/manager" element={<Protected><RequireSite site="binney"><RequireManagerArea><BinneyManager /></RequireManagerArea></RequireSite></Protected>} />
         <Route path="/binney/admin"   element={<Protected><RequireSite site="binney"><BinneyAdmin /></RequireSite></Protected>} />
+        {/* Experimental escort schedule — deliberately unlinked from nav. */}
+        <Route path="/binney/exp"     element={<Protected><RequireSite site="binney"><BinneyEscortExp /></RequireSite></Protected>} />
         <Route path="/binney/engineer" element={<Protected><RequireSite site="binney"><EngineerMe /></RequireSite></Protected>} />
         <Route path="/mro/receipts" element={<Protected><RequireSite site="upark"><MroReceipts /></RequireSite></Protected>} />
         <Route path="/upark/mro/receipts" element={<Navigate to="/mro/receipts" replace />} />
