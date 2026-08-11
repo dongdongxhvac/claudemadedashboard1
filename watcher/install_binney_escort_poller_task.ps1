@@ -1,14 +1,15 @@
 # Register the Binney Escort poller as a Windows Scheduled Task.
 # Hourly 7 AM - 7 PM ET, every day (escort WOs can land any day).
 #
-# Run in elevated PowerShell:
-#   PS> cd "D:\Dashboard PMs WOs Events Claude made\watcher"
+# Run in elevated PowerShell from the repo's watcher folder (any location —
+# paths are derived from where this script lives):
+#   PS> cd "C:\Users\don\claudemadedashboard1\watcher"
 #   PS> powershell.exe -ExecutionPolicy Bypass -File ".\install_binney_escort_poller_task.ps1"
 
 $ErrorActionPreference = 'Stop'
 
 $TaskName    = 'COVE-BinneyEscort-Poller'
-$WatcherDir  = 'D:\Dashboard PMs WOs Events Claude made\watcher'
+$WatcherDir  = $PSScriptRoot
 $PythonExe   = Join-Path $WatcherDir '.venv\Scripts\python.exe'
 $ScriptPath  = Join-Path $WatcherDir 'binney_escort_poller.py'
 $BatchPath   = Join-Path $WatcherDir 'run_binney_escort_poller.cmd'
