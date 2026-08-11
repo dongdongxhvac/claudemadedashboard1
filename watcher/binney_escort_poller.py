@@ -15,11 +15,12 @@ Requires the same watcher/.env + cove_session.json as the other pollers.
 NOTE: the Cove session account must have access to the Binney Portfolio
 network (Jie Lao's does).
 
-Schedule (set up via install_binney_escort_poller_task.ps1):
-  - Hourly 7:00am - 7:00pm daily.
+Schedule — hourly 7:00am - 7:00pm ET daily:
+  - Hetzner VM: sudo ./install_binney_escort_poller_linux.sh (systemd timer)
+  - Mac (dev):  ./install_binney_escort_poller_mac.sh        (launchd)
 
 Run manually:
-    .\.venv\Scripts\python.exe binney_escort_poller.py
+    ./.venv/bin/python binney_escort_poller.py
 """
 from __future__ import annotations
 
