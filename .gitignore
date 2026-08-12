@@ -38,3 +38,5 @@ CSV DB/
 *.gsheet
 *.gslides
 *.gform
+
+.claude/settings.local.json

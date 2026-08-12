@@ -8,9 +8,11 @@
 // "Add to Google Calendar" builds a calendar.google.com template link — the
 // event lands on whichever Google account the BROWSER is signed into, so on
 // the kiosk / a bmrbinney301 session it goes to the Binney calendar.
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/auth';
 
 interface EscortWo {
   wo_id: string;
@@ -44,6 +46,36 @@ function useEscorts() {
       return (data ?? []) as EscortWo[];
     },
     refetchInterval: 5 * 60_000,
+  });
+}
+
+interface RunRequest {
+  id: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  requested_at: string;
+  finished_at: string | null;
+  detail: string | null;
+}
+
+/** Latest manual-run request. The "Refresh now" button inserts one; the VM's
+ *  escort_run_watcher (per-minute systemd timer) claims it, runs the poller,
+ *  and stamps done/error. While a request is in flight we poll every 4s. */
+function useLatestRunRequest() {
+  return useQuery({
+    queryKey: ['binneyEscortRunReq'],
+    queryFn: async (): Promise<RunRequest | null> => {
+      const { data, error } = await supabase
+        .from('binney_escort_run_requests')
+        .select('id, status, requested_at, finished_at, detail')
+        .order('requested_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return (data?.[0] as RunRequest) ?? null;
+    },
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === 'pending' || s === 'running' ? 4000 : false;
+    },
   });
 }
 
@@ -171,6 +203,29 @@ function Section({ title, note, rows, past }: { title: string; note?: string; ro
 
 export default function BinneyEscortExp() {
   const q = useEscorts();
+  const { session } = useAuth();
+  const qc = useQueryClient();
+  const reqQ = useLatestRunRequest();
+  const requestRun = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('binney_escort_run_requests')
+        .insert({ requested_by: session?.user.email ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['binneyEscortRunReq'] }),
+  });
+
+  const runActive = reqQ.data?.status === 'pending' || reqQ.data?.status === 'running';
+  // When the in-flight request completes, pull the fresh escort rows.
+  const prevActive = useRef(false);
+  useEffect(() => {
+    if (prevActive.current && !runActive) {
+      qc.invalidateQueries({ queryKey: ['binneyEscortWos'] });
+    }
+    prevActive.current = runActive;
+  }, [runActive, qc]);
+
   const today = todayIso();
 
   const rows = q.data ?? [];
@@ -194,8 +249,24 @@ export default function BinneyEscortExp() {
               {freshest ? ` · data as of ${new Date(freshest).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
             </p>
           </div>
-          <Link to="/binney/manager" className="t-small t-accent hover:underline">Dashboard</Link>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => requestRun.mutate()}
+              disabled={runActive || requestRun.isPending}
+              className="t-small t-accent hover:underline disabled:opacity-50 disabled:no-underline"
+            >
+              {reqQ.data?.status === 'running' ? 'Polling COVE…'
+                : reqQ.data?.status === 'pending' ? 'Queued — starts within a minute…'
+                : 'Refresh from COVE now'}
+            </button>
+            <Link to="/binney/manager" className="t-small t-accent hover:underline">Dashboard</Link>
+          </div>
         </div>
+        {reqQ.data?.status === 'error' && (
+          <div className="max-w-5xl mx-auto px-6 pb-2">
+            <p className="t-small t-danger">Last manual run failed: {reqQ.data.detail ?? 'unknown error'}</p>
+          </div>
+        )}
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-4">
