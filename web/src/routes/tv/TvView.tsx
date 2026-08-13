@@ -2640,9 +2640,9 @@ function TvStyles() {
       /* Sub-label for the hrs/days column — quieter and un-tracked so it
          reads as a footnote, not a second heading. */
       .tv-crew-legend {
-        font-size: 0.6vw;
-        color: #475569;
-        margin-top: 0.1vw;
+        font-size: 0.72vw;
+        color: #94a3b8;
+        margin-top: 0.12vw;
       }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
