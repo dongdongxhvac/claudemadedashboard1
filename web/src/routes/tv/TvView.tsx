@@ -1154,7 +1154,7 @@ function CrewSection({ closes, laborDaily, pto, now }: {
 
   return (
     <div className="tv-wp-crew">
-      <div className="tv-workload-section-label">PMs closed · labor · last 7 days</div>
+      <div className="tv-workload-section-label">PMs closed · labor · last 7 days incl. today</div>
       {data.rows.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
