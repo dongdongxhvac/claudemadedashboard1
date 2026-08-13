@@ -1155,6 +1155,12 @@ function CrewSection({ closes, laborDaily, pto, now }: {
   return (
     <div className="tv-wp-crew">
       <div className="tv-workload-section-label">PMs closed · labor · last 7 days incl. today</div>
+      {/* The two numbers run on different clocks: days is scheduled (weekday
+          minus PTO, today counts from midnight), hours is reported (labor_daily,
+          arrives on the labor sync). Mid-morning the ratio therefore reads low
+          until today's hours land — say so, so a short number isn't read as a
+          short day. */}
+      <div className="tv-crew-legend">hrs/days · today’s hours post after labor sync</div>
       {data.rows.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
@@ -2631,6 +2637,13 @@ function TvStyles() {
       }
       .tv-crew-days.full  { color: #34d399; }
       .tv-crew-days.short { color: #fbbf24; }
+      /* Sub-label for the hrs/days column — quieter and un-tracked so it
+         reads as a footnote, not a second heading. */
+      .tv-crew-legend {
+        font-size: 0.6vw;
+        color: #475569;
+        margin-top: 0.1vw;
+      }
       .tv-crew-meta { display: inline-flex; gap: 0.45vw; align-items: baseline; }
       .tv-crew-meta b { color: #cbd5e1; font-weight: 600; }
       .tv-crew-meta-sep { color: #334155; }
