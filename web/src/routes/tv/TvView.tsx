@@ -1091,7 +1091,12 @@ function CrewSection({ closes, laborDaily, pto, now }: {
 }) {
   const data = useMemo(() => {
     const winEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const winStart = addDays(winEnd, -7);
+    const winStart = addDays(winEnd, -8);
+    // Day count stops at yesterday while hours/PMs still include today. Crews
+    // mostly log labor and close PM/WOs before noon, so today's totals are
+    // always half-written — counting today as a worked day made every ratio
+    // read short in the morning (2026-08-17, per user).
+    const dayCountAsOf = addDays(now, -1);
 
     type Acc = { pms: number; hours: number };
     const byTech = new Map<string, Acc>();
@@ -1118,10 +1123,10 @@ function CrewSection({ closes, laborDaily, pto, now }: {
     const names = Array.from(byTech.keys());
     // Days worked in the window, PTO-derived (see lib/daysWorked).
     const win = { start: winStart, end: winEnd };
-    const daysMap = daysWorkedByName(names, pto, win, now);
+    const daysMap = daysWorkedByName(names, pto, win, dayCountAsOf);
 
     return {
-      fullDays: workdaysInWindow(win, now), // 5 for a trailing-7d window
+      fullDays: workdaysInWindow(win, dayCountAsOf), // complete workdays only
       rows: names
         .map((name) => ({
           name,
@@ -1154,13 +1159,12 @@ function CrewSection({ closes, laborDaily, pto, now }: {
 
   return (
     <div className="tv-wp-crew">
-      <div className="tv-workload-section-label">PMs closed · labor · last 7 days incl. today</div>
-      {/* The two numbers run on different clocks: days is scheduled (weekday
-          minus PTO, today counts from midnight), hours is reported (labor_daily,
-          arrives on the labor sync). Mid-morning the ratio therefore reads low
-          until today's hours land — say so, so a short number isn't read as a
-          short day. */}
-      <div className="tv-crew-legend">hrs/days · today’s hours post after labor sync</div>
+      <div className="tv-workload-section-label">PMs closed · labor · last 8 days incl. today</div>
+      {/* Hours and PMs cover the full 8 days including today; the days
+          denominator stops at yesterday (see dayCountAsOf above). Saying so
+          keeps the ratio honest — today's partial totals sit over a count of
+          complete days, rather than pretending today is already a full day. */}
+      <div className="tv-crew-legend">hrs/days · days counted through yesterday</div>
       {data.rows.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
