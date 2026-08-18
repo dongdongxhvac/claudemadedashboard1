@@ -32,6 +32,10 @@ export type EngineerRow = {
   is_manager: boolean;
   cmms_assignee_name: string | null;
   plantlog_username: string | null;
+  /** Cove (CMMS) user ID — drives the pm12/wo12 pollers' assignee filter
+   *  (0127). Auto-backfilled by the pollers when the name matches; set it
+   *  by hand for a new hire so their PMs reach the dashboard on the next poll. */
+  cove_user_id: string | null;
   discipline: Discipline | null;
   level: number;
   xp: number;
@@ -52,7 +56,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
     .select(`
       id, full_name, email, phone, hiring_date, auth_user_id, active, role, is_manager,
       engineer_profiles!inner (
-        cmms_assignee_name, plantlog_username, discipline, level, xp,
+        cmms_assignee_name, plantlog_username, cove_user_id, discipline, level, xp,
         visible_to_self, notes, title, shift_id, is_lead, updated_at
       )
     `);
@@ -62,6 +66,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
   type Profile = {
     cmms_assignee_name: string | null;
     plantlog_username: string | null;
+    cove_user_id: string | null;
     discipline: Discipline | null;
     level: number; xp: number; visible_to_self: boolean;
     notes: string | null; title: string | null;
@@ -92,6 +97,7 @@ async function fetchUsers(roleFilter: Role | null): Promise<EngineerRow[]> {
         is_manager: r.is_manager,
         cmms_assignee_name: ep.cmms_assignee_name,
         plantlog_username: ep.plantlog_username,
+        cove_user_id: ep.cove_user_id,
         discipline: ep.discipline,
         level: ep.level,
         xp: ep.xp,
@@ -135,7 +141,7 @@ export function useUpdateEngineerProfile() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
+      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username' | 'cove_user_id'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')
@@ -215,6 +221,7 @@ export function useAddEngineer() {
       hiring_date?: string | null;
       discipline?: Discipline | null;
       role?: Role;
+      cove_user_id?: string | null;
     }) => {
       const { data: u, error: ue } = await supabase
         .from('users')
@@ -237,6 +244,7 @@ export function useAddEngineer() {
         .update({
           cmms_assignee_name: input.cmms_assignee_name.trim() || null,
           discipline: input.discipline ?? null,
+          cove_user_id: input.cove_user_id?.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq('user_id', (u as { id: string }).id);

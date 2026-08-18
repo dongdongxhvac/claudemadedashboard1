@@ -33,6 +33,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
+from cove_roster import assignee_ids, backfill_cove_ids  # noqa: E402
 from wo_stale_check import run_stale_wo_check  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
@@ -200,9 +201,11 @@ QUERY = """
 #   - status:   open + done (so the dashboard sees recently-completed WOs too)
 #   - assignee: 11 engineers/managers (subset of PM12 list — missing yGVXKlnu4F)
 #   - createdAt: rolling N-day lookback from today
-# Keep in sync with PM_ASSIGNEE_IDS in pm12_poller.py — a new hire has to be
-# added to BOTH or their WOs (here) / PMs (there) never reach the dashboard.
-# 2026-08-18: Austin Myette (DVQ8HxDTKS) added; see the note in pm12_poller.
+# Since 0127 the assignee list is roster-driven — engineer_profiles.cove_user_id
+# ∪ this legacy list (cove_roster.assignee_ids); a new hire is one field in
+# Admin › User Profiles, no code change. This list is the floor (an empty
+# assignee filter would pull the whole network). See pm12_poller for the story.
+# 2026-08-18: Austin Myette (DVQ8HxDTKS) added.
 WO_ASSIGNEE_IDS = [
     "IrQac3eAnX", "thGxmdCU3x", "uv9FFWuCIT", "V0cfCtkNuC",
     "8ZVqd2HExb", "RxaNCAOXew", "9PAgDPhuXE", "uQNAPN9ipb",
@@ -229,11 +232,11 @@ def compute_created_start() -> str:
     return start_eastern.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def build_wo_filter(statuses: list[str]) -> dict:
+def build_wo_filter(statuses: list[str], assignee_ids: list[str] | None = None) -> dict:
     return {
         "items": [
             {"field": "status",    "operator": "CONTAINED_IN", "value": statuses},
-            {"field": "assignee",  "operator": "CONTAINED_IN", "value": WO_ASSIGNEE_IDS},
+            {"field": "assignee",  "operator": "CONTAINED_IN", "value": assignee_ids or WO_ASSIGNEE_IDS},
             {"field": "createdAt", "operator": "DATE_RANGE",   "value": {"start": compute_created_start()}},
         ],
         "orItems": [],
@@ -402,8 +405,8 @@ def post_gql(body: dict):
     return resp.status_code, resp
 
 
-def fetch_all_work_orders(statuses: list[str]) -> list[dict]:
-    wo_filter = build_wo_filter(statuses)
+def fetch_all_work_orders(statuses: list[str], ids: list[str] | None = None) -> list[dict]:
+    wo_filter = build_wo_filter(statuses, ids)
     print(f"  status={statuses}  createdAt >= {wo_filter['items'][2]['value']['start']} (rolling {WO_CREATED_LOOKBACK_DAYS}d)")
     out: list[dict] = []
     skip = 0
@@ -476,9 +479,12 @@ def main() -> int:
     since_iso = prev.data[0]["taken_at"] if prev.data else None
     print(f"  since_iso={since_iso}")
 
+    # Assignee filter = roster cove_user_ids ∪ legacy list (cove_roster).
+    ids = assignee_ids(client, WO_ASSIGNEE_IDS, "wo")
+
     try:
-        open_items   = fetch_all_work_orders(OPEN_STATUSES)
-        closed_items = fetch_all_work_orders(CLOSED_STATUSES)
+        open_items   = fetch_all_work_orders(OPEN_STATUSES, ids)
+        closed_items = fetch_all_work_orders(CLOSED_STATUSES, ids)
     except Exception as e:
         msg = str(e)
         if "Not Authenticated" in msg:
@@ -486,6 +492,12 @@ def main() -> int:
         _log_error(filename, msg)
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
+
+    # Learn Cove IDs for roster profiles that lack one. No roster_gap_check
+    # here on purpose: WOs are sparse (a tech can go weeks with none), so
+    # "0 WOs" is usually legit and would just be hourly noise. pm12 is the
+    # signal — every engineer always has open PMs.
+    backfill_cove_ids(client, open_items + closed_items, "wo")
 
     # ----- wo_rows: open work queue only -----
     snap = client.table("snapshots").insert({

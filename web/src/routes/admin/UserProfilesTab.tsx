@@ -268,6 +268,15 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                             INACTIVE
                           </span>
                         )}
+                        {r.active && r.role === 'engineer' && !r.cove_user_id && (
+                          <span
+                            className="t-small px-1.5 py-0.5 rounded ml-1"
+                            style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309', fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em' }}
+                            title="No Cove user ID on this profile — the dashboard can't pull their PMs/WOs until it's set (Edit → Cove user ID). The pollers fill it in automatically once their tasks are flowing."
+                          >
+                            NO COVE ID
+                          </span>
+                        )}
                       </div>
                       {r.hiring_date && (
                         <div className="t-small t-muted">
@@ -441,7 +450,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
   );
 }
 
-type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
+type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username' | 'cove_user_id'>>;
 type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean; is_manager: boolean };
 
 function EditDrawer({
@@ -470,6 +479,7 @@ function EditDrawer({
   const [title, setTitle] = useState<string>(row.title ?? '');
   const [cmmsName, setCmmsName] = useState<string>(row.cmms_assignee_name ?? '');
   const [plantlogUsername, setPlantlogUsername] = useState<string>(row.plantlog_username ?? '');
+  const [coveUserId, setCoveUserId] = useState<string>(row.cove_user_id ?? '');
   const [email, setEmail] = useState<string>(row.email ?? '');
   const [phone, setPhone] = useState<string>(row.phone ?? '');
   const [role, setRole] = useState<Role>(row.role);
@@ -519,6 +529,7 @@ function EditDrawer({
           title: title.trim() || null,
           cmms_assignee_name: cmmsName.trim() || null,
           plantlog_username: plantlogUsername.trim() || null,
+          cove_user_id: coveUserId.trim() || null,
           shift_id: shiftId || null,
           is_lead: isLead,
           discipline,
@@ -711,6 +722,30 @@ function EditDrawer({
           />
           <p className="t-small t-muted mt-1">
             Must match the <code>Assigned To</code> column in PM CSV exports exactly. Only relevant for engineers; XP won't accumulate if this doesn't match.
+          </p>
+        </label>
+
+        <label className="block mb-3">
+          <span className="t-small t-muted uppercase tracking-wider block mb-1">
+            Cove user ID
+            {!coveUserId.trim() && row.role === 'engineer' && (
+              <span className="ml-2 px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309', fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>
+                NOT SET · PMs won't sync
+              </span>
+            )}
+          </span>
+          <input
+            type="text"
+            value={coveUserId}
+            onChange={(e) => setCoveUserId(e.target.value)}
+            placeholder="e.g. DVQ8HxDTKS (10 chars, from Cove)"
+            spellCheck={false}
+            autoCapitalize="off"
+            className="w-full border rounded px-2 py-1 t-text t-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          />
+          <p className="t-small t-muted mt-1">
+            The dashboard only pulls PMs/WOs for engineers whose Cove ID it knows — a new hire is invisible until this is set. Find it in Cove: filter Open Tasks by the person as Assignee, then copy the <code>id</code> from the page URL (<code>…%22id%22%3A%22<b>DVQ8HxDTKS</b>%22…</code>). The pollers also fill this in automatically once the person's tasks are flowing.
           </p>
         </label>
 
@@ -913,6 +948,7 @@ function AddUserDrawer({
     hiring_date: string | null;
     discipline: Discipline | null;
     role?: Role;
+    cove_user_id?: string | null;
   }) => Promise<void>;
   submitting: boolean;
   error: string | null;
@@ -920,6 +956,7 @@ function AddUserDrawer({
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<Role>('engineer');
   const [cmmsName, setCmmsName] = useState('');
+  const [coveUserId, setCoveUserId] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [hiringDate, setHiringDate] = useState('');
@@ -940,6 +977,7 @@ function AddUserDrawer({
       hiring_date: hiringDate || null,
       discipline: discipline || null,
       role,
+      cove_user_id: coveUserId.trim() || null,
     });
   };
 
@@ -1021,6 +1059,25 @@ function AddUserDrawer({
             XP won't accumulate if this doesn't match.
           </p>
         </label>
+
+        {role === 'engineer' && (
+          <label className="block mb-3">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Cove user ID</span>
+            <input
+              type="text"
+              value={coveUserId}
+              onChange={(e) => setCoveUserId(e.target.value)}
+              placeholder="e.g. DVQ8HxDTKS — optional, can add later"
+              spellCheck={false}
+              autoCapitalize="off"
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+            <p className="t-small t-muted mt-1">
+              Lets the dashboard pull this person's PMs/WOs from Cove on the next hourly poll. Find it in Cove: filter Open Tasks by them as Assignee and copy the <code>id</code> from the URL. Leave blank if you don't have it yet — the profile will flag it as unset.
+            </p>
+          </label>
+        )}
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">Sign-in email</span>

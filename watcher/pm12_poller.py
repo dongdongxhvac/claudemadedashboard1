@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from classify import classify_pm  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
+from cove_roster import assignee_ids, backfill_cove_ids, roster_gap_check  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
@@ -129,15 +130,19 @@ QUERY = """
 #   - dueDate:  rolling N-day lookback from today (bump PM_DUE_LOOKBACK_DAYS
 #               to widen or narrow the window — no need to keep editing dates)
 #
-# If the team roster changes, edit PM_ASSIGNEE_IDS (and WO_ASSIGNEE_IDS in
-# wo12_poller.py — keep them in sync). A new hire's Cove ID is in the URL of
-# their assignee filter in Cove: .../pm-tasks?filters=...%22id%22%3A%22<ID>%22
-# — or ask them to open their profile and read it from the address bar.
+# Since 0127 the assignee list is roster-driven: at run start we read
+# engineer_profiles.cove_user_id for every active UPark engineer (via
+# v_upark_active_engineers) and UNION it with this legacy list — see
+# cove_roster.assignee_ids. So a new hire is a single field in Admin › User
+# Profiles (Cove user ID), no code change. This list stays as the floor:
+# an empty assignee filter would pull the whole Cove network, so if the
+# roster read ever fails we still poll for everyone captured here.
 #
-# 2026-08-18: Austin Myette (DVQ8HxDTKS) added — hired 06-22, a month after
-# this list was captured, so his 61 open PMs were invisible to the dashboard
-# for ~8 weeks (0 rows in every snapshot). See ROSTER_CHECK below, which now
-# logs a loud warning when the DB roster has an engineer this list doesn't.
+# 2026-08-18: Austin Myette (DVQ8HxDTKS) — hired 06-22, a month after this
+# list was captured, so his 61 open PMs were invisible to the dashboard for
+# ~8 weeks (0 rows in every snapshot). That's what motivated the roster
+# column + cove_roster.roster_gap_check, which logs a warn row whenever an
+# active engineer has 0 fetched tasks.
 PM_ASSIGNEE_IDS = [
     "thGxmdCU3x", "uv9FFWuCIT", "V0cfCtkNuC", "8ZVqd2HExb",
     "D6ZvMf8Mcj", "RxaNCAOXew", "IKIPg7ql0G", "9PAgDPhuXE",
@@ -163,11 +168,11 @@ def compute_due_date_start() -> str:
     return start_eastern.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def build_pm_filter(statuses: list[str]) -> dict:
+def build_pm_filter(statuses: list[str], assignee_ids: list[str] | None = None) -> dict:
     return {
         "items": [
             {"field": "status",   "operator": "CONTAINED_IN", "value": statuses},
-            {"field": "assignee", "operator": "CONTAINED_IN", "value": PM_ASSIGNEE_IDS},
+            {"field": "assignee", "operator": "CONTAINED_IN", "value": assignee_ids or PM_ASSIGNEE_IDS},
             {"field": "dueDate",  "operator": "DATE_RANGE",   "value": {"start": compute_due_date_start()}},
         ],
         "orItems": [],
@@ -338,10 +343,10 @@ def post_gql(body: dict) -> dict:
     return resp.status_code, resp
 
 
-def fetch_all_pm_tasks(statuses: list[str]) -> list[dict]:
+def fetch_all_pm_tasks(statuses: list[str], ids: list[str] | None = None) -> list[dict]:
     """Paginate through every PM task matching the bookmark filter. Cove's UI
     sends limit=25 but for a poller we want fewer round-trips, so PAGE_LIMIT=100."""
-    pm_filter = build_pm_filter(statuses)
+    pm_filter = build_pm_filter(statuses, ids)
     print(f"  status={statuses}  dueDate >= {pm_filter['items'][2]['value']['start']} (rolling {PM_DUE_LOOKBACK_DAYS}d)")
     out: list[dict] = []
     skip = 0
@@ -378,51 +383,6 @@ def fetch_all_pm_tasks(statuses: list[str]) -> list[dict]:
 
 
 # ---------- main ----------
-
-def roster_check(client, filename: str, fetched_items: list[dict]) -> None:
-    """Warn when an active UPark engineer in the app roster has ZERO PMs in
-    what we just fetched. That's the fingerprint of a Cove user ID missing
-    from PM_ASSIGNEE_IDS (how Austin Myette went dark for 8 weeks in 2026):
-    Cove filters server-side by assignee, so a missing ID doesn't error — the
-    person's tasks simply never arrive. Compare the fetched assignee NAMES
-    against the roster's cmms_assignee_name and shout about any gap.
-
-    Zero PMs for a real engineer is also *possible* legitimately (brand-new
-    hire, long leave) — so this is a 'warn' row in ingestion_log, not a
-    failure, and never blocks the snapshot write. Best-effort: any exception
-    here is swallowed so a roster-lookup hiccup can't take the poller down."""
-    try:
-        seen = {assignee_name(it.get("assignee")) for it in fetched_items}
-        seen.discard(None)
-        roster = (
-            client.table("v_upark_active_engineers")
-            .select("full_name, cmms_assignee_name")
-            .execute()
-        ).data or []
-        missing = [
-            r for r in roster
-            if r.get("cmms_assignee_name") and r["cmms_assignee_name"] not in seen
-        ]
-        if not missing:
-            return
-        names = ", ".join(f"{r['full_name']} (CMMS '{r['cmms_assignee_name']}')" for r in missing)
-        msg = (
-            f"ROSTER GAP: {len(missing)} active engineer(s) with 0 PMs in this fetch — {names}. "
-            f"If they have open PMs in Cove, their Cove user ID is missing from "
-            f"PM_ASSIGNEE_IDS in watcher/pm12_poller.py (and WO_ASSIGNEE_IDS in wo12_poller.py). "
-            f"Their ID is in the URL of Cove's assignee filter for them."
-        )
-        print(f"WARN: {msg}", file=sys.stderr)
-        client.table("ingestion_log").insert({
-            "filename":  filename,
-            "kind":      "pm12",
-            "status":    "warn",
-            "rows":      0,
-            "error_msg": msg[:4000],
-        }).execute()
-    except Exception as e:  # noqa: BLE001 — never let the check break the poll
-        print(f"WARN: roster_check failed: {e}", file=sys.stderr)
-
 
 def main() -> int:
     now_local = datetime.now(EASTERN)
@@ -462,9 +422,12 @@ def main() -> int:
     since_iso = prev.data[0]["taken_at"] if prev.data else None
     print(f"  since_iso={since_iso}")
 
+    # Assignee filter = roster cove_user_ids ∪ legacy list (cove_roster).
+    ids = assignee_ids(client, PM_ASSIGNEE_IDS, "pm12")
+
     try:
-        open_items   = fetch_all_pm_tasks(OPEN_STATUSES)
-        closed_items = fetch_all_pm_tasks(CLOSED_STATUSES)
+        open_items   = fetch_all_pm_tasks(OPEN_STATUSES, ids)
+        closed_items = fetch_all_pm_tasks(CLOSED_STATUSES, ids)
     except Exception as e:
         msg = str(e)
         if "Not Authenticated" in msg:
@@ -473,8 +436,11 @@ def main() -> int:
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
-    # Anyone on the app roster who has 0 PMs across BOTH fetches → warn.
-    roster_check(client, filename, open_items + closed_items)
+    all_items = open_items + closed_items
+    # Learn Cove IDs for roster profiles that lack one (legacy 12 self-populate
+    # on first run), then warn about anyone on the roster with 0 fetched PMs.
+    backfill_cove_ids(client, all_items, "pm12")
+    roster_gap_check(client, all_items, "pm12", filename)
 
     # ----- pm_rows: open work queue only (To Do / In Progress / On Hold) -----
     snap = client.table("snapshots").insert({
