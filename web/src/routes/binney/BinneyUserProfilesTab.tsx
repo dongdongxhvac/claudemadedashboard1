@@ -356,10 +356,13 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
           readOnly={!canEditRow(editing)}
           lockRole={!canManageUsers}
           onClose={() => setEditing(null)}
-          onDelete={async () => {
+          // Hard delete is admin-only (users_admin_all). Managers get
+          // Deactivate via the 0124 UPDATE policy — that's the right tool
+          // for a departure anyway (keeps PTO/PM history).
+          onDelete={canManageUsers ? async () => {
             await deleteUser.mutateAsync(editing.user_id);
             setEditing(null);
-          }}
+          } : undefined}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
             const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string; is_manager?: boolean } = {};
@@ -451,9 +454,9 @@ function EditDrawer({
   lockRole?: boolean;
   onClose: () => void;
   onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
-  /** Hard-delete this user. RLS decides who may (admin: anyone; manager:
-   *  own-site engineers — 0125); a filtered-out delete rejects with a
-   *  message, which the drawer surfaces inline. */
+  /** Hard-delete this user. Admin-only — the tab passes it only under
+   *  manageScope 'all'; managers Deactivate instead. A filtered-out delete
+   *  rejects with a message, which the drawer surfaces inline. */
   onDelete?: () => Promise<void>;
 }) {
   const [fullName, setFullName] = useState<string>(row.full_name);

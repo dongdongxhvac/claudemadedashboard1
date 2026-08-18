@@ -191,9 +191,9 @@ export function useUpdateUser() {
 }
 
 /** Hard-delete a user — mirror of hooks/useEngineers.useDeleteUser, wired to
- *  the Binney query keys. RLS scopes it: admins any row; managers only
- *  engineers homed at THEIR site (0125). A 0-row delete throws so the UI never
- *  reports success on a silently-filtered no-op. */
+ *  the Binney query keys. RLS: admin-only (users_admin_all); managers have no
+ *  DELETE policy. A 0-row delete throws so the UI never reports success on a
+ *  silently-filtered no-op. */
 export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({

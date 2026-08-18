@@ -179,9 +179,9 @@ export function useUpdateUser() {
  *  oncall/overtime rows; REJECTED by the DB if the user is referenced as
  *  updated_by/closed_by on equipment issues, SOPs, weekly updates, etc.
  *  Realistically for fresh/mistaken rows — established people should be
- *  Deactivated instead. RLS: admins any row (users_admin_all); managers only
- *  engineers homed at their own site (0125 users_manager_delete_home_engineer).
- *  A silently-filtered delete (0 rows) surfaces as an error so the UI never
+ *  Deactivated instead. RLS: admin-only (users_admin_all); managers have no
+ *  DELETE policy (per user 2026-08-10 — deactivate is their tool). A
+ *  silently-filtered delete (0 rows) surfaces as an error so the UI never
  *  reports success on a no-op. */
 export function useDeleteUser() {
   const qc = useQueryClient();
