@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer,
+  useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer, useDeleteUser,
   ROLES,
   type EngineerRow, type Role, type Discipline,
 } from './hooks/useBinneyEngineers';
@@ -124,6 +124,7 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
   const updateProfile = useUpdateEngineerProfile();
   const updateUser = useUpdateUser();
   const addEngineer = useAddEngineer();
+  const deleteUser = useDeleteUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
@@ -355,6 +356,10 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
           readOnly={!canEditRow(editing)}
           lockRole={!canManageUsers}
           onClose={() => setEditing(null)}
+          onDelete={async () => {
+            await deleteUser.mutateAsync(editing.user_id);
+            setEditing(null);
+          }}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
             const _userPatch: { email?: string | null; phone?: string | null; role?: Role; active?: boolean; full_name?: string; is_manager?: boolean } = {};
@@ -436,6 +441,7 @@ function EditDrawer({
   lockRole = false,
   onClose,
   onSave,
+  onDelete,
 }: {
   row: EngineerRow;
   shifts: { id: string; name: string }[];
@@ -445,6 +451,10 @@ function EditDrawer({
   lockRole?: boolean;
   onClose: () => void;
   onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
+  /** Hard-delete this user. RLS decides who may (admin: anyone; manager:
+   *  own-site engineers — 0125); a filtered-out delete rejects with a
+   *  message, which the drawer surfaces inline. */
+  onDelete?: () => Promise<void>;
 }) {
   const [fullName, setFullName] = useState<string>(row.full_name);
   const [title, setTitle] = useState<string>(row.title ?? '');
@@ -456,8 +466,32 @@ function EditDrawer({
   const [isManager, setIsManager] = useState<boolean>(row.is_manager);
   const [active, setActive] = useState<boolean>(row.active);
   const [saving, setSaving] = useState(false);
+  // Delete is two-step: arm, then type the person's last name to confirm.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const lastName = row.full_name.trim().split(/\s+/).pop() ?? row.full_name;
+  const deleteConfirmed = deleteConfirm.trim().toLowerCase() === lastName.toLowerCase();
 
   const isLinked = !!row.auth_user_id;
+
+  const doDelete = async () => {
+    if (!onDelete || !deleteConfirmed) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDelete();
+    } catch (e) {
+      const msg = (e as Error).message ?? String(e);
+      setDeleteError(
+        /foreign key|violates|referenced/i.test(msg)
+          ? 'This user is referenced by other records (issues, notes, updates…) and can’t be deleted. Deactivate them instead.'
+          : msg,
+      );
+      setDeleting(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -683,6 +717,80 @@ function EditDrawer({
                 {active ? 'Deactivate user' : 'Reactivate user'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Danger zone — hard delete. Distinct from Deactivate: this drops
+            the row and cascades PTO / PM history. Meant for mistaken or
+            never-started accounts; the DB refuses if the person is
+            referenced by issues/notes/updates. */}
+        {!readOnly && onDelete && (
+          <div className="border-t pt-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            {!deleteArmed ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="t-small t-muted uppercase tracking-wider block">Delete user</span>
+                  <p className="t-small t-muted mt-0.5">
+                    Permanently removes this account and its PTO / PM history.
+                    For someone who has left, prefer Deactivate.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setDeleteArmed(true); setDeleteError(null); }}
+                  className="t-small px-3 py-1 rounded border font-medium"
+                  style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)', background: 'transparent' }}
+                >
+                  Delete…
+                </button>
+              </div>
+            ) : (
+              <div
+                className="rounded p-3"
+                style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid var(--color-danger)' }}
+              >
+                <p className="t-small mb-2" style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
+                  This cannot be undone.
+                </p>
+                <p className="t-small t-muted mb-2">
+                  Type <span className="t-mono" style={{ fontWeight: 600 }}>{lastName}</span> to confirm deleting <b>{row.full_name}</b>.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    // Inside the Save <form>: swallow Enter so it can't
+                    // submit the profile edit (or fire the delete) by accident.
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                    placeholder={lastName}
+                    autoFocus
+                    className="border rounded px-2 py-1 t-text t-mono flex-1"
+                    style={{ borderColor: 'var(--color-danger)', background: 'var(--color-card)' }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!deleteConfirmed || deleting}
+                    onClick={doDelete}
+                    className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-40"
+                    style={{ background: 'var(--color-danger)' }}
+                  >
+                    {deleting ? 'Deleting…' : 'Delete permanently'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteArmed(false); setDeleteConfirm(''); setDeleteError(null); }}
+                    className="t-small px-2 py-1 rounded border"
+                    style={{ borderColor: 'var(--color-border)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {deleteError && (
+                  <p className="t-small mt-2" style={{ color: 'var(--color-danger)' }}>{deleteError}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -190,6 +190,29 @@ export function useUpdateUser() {
   });
 }
 
+/** Hard-delete a user — mirror of hooks/useEngineers.useDeleteUser, wired to
+ *  the Binney query keys. RLS scopes it: admins any row; managers only
+ *  engineers homed at THEIR site (0125). A 0-row delete throws so the UI never
+ *  reports success on a silently-filtered no-op. */
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Not permitted to delete this user (outside your site or role scope).');
+      }
+      return data[0];
+    },
+    onSuccess: () => invalidateUserQueries(qc),
+  });
+}
+
 /** Create a new user homed at Binney St. Inserts public.users (the trigger
  *  auto-creates the engineer_profiles row) then updates profile fields,
  *  including home_site_id = Binney so the new tech lands at the right site. */

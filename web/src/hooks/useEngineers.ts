@@ -175,6 +175,33 @@ export function useUpdateUser() {
   });
 }
 
+/** Hard-delete a user. Cascades to engineer_profiles, PTO, PM completions,
+ *  oncall/overtime rows; REJECTED by the DB if the user is referenced as
+ *  updated_by/closed_by on equipment issues, SOPs, weekly updates, etc.
+ *  Realistically for fresh/mistaken rows — established people should be
+ *  Deactivated instead. RLS: admins any row (users_admin_all); managers only
+ *  engineers homed at their own site (0125 users_manager_delete_home_engineer).
+ *  A silently-filtered delete (0 rows) surfaces as an error so the UI never
+ *  reports success on a no-op. */
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Not permitted to delete this user (outside your site or role scope).');
+      }
+      return data[0];
+    },
+    onSuccess: () => invalidateUserQueries(qc),
+  });
+}
+
 /** Create a new user. Inserts public.users (the trigger auto-creates the
  *  engineer_profiles row) then UPSERTs profile fields. */
 export function useAddEngineer() {
