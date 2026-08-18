@@ -200,10 +200,14 @@ QUERY = """
 #   - status:   open + done (so the dashboard sees recently-completed WOs too)
 #   - assignee: 11 engineers/managers (subset of PM12 list — missing yGVXKlnu4F)
 #   - createdAt: rolling N-day lookback from today
+# Keep in sync with PM_ASSIGNEE_IDS in pm12_poller.py — a new hire has to be
+# added to BOTH or their WOs (here) / PMs (there) never reach the dashboard.
+# 2026-08-18: Austin Myette (DVQ8HxDTKS) added; see the note in pm12_poller.
 WO_ASSIGNEE_IDS = [
     "IrQac3eAnX", "thGxmdCU3x", "uv9FFWuCIT", "V0cfCtkNuC",
     "8ZVqd2HExb", "RxaNCAOXew", "9PAgDPhuXE", "uQNAPN9ipb",
     "IKIPg7ql0G", "D6ZvMf8Mcj", "hGCSa1lcK5",
+    "DVQ8HxDTKS",  # Austin Myette
 ]
 WO_CREATED_LOOKBACK_DAYS = 60
 
