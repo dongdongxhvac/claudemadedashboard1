@@ -1134,7 +1134,9 @@ function CrewSection({ closes, laborDaily, pto, now }: {
           hours: byTech.get(name)!.hours,
           days: daysMap.get(name) ?? 0,
         }))
-        .sort((a, b) => b.hours - a.hours || b.pms - a.pms)
+        // Fewest hours first (per user 2026-08-10) — surfaces who's light
+        // on logged labor at a glance. Ties broken by fewest PMs closed.
+        .sort((a, b) => a.hours - b.hours || a.pms - b.pms)
         .slice(0, 10),
     };
   }, [closes, laborDaily, pto, now]);
