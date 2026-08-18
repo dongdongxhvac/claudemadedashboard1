@@ -11,7 +11,7 @@ import {
   type EngineerRow, type Role, type Discipline,
 } from './hooks/useBinneyEngineers';
 import { useShifts } from '../../hooks/useShifts';
-import { useMe } from '../../hooks/useMe';
+import { useMe, type ManageScope } from '../../hooks/useMe';
 import { supabase } from '../../lib/supabase';
 
 type Crew = 'saturday' | 'sunday' | null;
@@ -118,7 +118,7 @@ function fmtAgo(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUsers?: boolean }) {
+export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageScope }) {
   const q = useAllUsers();
   const shiftsQ = useShifts();
   const updateProfile = useUpdateEngineerProfile();
@@ -126,6 +126,11 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
   const addEngineer = useAddEngineer();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
+  // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
+  // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
+  const canManageUsers  = manageScope === 'all';
+  const canManageAny    = manageScope !== 'none';
+  const canEditRow      = (r: EngineerRow) => canManageUsers || (canManageAny && r.role === 'engineer');
   const [filter, setFilter] = useState<Filter>(canManageUsers ? 'active' : 'engineer');
   const canCredential = useCanCredential();
   const activityQ = useAuthActivity(canCredential);
@@ -209,16 +214,16 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
           </div>
           <div className="flex items-center gap-3">
             <span className="t-small t-muted">{rows.length} shown</span>
-            {canManageUsers && (
+            {canManageAny && (
               <button
                 onClick={() => setAdding(true)}
                 className="t-small px-3 py-1 rounded border font-medium text-white"
                 style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
               >
-                + Add user
+                {canManageUsers ? '+ Add user' : '+ Add engineer'}
               </button>
             )}
-            {!canManageUsers && (
+            {!canManageAny && (
               <span className="t-small px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }} title="Leads can view but not edit user profiles">
                 ★ View only
               </span>
@@ -328,7 +333,7 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
                           background: 'var(--color-card)',
                         }}
                       >
-                        {canManageUsers ? 'Edit' : 'View'}
+                        {canEditRow(r) ? 'Edit' : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -347,7 +352,8 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
         <EditDrawer
           row={editing}
           shifts={shifts}
-          readOnly={!canManageUsers}
+          readOnly={!canEditRow(editing)}
+          lockRole={!canManageUsers}
           onClose={() => setEditing(null)}
           onSave={async (patch, userPatch) => {
             const tasks: Promise<unknown>[] = [];
@@ -372,6 +378,7 @@ export function BinneyUserProfilesTab({ canManageUsers = true }: { canManageUser
 
       {adding && (
         <AddUserDrawer
+          lockRole={!canManageUsers}
           onClose={() => setAdding(false)}
           onSubmit={async (input) => {
             await addEngineer.mutateAsync(input);
@@ -426,12 +433,16 @@ function EditDrawer({
   row,
   shifts,
   readOnly = false,
+  lockRole = false,
   onClose,
   onSave,
 }: {
   row: EngineerRow;
   shifts: { id: string; name: string }[];
   readOnly?: boolean;
+  /** Manager scope: role picker + Manager-rights toggle are frozen (the DB
+   *  policy would reject a change anyway — migration 0124). */
+  lockRole?: boolean;
   onClose: () => void;
   onSave: (profile: ProfilePatch, user: UserPatch) => Promise<void>;
 }) {
@@ -519,6 +530,8 @@ function EditDrawer({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
+            disabled={lockRole}
+            title={lockRole ? 'Managers can only manage engineer accounts — ask an admin to change roles' : undefined}
             className="border rounded px-2 py-1 t-text"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           >
@@ -566,24 +579,32 @@ function EditDrawer({
               </span>
             </div>
           </label>
-          <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Manager</span>
-            <div className="flex items-center gap-2 h-7">
-              <Toggle
-                checked={isManager}
-                onChange={setIsManager}
-                title={isManager ? 'Click to remove manager rights' : 'Click to grant manager rights (publish drafts)'}
-              />
-              <span className="t-small" style={{ color: isManager ? '#7e22ce' : 'var(--color-text-muted)' }}>
-                {isManager ? '✓ Manager' : '—'}
-              </span>
-            </div>
-          </label>
+          {/* Manager-rights toggle is admin-only: granting it is an
+              escalation, and the DB (0124) rejects is_manager=true from a
+              manager's save anyway. Hidden rather than disabled so the
+              engineer-scoped drawer doesn't advertise a power it lacks. */}
+          {!lockRole && (
+            <label className="block">
+              <span className="t-small t-muted uppercase tracking-wider block mb-1">Manager</span>
+              <div className="flex items-center gap-2 h-7">
+                <Toggle
+                  checked={isManager}
+                  onChange={setIsManager}
+                  title={isManager ? 'Click to remove manager rights' : 'Click to grant manager rights (publish drafts)'}
+                />
+                <span className="t-small" style={{ color: isManager ? '#7e22ce' : 'var(--color-text-muted)' }}>
+                  {isManager ? '✓ Manager' : '—'}
+                </span>
+              </div>
+            </label>
+          )}
         </div>
 
         <p className="t-small t-muted -mt-2 mb-3" style={{ paddingLeft: 2 }}>
           <strong>Lead</strong> can propose changes to On-call / Bldg Assign / Rounds.{' '}
-          <strong>Manager</strong> can also publish or reject drafts. Both are independent of Role.
+          {lockRole
+            ? 'Role and manager rights are set by an admin.'
+            : <><strong>Manager</strong> can also publish or reject drafts. Both are independent of Role.</>}
         </p>
 
         <label className="block mb-3">
@@ -686,11 +707,14 @@ function EditDrawer({
 }
 
 function AddUserDrawer({
+  lockRole = false,
   onClose,
   onSubmit,
   submitting,
   error,
 }: {
+  /** Manager scope: role pinned to Engineer (DB policy 0124 rejects others). */
+  lockRole?: boolean;
   onClose: () => void;
   onSubmit: (input: {
     full_name: string;
@@ -739,7 +763,7 @@ function AddUserDrawer({
         style={{ background: 'var(--color-card)' }}
       >
         <div className="flex items-baseline justify-between mb-4">
-          <h3 className="t-section-title">Add user</h3>
+          <h3 className="t-section-title">{lockRole ? 'Add engineer' : 'Add user'}</h3>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">
             Close
           </button>
@@ -771,10 +795,13 @@ function AddUserDrawer({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
+            disabled={lockRole}
+            title={lockRole ? 'Managers can add engineer accounts only — ask an admin for other roles' : undefined}
             className="border rounded px-2 py-1 t-text"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           >
-            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {(lockRole ? ROLES.filter((r) => r.value === 'engineer') : ROLES)
+              .map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </label>
 

@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import { useMe } from '../../hooks/useMe';
+import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { BinneyUserProfilesTab } from './BinneyUserProfilesTab';
 import { UkgReconcileTab } from '../admin/UkgReconcileTab';
 import { SiteSwitcher } from './SiteSwitcher';
@@ -20,11 +20,12 @@ export default function BinneyAdmin() {
 
   const isAdmin = me.data?.role === 'admin';
   const isLead  = me.data?.is_lead === true;
-  // Managers (role or is_manager flag) get view-only access so they can use
-  // the credential panels (set password / invite link) in User Profiles.
+  // Managers (role or is_manager flag) can add/edit ENGINEER users (migration
+  // 0124) plus use the credential panels; other roles/rows stay view-only.
   const isManagerish =
     me.data?.role === 'manager' || me.data?.role === 'director' || me.data?.is_manager === true;
   const canAccess = isAdmin || isLead || isManagerish;
+  const manageScope = manageScopeFor(me.data);
 
   return (
     <div className="min-h-screen t-bg">
@@ -65,13 +66,13 @@ export default function BinneyAdmin() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
-                User Profiles {!isAdmin && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
+                User Profiles {manageScope === 'none' && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
               </TabButton>
               <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
                 PTO vs UKG
               </TabButton>
             </div>
-            {tab === 'users' && <BinneyUserProfilesTab canManageUsers={isAdmin} />}
+            {tab === 'users' && <BinneyUserProfilesTab manageScope={manageScope} />}
             {tab === 'ukg'   && <UkgReconcileTab site="binney" />}
           </div>
         )}

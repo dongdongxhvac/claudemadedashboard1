@@ -49,6 +49,24 @@ export function useIsManager(): boolean {
   return useMe().data?.is_manager === true;
 }
 
+/** How much of the User Profiles roster the current user may edit.
+ *    'all'       — admin: any user, any role.
+ *    'engineers' — manager-ish (role manager/director, or is_manager flag):
+ *                  may add + edit ENGINEER users only. Mirrors the DB policies
+ *                  users_manager_insert_engineer / users_manager_update_engineer
+ *                  (migration 0124) — the UI locks the role picker to
+ *                  Engineer, the DB refuses anything else.
+ *    'none'      — everyone else (leads get view-only).
+ *  Kept as a fixed value derived from the row, not a boolean, so callers
+ *  can't accidentally treat "can add engineers" as "can add admins". */
+export type ManageScope = 'all' | 'engineers' | 'none';
+export function manageScopeFor(me: { role: string; is_manager?: boolean | null } | null | undefined): ManageScope {
+  if (!me) return 'none';
+  if (me.role === 'admin') return 'all';
+  if (me.role === 'manager' || me.role === 'director' || me.is_manager === true) return 'engineers';
+  return 'none';
+}
+
 /** Admin OR a lead engineer — the audience for the Admin panel (read/write
  *  capabilities still gated per-tab via canEditUsers). */
 export function useCanAccessAdmin(): boolean {
