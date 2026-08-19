@@ -66,6 +66,13 @@ export function CoveIdFinder({ roster, readOnly = false }: { roster: EngineerRow
 
   const missingCount = engineers.filter((e) => !e.cove_user_id).length;
 
+  const clear = () => {
+    setRaw('');
+    setChoice({});
+    setDone({});
+    setErr(null);
+  };
+
   const assign = async (f: CoveFound) => {
     const userId = choice[f.id] ?? suggestMatch(f, engineers)?.user_id;
     if (!userId) return;
@@ -103,15 +110,28 @@ export function CoveIdFinder({ roster, readOnly = false }: { roster: EngineerRow
         then copy the whole address-bar URL and paste it here. (A Cove profile link or the bare ID works too.)
       </p>
 
-      <textarea
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        placeholder="Paste the Cove URL here — https://manage.cove.is/networks/…/pm-tasks?filters=%7B%22status%22…"
-        rows={2}
-        spellCheck={false}
-        className="w-full border rounded px-2 py-1 t-text t-mono"
-        style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11, resize: 'vertical' }}
-      />
+      <div className="relative">
+        <textarea
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          placeholder="Paste the Cove URL here — https://manage.cove.is/networks/…/pm-tasks?filters=%7B%22status%22…"
+          rows={2}
+          spellCheck={false}
+          className="w-full border rounded px-2 py-1 t-text t-mono"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11, resize: 'vertical', paddingRight: raw ? 64 : undefined }}
+        />
+        {raw && (
+          <button
+            type="button"
+            onClick={clear}
+            className="absolute top-1.5 right-1.5 t-small px-2 py-0.5 rounded border"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', color: 'var(--color-text-muted)' }}
+            title="Clear the pasted text and start over"
+          >
+            ✕ Clear
+          </button>
+        )}
+      </div>
 
       {raw.trim() && found.length === 0 && (
         <p className="t-small mt-2" style={{ color: 'var(--color-danger)' }}>
