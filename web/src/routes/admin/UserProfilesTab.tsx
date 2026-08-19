@@ -175,11 +175,6 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
 
   return (
     <div className="space-y-4">
-      {/* Paste-a-Cove-URL → one-click assign the Cove ID. Lives above the
-          roster because that's where the NO COVE ID tags are. Anyone who can
-          edit engineers can assign; leads see it read-only. */}
-      <CoveIdFinder roster={allRows} readOnly={!canManageAny} />
-
       <div className="t-card">
         <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
           <div className="flex items-baseline gap-3 flex-wrap">
@@ -275,13 +270,14 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                           </span>
                         )}
                         {r.active && r.role === 'engineer' && !r.cove_user_id && (
-                          <span
-                            className="t-small px-1.5 py-0.5 rounded ml-1"
+                          <a
+                            href="#cove-id-finder"
+                            className="t-small px-1.5 py-0.5 rounded ml-1 no-underline"
                             style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309', fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em' }}
-                            title="No Cove user ID on this profile — the dashboard can't pull their PMs/WOs until it's set (Edit → Cove user ID). The pollers fill it in automatically once their tasks are flowing."
+                            title="No Cove user ID on this profile — the dashboard can't pull their PMs/WOs until it's set. Click to jump to the Find a Cove ID panel at the bottom of this page (or Edit → Cove user ID)."
                           >
-                            NO COVE ID
-                          </span>
+                            NO COVE ID ↓
+                          </a>
                         )}
                       </div>
                       {r.hiring_date && (
@@ -370,6 +366,13 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
       {canCredential && (
         <AccountActivityFeed userIds={new Set(allRows.map((r) => r.user_id))} />
       )}
+
+      {/* Paste-a-Cove-URL → one-click assign the Cove ID. At the bottom (per
+          user 2026-08-19): it's an occasional onboarding tool, not a daily
+          one, so it shouldn't push the roster down. The NO COVE ID tags in
+          the roster point here. Anyone who can edit engineers can assign;
+          leads see it read-only. */}
+      <CoveIdFinder roster={allRows} readOnly={!canManageAny} />
 
       {editing && (
         <EditDrawer

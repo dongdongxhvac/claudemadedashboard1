@@ -83,7 +83,7 @@ export function CoveIdFinder({ roster, readOnly = false }: { roster: EngineerRow
   };
 
   return (
-    <div className="t-card">
+    <div className="t-card" id="cove-id-finder" style={{ scrollMarginTop: 16 }}>
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
         <h3 className="t-section-title" style={{ fontSize: '0.95rem' }}>
           Find a Cove ID
