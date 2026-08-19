@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equipment &amp; Terminology — New-Hire Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb; --panel:#ffffff; --panel-2:#eef2f8; --line:#e2e8f0; --line-2:#cbd5e1;
+    --ink:#1b2433; --ink-dim:#4d5b72; --ink-faint:#8a97ab;
+    --cyan:#0e8fa6; --amber:#b07408; --violet:#6a4fd0; --green:#1f9a55; --red:#d23b35; --blue:#2f6dcc;
+    --mono:'IBM Plex Mono',ui-monospace,monospace; --disp:'Space Grotesk',system-ui,sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 14px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--disp);line-height:1.45;padding:14px 10px 56px}
+  .wrap{max-width:1060px;margin:0 auto}
+  header{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px;margin-bottom:18px}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);font-weight:700}
+  h1{font-size:25px;margin:8px 0 4px;letter-spacing:-.01em}
+  .lede{color:var(--ink-dim);font-size:14px;margin:0}
+  section{margin-bottom:26px}
+  .shead{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+  .num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)}
+  .shead h2{font-size:19px;margin:0}
+  .rule{flex:1;height:1px;background:var(--line-2)}
+  .sub{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:14px 0 6px}
+  .gt{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .gt td{border-bottom:1px solid var(--line);padding:8px 12px;vertical-align:top}
+  .gt tr:last-child td{border-bottom:0}
+  td.t{width:31%;font-size:13.5px}
+  td.t b{color:var(--ink)}
+  .full{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:2px}
+  td.d{font-size:12.5px;color:var(--ink-dim)}
+  .desc b{color:var(--ink)}
+  footer{margin-top:24px;border-top:1px solid var(--line);padding-top:14px;color:var(--ink-faint);font-size:12px}
+  .toolbar{position:fixed;right:16px;bottom:16px;z-index:10}
+  .toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:0;border-radius:9px;padding:9px 15px;cursor:pointer;box-shadow:var(--shadow)}
+  @media print{
+    @page{
+      size:A4 portrait; margin:5mm 5mm 11mm 5mm;
+      @bottom-right{content:counter(page) " / " counter(pages);font-family:'IBM Plex Mono',monospace;font-size:8pt;color:#4a5566}
+    }
+    :root{--ink:#0c1118;--ink-dim:#28313f;--ink-faint:#4a5566;--line:#8a94a4;--line-2:#8a94a4;
+           --cyan:#095f70;--amber:#7a4f05;--blue:#1f4a8f;--red:#9c231e;--green:#0f6b39;--violet:#4a3596}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff;padding:0;font-size:10.5px}
+    .toolbar{display:none}
+    header{box-shadow:none;border-color:#8a94a4;padding:10px 12px;margin-bottom:10px}
+    h1{font-size:19px} .lede{font-size:11px}
+    section{margin-bottom:12px;break-inside:auto}
+    .shead{break-after:avoid;margin-bottom:6px} .shead h2{font-size:14px}
+    .sub{margin:8px 0 4px;break-after:avoid}
+    .gt{box-shadow:none;border-color:#8a94a4;border-radius:6px}
+    .gt td{padding:3px 6px;border-color:#c3cad4}
+    .gt tr{break-inside:avoid}
+    td.t{font-size:10px;width:29%} td.d{font-size:9.5px}
+    .full{font-size:8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Reference</div>
+    <h1>Equipment &amp; Terminology</h1>
+    <p class="lede">Every piece of equipment and every term used across the HVAC, Life Safety, Plumbing, Electrical, and BMS overviews — in one place. Keep it in the toolbox for the first few weeks.</p>
+  </header>
+
+  <section style="--accent:var(--cyan)">
+    <div class="shead"><span class="num">01</span><h2>HVAC</h2><span class="rule"></span></div>
+      <h3 class="sub">Equipment</h3>
+      <table class="gt">
+        <tr><td class="t"><b>AHU</b><span class="full">Air Handling Unit</span></td><td class="d"><span class="desc">Filter, coils, fan in one casing. Conditions the air and pushes it out. Sections: OA damper → ERM coil → filter → CHW coil → HHW coil → fan.</span></td></tr>
+        <tr><td class="t"><b>Chiller</b></td><td class="d"><span class="desc">Makes chilled water. Moves the building's heat into the condenser water.</span></td></tr>
+        <tr><td class="t"><b>Cooling Tower</b></td><td class="d"><span class="desc">Rejects that heat to the atmosphere by evaporation.</span></td></tr>
+        <tr><td class="t"><b>Boiler</b></td><td class="d"><span class="desc">Makes hot water. Condensing (~120–140°F), non-condensing (~160–180°F), or a steam-to-water HX fed by campus steam.</span></td></tr>
+        <tr><td class="t"><b>Free-Cooling HX &amp; Pump</b><span class="full">Heat Exchanger</span></td><td class="d"><span class="desc">When it's cold out, tower water chills the CHW loop directly — compressors off.</span></td></tr>
+        <tr><td class="t"><b>ERM</b><span class="full">Energy Recovery Module</span></td><td class="d"><span class="desc"><b>Two coils</b>, one in the OA stream (inside the AHU) and one in the exhaust duct, joined by a pumped <b>glycol run-around</b> loop. Preheats in winter, pre-cools in summer. Airstreams never touch.</span></td></tr>
+        <tr><td class="t"><b>LEF</b><span class="full">Lab Exhaust Fan</span></td><td class="d"><span class="desc">Throws lab exhaust high above the roof. On emergency power.</span></td></tr>
+        <tr><td class="t"><b>GEF</b><span class="full">General Exhaust Fan</span></td><td class="d"><span class="desc">Pulls restrooms, electrical/MDF, elevator machine and mechanical rooms straight to the roof. <b>No ERM, no LEF.</b></span></td></tr>
+        <tr><td class="t"><b>UH / CUH</b><span class="full">Unit Heater / Cabinet Unit Heater</span></td><td class="d"><span class="desc">Local heater for docks, vestibules, stairs, garages, mech rooms. Often there for <b>freeze protection</b>.</span></td></tr>
+        <tr><td class="t"><b>VAV</b><span class="full">Variable Air Volume box</span></td><td class="d"><span class="desc">Damper + airflow sensor. <b>No cooling coil</b> — it cools by admitting more cold air. Reheat coil on a call for heat.</span></td></tr>
+        <tr><td class="t"><b>FPT</b><span class="full">Fan Powered Terminal</span></td><td class="d"><span class="desc">VAV plus its own fan, pulling <b>return air</b> through a return duct/plenum. Reheat coil; four-pipe units add a <b>CHW coil</b>.</span></td></tr>
+        <tr><td class="t"><b>CRAC / CRAH</b><span class="full">Computer Room Air Conditioner / Air Handler</span></td><td class="d"><span class="desc"><b>Recirculates the room's own air</b> across a coil, 24/7. CRAH = chilled water (ours); CRAC = built-in DX compressor.</span></td></tr>
+        <tr><td class="t"><b>Exhaust valve</b><span class="full">venturi valve / damper</span></td><td class="d"><span class="desc">Meters air <i>out</i> of a room. What makes a lab negative.</span></td></tr>
+        <tr><td class="t"><b>WSHP</b><span class="full">Water-Source Heat Pump</span></td><td class="d"><span class="desc">Zone unit rejecting/absorbing heat on a shared water loop.</span></td></tr>
+        <tr><td class="t"><b>HV / MAU (DOAS)</b><span class="full">Heating &amp; Ventilating / Make-Up Air Unit</span></td><td class="d"><span class="desc">Brings fresh air to a WSHP building; exhaust takes it out.</span></td></tr>
+        <tr><td class="t"><b>Pumps</b><span class="full">CW · CHW · HW · loop pumps</span></td><td class="d"><span class="desc">No pump, no flow, no cooling or heat.</span></td></tr>
+        <tr><td class="t"><b>OA louver · OA damper</b><span class="full">Outside Air</span></td><td class="d"><span class="desc">Louver is in the wall; damper is the AHU's first section.</span></td></tr>
+        <tr><td class="t"><b>Economizer</b></td><td class="d"><span class="desc">Office AHUs only: open the OA dampers wide in mild weather and cool with fresh air. A 100% OA lab AHU has no use for one.</span></td></tr>
+      </table>
+      <h3 class="sub">Terminology</h3>
+      <table class="gt">
+        <tr><td class="t"><b>H / V / AC</b><span class="full">Heating · Ventilation · Air Conditioning</span></td><td class="d"></td></tr>
+        <tr><td class="t"><b>OA</b><span class="full">Outside Air</span></td><td class="d"></td></tr>
+        <tr><td class="t"><b>CFM</b><span class="full">Cubic Feet per Minute</span></td><td class="d"><span class="desc">How much air is moving.</span></td></tr>
+        <tr><td class="t"><b>ACH</b><span class="full">Air Changes per Hour</span></td><td class="d"><span class="desc">CFM = ACH × room volume ÷ 60. Office 4–6; lab 6–12; setback 2–6.</span></td></tr>
+        <tr><td class="t"><b>CHW / HHW / CW</b><span class="full">Chilled water / Heating hot water / Condenser water</span></td><td class="d"></td></tr>
+        <tr><td class="t"><b>DX</b><span class="full">Direct expansion</span></td><td class="d"><span class="desc">Refrigerant coil, no chilled water.</span></td></tr>
+        <tr><td class="t"><b>Freezestat</b><span class="full">low-limit</span></td><td class="d"><span class="desc">A hardwired, manual-reset switch that senses the <b>coldest foot</b> of its capillary, not the average. It stops the fan and closes the OA damper. The BMS is informed; it is not asked.</span></td></tr>
+        <tr><td class="t"><b>High-static cutout</b><span class="full">supply duct</span></td><td class="d"><span class="desc">A hardwired, manual-reset pressure switch that stops the fan before the duct <b>bursts</b>. Cause: a shut fire damper, a stuck damper, or every VAV driving closed.</span></td></tr>
+        <tr><td class="t"><b>Low-static cutout</b><span class="full">return / exhaust duct</span></td><td class="d"><span class="desc">A hardwired, manual-reset switch that stops the fan before the duct <b>implodes</b>. Ducts are rated for far less negative than positive pressure, and buckling is <b>sudden and total</b>.</span></td></tr>
+        <tr><td class="t"><b>Shutoff head</b><span class="full">fan curve</span></td><td class="d"><span class="desc">The pressure a fan makes at <b>zero flow</b> — often 6&#8211;10&quot; w.c. on an AHU, well past the duct&#8217;s rating. A VFD fan is a <b>pressure source, not a flow source</b>: close the path and it keeps pushing.</span></td></tr>
+        <tr><td class="t"><b>Fan status proof</b><span class="full">current switch · DP switch</span></td><td class="d"><span class="desc">Independent proof the fan is really moving air. Nothing in the start sequence is released to control until status makes. <b>Command is not proof.</b></span></td></tr>
+        <tr><td class="t"><b>Access-door switch</b><span class="full">AHU door interlock</span></td><td class="d"><span class="desc">A hardwired permissive: open a door and the fan drops. It exists because people go inside these boxes — and it is <b>not a substitute for LOTO</b>.</span></td></tr>
+        <tr><td class="t"><b>Reheat penalty</b></td><td class="d"><span class="desc">Air cooled to ~55°F, then warmed back up at the terminal. You paid twice.</span></td></tr>
+        <tr><td class="t"><b>Free cooling</b></td><td class="d"><span class="desc">Tower + HX chills the loop; compressors rest.</span></td></tr>
+        <tr><td class="t"><b>Outdoor reset</b></td><td class="d"><span class="desc">Supply setpoint slides with the weather.</span></td></tr>
+        <tr><td class="t"><b>Mass balance</b></td><td class="d"><span class="desc">supply + infiltration = exhaust + exfiltration.</span></td></tr>
+        <tr><td class="t"><b>Building pressure</b></td><td class="d"><span class="desc">Held <b>+0.02 to +0.05 in. w.c.</b> positive to outside.</span></td></tr>
+        <tr><td class="t"><b>Pressure cascade</b></td><td class="d"><span class="desc">Air flows <b>clean → dirty</b>. Labs negative, corridors positive, restrooms negative.</span></td></tr>
+        <tr><td class="t"><b>Tracking pair</b></td><td class="d"><span class="desc">Supply valve follows the exhaust valve to hold the offset.</span></td></tr>
+        <tr><td class="t"><b>Offset CFM</b></td><td class="d"><span class="desc">How a room is held negative — not a pressure knob.</span></td></tr>
+        <tr><td class="t"><b>Stack effect · wind</b></td><td class="d"><span class="desc">Cold day/tall building: lower floors negative, upper positive; wind moves the neutral plane.</span></td></tr>
+        <tr><td class="t"><b>Sensible / latent / total heat</b></td><td class="d"><span class="desc">1.08 × CFM × ΔT · 0.68 × CFM × Δgrains · 4.5 × CFM × Δh</span></td></tr>
+        <tr><td class="t"><b>Sash management</b></td><td class="d"><span class="desc">Closing sashes lets airflow fall back to the ACH floor. An energy program.</span></td></tr>
+        <tr><td class="t"><b>MDF room</b><span class="full">Main Distribution Frame</span></td><td class="d"><span class="desc">IT room; heat, not fumes — served by the GEF.</span></td></tr>
+      </table>
+  </section>
+  <section style="--accent:var(--red)">
+    <div class="shead"><span class="num">02</span><h2>Life Safety</h2><span class="rule"></span></div>
+      <h3 class="sub">Equipment</h3>
+      <table class="gt">
+        <tr><td class="t"><b>FACP</b><span class="full">Fire Alarm Control Panel</span></td><td class="d"><span class="desc">The brain. Everything reports to it; it commands everything else.</span></td></tr>
+        <tr><td class="t"><b>Detection devices</b></td><td class="d"><span class="desc">Smoke, heat, <b>duct detectors</b> (shut the AHU down), manual pull stations.</span></td></tr>
+        <tr><td class="t"><b>Notification</b></td><td class="d"><span class="desc">Horns, strobes, voice communication.</span></td></tr>
+        <tr><td class="t"><b>Sprinklers</b><span class="full">wet · dry · pre-action</span></td><td class="d"><span class="desc">Each head is its own heat-activated valve. One head opens over the fire — not all of them.</span></td></tr>
+        <tr><td class="t"><b>Fire pump</b></td><td class="d"><span class="desc">Boosts pressure so sprinklers and standpipes get real flow.</span></td></tr>
+        <tr><td class="t"><b>Jockey pump</b></td><td class="d"><span class="desc">Holds system pressure day-to-day so the fire pump only starts on real flow.</span></td></tr>
+        <tr><td class="t"><b>Floor control valve</b></td><td class="d"><span class="desc">Per floor: isolation valve, <b>tamper switch</b>, <b>flow switch</b>, test &amp; drain.</span></td></tr>
+        <tr><td class="t"><b>Standpipe</b></td><td class="d"><span class="desc">Fire department hose connections.</span></td></tr>
+        <tr><td class="t"><b>Smoke / fire dampers</b></td><td class="d"><span class="desc">Close on alarm to compartmentalize.</span></td></tr>
+        <tr><td class="t"><b>Stair pressurization fans</b></td><td class="d"><span class="desc">Push air into the stairs so smoke stays out of the escape path.</span></td></tr>
+        <tr><td class="t"><b>Elevator recall</b></td><td class="d"><span class="desc">Cars return to a safe floor and stop serving the alarmed zone.</span></td></tr>
+        <tr><td class="t"><b>Door hold-open / release</b></td><td class="d"><span class="desc">Magnetically held doors drop shut on alarm.</span></td></tr>
+        <tr><td class="t"><b>Generator &amp; ATS</b><span class="full">Automatic Transfer Switch</span></td><td class="d"><span class="desc">Two inputs, one output. Life-safety loads transfer first.</span></td></tr>
+        <tr><td class="t"><b>Gas detection &amp; shutoff</b></td><td class="d"><span class="desc">Lab layer.</span></td></tr>
+        <tr><td class="t"><b>Emergency showers &amp; eyewash</b></td><td class="d"><span class="desc">Tepid water, tested regularly.</span></td></tr>
+      </table>
+      <h3 class="sub">Terminology</h3>
+      <table class="gt">
+        <tr><td class="t"><b>Zone control</b></td><td class="d"><span class="desc">The smoke-control devices the FACP commands: dampers, doors, stair pressurization, elevator recall.</span></td></tr>
+        <tr><td class="t"><b>Life-safety vs standby</b></td><td class="d"><span class="desc">Transfer priority on the emergency bus.</span></td></tr>
+        <tr><td class="t"><b>Fails safe</b></td><td class="d"><span class="desc">Lab exhaust keeps running. It never stops.</span></td></tr>
+        <tr><td class="t"><b>Pre-action</b></td><td class="d"><span class="desc">Needs detection <b>and</b> a fused head before water flows.</span></td></tr>
+        <tr><td class="t"><b>BMS</b><span class="full">Building Management System</span></td><td class="d"></td></tr>
+      </table>
+  </section>
+  <section style="--accent:var(--blue)">
+    <div class="shead"><span class="num">03</span><h2>Plumbing</h2><span class="rule"></span></div>
+      <h3 class="sub">Equipment</h3>
+      <table class="gt">
+        <tr><td class="t"><b>RPZ</b><span class="full">Reduced Pressure Zone assembly</span></td><td class="d"><span class="desc">Highest level of backflow protection. Two checks in series, relief valve between them. Field names: <b>RP</b>, <b>&#8220;the backflow.&#8221;</b> Tested annually.</span></td></tr>
+        <tr><td class="t"><b>Water meter &amp; service</b></td><td class="d"><span class="desc">Measurement and the main shutoff.</span></td></tr>
+        <tr><td class="t"><b>PRV</b><span class="full">Pressure-Reducing Valve</span></td><td class="d"><span class="desc">Steps street pressure down to a steady, safe level.</span></td></tr>
+        <tr><td class="t"><b>Domestic booster pump</b></td><td class="d"><span class="desc">Pressure for the upper floors.</span></td></tr>
+        <tr><td class="t"><b>Water heater &amp; recirc loop</b></td><td class="d"><span class="desc">Store ~140°F, deliver ~120°F through a <b>mixing valve</b>.</span></td></tr>
+        <tr><td class="t"><b>Mixing valve</b></td><td class="d"><span class="desc">Blends cold in to temper the delivered hot water.</span></td></tr>
+        <tr><td class="t"><b>P-trap</b></td><td class="d"><span class="desc">A U of standing water sealing the drain against sewer gas.</span></td></tr>
+        <tr><td class="t"><b>Vent stack</b></td><td class="d"><span class="desc">Lets air in and sewer gas out so drains flow and traps hold their seal.</span></td></tr>
+        <tr><td class="t"><b>Cleanout</b></td><td class="d"><span class="desc">Capped access stub at the base of the stack.</span></td></tr>
+        <tr><td class="t"><b>Sump / ejector pump</b></td><td class="d"><span class="desc">Lifts below-grade waste up to the sewer.</span></td></tr>
+        <tr><td class="t"><b>Roof drain &amp; overflow</b></td><td class="d"><span class="desc">Rain leaders to the <b>storm</b> system — separate piping.</span></td></tr>
+        <tr><td class="t"><b>Oil / water separator</b></td><td class="d"><span class="desc">Garage and loading-dock drains. Oil floats and is pumped out; only water goes to sanitary.</span></td></tr>
+        <tr><td class="t"><b>Neutralization tank</b></td><td class="d"><span class="desc">Corrects lab-waste pH before the sewer.</span></td></tr>
+        <tr><td class="t"><b>RO / DI skid</b><span class="full">Reverse Osmosis / Deionization</span></td><td class="d"><span class="desc">Fed by potable through its own RPZ. Output is lab process water on dedicated piping.</span></td></tr>
+        <tr><td class="t"><b>Cooling tower make-up</b></td><td class="d"><span class="desc">Reclaimed, or potable through PRV + RPZ.</span></td></tr>
+      </table>
+      <h3 class="sub">Terminology</h3>
+      <table class="gt">
+        <tr><td class="t"><b>Potable / non-potable</b></td><td class="d"><span class="desc">Two systems, <b>never cross-connected</b>. Non-potable pipe is marked and labeled.</span></td></tr>
+        <tr><td class="t"><b>Cross-connection · backflow</b></td><td class="d"><span class="desc">The biggest plumbing risk in a lab building.</span></td></tr>
+        <tr><td class="t"><b>DHW</b><span class="full">Domestic Hot Water</span></td><td class="d"><span class="desc">Stored 140°F (Legionella), delivered 120°F (scald).</span></td></tr>
+        <tr><td class="t"><b>Legionella / scald</b></td><td class="d"><span class="desc">The two competing risks the mixing valve and recirc loop manage.</span></td></tr>
+        <tr><td class="t"><b>Water hammer</b></td><td class="d"><span class="desc">The bang when fast-moving water is stopped suddenly by a closing valve.</span></td></tr>
+        <tr><td class="t"><b>pH</b></td><td class="d"><span class="desc">Acid/base scale 0–14, 7 neutral. Sewer-safe band roughly <b>6–9</b>.</span></td></tr>
+        <tr><td class="t"><b>Resistivity / conductivity</b><span class="full">MΩ·cm / µS/cm</span></td><td class="d"><span class="desc">RO/DI purity. Tap ~300–800 µS/cm · RO ~5–50 · DI &lt;0.1 ≈ <b>18.2 MΩ·cm</b>. Falling MΩ = spent resin.</span></td></tr>
+        <tr><td class="t"><b>Storm vs sanitary</b></td><td class="d"><span class="desc"><b>Rain and only rain → storm. Touched anything else → sanitary</b> (with treatment on the way if needed).</span></td></tr>
+        <tr><td class="t"><b>Blowdown</b></td><td class="d"><span class="desc">Tower bleed carries treatment chemicals → <b>sanitary</b>, never storm.</span></td></tr>
+        <tr><td class="t"><b>WSHP condenser loop</b><span class="full">Water-Source Heat Pump</span></td><td class="d"><span class="desc">Small potable make-up, protected by an RPZ.</span></td></tr>
+      </table>
+  </section>
+  <section style="--accent:var(--amber)">
+    <div class="shead"><span class="num">04</span><h2>Electrical</h2><span class="rule"></span></div>
+      <h3 class="sub">Equipment</h3>
+      <table class="gt">
+        <tr><td class="t"><b>Utility service &amp; transformer</b></td><td class="d"><span class="desc">Medium voltage stepped down to <b>480V</b>, the building's backbone.</span></td></tr>
+        <tr><td class="t"><b>Main switchgear</b></td><td class="d"><span class="desc">Main breaker, feeder breakers, metering, bus duct.</span></td></tr>
+        <tr><td class="t"><b>Panels &amp; step-down transformers</b></td><td class="d"><span class="desc">480V → 277V lighting; dry-type transformers make 208/120V for receptacles.</span></td></tr>
+        <tr><td class="t"><b>MCC</b><span class="full">Motor Control Center</span></td><td class="d"><span class="desc">Starters, overloads, and disconnects for pumps and fans in one lineup.</span></td></tr>
+        <tr><td class="t"><b>VFD</b><span class="full">Variable Frequency Drive</span></td><td class="d"><span class="desc">Varies motor speed so pumps and fans sip power at part load.</span></td></tr>
+        <tr><td class="t"><b>Generator</b></td><td class="d"><span class="desc">Builds the emergency bus in roughly ten seconds. Weekly test.</span></td></tr>
+        <tr><td class="t"><b>ATS</b><span class="full">Automatic Transfer Switch</span></td><td class="d"><span class="desc"><b>Two inputs, one output.</b> Life-safety transfers first, standby follows.</span></td></tr>
+        <tr><td class="t"><b>Emergency bus</b></td><td class="d"><span class="desc">What the generator feeds; the ATSs hang off it.</span></td></tr>
+        <tr><td class="t"><b>UPS</b><span class="full">Uninterruptible Power Supply</span></td><td class="d"><span class="desc">Batteries bridge the ten-second gap for loads that cannot blink.</span></td></tr>
+        <tr><td class="t"><b>Breakers</b><span class="full">main → feeder → branch</span></td><td class="d"><span class="desc">Each protects the wiring downstream of it.</span></td></tr>
+        <tr><td class="t"><b>Red outlets</b></td><td class="d"><span class="desc">Generator-backed standby circuits. −80 freezers plug in here.</span></td></tr>
+        <tr><td class="t"><b>No-load exercise</b><span class="full">weekly test</span></td><td class="d"><span class="desc">The generator runs, the <b>ATS never transfers</b>, and the building notices nothing. That is the test working — and the reason people misread a running generator.</span></td></tr>
+        <tr><td class="t"><b>Cool-down</b><span class="full">unloaded run before shutdown</span></td><td class="d"><span class="desc">A hot turbocharged diesel must run unloaded before it stops, or oil cokes in the turbo bearing. <b>It will not fail today. It will fail on the night you need it.</b></span></td></tr>
+        <tr><td class="t"><b>E-stop lockout</b></td><td class="d"><span class="desc">Pressing the generator E-stop puts the set in lockout until somebody resets it by hand. A generator that merely looked wrong becomes genuinely unavailable.</span></td></tr>
+        <tr><td class="t"><b>EPO</b><span class="full">Emergency Power Off</span></td><td class="d"><span class="desc">Kills a lab's power instantly. Know where they are.</span></td></tr>
+      </table>
+      <h3 class="sub">Terminology</h3>
+      <table class="gt">
+        <tr><td class="t"><b>Normal / emergency / standby / critical</b></td><td class="d"><span class="desc">The four tiers of power.</span></td></tr>
+        <tr><td class="t"><b>Retransfer &amp; cool-down</b></td><td class="d"><span class="desc">Utility returns, ATSs retransfer on a delay, generator runs unloaded then stops.</span></td></tr>
+        <tr><td class="t"><b>Arc flash</b></td><td class="d"><span class="desc">The label states the hazard and required PPE. Hands off energized gear until trained and authorized.</span></td></tr>
+        <tr><td class="t"><b>LOTO</b><span class="full">Lockout / Tagout</span></td><td class="d"><span class="desc">Lock, tag, then verify dead — <b>live-dead-live</b>.</span></td></tr>
+        <tr><td class="t"><b>Reset-once rule</b></td><td class="d"><span class="desc">A trip is information. Investigate, reset once, never hold a breaker in against a fault.</span></td></tr>
+        <tr><td class="t"><b>BMS</b><span class="full">Building Management System</span></td><td class="d"><span class="desc">Sits behind the UPS.</span></td></tr>
+      </table>
+  </section>
+  <section style="--accent:var(--violet)">
+    <div class="shead"><span class="num">05</span><h2>BMS</h2><span class="rule"></span></div>
+      <h3 class="sub">Equipment</h3>
+      <table class="gt">
+        <tr><td class="t"><b>Front end / workstation</b><span class="full">server + graphics</span></td><td class="d"><span class="desc">Where you look, not where control happens. Graphics, trends, alarms, schedules. Pull it off the network and the controllers keep controlling.</span></td></tr>
+        <tr><td class="t"><b>Supervisory controller</b><span class="full">network controller</span></td><td class="d"><span class="desc">Holds schedules, reset schedules, global setpoints, trend storage, alarm logic. Most of a BMS&#8217;s energy savings live here.</span></td></tr>
+        <tr><td class="t"><b>Field controller</b><span class="full">DDC / unitary controller</span></td><td class="d"><span class="desc">One small computer per piece of equipment — an AHU, a plant, every VAV box. Runs its own loops and keeps running them if the network goes quiet.</span></td></tr>
+        <tr><td class="t"><b>Sensors</b><span class="full">inputs</span></td><td class="d"><span class="desc">Temperature, humidity, DP, airflow, CO₂, and <b>status contacts</b> — current switches and aux contacts that prove a thing is really running.</span></td></tr>
+        <tr><td class="t"><b>Actuators</b><span class="full">outputs</span></td><td class="d"><span class="desc">Valve and damper actuators, VFD speed commands, start/stop relays. <b>The only parts that move.</b></span></td></tr>
+        <tr><td class="t"><b>Points</b><span class="full">AI · AO · BI · BO</span></td><td class="d"><span class="desc">Analog input (a temperature), analog output (a valve), binary input (a status), binary output (a start command). Virtual points hold calculated values.</span></td></tr>
+        <tr><td class="t"><b>BACnet</b><span class="full">MS/TP · IP</span></td><td class="d"><span class="desc">The common language. MS/TP on a twisted-pair field bus; BACnet/IP over the building network. Modbus on chillers and meters, LON on older gear.</span></td></tr>
+        <tr><td class="t"><b>Trends &amp; alarms</b></td><td class="d"><span class="desc">A trend is a point sampled over time; an alarm is a limit crossed. Together they turn a snapshot into a story.</span></td></tr>
+        <tr><td class="t"><b>Schedules</b><span class="full">occupancy · optimal start</span></td><td class="d"><span class="desc">Occupied/unoccupied modes, holidays, and starting early enough to hit setpoint at occupancy — no earlier.</span></td></tr>
+        <tr><td class="t"><b>Trend log</b><span class="full">history</span></td><td class="d"><span class="desc">A point recorded over time, on an interval or on <b>change of value (COV)</b>. <b>You cannot trend the past</b> — if a point was never logged, that history does not exist.</span></td></tr>
+        <tr><td class="t"><b>Field bus</b><span class="full">MS/TP trunk</span></td><td class="d"><span class="desc">The twisted-pair daisy chain the field controllers sit on. A whole branch of the graphic going stale at once points at the <b>bus</b>, not at a device.</span></td></tr>
+      </table>
+      <h3 class="sub">Terminology</h3>
+      <table class="gt">
+        <tr><td class="t"><b>BMS / BAS</b><span class="full">Building Management / Automation System</span></td><td class="d"><span class="desc">The whole thing: controllers, network, and front end.</span></td></tr>
+        <tr><td class="t"><b>DDC</b><span class="full">Direct Digital Control</span></td><td class="d"><span class="desc">Control done by a computer rather than a pneumatic or mechanical device.</span></td></tr>
+        <tr><td class="t"><b>Setpoint vs process variable</b><span class="full">SP / PV</span></td><td class="d"><span class="desc"><b>Setpoint</b> is what you want; <b>PV</b> is what you have. Their difference is the <b>error</b>. Never report a reading without its setpoint beside it.</span></td></tr>
+        <tr><td class="t"><b>PID</b><span class="full">Proportional · Integral · Derivative</span></td><td class="d"><span class="desc">P reacts to how big the error is now, I to how long it has persisted, D to how fast it changes. Most HVAC loops use P and I.</span></td></tr>
+        <tr><td class="t"><b>Deadband</b></td><td class="d"><span class="desc">A band around setpoint where nothing is commanded — it stops heating and cooling fighting each other and equipment short-cycling.</span></td></tr>
+        <tr><td class="t"><b>Hunting</b></td><td class="d"><span class="desc">A valve swinging open and shut, never settling. Too much gain, or integral wind-up. A tuning fault, not a mechanical one.</span></td></tr>
+        <tr><td class="t"><b>Command vs status</b></td><td class="d"><span class="desc"><b>Command</b> is what the BMS asked for. <b>Status</b> is independent proof. <b>Command ON with status OFF is a fault</b> — and the status point is only as good as the device behind it.</span></td></tr>
+        <tr><td class="t"><b>Saturated output</b><span class="full">pinned at 100% or 0%</span></td><td class="d"><span class="desc">A modulating device that never moves. The loop is asking for everything it has and still missing setpoint. <b>It almost never alarms.</b></span></td></tr>
+        <tr><td class="t"><b>Stale point</b></td><td class="d"><span class="desc">A value that stopped updating: comm loss, dead sensor, or an override. Real sensors wiggle — <b>never trust a flat trend line</b>.</span></td></tr>
+        <tr><td class="t"><b>Interlock / permissive</b></td><td class="d"><span class="desc">A condition proven before equipment may run — flow proven before a chiller starts. <b>Satisfy it; never defeat it.</b></span></td></tr>
+        <tr><td class="t"><b>Override / Hand</b></td><td class="d"><span class="desc">A point forced by a person. Schedules, resets, and alarms are all bypassed. <b>An override is a promise to come back.</b></span></td></tr>
+        <tr><td class="t"><b>Reset schedule</b></td><td class="d"><span class="desc">A setpoint that slides with a measured condition — hot water hotter as it gets colder out; DP setpoint down when valves are mostly closed. The biggest energy lever the BMS has.</span></td></tr>
+        <tr><td class="t"><b>Cascade control</b></td><td class="d"><span class="desc">One loop&#8217;s output becomes another loop&#8217;s setpoint. A slow room loop steers a fast supply-air loop.</span></td></tr>
+        <tr><td class="t"><b>Fail position</b><span class="full">normally open / closed</span></td><td class="d"><span class="desc">Where a spring-return actuator goes on power loss. OA dampers usually fail closed to protect coils from freezing.</span></td></tr>
+        <tr><td class="t"><b>Alarm fatigue</b></td><td class="d"><span class="desc">When everything alarms, nothing does. A nuisance alarm is a defect — fix the cause, or retune the limit deliberately and write down why.</span></td></tr>
+        <tr><td class="t"><b>Hardware point</b><span class="full">physical · AI AO BI BO</span></td><td class="d"><span class="desc">Landed on a controller <b>terminal</b>, wired to a real device, occupying an I/O slot. When it is wrong, the fault is <b>in the field</b> — sensor, wiring, transmitter, calibration, linkage.</span></td></tr>
+        <tr><td class="t"><b>Software point</b><span class="full">virtual · AV BV</span></td><td class="d"><span class="desc">Lives only in the controller&#8217;s <b>memory</b>: setpoints, alarm limits, occupancy flags, calculated values, runtime totals. When it is wrong, the fault is <b>in the logic</b>. Nothing in the field will help you.</span></td></tr>
+        <tr><td class="t"><b>Network point</b><span class="full">mapped / integrated</span></td><td class="d"><span class="desc">Read from <b>another device</b> over BACnet or Modbus — chiller amps, meter kWh, VFD reported speed. When it is wrong, the fault is in the <b>integration</b>: gateway, register map, address, or the third-party device.</span></td></tr>
+        <tr><td class="t"><b>Status echo</b><span class="full">the trap</span></td><td class="d"><span class="desc">A &#8220;status&#8221; that is really a <b>software point mirroring the command</b>. It turns green because the BMS asked, not because anything happened — so it can never reveal a failure. <b>If command and status have never once disagreed, look for a wire.</b></span></td></tr>
+        <tr><td class="t"><b>Process variable</b><span class="full">PV — a role, not a point type</span></td><td class="d"><span class="desc">The reading a particular loop is <b>controlling to</b>. Its partner is the <b>setpoint</b>; a status&#8217;s partner is the <b>command</b>. Usually an input, never a status — and it can be calculated, arrive over the network, or be binary.</span></td></tr>
+        <tr><td class="t"><b>Present_Value</b><span class="full">BACnet property</span></td><td class="d"><span class="desc">A property <b>every</b> BACnet object has — AI, AO, BI, BO, AV. An AO&#8217;s Present_Value is the <b>command</b> it is sending, not a measurement. &#8220;Present value&#8221; in a point list is not &#8220;process variable&#8221; in a loop, though both get shortened to PV.</span></td></tr>
+        <tr><td class="t"><b>COV</b><span class="full">Change Of Value</span></td><td class="d"><span class="desc">A trend that logs only when the value moves, rather than on a timer. A five-minute interval will not show a valve hunting on a thirty-second cycle.</span></td></tr>
+        <tr><td class="t"><b>Sequence of operation</b><span class="full">SOO</span></td><td class="d"><span class="desc">The document that says what the building is supposed to do. Every setpoint and timer defers to it.</span></td></tr>
+      </table>
+  </section>
+
+  <section style="--accent:var(--violet)">
+    <div class="shead"><span class="num">06</span><h2>Where the disciplines meet</h2><span class="rule"></span></div>
+    <table class="gt">
+        <tr><td class="t"><b>BMS ↔ everything</b><span class="full">the nervous system</span></td><td class="d"><span class="desc">Every discipline on this sheet reports to, or is commanded by, the BMS — except the one that must not be.</span></td></tr>
+        <tr><td class="t"><b>BMS ↔ Life Safety</b><span class="full">the boundary</span></td><td class="d"><span class="desc">The FACP is <b>stand-alone</b>. It commands dampers, fans, and elevator recall through hardwired paths; the BMS may only monitor. A hardwired interlock always beats a software command.</span></td></tr>
+        <tr><td class="t"><b>BMS ↔ Electrical</b><span class="full">UPS</span></td><td class="d"><span class="desc">The BMS rides the UPS so it never sees the ten-second gap before the generator picks up.</span></td></tr>
+        <tr><td class="t"><b>AHU · ERM · LEF · GEF</b><span class="full">HVAC ↔ Life Safety</span></td><td class="d"><span class="desc">Lab exhaust is life safety: the LEF rides emergency power and fails safe.</span></td></tr>
+        <tr><td class="t"><b>ATS · Generator</b><span class="full">Life Safety ↔ Electrical</span></td><td class="d"><span class="desc">Same sequence taught on both pages: sense → start → build bus → transfer, life safety first.</span></td></tr>
+        <tr><td class="t"><b>Cooling tower</b><span class="full">HVAC ↔ Plumbing</span></td><td class="d"><span class="desc">Make-up water in (potable + RPZ, or reclaimed); blowdown out to sanitary.</span></td></tr>
+        <tr><td class="t"><b>WSHP</b><span class="full">HVAC ↔ Plumbing</span></td><td class="d"><span class="desc">Condenser loop make-up is potable through an RPZ.</span></td></tr>
+        <tr><td class="t"><b>MDF / electrical rooms</b><span class="full">HVAC ↔ Electrical</span></td><td class="d"><span class="desc">Served by the GEF for heat removal. A dead GEF throttles or trips equipment.</span></td></tr>
+        <tr><td class="t"><b>RO / DI</b><span class="full">Plumbing ↔ lab layer</span></td><td class="d"><span class="desc">Potable + RPZ in; ultra-pure process water out on its own piping.</span></td></tr>
+        <tr><td class="t"><b>BMS</b><span class="full">Electrical ↔ Life Safety</span></td><td class="d"><span class="desc">On the UPS, so it never sees the transfer gap.</span></td></tr>
+    </table>
+  </section>
+
+  <footer>
+    Numbers quoted here (44°F chilled water; 140–180°F hot water; 6–12 ACH; +0.02–0.05 in. w.c.) are typical ballparks to build intuition.
+    Always defer to the actual setpoints, sequences of operation, and tenant EH&amp;S requirements for the building you are standing in.
+  </footer>
+</div>
+<div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
+</body>
+</html>

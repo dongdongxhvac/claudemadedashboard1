@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Electrical Works — Life-Science Building (New Hire)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--amber),var(--green),var(--violet))}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--amber);margin:4px 0 9px}
+  h1{font-size:27px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:17px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:15px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:15px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:126px;flex:0 0 auto;padding-right:8px;line-height:1.5}
+  .t-norm .track-tag{color:var(--amber)} .t-emerg .track-tag{color:var(--green)} .t-crit .track-tag{color:var(--violet)}
+  .node{font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:62px;padding:0 3px}
+  .arr .lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.15;text-align:center;margin-bottom:2px}
+  .arr .line2{color:var(--line-2);font-size:22px;font-weight:600;line-height:1}
+  .t-norm .arr .line2{color:var(--amber)} .t-emerg .arr .line2{color:var(--green)} .t-crit .arr .line2{color:var(--violet)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:8px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:8px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--red);border-radius:10px;
+    background:rgba(210,59,53,.05);padding:13px 16px;font-size:13.5px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);display:block;margin-bottom:4px;font-weight:600}
+
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.crit{color:var(--violet);background:rgba(106,79,208,.1)} .coil.safe{color:var(--red);background:rgba(210,59,53,.1)} .coil.mon{color:var(--cyan);background:rgba(14,143,166,.1)}
+  .term-card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:16.5px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:14px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:13.5px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:13px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:16px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:14px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--amber)} .d2 .tag{color:var(--green)}
+  .d-head h2{font-size:17px;margin:0;font-weight:600}
+  .d-sub{font-size:13px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .hub{stroke-width:2.6}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:12.5px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:8px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:8.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .rowlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .busbar{fill:rgba(31,154,85,.09);stroke:var(--green);stroke-width:1.7}
+  .bust{font-family:var(--mono);font-size:10px;fill:var(--green);font-weight:600;text-anchor:middle;letter-spacing:.14em}
+
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:14px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:13px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.5px;color:var(--ink-dim)}
+
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:11px} .q-opts{gap:4px}
+    .q-opts button{font-size:9.5px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:13px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:21px;line-height:1.15;color:#000} h1 .sub{font-size:14px;margin-top:2px}
+    .eyebrow{font-size:9.5px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:11.5px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:15.5px;color:#000} .s-head .n{font-size:10px}
+    p.lead{font-size:11.5px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:9px;width:100%;line-height:1.4;padding-bottom:2px}
+    .node{font-size:10.5px;padding:4px 7px;border-radius:6px;border-color:#5b6674;color:#000;white-space:nowrap}
+    .arr{min-width:34px;padding:0 2px} .arr .lbl{font-size:8px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:17px}
+    .stack{gap:2px} .stack .opt{font-size:10px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7px;color:#3e4a5a} .stack .conj{font-size:7px}
+    .flow-note{font-size:10px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:11px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:8.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;page-break-inside:avoid;border-color:#8a94a4}
+    .cards > .card:last-child:nth-child(odd){grid-column:1 / -1;column-count:2;column-gap:20px;column-fill:balance}
+    .cards > .card:last-child:nth-child(odd) .role,.cards > .card:last-child:nth-child(odd) h3,.cards > .card:last-child:nth-child(odd) .one{column-span:all}
+    .cards > .card:last-child:nth-child(odd) p{break-inside:auto;orphans:2;widows:2}
+    .card .role{font-size:8.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:13px;margin:0 0 3px;color:#000} .card .one{font-size:11.5px;margin:0 0 5px;color:#000}
+    .card p{font-size:10.8px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:10.3px;padding-top:5px;margin-top:5px} .card .why em{font-size:7.6px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:12px;color:#000} .term-card p{font-size:10.3px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:7.8px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:13.5px;margin:0 0 5px;color:#000} .downstream p{font-size:11.3px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:9.5px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:auto} .s-head{break-inside:avoid;break-after:avoid;page-break-after:avoid}
+    .downstream{break-inside:auto} .diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:9.5px;color:#242e3c;margin-top:8px} .d-head h2{font-size:13.5px} .d-sub{font-size:10px} }
+
+  table.ptab{width:100%;border-collapse:collapse;margin:12px 0 4px;font-size:13.5px}
+  table.ptab th{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+    text-align:left;font-weight:700;border-bottom:1px solid var(--line-2);padding:0 10px 7px 0}
+  table.ptab td{border-bottom:1px solid var(--line);padding:8px 10px 8px 0;vertical-align:top;color:var(--ink-dim)}
+  table.ptab td:first-child{color:var(--ink);font-weight:600}
+  table.ptab tr.warn td{background:rgba(210,59,53,.05)}
+  table.ptab .ok{color:var(--green);font-weight:700}
+  table.ptab .no{color:var(--red);font-weight:700}
+  @media print{table.ptab{font-size:10pt;break-inside:avoid} table.ptab td,table.ptab th{padding:4px 8px 4px 0}}
+  p.expand{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin:-4px 0 8px;letter-spacing:.01em}
+  p.expand b{color:var(--ink-dim)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">prints as a compact handout — few pages, tight layout</span></div>
+
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Basics</div>
+    <h1>How Electrical Works in a Life-Science Building<span class="sub">Utility in, stepped down, distributed — and never allowed to fail</span></h1>
+    <p class="intro">Everything in the building — the chillers, the fans, the labs, the lights — runs on the electrical system. Utility power comes in at <b>high voltage</b>, gets <b>stepped down by transformers</b>, and is split by <b>switchgear and panels</b> into smaller and smaller circuits until it reaches each load. And because a lab building can't just go dark, the system is built in <b>layers</b>: normal power, <b>generator-backed</b> power, and <b>UPS-protected</b> power for what can't blink even for a second.</p>
+  </header>
+
+  <!-- FLOW -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">01</span><h2>How it fits together</h2><span class="line"></span></div>
+    <p class="lead">Power flows from big to small. Read each track left to right — the <b>same loads</b> can sit on different layers depending on how important they are.</p>
+    <div class="flow" style="margin-top:14px">
+
+      <div class="track t-norm">
+        <span class="track-tag">Normal power</span>
+        <span class="node soft">Utility grid</span>
+        <span class="arr"><span class="lbl">step<br>down</span><span class="line2">→</span></span>
+        <span class="node">Transformer</span>
+        <span class="arr"><span class="lbl">480V</span><span class="line2">→</span></span>
+        <span class="node hub">Main switchgear</span>
+        <span class="arr"><span class="lbl">feeder<br>breakers</span><span class="line2">→</span></span>
+        <span class="node">Panels &amp; MCCs</span>
+        <span class="arr"><span class="lbl">branch<br>breakers</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">Motors · VFDs<small>480V</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Lighting<small>277V</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Receptacles<small>120V via xfmr</small></span>
+        </span>
+      </div>
+
+      <div class="track t-emerg">
+        <span class="track-tag">Emergency / standby</span>
+        <span class="node soft">Utility fails</span>
+        <span class="arr"><span class="lbl">auto-start</span><span class="line2">→</span></span>
+        <span class="node">Generator</span>
+        <span class="arr"><span class="lbl">builds<br>~10 sec</span><span class="line2">→</span></span>
+        <span class="node hub">Emergency bus</span>
+        <span class="arr"><span class="lbl">feeds</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">ATS — life safety<small>transfers first · egress · alarm · fire pump</small></span>
+          <span class="conj">+</span>
+          <span class="opt">ATS — standby<small>lab exhaust · freezers · some HVAC</small></span>
+        </span>
+      </div>
+
+      <div class="track t-crit">
+        <span class="track-tag">Critical / no-blink</span>
+        <span class="node soft">Panel power</span>
+        <span class="arr"><span class="lbl">condition</span><span class="line2">→</span></span>
+        <span class="node">UPS</span>
+        <span class="arr"><span class="lbl">battery<br>ride-through</span><span class="line2">→</span></span>
+        <span class="node">Lab equipment · BMS · servers</span>
+      </div>
+
+    </div>
+    </div>
+    <p class="flow-note"><b>The short version:</b> the utility delivers power at high voltage; a <b>transformer</b> steps it down to 480V for the building. The <b>main switchgear</b> splits it through <b>feeder breakers</b> to <b>panels and motor control centers</b>, whose <b>branch breakers</b> feed the loads — 480V for motors, 277V for lighting, and 120V receptacles through small step-down transformers. When the utility drops, the <b>generator</b> starts and energizes the <b>emergency bus</b>; the <b>ATSs</b> hanging on that bus transfer their loads over in seconds. Anything that can't ride even those seconds — lab instruments, the BMS, servers — sits behind a <b>UPS</b>, whose batteries carry it through the gap.</p>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05)">
+      <span class="ttl" style="color:var(--cyan)">🔁 How the generator, emergency bus &amp; ATSs work together</span>
+      Each <b>ATS has two inputs and one output</b>: normal power on one side, the <b>emergency (secondary) bus</b> on the other, and its loads on the output. In normal life every ATS sits on the utility side and the generator is off. When an ATS <b>senses the utility drop</b>, it sends the <b>start signal</b>; the generator comes up to speed and voltage and <b>builds the emergency bus</b>. Each ATS then <b>transfers</b> its loads onto that bus — <b>life safety first</b> (code requires it live within seconds), standby loads after. One generator bus can carry <b>several ATSs</b>, each with its own priority. When the utility returns and holds steady, the ATSs <b>retransfer back</b> after a time delay, and the generator runs a few minutes unloaded to <b>cool down</b>, then stops — back to normal.
+    </div>
+
+    <div class="callout">
+      <span class="ttl">⚠ Arc flash — the rule that keeps you alive</span>
+      Electrical gear can release explosive energy in a fault — an <b>arc flash</b>. The rule for a new engineer is simple: <b>you don't open, reset, or work in energized gear</b> until you're trained and authorized. Respect the <b>arc-flash labels</b> on every panel (they state the hazard and required PPE), keep panel covers on and doors closed, and treat every conductor as live until <b>LOTO</b> proves otherwise. Your LOTO competency is exactly this.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--green);background:rgba(31,154,85,.05)">
+      <span class="ttl" style="color:var(--green)">⚡ Why the generator test matters</span>
+      That weekly <b>generator test</b> on your plant log is this whole second track being proven. A generator that hasn't run is a generator you can't trust — the test confirms it starts, takes load, and the ATSs will have real power to transfer to when the grid drops.
+    </div>
+  </section>
+
+  <!-- PIECES -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">02</span><h2>The seven pieces of building electrical</h2><span class="line"></span></div>
+    <div class="cards">
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--red)"></span>Protect</div>
+        <h3>Breakers</h3>
+        <p class="one">The protection at every level.</p>
+        <p>A hierarchy: the <b>main breaker</b> at the service, <b>feeder breakers</b> in the switchgear, <b>branch breakers</b> in every panel. Each trips on <b>overload or fault</b> to protect the wiring downstream of it.</p>
+        <p class="why"><em>Why it matters</em>A tripped breaker is telling you something — investigate, reset <b>once</b>, and never hold one in against a fault.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Service</div>
+        <h3>Utility Service &amp; Transformer</h3>
+        <p class="one">Brings power in and steps it down.</p>
+        <p>The utility feed arrives at <b>medium voltage</b>; transformers step it down to <b>480V</b> — the building's working voltage. Everything downstream hangs off this.</p>
+        <p class="why"><em>Why it matters</em>It's the single source for the whole building — and utility-owned gear you don't touch.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Distribute</div>
+        <h3>Main Switchgear</h3>
+        <p class="one">The building's electrical front door.</p>
+        <p>The <b>main breakers</b> and metering. It splits the service into the big feeders and is where the whole building can be shut down or isolated.</p>
+        <p class="why"><em>Why it matters</em>Know where it is and what it feeds — and stay out of it until trained.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--blue)"></span>Distribute</div>
+        <h3>Panels &amp; Step-Down Transformers</h3>
+        <p class="one">Split power into smaller circuits.</p>
+        <p><b>Distribution panels</b> feed floors and systems; <b>dry-type transformers</b> drop 480V to <b>208/120V</b> for receptacle panels. Every circuit has a breaker and (ideally) a label.</p>
+        <p class="why"><em>Why it matters</em>Tracing a dead outlet or tripped breaker starts with knowing the panel tree.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--blue)"></span>Motors</div>
+        <h3>MCCs &amp; VFDs</h3>
+        <p class="one">Start, protect, and speed-control the motors.</p>
+        <p class="expand"><b>MCC</b> = Motor Control Center &nbsp;·&nbsp; <b>VFD</b> = Variable Frequency Drive</p>
+        <p><b>Motor control centers</b> gather the starters for pumps and fans in one place; <b>VFDs</b> vary motor speed so equipment sips power at part load instead of running flat out.</p>
+        <p class="why"><em>Why it matters</em>Most of your mechanical equipment is really an electrical load — this is where it's controlled.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Backup</div>
+        <h3>Generator &amp; ATS</h3>
+        <p class="one">Keeps the building alive in an outage.</p>
+        <p class="expand"><b>ATS</b> = Automatic Transfer Switch</p>
+        <p>On power loss the <b>generator</b> auto-starts and energizes the <b>emergency bus</b>; each <b>ATS</b> (two inputs — normal &amp; emergency — one output) transfers its loads onto it, <b>life safety first</b>, then standby loads like lab exhaust and freezers. Retransfers back when the utility returns and holds.</p>
+        <p class="why"><em>Why it matters</em>Life safety and the science both depend on this working — hence the weekly test.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Critical</div>
+        <h3>UPS</h3>
+        <p class="one">Bridges the gap the generator can't.</p>
+        <p class="expand"><b>UPS</b> = Uninterruptible Power Supply</p>
+        <p>A generator takes seconds to start; a <b>UPS</b> rides through on <b>batteries</b> instantly, keeping lab instruments, the BMS, and servers from ever seeing the blink — and conditioning the power besides.</p>
+        <p class="why"><em>Why it matters</em>Some experiments and systems can't recover from even a one-second drop.</p>
+      </div>
+
+    </div>
+    </div>
+  </section>
+
+  <!-- LAB LAYER -->
+  <!-- LAB LAYER -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">03</span><h2>The life-science layer — lab power</h2><span class="line"></span></div>
+    <div class="downstream">
+      <h3>The extra electrical a lab building needs</h3>
+      <p>Labs hold work that <b>can't lose power</b> — years of samples in a <b>−80°C freezer</b>, running experiments, exhaust that must never stop. So the lab side gets its own electrical layer on top of the building systems above.</p>
+
+      <div class="terms">
+        <div class="term-card">
+          <h4>Red outlets</h4>
+          <span class="coil crit">standby power</span>
+          <p><b>Red receptacles</b> are on generator-backed circuits — freezers and critical equipment plug in there, so they ride through an outage.</p>
+        </div>
+        <div class="term-card">
+          <h4>EPO — emergency power off</h4>
+          <span class="coil safe">safety</span>
+          <p>Big red <b>EPO buttons</b> kill power to a lab or room instantly in an emergency. Know where they are — and don't lean on them.</p>
+        </div>
+        <div class="term-card">
+          <h4>Freezer &amp; equipment alarms</h4>
+          <span class="coil mon">monitor</span>
+          <p>Critical freezers and equipment are <b>monitored and alarmed</b> — a power or temperature problem calls someone before the science is lost.</p>
+        </div>
+      </div>
+
+      <p>So the split is simple: <b>building electrical</b> gets power in, steps it down, and distributes it; the <b>lab layer</b> decides which loads ride the generator, which get a UPS, and how a problem gets noticed at 2 AM. When a breaker trips or an outage hits, knowing <b>which layer a load sits on</b> tells you how urgent it is.</p>
+    </div>
+    </div>
+  </section>
+
+  <!-- SYSTEM DIAGRAMS -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">04</span><h2>System diagrams</h2><span class="line"></span></div>
+    <p class="lead">The same story, drawn: boxes are equipment, colored lines are the flows. Trace them line by line.</p>
+    <div class="legend">
+      <span><i style="background:var(--amber)"></i>normal power</span>
+      <span><i style="background:var(--green)"></i>generator · emergency bus</span>
+      <span><i style="background:var(--violet)"></i>UPS · critical</span>
+      <span><i style="background:var(--ink-faint)"></i>dashed = sense / start signal</span>
+    </div>
+
+    <div class="diagram d1">
+    <div class="d-head"><span class="tag">Part 1</span><h2>Normal power — big to small</h2></div>
+    <p class="d-sub">Utility power is stepped down, split through feeder and branch breakers to the loads — with a UPS bridging the loads that can never blink.</p>
+    <svg viewBox="0 0 780 260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="eA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="eV" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+      </defs>
+
+      <!-- main chain -->
+      <path class="pipe p-amber" d="M130,72 H160" marker-end="url(#eA)"/>
+      <text class="pl pl-a" x="126" y="64">medium V</text>
+      <path class="pipe p-amber" d="M270,72 H300" marker-end="url(#eA)"/>
+      <text class="pl pl-a" x="272" y="64">480V</text>
+      <path class="pipe p-amber" d="M450,72 H480" marker-end="url(#eA)"/>
+      <text class="pl pl-a" x="442" y="64">feeder brkr</text>
+      <!-- fan to loads -->
+      <path class="pipe p-amber" d="M620,60 L650,42" marker-end="url(#eA)"/>
+      <path class="pipe p-amber" d="M620,72 L650,98" marker-end="url(#eA)"/>
+      <path class="pipe p-amber" d="M620,84 L650,154" marker-end="url(#eA)"/>
+      <text class="pl pl-a" x="614" y="110">branch brkrs</text>
+      <!-- UPS branch -->
+      <path class="pipe p-violet" d="M550,100 V170" marker-end="url(#eV)"/>
+      <path class="pipe p-violet" d="M620,194 H650" marker-end="url(#eV)"/>
+      <text class="pl pl-v" x="558" y="140">condition</text>
+      <text class="pl pl-v" x="600" y="216">battery ride-through</text>
+
+      <rect class="eq c-ink dash" x="30" y="48" width="100" height="48" rx="8"/>
+      <text class="eqt" x="80" y="69" font-size="11.5">Utility grid</text><text class="eqs" x="80" y="83">the source</text>
+      <rect class="eq c-amber" x="160" y="48" width="110" height="48" rx="8"/>
+      <text class="eqt" x="215" y="69" font-size="11.5">Transformer</text><text class="eqs" x="215" y="83">steps down to 480V</text>
+      <rect class="eq c-amber hub" x="300" y="44" width="150" height="56" rx="9"/>
+      <text class="eqt" x="375" y="67" font-size="12">Main switchgear</text><text class="eqs" x="375" y="83">main + feeder breakers</text>
+      <rect class="eq c-amber" x="480" y="44" width="140" height="56" rx="8"/>
+      <text class="eqt" x="550" y="67" font-size="12">Panels &amp; MCCs</text><text class="eqs" x="550" y="83">branch breakers · VFDs</text>
+
+      <rect class="eq c-amber" x="650" y="20" width="120" height="44" rx="8"/>
+      <text class="eqt" x="710" y="39" font-size="11">Motors · VFDs</text><text class="eqs" x="710" y="53">480V</text>
+      <rect class="eq c-amber" x="650" y="76" width="120" height="44" rx="8"/>
+      <text class="eqt" x="710" y="95" font-size="11">Lighting</text><text class="eqs" x="710" y="109">277V</text>
+      <rect class="eq c-amber" x="650" y="132" width="120" height="44" rx="8"/>
+      <text class="eqt" x="710" y="151" font-size="11">Receptacles</text><text class="eqs" x="710" y="165">120V via step-down xfmr</text>
+
+      <rect class="eq c-violet" x="480" y="170" width="140" height="48" rx="8"/>
+      <text class="eqt" x="550" y="191" font-size="12">UPS</text><text class="eqs" x="550" y="205">batteries · no blink</text>
+      <rect class="eq c-violet" x="650" y="170" width="120" height="48" rx="8"/>
+      <text class="eqt" x="710" y="189" font-size="10.5">Lab equip · BMS</text><text class="eqs" x="710" y="203">servers · critical</text>
+    </svg>
+  </div>
+    </div>
+
+  <!-- DIAGRAM 2: EMERGENCY -->
+  <div class="diagram d2">
+    <div class="d-head"><span class="tag">Part 2</span><h2>Generator, emergency bus &amp; ATS — two inputs, one output</h2></div>
+    <p class="d-sub">Every ATS sees both sources. On a utility drop it signals the generator, the generator builds the emergency bus, and each ATS transfers its loads — life safety first.</p>
+    <svg viewBox="0 0 780 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="gA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="gG" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+        <marker id="gI" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-dim)"/></marker>
+      </defs>
+
+      <!-- normal inputs (amber): header line + drops into each ATS -->
+      <path class="pipe p-amber" d="M180,54 H500"/>
+      <path class="pipe p-amber" d="M310,54 V240" marker-end="url(#gA)"/>
+      <path class="pipe p-amber" d="M500,54 V240" marker-end="url(#gA)"/>
+      <text class="pl pl-a" x="330" y="46">normal input — to every ATS</text>
+
+      <!-- gen -> bus -->
+      <path class="pipe p-green" d="M180,184 H230" marker-end="url(#gG)"/>
+      <text class="pl pl-g" x="178" y="176">builds</text>
+      <!-- bus -> ATS emergency inputs -->
+      <path class="pipe p-green" d="M370,206 V240" marker-end="url(#gG)"/>
+      <path class="pipe p-green" d="M560,206 V240" marker-end="url(#gG)"/>
+      <text class="pl pl-g" x="378" y="228">emergency input</text>
+
+      <!-- start signal -->
+      <path class="pipe p-ink dash" d="M250,266 H150 V202" marker-end="url(#gI)" stroke-width="1.8"/>
+      <text class="pl" x="158" y="252">senses loss → start signal</text>
+
+      <!-- outputs -->
+      <path class="pipe p-green" d="M340,294 V326" marker-end="url(#gG)"/>
+      <path class="pipe p-green" d="M530,294 V326" marker-end="url(#gG)"/>
+      <text class="pl pl-g" x="348" y="316">one output</text>
+
+      <!-- emergency bus bar -->
+      <rect class="busbar" x="230" y="178" width="420" height="28" rx="6"/>
+      <text class="bust" x="440" y="196">EMERGENCY BUS</text>
+
+      <!-- sources -->
+      <rect class="eq c-amber dash" x="40" y="30" width="140" height="48" rx="8"/>
+      <text class="eqt" x="110" y="51" font-size="11.5">Normal power</text><text class="eqs" x="110" y="65">utility · via switchgear</text>
+      <rect class="eq c-green" x="40" y="160" width="140" height="48" rx="8"/>
+      <text class="eqt" x="110" y="181" font-size="11.5">Generator</text><text class="eqs" x="110" y="195">auto-starts · ~10 sec</text>
+
+      <!-- ATSs -->
+      <rect class="eq c-green hub" x="250" y="240" width="180" height="54" rx="9"/>
+      <text class="eqt" x="340" y="262" font-size="12">ATS — life safety</text><text class="eqs" x="340" y="278">transfers first · code</text>
+      <rect class="eq c-green hub" x="440" y="240" width="180" height="54" rx="9"/>
+      <text class="eqt" x="530" y="262" font-size="12">ATS — standby</text><text class="eqs" x="530" y="278">transfers after</text>
+
+      <!-- loads -->
+      <rect class="eq c-ink" x="250" y="326" width="180" height="52" rx="8"/>
+      <text class="eqt" x="340" y="347" font-size="11">Life-safety loads</text><text class="eqs" x="340" y="362">egress · alarm · fire pump</text>
+      <rect class="eq c-ink" x="440" y="326" width="180" height="52" rx="8"/>
+      <text class="eqt" x="530" y="347" font-size="11">Standby loads</text><text class="eqs" x="530" y="362">lab exhaust · freezers · HVAC</text>
+    </svg>
+  </div>
+  
+    <div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--amber)">Illustrated</span><h2>Electrical — normal power and the backup layer</h2></div>
+      <p class="d-sub">Amber zone = utility power stepped down and split by breakers; green zone = generator building the emergency bus, ATS switching between the two.</p>
+      <svg viewBox="0 0 760 410" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="elA" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+          <marker id="elG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <linearGradient id="elMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f7"/><stop offset="0.45" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4d2"/></linearGradient>
+          <linearGradient id="elPMG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#84ac90"/><stop offset="0.45" stop-color="#a3c4ad"/><stop offset="1" stop-color="#527a5f"/></linearGradient>
+          <linearGradient id="elYel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4d98e"/><stop offset="0.45" stop-color="#f9e9b8"/><stop offset="1" stop-color="#cfa842"/></linearGradient>
+        </defs>
+        <rect x="16" y="14" width="436" height="382" rx="12" fill="rgba(176,116,8,0.07)"/>
+        <rect x="458" y="14" width="286" height="382" rx="12" fill="rgba(31,154,85,0.08)"/>
+        <text x="34" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--amber)" font-weight="700" letter-spacing="2">NORMAL POWER</text>
+        <text x="476" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--green)" font-weight="700" letter-spacing="2">EMERGENCY</text>
+
+        <rect x="44" y="146" width="94" height="8" rx="2" fill="#8a94a4"/>
+        <rect x="48" y="82" width="70" height="64" rx="4" fill="url(#elPMG)" stroke="#3f6b4d" stroke-width="1.7"/>
+        <rect x="120" y="88" width="16" height="52" rx="2" fill="url(#elPMG)" stroke="#3f6b4d" stroke-width="1.4"/>
+        <line x1="124" y1="92" x2="124" y2="136" stroke="#3f6b4d" stroke-width="1"/>
+        <line x1="128" y1="92" x2="128" y2="136" stroke="#3f6b4d" stroke-width="1"/>
+        <line x1="132" y1="92" x2="132" y2="136" stroke="#3f6b4d" stroke-width="1"/>
+        <circle cx="62" cy="76" r="4" fill="#fff" stroke="#3f6b4d" stroke-width="1.4"/>
+        <circle cx="62" cy="70" r="2.5" fill="#fff" stroke="#3f6b4d" stroke-width="1.2"/>
+        <circle cx="80" cy="76" r="4" fill="#fff" stroke="#3f6b4d" stroke-width="1.4"/>
+        <circle cx="80" cy="70" r="2.5" fill="#fff" stroke="#3f6b4d" stroke-width="1.2"/>
+        <rect x="56" y="108" width="26" height="16" rx="1" fill="#eef2f7" stroke="#3f6b4d" stroke-width="1"/>
+        <text x="92" y="174" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Transformer</text>
+        <text x="92" y="188" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-faint)" text-anchor="middle">steps down to 480V</text>
+
+        <rect x="188" y="60" width="120" height="10" rx="2" fill="#8a94a4"/>
+        <rect x="192" y="70" width="36" height="102" rx="2" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <rect x="230" y="70" width="36" height="102" rx="2" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <rect x="268" y="70" width="36" height="102" rx="2" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <circle cx="210" cy="82" r="5" fill="#fff" stroke="#64748b" stroke-width="1.2"/>
+        <circle cx="248" cy="82" r="5" fill="#fff" stroke="#64748b" stroke-width="1.2"/>
+        <circle cx="286" cy="82" r="5" fill="#fff" stroke="#64748b" stroke-width="1.2"/>
+        <rect x="198" y="96" width="24" height="30" rx="2" fill="#dce3ec" stroke="#64748b" stroke-width="1.2"/>
+        <rect x="236" y="96" width="24" height="30" rx="2" fill="#dce3ec" stroke="#64748b" stroke-width="1.2"/>
+        <rect x="274" y="96" width="24" height="30" rx="2" fill="#dce3ec" stroke="#64748b" stroke-width="1.2"/>
+        <rect x="207" y="104" width="6" height="14" rx="2" fill="#4a5462"/>
+        <rect x="245" y="104" width="6" height="14" rx="2" fill="#4a5462"/>
+        <rect x="283" y="104" width="6" height="14" rx="2" fill="#4a5462"/>
+        <line x1="196" y1="146" x2="224" y2="146" stroke="#8a94a4" stroke-width="1.2"/>
+        <line x1="234" y1="146" x2="262" y2="146" stroke="#8a94a4" stroke-width="1.2"/>
+        <line x1="272" y1="146" x2="300" y2="146" stroke="#8a94a4" stroke-width="1.2"/>
+        <text x="248" y="192" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Switchgear lineup</text>
+        <text x="248" y="206" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-faint)" text-anchor="middle">main + feeder breakers</text>
+
+        <rect x="354" y="76" width="52" height="92" rx="4" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <rect x="360" y="82" width="40" height="80" rx="2" fill="none" stroke="#8a94a4" stroke-width="1"/>
+        <rect x="372" y="90" width="16" height="6" rx="1" fill="#4a5462"/>
+        <rect x="372" y="102" width="16" height="6" rx="1" fill="#4a5462"/>
+        <rect x="372" y="114" width="16" height="6" rx="1" fill="#4a5462"/>
+        <rect x="372" y="126" width="16" height="6" rx="1" fill="#4a5462"/>
+        <rect x="372" y="138" width="16" height="6" rx="1" fill="#4a5462"/>
+        <circle cx="400" cy="122" r="2.5" fill="#64748b"/>
+        <text x="360" y="188" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Panel</text>
+        <text x="360" y="202" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-faint)" text-anchor="middle">branch breakers</text>
+
+        <path d="M136,114 H192" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#elA)"/>
+        <path d="M304,114 H354" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#elA)"/>
+        <path d="M394,168 V254" fill="none" stroke="var(--amber)" stroke-width="2.6"/>
+        <path d="M394,254 H120 V276" fill="none" stroke="var(--amber)" stroke-width="2.2" marker-end="url(#elA)"/>
+        <path d="M224,254 V276" fill="none" stroke="var(--amber)" stroke-width="2.2" marker-end="url(#elA)"/>
+        <path d="M318,254 V276" fill="none" stroke="var(--amber)" stroke-width="2.2" marker-end="url(#elA)"/>
+
+        <circle cx="120" cy="294" r="16" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <text x="120" y="299" font-family="IBM Plex Mono" font-size="11" fill="#4a5462" text-anchor="middle" font-weight="700">M</text>
+        <text x="120" y="330" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">motor</text>
+        <circle cx="224" cy="294" r="14" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <path d="M216,294 h16 M224,286 v16" stroke="#64748b" stroke-width="1.6"/>
+        <text x="224" y="330" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">lighting</text>
+        <rect x="304" y="280" width="28" height="28" rx="5" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <circle cx="313" cy="294" r="2" fill="#4a5462"/><circle cx="323" cy="294" r="2" fill="#4a5462"/>
+        <text x="318" y="330" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">receptacle</text>
+
+        <rect x="482" y="128" width="128" height="11" rx="3" fill="#6b7686" stroke="#4a5462" stroke-width="1.2"/>
+        <rect x="486" y="96" width="20" height="32" rx="2" fill="url(#elYel)" stroke="#a97f16" stroke-width="1.4"/>
+        <line x1="491" y1="100" x2="491" y2="124" stroke="#a97f16" stroke-width="1"/>
+        <line x1="496" y1="100" x2="496" y2="124" stroke="#a97f16" stroke-width="1"/>
+        <line x1="501" y1="100" x2="501" y2="124" stroke="#a97f16" stroke-width="1"/>
+        <rect x="506" y="100" width="56" height="28" rx="3" fill="url(#elYel)" stroke="#a97f16" stroke-width="1.4"/>
+        <rect x="512" y="94" width="16" height="8" rx="2" fill="url(#elYel)" stroke="#a97f16" stroke-width="1.1"/>
+        <rect x="534" y="94" width="16" height="8" rx="2" fill="url(#elYel)" stroke="#a97f16" stroke-width="1.1"/>
+        <rect x="562" y="103" width="30" height="25" rx="11" fill="url(#elYel)" stroke="#a97f16" stroke-width="1.4"/>
+        <circle cx="592" cy="115" r="8" fill="#fff" stroke="#a97f16" stroke-width="1.2"/>
+        <rect x="518" y="84" width="5" height="12" fill="#8a94a4"/>
+        <rect x="510" y="77" width="21" height="8" rx="4" fill="#8a94a4"/>
+        <rect x="540" y="106" width="15" height="10" rx="1" fill="#232a34"/>
+        <text x="546" y="158" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Generator</text>
+
+        <rect x="648" y="82" width="64" height="70" rx="4" fill="url(#elMetal)" stroke="#64748b" stroke-width="1.9"/>
+        <rect x="654" y="88" width="52" height="58" rx="2" fill="none" stroke="#8a94a4" stroke-width="1"/>
+        <rect x="706" y="106" width="5" height="14" rx="2" fill="#64748b"/>
+        <rect x="660" y="94" width="28" height="13" rx="2" fill="#232a34"/>
+        <line x1="664" y1="100" x2="682" y2="100" stroke="#2be06c" stroke-width="1.4"/>
+        <circle cx="663" cy="120" r="3" fill="var(--amber)"/><circle cx="663" cy="132" r="3" fill="var(--green)"/><circle cx="698" cy="126" r="3" fill="#4a5462"/>
+        <line x1="666" y1="131" x2="695" y2="126" stroke="var(--green)" stroke-width="2"/>
+        <text x="680" y="170" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">ATS</text>
+        <text x="680" y="184" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)" text-anchor="middle">two inputs · one output</text>
+
+        <path d="M248,60 V32 H663 V82" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#elA)"/>
+        <text x="420" y="26" font-family="IBM Plex Mono" font-size="8.5" fill="var(--amber)">normal input</text>
+        <path d="M612,116 H648" fill="none" stroke="var(--green)" stroke-width="3" marker-end="url(#elG)"/>
+        <path d="M712,120 H730 V224 H724" fill="none" stroke="var(--green)" stroke-width="3" marker-end="url(#elG)"/>
+
+        <rect x="486" y="212" width="234" height="24" rx="6" fill="rgba(31,154,85,0.10)" stroke="var(--green)" stroke-width="1.8"/>
+        <text x="603" y="228" font-family="IBM Plex Mono" font-size="9.5" fill="var(--green)" text-anchor="middle" font-weight="700" letter-spacing="2">EMERGENCY BUS</text>
+        <path d="M540,236 V278" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#elG)"/>
+        <path d="M666,236 V278" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#elG)"/>
+        <text x="540" y="298" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">life safety</text>
+        <text x="666" y="298" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">standby loads</text>
+        <text x="603" y="322" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-faint)" text-anchor="middle">egress · alarm · fire pump · lab exhaust · freezers</text>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- GENERATOR: WHY IS IT RUNNING -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">05</span><h2>Why is the generator running?</h2><span class="line"></span></div>
+    </div>
+
+  <div class="pgroup">
+    <p class="lead"><b>&#8220;The generator is running.&#8221; That, by itself, is not information.</b></p>
+    <p class="flow-note">A running generator tells you almost nothing until you know <b>whether the ATS transferred</b>. The engine is not the diagnostic — <b>the ATS position is</b>. There are ten reasons the set may be running, and in six of them the building is completely normal.</p>
+  </div>
+
+  <table class="ptab">
+    <thead><tr><th style="width:26%">What started it</th><th style="width:18%">ATS transfers?</th><th style="width:12%">Normal?</th><th>How you confirm</th></tr></thead>
+    <tbody>
+      <tr><td>Utility outage</td><td>Yes</td><td class="ok">Yes</td><td>ATS reads <b>Emergency</b>; utility volts near zero</td></tr>
+      <tr><td>Utility anomaly</td><td>Usually</td><td class="ok">Yes</td><td>Brownout, single-phasing, frequency excursion — one leg low or missing</td></tr>
+      <tr><td><b>Weekly no-load exercise</b></td><td>No</td><td class="ok">Yes</td><td>Engine running, <b>ATS still on Normal</b>, exerciser schedule in the controller</td></tr>
+      <tr><td>Monthly loaded test</td><td>Yes</td><td class="ok">Yes</td><td>Posted test notice; a work order exists</td></tr>
+      <tr><td>Annual load bank test</td><td>No — the load bank carries it</td><td class="ok">Yes</td><td>Cables and load bank on site</td></tr>
+      <tr><td><b>Cool-down after retransfer</b></td><td>Already back on Normal</td><td class="ok">Yes</td><td>Engine running <b>unloaded</b>, cool-down timer counting</td></tr>
+      <tr><td>Manual start at the controller</td><td>No, unless transferred</td><td class="ok">Planned</td><td>Controller <b>not in AUTO</b></td></tr>
+      <tr><td>ATS test switch pressed</td><td>Yes</td><td class="ok">Planned</td><td>ATS in <b>Test</b> — a simulated outage</td></tr>
+      <tr><td>Peak shave / demand response</td><td>Yes, or parallels</td><td class="ok">Yes</td><td>Program signal or utility notice</td></tr>
+      <tr class="warn"><td>Sensing fault</td><td>Maybe</td><td class="no">No — investigate</td><td>Utility looks fine but the ATS thinks it is not: drifted voltage relay, loose neutral, failed phase monitor</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05);margin-top:18px">
+    <span class="ttl" style="color:var(--red)">Before you stop a running generator — read five things, in this order</span>
+    <b>1. The ATS</b> — Automatic Transfer Switch. Normal, or Emergency? If it reads Emergency, that generator <b>is</b> the building&#8217;s power. <b>Read it at the switch, not on a BMS graphic.</b> The graphic shows a point somebody mapped; the ATS shows what the contacts did.<br>
+    &nbsp;&nbsp;&#8226; <b>The controller screen</b>, on newer units: source status, present position, and any timer counting down.<br>
+    &nbsp;&nbsp;&#8226; <b>The indicating lights.</b> <i>Normal Source Available</i> · <i>Emergency Source Available</i> · <i>Load on Normal</i> · <i>Load on Emergency</i>. Two of them tell you what power <b>exists</b>; two tell you where the load <b>is</b>. They are not the same question.<br>
+    &nbsp;&nbsp;&#8226; <b>The Not-In-Auto lamp.</b> If it is lit, that switch will <b>not</b> transfer by itself. It is the single most important light on the door.<br>
+    &nbsp;&nbsp;&#8226; <b>The mechanical position indicator</b> on the transfer mechanism — the flag or pointer. Contacts do not lie.<br>
+    &nbsp;&nbsp;&#8226; On a <b>bypass-isolation</b> ATS, also read the <b>bypass handle</b> and the <b>isolation handle</b>: is the switch carrying the load, or is bypass carrying it while the switch sits isolated?<br>
+    &nbsp;&nbsp;&#8226; <b>Read it from the front, through the window and off the labels. Do not open the door.</b> The arc-flash label on that enclosure governs, and it is not a door you open to satisfy curiosity.<br>
+    <b>2. The utility.</b> Volts on all three legs, or not?<br>
+    <b>3. Who started it — and was it you?</b> <b>The person who starts a generator is the person who stops it.</b> If you did not start it, you do not stop it. Find whoever did: the technician, the vendor, the on-call engineer, the supervisor who authorized the test. That machine is running because somebody put it there for a reason, and you do not yet know the reason.<br>
+    <b>4. The controller mode.</b> AUTO · exercise running · cool-down timer counting · not in AUTO.<br>
+    <b>5. The schedule and the work orders.</b> Is this the weekly exercise, or an annual test somebody posted?<br><br>
+    <b>Only then decide.</b> You stop a running generator for exactly one reason: a genuine emergency in front of you — fire, mechanical failure, someone injured. In that moment you are <b>choosing</b> to drop emergency power, knowingly.
+  </div>
+
+  <div class="callout" style="border-left-color:var(--amber);background:rgba(176,116,8,.05);margin-top:12px">
+    <span class="ttl" style="color:var(--amber)">Why this is the trap it is</span>
+    During a <b>no-load exercise</b> the engine runs and <b>the building is perfectly normal</b> — that is exactly what the test is. So &#8220;everything looks fine, therefore the generator should not be running&#8221; is a <b>backwards inference</b>, and it is the reasoning that gets a generator shut down mid-test.<br><br>
+    The cost is real. Stop it during an <b>outage</b> and you drop egress lighting, the fire alarm, the fire pump, elevator recall, and <b>lab exhaust</b> — which fails safe onto emergency power precisely so containment survives a blackout — along with freezers and cold rooms. Stop it during a <b>cool-down</b> and you shut a hot turbocharged diesel down without its unloaded run; oil cokes in the turbo bearing. It will not fail today. <b>It will fail on the night you need it.</b> And if you use the <b>E-stop</b>, the set is now in <b>lockout</b> and needs a manual reset at the panel — so the generator that merely looked wrong is now genuinely unavailable.
+  </div>
+
+  </section>
+
+  <!-- QUIZ -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">06</span><h2>Check yourself — quick quiz</h2><span class="line"></span></div>
+    <p class="lead">Tap an answer for instant feedback — nothing is graded or saved. On paper, circle your answers and review them with your mentor.</p>
+    <div class="q-score"><span><b id="qDone">0</b>/<span id="qTot">0</span> answered &middot; <b id="qRight">0</b> correct</span><button id="qReset" type="button">Reset quiz</button></div>
+    </div>
+    <div id="quizBox"></div>
+    <div class="q-openhead">Open questions — say it in your own words</div>
+    <div id="openBox"></div>
+  </section>
+
+  <script>
+  (function(){
+  var QUIZ=[{q:"After the utility transformer, the building’s working voltage is…",o:["120V","480V","208V","13,800V"],a:1,e:"The transformer steps medium voltage down to 480V — the backbone everything else hangs from."},
+{q:"Lighting typically runs at ___ and receptacles at ___…",o:["277V / 120V via step-down transformers","480V / 277V","120V / 480V","208V / 480V"],a:0,e:"277V lighting comes straight off the 480 system; small dry-type transformers make 208/120V for receptacle panels."},
+{q:"The breaker hierarchy, big to small, is…",o:["Main → feeder → branch","They are all the same size","Feeder → main → branch","Branch → feeder → main"],a:0,e:"Main at the service, feeders in the switchgear, branch breakers in every panel — each protects the wiring downstream of it."},
+{q:"You find a tripped branch breaker. The rule is…",o:["Tape it on","Reset it repeatedly until it holds","Replace it immediately","Investigate, reset once, and never hold one in against a fault"],a:3,e:"A trip is information. One reset after looking for a cause; if it trips again, something is wrong — escalate, don’t fight it."},
+{q:"An ATS has…",o:["No moving parts","One input and two outputs","Three inputs","Two inputs — normal and emergency — and one output"],a:3,e:"It watches both sources and connects its loads to whichever should be live."},
+{q:"On utility loss, the correct sequence is…",o:["UPS starts the generator","Generator builds bus, then ATS notices","Everything shuts down safely","ATS senses loss → sends start signal → generator builds the emergency bus → ATSs transfer, life safety first"],a:3,e:"Sense → start signal → bus builds in ~10 seconds → transfer. Life safety must be live within seconds; standby follows."},
+{q:"When the utility returns and holds steady…",o:["ATSs retransfer after a time delay, then the generator runs unloaded to cool down and stops","The generator stops instantly","Everything must be reset by hand","The emergency bus stays live forever"],a:0,e:"Retransfer on a delay (to be sure the utility is stable), then a cool-down run — back to normal automatically."},
+{q:"The UPS exists because…",o:["Generators are unreliable","Code requires it everywhere","Some loads cannot ride even the ~10 seconds the generator needs — batteries bridge the gap with no blink","It is cheaper than a generator"],a:2,e:"Lab instruments, the BMS, and servers sit behind the UPS so they never see the transfer gap at all."},
+{q:"A red receptacle in a lab means…",o:["Do not use","High voltage","Generator-backed standby power — plug critical equipment like -80 freezers there","Isolated ground only"],a:2,e:"Red outlets ride the emergency/standby system, so what is plugged in survives an outage."},
+{q:"A VFD’s job is to…",o:["Boost voltage","Protect against lightning","Vary motor speed so pumps and fans sip power at part load","Convert AC to DC permanently"],a:2,e:"Most HVAC motors rarely need full speed — the VFD slows them down and the energy savings are huge."},
+{q:"An MCC is…",o:["A type of breaker","The main utility meter","A motor control center — the starters and controls for pumps and fans gathered in one lineup","A UPS cabinet"],a:2,e:"One organized lineup holding the starters, overloads, and disconnects for the mechanical equipment."},
+{q:"The arc flash rule for a new engineer is…",o:["Never open, reset, or work in energized gear until trained and authorized — respect the labels, prove dead with LOTO","Rubber-soled shoes make it safe","Panels are safe if the door is closed tight","Arc flash only happens at medium voltage"],a:0,e:"Arc-flash labels state the hazard and PPE. Until you are trained and authorized: hands off energized gear, and LOTO proves dead."},
+{q:"An EPO button in a lab…",o:["Kills power to that lab instantly — for emergencies only, know where they are","Starts the generator","Silences alarms","Calls security"],a:0,e:"Emergency Power Off drops the lab’s power at once. Know the locations; never lean equipment against them."},
+{q:"You walk into the generator room and the set is running. The building is completely normal. What do you read first?",o:["The fuel level","The ATS position — Normal or Emergency","The oil pressure gauge","Nothing; shut it down, it should not be running"],a:1,e:"A running generator is not information. The ATS position is the diagnostic: on Emergency, that generator is the building's power. On Normal, it is exercising, cooling down, or being tested. The engine is never the thing you look at first."},
+{q:"Generator running, ATS on Normal, engine unloaded, a timer counting down on the controller. What is happening?",o:["The generator is stuck on","A utility outage","An ATS failure","A no-load exercise or a cool-down after retransfer — leave it alone"],a:3,e:"Both are normal, scheduled states in which the building never notices. During a no-load exercise the building is perfectly fine by design, which is exactly why people misread it."},
+{q:"Why must a hot turbocharged diesel run unloaded for a cool-down before it stops?",o:["To let the ATS retransfer","To recharge the batteries","To burn off remaining fuel","Oil cokes in the turbo bearing if it is shut down hot — the damage shows up later, not today"],a:3,e:"Cutting the cool-down does not fail the generator now. It fails it on the night you need it. Stopping a generator mid cool-down is not a harmless act."},
+{q:"A coworker presses the generator E-stop because he thinks it should not be running. What is the state of that generator now?",o:["Unchanged","Back in AUTO, ready to start","In lockout — it needs a manual reset at the panel, so it is genuinely unavailable","Running in standby"],a:2,e:"An E-stop locks the set out until somebody resets it by hand. The generator that merely looked wrong is now actually unable to answer an outage."},
+{q:"During a real utility outage, which of these is riding on the emergency bus that a generator shutdown would drop?",o:["Nothing until the UPS drains","Egress lighting, fire alarm, fire pump, elevator recall, and lab exhaust","Only the lobby lights","Only office receptacles"],a:1,e:"Lab exhaust fails safe onto emergency power precisely so containment survives a blackout. Life safety transfers first, then standby loads like exhaust, freezers and cold rooms."},
+{q:"You did not start the generator, and you cannot tell why it is running. What do you do?",o:["Switch the controller out of AUTO","Leave it running and find the person who started it","Press the E-stop to be safe","Stop it, then investigate"],a:1,e:"The person who starts a generator is the person who stops it. It is running because somebody put it there for a reason you do not yet know. Find the technician, the vendor, the on-call engineer, or the supervisor who authorized the test."},
+{q:"Which lamp on an ATS door tells you the switch will not transfer by itself?",o:["Emergency Source Available","Not In Auto","Normal Source Available","Load on Normal"],a:1,e:"Not In Auto is the single most important light on the door. Source Available lamps tell you what power exists; Load On lamps tell you where the load is. Those are different questions, and neither one says the switch will act."},
+{q:"An ATS shows Emergency Source Available and Load on Normal. What does that mean?",o:["The generator is running and its power is there, but the load has not transferred","The utility is gone","The generator has failed","The building is on generator power"],a:0,e:"Two lamps answer two different questions. Source Available means the power exists at the switch. Load On tells you which source is actually carrying the building. During a no-load exercise this is exactly what you would see."},
+{q:"Where do you read an ATS position?",o:["On the BMS graphic","At the switch — controller screen, lamps, and the mechanical position indicator, read from the front without opening the door","From the generator controller","From the panel schedule"],a:1,e:"The BMS shows a point somebody mapped; the ATS shows what the contacts did. Read it from the front, through the window and off the labels. The arc-flash label on that enclosure governs."}];;;;
+  var box=document.getElementById('quizBox'),done=0,right=0;
+  function upd(){document.getElementById('qDone').textContent=done;document.getElementById('qRight').textContent=right;}
+  function render(){box.innerHTML='';done=0;right=0;upd();
+    QUIZ.forEach(function(it,i){
+      var c=document.createElement('div');c.className='q-card';
+      var top=document.createElement('div');top.className='q-top';
+      var n=document.createElement('span');n.className='q-num';n.textContent='Q'+(i+1);
+      var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+      top.appendChild(n);top.appendChild(t);c.appendChild(top);
+      var op=document.createElement('div');op.className='q-opts';
+      it.o.forEach(function(txt,j){
+        var b=document.createElement('button');b.type='button';
+        var em=document.createElement('em');em.textContent=String.fromCharCode(65+j);
+        var sp=document.createElement('span');sp.textContent=txt;
+        b.appendChild(em);b.appendChild(sp);
+        b.onclick=function(){if(c.dataset.a)return;c.dataset.a='1';done++;
+          if(j===it.a){b.classList.add('ok');right++;}
+          else{b.classList.add('bad');op.children[it.a].classList.add('ok');}
+          for(var k=0;k<op.children.length;k++){op.children[k].classList.add('lock');}
+          var e=document.createElement('div');e.className='q-exp';e.textContent=it.e;c.appendChild(e);upd();};
+        op.appendChild(b);});
+      c.appendChild(op);box.appendChild(c);});
+    document.getElementById('qTot').textContent=QUIZ.length;}
+  document.getElementById('qReset').onclick=render;
+  render();})();
+  </script>
+
+  <script>
+  (function(){
+  var OPEN=[
+{q:"You find the generator running. List, in order, what you read before touching anything — and name every reason the generator might legitimately be running.",a:"Read five things, in order: (1) the ATS (Automatic Transfer Switch) position, Normal or Emergency — read at the switch itself: the controller screen, the Source Available and Load On lamps, the Not-In-Auto lamp, the mechanical position indicator, and on a bypass-isolation unit the bypass and isolation handle positions, all from the front without opening the door; if Emergency, that generator is the building's power. (2) The utility: volts on all three legs, or not. (3) Who started it — and was it you? The person who starts a generator is the person who stops it. If you did not start it, you do not stop it; go find whoever did. (4) The controller mode: AUTO, exercise running, cool-down timer counting, or not in AUTO. (5) The schedule and the work orders. Legitimate reasons it runs: a utility outage; a utility anomaly such as a brownout, single-phasing or a frequency excursion; the weekly no-load exercise; a monthly loaded test; an annual load bank test; a cool-down after retransfer; a manual start by a technician; the ATS test switch simulating an outage; peak shaving or demand response if the site is enrolled. The tenth possibility is a sensing fault — a drifted voltage relay, a loose neutral, a failed phase monitor — where the utility is fine but the ATS believes otherwise, and that one you investigate. In six of those ten the building is completely normal, which is why looking at the building tells you nothing. You stop a running generator for exactly one reason: a genuine emergency in front of you."},
+{q:"Trace power from the street to a lab receptacle — name every transformation and breaker on the way.",a:"Utility medium voltage into the transformer, stepped to 480V; through the main breaker and a feeder breaker in the switchgear; to a distribution panel, through a dry-type step-down transformer making 208/120V; then a branch breaker in the receptacle panel feeds the outlet."},
+{q:"The building goes dark for ten seconds and comes back. Explain what happened — and why the −80 freezers and the BMS never noticed.",a:"Utility dropped; the ATSs sensed it and signaled the generator, which built the emergency bus in about ten seconds, and the ATSs transferred — that was the gap. The freezers rode it out on generator-backed red-outlet circuits, and the BMS never blinked at all because it sits behind the UPS, whose batteries covered the seconds the generator needed."},
+{q:"Explain the breaker hierarchy and the reset-once rule — why not just keep resetting a breaker that trips?",a:"Main at the service, feeders in the switchgear, branch breakers in the panels — each protects the wiring downstream of it. A trip means overload or fault; you investigate, reset once, and if it trips again something is genuinely wrong. Repeated resetting or holding a breaker in feeds energy into a fault — that is how equipment burns and arc flash happens."},
+{q:"Sort these onto normal, generator/standby, and UPS power, with reasoning: hallway lighting, lab exhaust fans, a −80 freezer, the BMS servers, general receptacles.",a:"Hallway lighting and general receptacles: normal (egress lighting specifically is on emergency). Lab exhaust and the −80 freezer: generator/standby — they must survive an outage but can ride the ten-second gap. The BMS servers: UPS — they cannot tolerate even a blink, then the generator carries them long-term."},
+{q:"You need to open a panel to work on a circuit. Walk the safety steps before you touch anything.",a:"Read the arc-flash label for the hazard level and required PPE. Identify and open the upstream disconnect, apply your lock and tag (LOTO), then verify dead with a tester — live-dead-live. Only trained and authorized people work in energized gear; until it is proven dead, treat every conductor as live."}
+];
+  var box=document.getElementById('openBox');
+  OPEN.forEach(function(it,i){
+    var c=document.createElement('div');c.className='q-card';
+    var top=document.createElement('div');top.className='q-top';
+    var n=document.createElement('span');n.className='q-num';n.textContent='O'+(i+1);
+    var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+    top.appendChild(n);top.appendChild(t);c.appendChild(top);
+    var lines=document.createElement('div');lines.className='q-lines';
+    for(var k=0;k<3;k++){lines.appendChild(document.createElement('i'));}
+    c.appendChild(lines);
+    var b=document.createElement('button');b.type='button';b.className='q-show';b.textContent='Show a strong answer';
+    b.onclick=function(){var e=document.createElement('div');e.className='q-exp';e.textContent=it.a;c.appendChild(e);b.remove();};
+    c.appendChild(b);box.appendChild(c);});
+  })();
+  </script>
+
+
+  <footer>
+    <b>This is the big-picture version.</b> The details — one-line diagrams, breaker coordination, arc-flash categories, ATS sequences, and load priorities — come once these basics click.<br>
+    Voltages shown (480/277/208/120V) are the common US setup; always go by the actual one-line, the labels on the gear, and your electrical safety training.
+  </footer>
+
+</div>
+
+</body>
+</html>

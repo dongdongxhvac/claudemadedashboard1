@@ -10,12 +10,16 @@ import { useShifts } from '../../hooks/useShifts';
 import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe, type ManageScope } from '../../hooks/useMe';
 import { CoveIdFinder } from '../../components/CoveIdFinder';
+import { NewHireProgramDrawer } from '../../components/NewHireProgramDrawer';
+import { useNewHireAll, nhUserState } from '../../hooks/useNewHire';
+import { NH_WEEKS, NH_TOTAL_ITEMS, nhWeekFor } from '../../lib/newHireProgram';
 import { supabase } from '../../lib/supabase';
 
-type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
+type Filter = 'active' | 'engineer' | 'newhire' | 'manager' | 'director' | 'admin' | 'inactive';
 const FILTERS_ADMIN: { key: Filter; label: string }[] = [
   { key: 'active',   label: 'All active' },
   { key: 'engineer', label: 'Engineers' },
+  { key: 'newhire',  label: 'New hires' },
   { key: 'manager',  label: 'Managers' },
   { key: 'director', label: 'Directors' },
   { key: 'admin',    label: 'Admins' },
@@ -24,13 +28,16 @@ const FILTERS_ADMIN: { key: Filter; label: string }[] = [
 // Leads only see engineers (active + inactive). No managers / directors / admins.
 const FILTERS_LEAD: { key: Filter; label: string }[] = [
   { key: 'engineer', label: 'Engineers' },
+  { key: 'newhire',  label: 'New hires' },
   { key: 'inactive', label: 'Inactive engineers' },
 ];
 
-function applyFilter(rows: EngineerRow[], f: Filter): EngineerRow[] {
+function applyFilter(rows: EngineerRow[], f: Filter, enrolled: Set<string>): EngineerRow[] {
   switch (f) {
     case 'active':   return rows.filter((r) => r.active);
     case 'engineer': return rows.filter((r) => r.active && r.role === 'engineer');
+    // Enrolled in the 8-week new-hire program (0128) and still on the roster.
+    case 'newhire':  return rows.filter((r) => r.active && enrolled.has(r.user_id));
     case 'manager':  return rows.filter((r) => r.active && r.role === 'manager');
     case 'director': return rows.filter((r) => r.active && r.role === 'director');
     case 'admin':    return rows.filter((r) => r.active && r.role === 'admin');
@@ -109,7 +116,13 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   const addEngineer = useAddEngineer();
   const deleteUser = useDeleteUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
+  const [trainingFor, setTrainingFor] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
+  // New-hire 8-week program state for the whole roster (tiny tables, one
+  // fetch) — drives the New hires filter, the progress pill under the name,
+  // and the Training drawer.
+  const nhQ = useNewHireAll();
+  const enrolledIds = useMemo(() => new Set(nhQ.data?.enrollments.keys() ?? []), [nhQ.data]);
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
   const canManageUsers  = manageScope === 'all';                 // full roster powers
@@ -151,10 +164,11 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
     .filter((r) => canManageUsers || r.role === 'engineer');
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0 };
+    const c: Record<Filter, number> = { active: 0, engineer: 0, newhire: 0, manager: 0, director: 0, admin: 0, inactive: 0 };
     for (const r of allRows) {
       if (r.active) {
         c.active++;
+        if (enrolledIds.has(r.user_id)) c.newhire++;
         if (r.role === 'engineer') c.engineer++;
         else if (r.role === 'manager')  c.manager++;
         else if (r.role === 'director') c.director++;
@@ -164,12 +178,12 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
       }
     }
     return c;
-  }, [allRows]);
+  }, [allRows, enrolledIds]);
 
   if (q.isLoading) return <p className="t-text t-muted">Loading users...</p>;
   if (q.isError) return <p className="t-text t-danger">Error: {(q.error as Error).message}</p>;
 
-  const rows = applyFilter(allRows, filter);
+  const rows = applyFilter(allRows, filter, enrolledIds);
   const shifts = shiftsQ.data ?? [];
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
@@ -285,6 +299,29 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                           hired {new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
                       )}
+                      {enrolledIds.has(r.user_id) && (() => {
+                        const st = nhUserState(nhQ.data, r.user_id);
+                        const wk = nhWeekFor(st.enrollment?.start_date);
+                        const done = st.enrollment?.status === 'completed';
+                        const wkText = done ? 'Certified' : wk === 0 ? 'not started' : wk > NH_WEEKS ? 'past wk 8' : `Wk ${wk}/${NH_WEEKS}`;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setTrainingFor(r)}
+                            className="t-small mt-0.5 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                            style={{
+                              background: done ? 'rgba(16,185,129,0.12)' : 'rgba(94,106,210,0.10)',
+                              color: done ? '#047857' : 'var(--color-accent)',
+                              fontSize: 10, fontWeight: 600, letterSpacing: '0.02em',
+                            }}
+                            title={`New-hire program — ${st.progress.itemsDone}/${NH_TOTAL_ITEMS} items · ${st.progress.repsDone}/${st.progress.repsTotal} reps at target · ${st.progress.pct}%. Click to open the tracker.`}
+                          >
+                            <span>8-WK</span>
+                            <span>{wkText}</span>
+                            <span style={{ opacity: 0.8 }}>· {st.progress.pct}%</span>
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 px-2">
                       <RoleBadge role={r.role} />
@@ -344,7 +381,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                       </button>
                       <Link
                         to={`/engineer/${r.user_id}/profile`}
-                        className="t-small px-2 py-0.5 rounded border inline-block"
+                        className="t-small px-2 py-0.5 rounded border inline-block mr-1"
                         style={{
                           color: 'var(--color-accent)',
                           borderColor: 'var(--color-border)',
@@ -354,6 +391,20 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                       >
                         Profile →
                       </Link>
+                      {r.role === 'engineer' && (
+                        <button
+                          onClick={() => setTrainingFor(r)}
+                          className="t-small px-2 py-0.5 rounded border"
+                          style={{
+                            color: enrolledIds.has(r.user_id) ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                            borderColor: 'var(--color-border)',
+                            background: 'var(--color-card)',
+                          }}
+                          title={enrolledIds.has(r.user_id) ? 'Open the 8-week new-hire tracker' : 'Enroll in the 8-week new-hire program'}
+                        >
+                          Training
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -373,6 +424,14 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
           the roster point here. Anyone who can edit engineers can assign;
           leads see it read-only. */}
       <CoveIdFinder roster={allRows} readOnly={!canManageAny} />
+
+      {trainingFor && (
+        <NewHireProgramDrawer
+          person={trainingFor}
+          people={(q.data ?? []).map((p) => ({ user_id: p.user_id, full_name: p.full_name, role: p.role, active: p.active, is_lead: p.is_lead, hiring_date: p.hiring_date }))}
+          onClose={() => setTrainingFor(null)}
+        />
+      )}
 
       {editing && (
         <EditDrawer

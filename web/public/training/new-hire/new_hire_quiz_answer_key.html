@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New-Hire Overviews — Quiz Answer Key (Mentor Copy)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb; --panel:#ffffff; --panel-2:#eef2f8; --line:#e2e8f0; --line-2:#cbd5e1;
+    --ink:#1b2433; --ink-dim:#4d5b72; --ink-faint:#8a97ab;
+    --cyan:#0e8fa6; --amber:#b07408; --violet:#6a4fd0; --green:#1f9a55; --red:#d23b35; --blue:#2f6dcc;
+    --mono:'IBM Plex Mono',ui-monospace,monospace; --disp:'Space Grotesk',system-ui,sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 14px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--disp);line-height:1.5;padding:14px 10px 56px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px;margin-bottom:14px}
+  .eyebrow{font-family:var(--mono);font-size:11.8px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);font-weight:700}
+  h1{font-size:29.1px;margin:8px 0 4px;letter-spacing:-.01em}
+  .lede{color:var(--ink-dim);font-size:15.7px;margin:0}
+  .conf{margin-top:12px;display:inline-block;font-family:var(--mono);font-size:11.8px;font-weight:700;letter-spacing:.1em;color:var(--red);background:rgba(210,59,53,.08);border:1px solid rgba(210,59,53,.28);border-radius:6px;padding:4px 10px}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 22px;margin-bottom:22px}
+  .toc h4{font-family:var(--mono);font-size:11.8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 8px}
+  .toc ul{margin:0;padding-left:18px;color:var(--ink-dim);font-size:15.1px}
+  .toc a{color:var(--ink);text-decoration:none;font-weight:600}
+  .toc a:hover{color:var(--cyan)}
+  section{margin-bottom:30px}
+  .shead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+  .num{font-family:var(--mono);font-size:13.4px;font-weight:700;color:var(--accent)}
+  .shead h2{font-size:21.3px;margin:0}
+  .rule{flex:1;height:1px;background:var(--line-2)}
+  .sub{font-family:var(--mono);font-size:11.8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:18px 0 8px}
+  .note{font-size:14px;color:var(--ink-dim);margin:0 0 10px}
+  .strip{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:9px 12px}
+  .striplab{font-family:var(--mono);font-size:11.2px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-right:6px}
+  .key{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:13.4px;font-weight:700;color:var(--ink);background:var(--panel);border:1px solid var(--line-2);border-radius:6px;padding:2px 7px}
+  .key i{font-style:normal;font-size:10.1px;color:var(--ink-faint)}
+  .qa{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:13px 15px;margin-bottom:9px;break-inside:avoid}
+  .qh{display:flex;gap:9px;align-items:baseline}
+  .qn{font-family:var(--mono);font-size:11.2px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .qt{font-size:15.7px;font-weight:600;flex:1}
+  .ans{font-family:var(--mono);font-size:14.6px;font-weight:700;color:#fff;background:var(--green);border-radius:6px;padding:1px 9px;flex:0 0 auto}
+  .opts{list-style:none;margin:9px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  @media(max-width:700px){.opts{grid-template-columns:1fr}}
+  .opts li{display:flex;gap:7px;align-items:flex-start;font-size:14px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:6px 9px;line-height:1.35}
+  .opts li em{font-style:normal;font-family:var(--mono);font-size:10.6px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:4px;padding:1px 5px;flex:0 0 auto}
+  .opts li.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink);font-weight:600}
+  .opts li.ok em{border-color:var(--green);color:var(--green)}
+  .why,.model{margin:9px 0 0;border-top:1px dashed var(--line);padding-top:8px;font-size:14px;color:var(--ink-dim)}
+  .why em,.model em{display:block;font-style:normal;font-family:var(--mono);font-size:10.6px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:3px}
+  .qa.open{border-left:3px solid var(--accent)}
+  footer{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;color:var(--ink-faint);font-size:13.4px}
+  .toolbar{position:fixed;right:16px;bottom:16px;z-index:10}
+  .toolbar{display:flex;gap:8px}
+  .toolbar button{font-family:var(--disp);font-size:14.6px;font-weight:600;color:#fff;background:var(--ink);border:0;border-radius:9px;padding:9px 15px;cursor:pointer;box-shadow:var(--shadow)}
+  .toolbar button.alt{color:var(--ink);background:var(--panel);border:1px solid var(--line-2)}
+  @media print{
+    @page{
+      size:A4 portrait; margin:5mm 5mm 11mm 5mm;
+      @bottom-right{content:counter(page) " / " counter(pages);font-family:'IBM Plex Mono',monospace;font-size:8pt;color:#4a5566}
+    }
+    :root{--ink:#0c1118;--ink-dim:#28313f;--ink-faint:#4a5566;--line:#8a94a4;--line-2:#8a94a4;--green:#0f6b39;--red:#9c231e;--cyan:#095f70;--amber:#7a4f05;--blue:#1f4a8f;--violet:#4a3596}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff;padding:0;font-size:12.3px}
+    .toolbar{display:none}
+    header,.toc,.qa{box-shadow:none;border-color:#8a94a4}
+    section{break-before:right;page-break-before:right}
+    section:first-of-type{break-before:auto;page-break-before:auto}
+    body.simplex section{break-before:page;page-break-before:page}
+    body.simplex section:first-of-type{break-before:auto;page-break-before:auto}
+    .qa{padding:7px 9px;margin-bottom:5px}
+    .qt{font-size:12.3px} .opts li{font-size:10.6px;padding:3px 6px}
+    .why,.model{font-size:10.6px;padding-top:5px}
+    .strip,.shead,.qa{break-inside:avoid}
+    h1{font-size:22.4px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · Mentor Copy</div>
+    <h1>New-Hire Overviews — Quiz Answer Key</h1>
+    <p class="lede">Answers and explanations for the self-check quizzes in the HVAC, Life Safety, Plumbing, Electrical, and BMS overview pages. 109 multiple-choice and 30 open questions in total.</p>
+    <span class="conf">MENTOR / REVIEWER COPY — DO NOT HAND TO THE NEW HIRE</span>
+  </header>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ul><li><a href="#s1">HVAC</a> — 25 multiple choice, 7 open</li><li><a href="#s2">Life Safety</a> — 13 multiple choice, 5 open</li><li><a href="#s3">Plumbing</a> — 14 multiple choice, 5 open</li><li><a href="#s4">Electrical</a> — 22 multiple choice, 6 open</li><li><a href="#s5">BMS</a> — 35 multiple choice, 7 open</li></ul>
+  </div>
+
+  <section id="s1" style="--accent:var(--cyan)">
+    <div class="shead"><span class="num">01</span><h2>HVAC</h2><span class="rule"></span></div>
+    <div class="strip"><span class="striplab">Answer key</span><span class="key"><i>1</i>C</span> <span class="key"><i>2</i>A</span> <span class="key"><i>3</i>B</span> <span class="key"><i>4</i>B</span> <span class="key"><i>5</i>C</span> <span class="key"><i>6</i>D</span> <span class="key"><i>7</i>B</span> <span class="key"><i>8</i>D</span> <span class="key"><i>9</i>A</span> <span class="key"><i>10</i>D</span> <span class="key"><i>11</i>C</span> <span class="key"><i>12</i>D</span> <span class="key"><i>13</i>A</span> <span class="key"><i>14</i>D</span> <span class="key"><i>15</i>D</span> <span class="key"><i>16</i>B</span> <span class="key"><i>17</i>D</span> <span class="key"><i>18</i>B</span> <span class="key"><i>19</i>C</span> <span class="key"><i>20</i>C</span> <span class="key"><i>21</i>A</span> <span class="key"><i>22</i>C</span> <span class="key"><i>23</i>B</span> <span class="key"><i>24</i>C</span> <span class="key"><i>25</i>A</span> <span class="key"><i>26</i>A</span> <span class="key"><i>27</i>A</span> <span class="key"><i>28</i>B</span> <span class="key"><i>29</i>B</span> <span class="key"><i>30</i>A</span></div>
+    <h3 class="sub">Multiple choice — with explanations</h3>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q1</span><span class="qt">Why does a lab building run 100% outside air instead of recirculating?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Recirculating wears out the fans</li><li class=""><em>B</em>Code requires it in all offices too</li><li class="ok"><em>C</em>Lab air may carry fumes and hazards, so it must go out, not around</li><li class=""><em>D</em>It is cheaper to condition</li></ul>
+        <p class="why"><em>Why</em>Lab air can never be recirculated — it is conditioned once, used once, and exhausted. That is what makes lab HVAC expensive and why the ERM matters.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q2</span><span class="qt">Which piece of equipment is where the water side and the air side meet?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>LEF</li><li class=""><em>B</em>Cooling tower</li><li class=""><em>C</em>Boiler</li><li class="ok"><em>D</em>AHU</li></ul>
+        <p class="why"><em>Why</em>The AHU holds the chilled-water and hot-water coils and pushes the air — every loop and the air path meet there.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q3</span><span class="qt">What do the CW, CHW, and HW pumps actually do?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Filter the water</li><li class=""><em>B</em>Cool the water</li><li class="ok"><em>C</em>Make the loops circulate — no pump, no flow, no cooling or heat</li><li class=""><em>D</em>Add chemicals</li></ul>
+        <p class="why"><em>Why</em>Pumps are the movers. Water only picks up or drops off heat if it is flowing.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q4</span><span class="qt">The condenser water loop runs between which two pieces?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Cooling tower and chiller</li><li class=""><em>B</em>Chiller and AHU</li><li class=""><em>C</em>AHU and LEF</li><li class=""><em>D</em>Boiler and VAV</li></ul>
+        <p class="why"><em>Why</em>The CW pump shuttles water tower ⇄ chiller: the chiller dumps building heat into it, the tower evaporates it away outside.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q5</span><span class="qt">When it is cold outside, free cooling means…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The boiler pre-cools the water</li><li class=""><em>B</em>The chiller runs faster</li><li class=""><em>C</em>Opening the windows</li><li class="ok"><em>D</em>Tower water cools the chilled loop through a plate heat exchanger — compressors off</li></ul>
+        <p class="why"><em>Why</em>Cold outdoor air makes the tower water cold enough on its own; the free-cooling pump and HX chill the CHW loop directly. Big winter energy savings.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q6</span><span class="qt">Our ERM recovers energy using…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Mixing the two airstreams</li><li class="ok"><em>B</em>Glycol run-around coils — a coil in each airstream tied by a pumped glycol loop</li><li class=""><em>C</em>Electric preheat</li><li class=""><em>D</em>A rotating heat wheel</li></ul>
+        <p class="why"><em>Why</em>A coil in the exhaust and a coil in the OA, connected by pumped glycol — heat crosses over but the airstreams never touch, so no cross-contamination.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q7</span><span class="qt">Typical chilled-water supply temperature is around…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>70°F</li><li class=""><em>B</em>58°F</li><li class="ok"><em>C</em>44°F</li><li class=""><em>D</em>34°F</li></ul>
+        <p class="why"><em>Why</em>About 44°F is the classic CHW supply ballpark — always confirm the actual setpoint on the plant.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q8</span><span class="qt">A hot-water loop is running 125°F supply. What must you know before calling it a problem?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The chilled water setpoint</li><li class="ok"><em>B</em>Whether the plant is a condensing boiler (runs cool on purpose) or non-condensing (needs hot return)</li><li class=""><em>C</em>The tower blowdown rate</li><li class=""><em>D</em>The building’s occupancy</li></ul>
+        <p class="why"><em>Why</em>Condensing boilers want ~120–140°F supply and cold return to condense flue gas. Non-condensing boilers want ~160–180°F and return above ~140°F, or the heat exchanger corrodes. Same reading, opposite verdicts.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q9</span><span class="qt">A VAV/FPT reheat coil gets its heat from…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The exhaust air</li><li class="ok"><em>B</em>The boiler’s hot water loop</li><li class=""><em>C</em>Electric strips always</li><li class=""><em>D</em>The condenser water</li></ul>
+        <p class="why"><em>Why</em>Reheat coils ride the heating loop — the boiler makes the hot water, the HW pump delivers it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q10</span><span class="qt">In the WSHP setup, what trims the common loop temperature?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The MAU</li><li class="ok"><em>B</em>The fluid cooler / tower and the boiler</li><li class=""><em>C</em>The chiller</li><li class=""><em>D</em>Each heat pump individually</li></ul>
+        <p class="why"><em>Why</em>Zone heat pumps push and pull heat on the loop; the cooler rejects excess and the boiler adds heat only if the loop runs short.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q11</span><span class="qt">In a WSHP building, fresh air for the zones comes from…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The heat pumps themselves</li><li class=""><em>B</em>The stairwells</li><li class=""><em>C</em>Opening dampers on each WSHP</li><li class="ok"><em>D</em>A separate HV / MAU, with exhaust taking it back out</li></ul>
+        <p class="why"><em>Why</em>WSHPs only recirculate zone air for temperature. The make-up air unit brings in and tempers the outside air the exhaust removes.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q12</span><span class="qt">Used lab air leaves the building through…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The AHU return</li><li class=""><em>B</em>The cooling tower</li><li class="ok"><em>C</em>The LEF, discharged high above the roof</li><li class=""><em>D</em>Relief louvers at grade</li></ul>
+        <p class="why"><em>Why</em>Lab exhaust fans throw the air high above the roof so it disperses and never re-enters an intake.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q13</span><span class="qt">CRAC units cool equipment rooms using…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Outside air only</li><li class=""><em>B</em>Condenser water</li><li class=""><em>C</em>Refrigerant from the chiller directly</li><li class="ok"><em>D</em>A chilled-water coil</li></ul>
+        <p class="why"><em>Why</em>CRACs on this campus ride the chilled-water loop, same as the AHU coil — just dedicated to IT/equipment rooms.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q14</span><span class="qt">A GEF (general exhaust fan) serves…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Restrooms, electrical/MDF rooms, elevator machine rooms and mechanical spaces — straight to the roof</li><li class=""><em>B</em>Fume hoods and lab benches</li><li class=""><em>C</em>The cooling tower basin</li><li class=""><em>D</em>The AHU return air</li></ul>
+        <p class="why"><em>Why</em>General exhaust clears odor and heat from support spaces. It never passes through the ERM or the LEF — that air is neither hazardous nor worth recovering heat from.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q15</span><span class="qt">In a 100% outside-air lab building, what sets the supply airflow?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The outdoor air temperature</li><li class=""><em>B</em>The thermostat in the corridor</li><li class="ok"><em>C</em>The total exhaust — LEF plus GEF plus exfiltration; supply replaces what exhaust removes</li><li class=""><em>D</em>The chilled water setpoint</li></ul>
+        <p class="why"><em>Why</em>Mass balance: air in must equal air out. Lab HVAC is exhaust-driven — fume hoods and lab exhaust are the boss, and the AHU exists to replace what they throw away.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q16</span><span class="qt">A lab should be held ___ to the corridor, and the corridor ___ to the labs.</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>positive / negative</li><li class=""><em>B</em>neutral / neutral</li><li class=""><em>C</em>negative / negative</li><li class="ok"><em>D</em>negative / positive</li></ul>
+        <p class="why"><em>Why</em>Air flows clean → dirty. Exhaust exceeds supply in the lab so fumes stay in; the corridor runs supply-heavy so clean air pushes inward.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q17</span><span class="qt">Why is a building normally kept slightly POSITIVE to the outside?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Because code sets a maximum pressure</li><li class="ok"><em>B</em>So unconditioned outside air isn't sucked in through every crack — no drafts, no unfiltered humidity</li><li class=""><em>C</em>To make the fans work harder</li><li class=""><em>D</em>To keep the roof drains flowing</li></ul>
+        <p class="why"><em>Why</em>Supply is set a little higher than total exhaust, so the surplus leaks out. Go negative and outside air infiltrates: cold drafts in winter, sticky humidity in summer, all unfiltered.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q18</span><span class="qt">If you double the outside airflow (CFM) through the AHU, the energy needed to condition it roughly…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Doubles</li><li class=""><em>B</em>Stays the same</li><li class=""><em>C</em>Goes up four times</li><li class=""><em>D</em>Halves</li></ul>
+        <p class="why"><em>Why</em>Conditioning energy is linear in airflow (1.08 × CFM × ΔT for sensible heat). That's why airflow — not setpoints — is the biggest energy lever, and why the ERM matters so much.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q19</span><span class="qt">When does the ERM do useful work?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Only when the chiller is off</li><li class=""><em>B</em>Summer only, pre-cooling the incoming air</li><li class="ok"><em>C</em>Both — it preheats incoming air in winter and pre-cools it in summer</li><li class=""><em>D</em>Winter only, preheating the incoming air</li></ul>
+        <p class="why"><em>Why</em>The glycol loop simply moves energy from the warmer airstream to the cooler one. In winter the exhaust is warmer than the OA (preheat); in summer the exhaust is cooler than the OA (pre-cool). Only in mild shoulder weather is there nothing to recover.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q20</span><span class="qt">What is a unit heater (UH) usually there to do?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Heat a space the ductwork doesn't reach — often for freeze protection of pipes</li><li class=""><em>B</em>Boost the exhaust fan</li><li class=""><em>C</em>Humidify the labs</li><li class=""><em>D</em>Cool a server room</li></ul>
+        <p class="why"><em>Why</em>Docks, vestibules, stairs, garages, mechanical rooms. Their real job is frequently keeping sprinkler and water lines above freezing — a failed UH in January is a burst-pipe call.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q21</span><span class="qt">The biggest difference between office air and lab air is…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Office air is recirculated; lab air is 100% outside air, used once and exhausted</li><li class=""><em>B</em>Labs use more filters</li><li class=""><em>C</em>Office air skips the AHU</li><li class=""><em>D</em>Office air is colder</li></ul>
+        <p class="why"><em>Why</em>Offices reuse their air (cheap, comfort-driven). Labs cannot recirculate at all — conditioned once, used once, out the LEF. That single difference drives the cost, the pressure, and the controls.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q22</span><span class="qt">An economizer saves energy in an OFFICE AHU by…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Shutting the exhaust fans</li><li class=""><em>B</em>Running the chiller harder</li><li class=""><em>C</em>Recirculating lab air</li><li class="ok"><em>D</em>Opening the OA dampers wide in mild weather to cool with fresh air instead of the chiller</li></ul>
+        <p class="why"><em>Why</em>Free cooling on the air side. A lab AHU has no use for it — it is already at 100% outside air, so the ERM is where its savings come from instead.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q23</span><span class="qt">How does an FPT differ from a plain VAV box?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>It has its own fan that pulls in return air and blends it with the primary supply air; four-pipe versions have both a hot and a chilled coil</li><li class=""><em>B</em>It replaces the AHU</li><li class=""><em>C</em>It only serves labs</li><li class=""><em>D</em>It has no coil</li></ul>
+        <p class="why"><em>Why</em>The fan and the return-air path are the difference. A two-pipe FPT usually has hot water only; a four-pipe FPT has hot AND chilled coils, so the same box can heat or cool — handy on a perimeter zone that swings all day.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q24</span><span class="qt">A room is 6,000 ft³ and gets 800 CFM of supply air. What is its air change rate?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>8 ACH</li><li class=""><em>B</em>12 ACH</li><li class=""><em>C</em>4 ACH</li><li class=""><em>D</em>80 ACH</li></ul>
+        <p class="why"><em>Why</em>ACH = CFM × 60 ÷ volume = 800 × 60 ÷ 6,000 = 8. Or the other way: CFM = ACH × volume ÷ 60.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q25</span><span class="qt">In a hood-heavy lab with every sash wide open, what is governing the supply airflow?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The chilled water setpoint</li><li class="ok"><em>B</em>The hood exhaust — supply must rise to match whatever the hoods pull</li><li class=""><em>C</em>The ACH requirement</li><li class=""><em>D</em>The thermostat</li></ul>
+        <p class="why"><em>Why</em>A lab has two demands for air — the ACH dilution requirement and the hood exhaust — and the larger one wins. Closing sashes lets airflow fall back to the ACH floor, which is why sash management is an energy program.</p>
+      </div>
+    <h3 class="sub">Open questions — model answers</h3>
+    <p class="note">These are guides, not scripts. Credit any answer that gets the mechanism right, in the new hire&#8217;s own words.</p>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O1</span><span class="qt">A lab room is too warm. Walk the heat out of the building — name every loop and machine it passes through.</span></div>
+        <p class="model"><em>A strong answer covers</em>Careful — there are two different paths, and a lab uses the first one. (1) The VAV box does not cool anything; it just meters in more 55°F supply air. That cold air absorbs the room's heat, warms up, and leaves through the exhaust valve — so in a 100% outside-air lab the room's heat physically leaves the building with the exhaust, out the LEF. The ERM's exhaust coil grabs some of it on the way. Meanwhile the chiller was never cooling room air at all: the AHU's chilled-water coil is cooling the incoming outside air. (2) A recirculating unit — a CRAC/CRAH, or a four-pipe FPT with a chilled-water coil — pulls room air across its own coil. Only there does the room's heat enter the chilled water, and then: CHW pump to the chiller, refrigerant lifts it into the condenser water, CW pump to the cooling tower, evaporation to the atmosphere.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O2</span><span class="qt">It is 30°F outside. Explain what free cooling is doing right now and why the compressors can be off.</span></div>
+        <p class="model"><em>A strong answer covers</em>The tower alone can make condenser water colder than the chilled-water setpoint. The free-cooling pump routes that cold tower water through a plate heat exchanger against the chilled loop, so the CHW gets cooled directly — no refrigeration cycle, compressors off, and the plant runs on pump and fan energy only.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O3</span><span class="qt">Explain to a tenant why their lab cannot recirculate air like an office does — and what the ERM does about the cost.</span></div>
+        <p class="model"><em>A strong answer covers</em>Lab air may carry fumes and hazards, so it is used once and exhausted; every cubic foot in is fresh outside air that must be fully conditioned. The ERM softens that cost: glycol run-around coils pull heat from the outgoing exhaust and hand it to the incoming air without the airstreams ever touching.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O4</span><span class="qt">How is the WSHP setup different from the central plant — where does heating and cooling actually happen, and where does fresh air come from?</span></div>
+        <p class="model"><em>A strong answer covers</em>Instead of one plant conditioning all the air, each zone has its own heat pump rejecting or absorbing heat on a shared water loop; the fluid cooler and boiler only trim the loop temperature. Temperature is handled at the zone; fresh air comes separately from an HV/MAU, and exhaust takes it back out.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O5</span><span class="qt">The chilled-water pump trips. What symptoms show up, and in what order?</span></div>
+        <p class="model"><em>A strong answer covers</em>No CHW flow means the coils stop absorbing heat: supply air temperature climbs first, then space temperatures drift up, hot calls start, and the chiller may alarm or unload on low flow. The fix chain starts at the pump — no pump, no flow, no cooling.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O6</span><span class="qt">A restroom smells in the corridor, and on the same cold morning the lobby doors are hard to open. Explain both with pressure — and say what you'd check.</span></div>
+        <p class="model"><em>A strong answer covers</em>Odor migrating out means the restroom is no longer negative: its GEF is likely down or a damper shut, so exhaust no longer exceeds supply there. The hard lobby door is stack effect — warm air rising makes the lower floors negative to outside, so the door fights you. Check the GEF and its damper first, then look at overall balance (supply vs. total exhaust) to see whether the building itself has drifted negative on top of the stack effect.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O7</span><span class="qt">A tenant asks why their lab costs so much more to run than the office suite next door, when both are in the same building on the same chillers. Explain it.</span></div>
+        <p class="model"><em>A strong answer covers</em>The plant is shared, but the air is not. The office recirculates most of its air and only conditions a small fraction of fresh outside air, so a mild day costs almost nothing — it can even economize and cool with fresh air. The lab runs 100% outside air: every cubic foot is heated or cooled from whatever the weather is, used once, and thrown away out the LEF, and its airflow is set by exhaust and hood safety rather than by the thermostat. The ERM buys some of that energy back, but a lab typically runs three to five times the energy per square foot.</p>
+      </div>
+  </section>
+  <section id="s2" style="--accent:var(--red)">
+    <div class="shead"><span class="num">02</span><h2>Life Safety</h2><span class="rule"></span></div>
+    <div class="strip"><span class="striplab">Answer key</span><span class="key"><i>1</i>D</span> <span class="key"><i>2</i>B</span> <span class="key"><i>3</i>A</span> <span class="key"><i>4</i>C</span> <span class="key"><i>5</i>C</span> <span class="key"><i>6</i>B</span> <span class="key"><i>7</i>D</span> <span class="key"><i>8</i>C</span> <span class="key"><i>9</i>A</span> <span class="key"><i>10</i>B</span> <span class="key"><i>11</i>D</span> <span class="key"><i>12</i>A</span> <span class="key"><i>13</i>A</span></div>
+    <h3 class="sub">Multiple choice — with explanations</h3>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q1</span><span class="qt">What is the ‘brain’ that everything in life safety reports to?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The sprinkler riser</li><li class=""><em>B</em>The BMS</li><li class=""><em>C</em>The generator</li><li class="ok"><em>D</em>The FACP — fire alarm control panel</li></ul>
+        <p class="why"><em>Why</em>Every detector and pull station reports to the FACP, and the FACP commands everything else.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q2</span><span class="qt">On an alarm, the FACP does which three things?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Starts the chiller, closes valves, silences horns</li><li class="ok"><em>B</em>Notifies occupants, signals the fire department, commands the zone controls</li><li class=""><em>C</em>Calls the elevator, opens windows, starts the AHU</li><li class=""><em>D</em>Only sounds the horns</li></ul>
+        <p class="why"><em>Why</em>Alert people, bring the fire department, and command the building — smoke control, doors, elevators.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q3</span><span class="qt">Sprinkler heads open…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>One at a time, each triggered by heat right over the fire</li><li class=""><em>B</em>When the pull station is pulled</li><li class=""><em>C</em>Only when the FACP commands them</li><li class=""><em>D</em>All at once like the movies</li></ul>
+        <p class="why"><em>Why</em>Each head is its own heat-activated valve. Movies lie — one head over the fire opens, the rest stay shut.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q4</span><span class="qt">The fire pump’s job is to…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Drain the system</li><li class=""><em>B</em>Fill the tower</li><li class="ok"><em>C</em>Boost water pressure so sprinklers and standpipes get real flow</li><li class=""><em>D</em>Circulate hot water</li></ul>
+        <p class="why"><em>Why</em>City pressure alone often is not enough, especially up high — the fire pump provides the boost.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q5</span><span class="qt">What does the jockey pump do?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Pumps the neutralization tank</li><li class=""><em>B</em>Backs up the fire pump if it fails</li><li class="ok"><em>C</em>Holds system pressure day-to-day so the fire pump only starts on real flow</li><li class=""><em>D</em>Tests the sprinklers weekly</li></ul>
+        <p class="why"><em>Why</em>The little jockey tops up small pressure losses. If pressure drops fast — real flow — the big pump starts, and that start is itself an alarm signal.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q6</span><span class="qt">A floor control valve assembly includes…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>A smoke detector and horn</li><li class="ok"><em>B</em>Valve, tamper switch, flow switch, test &amp; drain</li><li class=""><em>C</em>A PRV and an RPZ</li><li class=""><em>D</em>Just a shutoff valve</li></ul>
+        <p class="why"><em>Why</em>Per floor: an isolation valve (with a tamper switch watching it), a flow switch to detect discharge, and a test &amp; drain to prove it all works.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q7</span><span class="qt">‘Zone control’ in life safety refers to…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The sprinkler floor valves</li><li class=""><em>B</em>Thermostat zones</li><li class=""><em>C</em>The security card readers</li><li class="ok"><em>D</em>Smoke/fire dampers, door release, stair pressurization, elevator recall — commanded by the FACP</li></ul>
+        <p class="why"><em>Why</em>When a zone alarms, the FACP closes its dampers, releases its doors, pressurizes stairs, and recalls elevators.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q8</span><span class="qt">Stair pressurization exists to…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Ventilate the roof</li><li class=""><em>B</em>Cool the stairwells</li><li class="ok"><em>C</em>Keep smoke out of the egress stairs so people can escape</li><li class=""><em>D</em>Dry the sprinkler pipes</li></ul>
+        <p class="why"><em>Why</em>Fans blow air into the stairs so pressure pushes smoke out — the escape path stays clear.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q9</span><span class="qt">Pre-action sprinkler piping is used where…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>An accidental discharge would be unacceptable — it needs detection AND a fused head before water flows</li><li class=""><em>B</em>There are no detectors</li><li class=""><em>C</em>Freezing is impossible</li><li class=""><em>D</em>Water is cheap</li></ul>
+        <p class="why"><em>Why</em>Two independent triggers (detection fills the pipe, heat opens the head) protect spaces where a false discharge would be a disaster.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q10</span><span class="qt">On a utility power loss, the correct sequence is…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Everything transfers instantly with no delay</li><li class="ok"><em>B</em>ATS senses loss → start signal → generator builds the emergency bus → ATSs transfer, life safety first</li><li class=""><em>C</em>Generator builds bus → ATS senses → transfer</li><li class=""><em>D</em>Fire pump starts → generator follows</li></ul>
+        <p class="why"><em>Why</em>Sense → start → build the bus → transfer. Life-safety loads must be live within seconds; standby follows.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q11</span><span class="qt">Why does the generator get a weekly test?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>To charge its battery only</li><li class=""><em>B</em>Code requires daily fuel checks</li><li class=""><em>C</em>To warm the building</li><li class="ok"><em>D</em>Because a generator that has not run is a generator you cannot trust — the test proves the whole start-and-transfer chain</li></ul>
+        <p class="why"><em>Why</em>The weekly run proves it starts, takes load, and the ATSs will have real power to transfer to.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q12</span><span class="qt">Duct detectors exist to…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Detect smoke in the airstream and shut down the AHU so it is not spread through the building</li><li class=""><em>B</em>Sense humidity</li><li class=""><em>C</em>Count filter changes</li><li class=""><em>D</em>Measure airflow</li></ul>
+        <p class="why"><em>Why</em>If smoke gets into the ductwork, the duct detector stops the air handler from distributing it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q13</span><span class="qt">‘Lab exhaust fails safe’ means…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Exhaust keeps running — it is on emergency power, because fume control must never stop</li><li class=""><em>B</em>It only runs during business hours</li><li class=""><em>C</em>It shuts off in a fire</li><li class=""><em>D</em>It reverses direction</li></ul>
+        <p class="why"><em>Why</em>Fume hoods and lab exhaust are life safety for the people at the bench — they ride the generator and never stop.</p>
+      </div>
+    <h3 class="sub">Open questions — model answers</h3>
+    <p class="note">These are guides, not scripts. Credit any answer that gets the mechanism right, in the new hire&#8217;s own words.</p>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O1</span><span class="qt">A smoke detector activates on the third floor. Walk the first sixty seconds — name everything the FACP commands.</span></div>
+        <p class="model"><em>A strong answer covers</em>The detector reports to the FACP. It sounds horns and strobes, signals the fire department through monitoring, and commands the zone: smoke/fire dampers close, held-open doors release, stair pressurization fans start, elevators recall to the safe floor, and the AHU shuts down or flips to smoke mode.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O2</span><span class="qt">Explain wet, dry, and pre-action piping — and give a space where each one belongs.</span></div>
+        <p class="model"><em>A strong answer covers</em>Wet pipe is water-filled and simplest — most occupied spaces. Dry pipe holds air and fills only on discharge — spaces that can freeze, like a parking garage or loading dock. Pre-action needs detection AND a fused head before water flows — spaces where an accidental discharge is unacceptable, like an electrical room or server room.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O3</span><span class="qt">One sprinkler head opens over a fire. Why does the fire pump start — and what was the jockey pump doing before this?</span></div>
+        <p class="model"><em>A strong answer covers</em>The jockey had been holding system pressure, topping up small losses. A head opening dumps pressure faster than the jockey can keep up, so the fire pump controller sees the drop and starts the big pump — and that pressure drop and flow are themselves alarm signals to the FACP.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O4</span><span class="qt">Explain zone control to a tenant: what physically happens on their floor during an alarm?</span></div>
+        <p class="model"><em>A strong answer covers</em>Their floor is a zone. On alarm, its smoke dampers close to hold the smoke in that compartment, magnetically-held doors release and swing shut, the stair pressurization fans keep their escape stairs clear, and the elevators stop serving the floor and recall — all commanded automatically by the fire alarm panel.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O5</span><span class="qt">Utility power just dropped. Describe the whole generator/ATS sequence until the building is back to normal.</span></div>
+        <p class="model"><em>A strong answer covers</em>Each ATS senses the loss and sends the start signal; the generator comes up to speed and voltage and builds the emergency bus in about ten seconds; the ATSs transfer their loads onto it, life safety first, standby after. When the utility returns and holds, the ATSs retransfer on a delay, and the generator runs unloaded to cool down, then stops.</p>
+      </div>
+  </section>
+  <section id="s3" style="--accent:var(--blue)">
+    <div class="shead"><span class="num">03</span><h2>Plumbing</h2><span class="rule"></span></div>
+    <div class="strip"><span class="striplab">Answer key</span><span class="key"><i>1</i>D</span> <span class="key"><i>2</i>B</span> <span class="key"><i>3</i>B</span> <span class="key"><i>4</i>A</span> <span class="key"><i>5</i>D</span> <span class="key"><i>6</i>B</span> <span class="key"><i>7</i>C</span> <span class="key"><i>8</i>A</span> <span class="key"><i>9</i>A</span> <span class="key"><i>10</i>C</span> <span class="key"><i>11</i>D</span> <span class="key"><i>12</i>C</span> <span class="key"><i>13</i>B</span> <span class="key"><i>14</i>A</span></div>
+    <h3 class="sub">Multiple choice — with explanations</h3>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q1</span><span class="qt">RPZ stands for…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Reverse Pipe Zone</li><li class=""><em>B</em>Rapid Pressure Zone</li><li class=""><em>C</em>Regulated Potable Zone</li><li class="ok"><em>D</em>Reduced Pressure Zone</li></ul>
+        <p class="why"><em>Why</em>Reduced Pressure Zone: two checks in series with a relief valve keeping the middle zone at lower pressure — the highest level of backflow protection.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q2</span><span class="qt">What is an RPZ actually protecting?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The building’s fixtures</li><li class="ok"><em>B</em>The city’s drinking water, from anything flowing backward out of the building</li><li class=""><em>C</em>The water heater</li><li class=""><em>D</em>The booster pump</li></ul>
+        <p class="why"><em>Why</em>Backflow protection is about everyone outside the building — nothing in here may ever siphon back into the public main.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q3</span><span class="qt">The rule for potable vs non-potable piping is…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Potable is always bigger pipe</li><li class="ok"><em>B</em>Never cross-connected — non-potable runs on its own marked, labeled piping</li><li class=""><em>C</em>Non-potable is always underground</li><li class=""><em>D</em>They can share pipe if labeled</li></ul>
+        <p class="why"><em>Why</em>Two systems, never connected. The non-potable side is kept separate, marked, and labeled.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q4</span><span class="qt">The moment potable water crosses an RPZ into a mechanical system, it…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Becomes non-potable</li><li class=""><em>B</em>Becomes distilled</li><li class=""><em>C</em>Must be heated</li><li class=""><em>D</em>Stays potable</li></ul>
+        <p class="why"><em>Why</em>Once it is on the far side feeding a loop, a tower, or an RO/DI skid, it is non-potable from that point on — and the RPZ keeps it from ever coming back.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q5</span><span class="qt">Cooling tower make-up water can be fed by…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Sanitary grey water untreated</li><li class=""><em>B</em>Storm water directly</li><li class=""><em>C</em>The chilled water loop</li><li class="ok"><em>D</em>Reclaimed / non-potable where available, or potable through a PRV + RPZ</li></ul>
+        <p class="why"><em>Why</em>Either grade works — what is non-negotiable is the backflow protection on any potable feed.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q6</span><span class="qt">Why store domestic hot water at ~140°F but deliver ~120°F?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>To save energy</li><li class="ok"><em>B</em>Hot storage controls Legionella; the mixing valve tempers it down to a safe delivery temperature</li><li class=""><em>C</em>Code bans hot water above 120°F everywhere</li><li class=""><em>D</em>Pipes cannot handle 140°F</li></ul>
+        <p class="why"><em>Why</em>Store and circulate hot enough to keep Legionella from growing, temper at the mixing valve so no one gets scalded.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q7</span><span class="qt">The recirc loop exists so that…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The heater lasts longer</li><li class=""><em>B</em>Cold water arrives faster</li><li class="ok"><em>C</em>Hot water is hot at every tap and never sits in warm dead legs where Legionella grows</li><li class=""><em>D</em>Pressure stays constant</li></ul>
+        <p class="why"><em>Why</em>Moving water stays hot and safe; still, lukewarm water in dead legs is the Legionella risk.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q8</span><span class="qt">The vent stack’s job is to…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Let air in and sewer gas out so drains flow and traps keep their seal</li><li class=""><em>B</em>Catch rainwater</li><li class=""><em>C</em>Cool the sanitary line</li><li class=""><em>D</em>Exhaust lab fumes</li></ul>
+        <p class="why"><em>Why</em>Without vents, drains gurgle and traps siphon dry — then sewer gas walks right in.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q9</span><span class="qt">A P-trap works by…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Holding a water seal that blocks sewer gas from coming up the drain</li><li class=""><em>B</em>A rubber flap</li><li class=""><em>C</em>A spring-loaded valve</li><li class=""><em>D</em>Air pressure</li></ul>
+        <p class="why"><em>Why</em>That U of standing water is the whole trick — which is why a dry trap in an unused floor drain smells.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q10</span><span class="qt">Corrosive lab waste reaches the sewer by…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The storm leader</li><li class=""><em>B</em>Regular PVC drain straight out</li><li class="ok"><em>C</em>Acid-resistant piping to a neutralization tank, pH corrected first, then sanitary</li><li class=""><em>D</em>Evaporation</li></ul>
+        <p class="why"><em>Why</em>Neutralize before the sewer — the tank brings pH into the safe range before discharge.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q11</span><span class="qt">The RO/DI system is fed by…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The hot water loop</li><li class=""><em>B</em>Condensate</li><li class=""><em>C</em>Non-potable reclaimed water</li><li class="ok"><em>D</em>Potable water through its own RPZ, producing lab process water on dedicated piping</li></ul>
+        <p class="why"><em>Why</em>Potable in through an RPZ; ultra-pure process water out on its own piping to the labs.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q12</span><span class="qt">Roof drains discharge to…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The cooling tower</li><li class=""><em>B</em>Sanitary, like everything else</li><li class="ok"><em>C</em>The storm system — completely separate piping from sanitary</li><li class=""><em>D</em>The neutralization tank</li></ul>
+        <p class="why"><em>Why</em>Rain and only rain goes to storm — a separate system that typically discharges untreated to waterways.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q13</span><span class="qt">A loading-dock drain routes…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>To the roof</li><li class="ok"><em>B</em>Through an oil/water separator, then to sanitary — never storm</li><li class=""><em>C</em>Straight to storm since it is outdoors</li><li class=""><em>D</em>Into the RO/DI feed</li></ul>
+        <p class="why"><em>Why</em>Fuel and oil drips make it ‘touched something’ — separator traps the oil, only the water continues to sanitary.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q14</span><span class="qt">Cooling tower blowdown goes to…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Sanitary — it carries treatment chemicals and concentrated solids</li><li class=""><em>B</em>Storm — it is just water</li><li class=""><em>C</em>Back into the make-up line</li><li class=""><em>D</em>The irrigation system</li></ul>
+        <p class="why"><em>Why</em>Biocides and concentrated minerals mean sanitary, often through an air gap and under a discharge permit. Never storm.</p>
+      </div>
+    <h3 class="sub">Open questions — model answers</h3>
+    <p class="note">These are guides, not scripts. Credit any answer that gets the mechanism right, in the new hire&#8217;s own words.</p>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O1</span><span class="qt">Trace a drop of city water to a lab faucet — name every device it passes and what each one does.</span></div>
+        <p class="model"><em>A strong answer covers</em>Through the meter (measurement and the main shutoff), the RPZ backflow preventer (protects the city supply), the PRV (drops street pressure to a safe level), and the booster pump (pressure for the upper floors) — then out through the cold distribution to the fixture; the hot side adds the water heater, recirc loop, and mixing valve.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O2</span><span class="qt">Explain the potable / non-potable rule, and what crossing the RPZ means — use tower make-up as your example.</span></div>
+        <p class="model"><em>A strong answer covers</em>Potable serves people, non-potable serves machines, and the two are never cross-connected. Tower make-up can come from reclaimed water, or from potable — but the moment potable passes through the PRV + RPZ toward the tower, it is non-potable from that point on, and the RPZ guarantees it can never flow back.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O3</span><span class="qt">Why store hot water at about 140°F, deliver it at about 120°F, and keep it moving? Name the risk each part manages.</span></div>
+        <p class="model"><em>A strong answer covers</em>Storing and circulating at 140°F keeps Legionella from growing; the recirc loop prevents warm, stagnant dead legs where it breeds; and the mixing valve tempers delivery to about 120°F so nobody is scalded. Hot enough to be safe from bacteria, cool enough to be safe on skin.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O4</span><span class="qt">Four drains: a restroom sink, a lab sink, a loading-dock trench drain, and a roof drain. Where does each go, and why?</span></div>
+        <p class="model"><em>A strong answer covers</em>Restroom sink: trap, then sanitary. Lab sink: acid-resistant pipe to the neutralization tank, pH corrected, then sanitary. Dock drain: through the oil/water separator, then sanitary — oil never goes to either sewer directly. Roof drain: rain and only rain, so it runs on the storm system, completely separate from sanitary.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O5</span><span class="qt">You find an RPZ discharging water from its relief port. What is it telling you, and what do you check?</span></div>
+        <p class="model"><em>A strong answer covers</em>The relief valve dumps whenever the middle zone cannot stay below supply pressure — so either a check valve is fouled or a real backflow condition occurred. It is doing its job, not failing. Check the checks for debris, verify pressures, and get it tested — never plug the relief port.</p>
+      </div>
+  </section>
+  <section id="s4" style="--accent:var(--amber)">
+    <div class="shead"><span class="num">04</span><h2>Electrical</h2><span class="rule"></span></div>
+    <div class="strip"><span class="striplab">Answer key</span><span class="key"><i>1</i>B</span> <span class="key"><i>2</i>A</span> <span class="key"><i>3</i>A</span> <span class="key"><i>4</i>D</span> <span class="key"><i>5</i>D</span> <span class="key"><i>6</i>D</span> <span class="key"><i>7</i>A</span> <span class="key"><i>8</i>C</span> <span class="key"><i>9</i>C</span> <span class="key"><i>10</i>C</span> <span class="key"><i>11</i>C</span> <span class="key"><i>12</i>A</span> <span class="key"><i>13</i>A</span> <span class="key"><i>14</i>B</span> <span class="key"><i>15</i>D</span> <span class="key"><i>16</i>D</span> <span class="key"><i>17</i>C</span> <span class="key"><i>18</i>B</span> <span class="key"><i>19</i>B</span> <span class="key"><i>20</i>B</span> <span class="key"><i>21</i>A</span> <span class="key"><i>22</i>B</span></div>
+    <h3 class="sub">Multiple choice — with explanations</h3>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q1</span><span class="qt">After the utility transformer, the building’s working voltage is…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>120V</li><li class="ok"><em>B</em>480V</li><li class=""><em>C</em>208V</li><li class=""><em>D</em>13,800V</li></ul>
+        <p class="why"><em>Why</em>The transformer steps medium voltage down to 480V — the backbone everything else hangs from.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q2</span><span class="qt">Lighting typically runs at ___ and receptacles at ___…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>277V / 120V via step-down transformers</li><li class=""><em>B</em>480V / 277V</li><li class=""><em>C</em>120V / 480V</li><li class=""><em>D</em>208V / 480V</li></ul>
+        <p class="why"><em>Why</em>277V lighting comes straight off the 480 system; small dry-type transformers make 208/120V for receptacle panels.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q3</span><span class="qt">The breaker hierarchy, big to small, is…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Main → feeder → branch</li><li class=""><em>B</em>They are all the same size</li><li class=""><em>C</em>Feeder → main → branch</li><li class=""><em>D</em>Branch → feeder → main</li></ul>
+        <p class="why"><em>Why</em>Main at the service, feeders in the switchgear, branch breakers in every panel — each protects the wiring downstream of it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q4</span><span class="qt">You find a tripped branch breaker. The rule is…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Tape it on</li><li class=""><em>B</em>Reset it repeatedly until it holds</li><li class=""><em>C</em>Replace it immediately</li><li class="ok"><em>D</em>Investigate, reset once, and never hold one in against a fault</li></ul>
+        <p class="why"><em>Why</em>A trip is information. One reset after looking for a cause; if it trips again, something is wrong — escalate, don’t fight it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q5</span><span class="qt">An ATS has…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>No moving parts</li><li class=""><em>B</em>One input and two outputs</li><li class=""><em>C</em>Three inputs</li><li class="ok"><em>D</em>Two inputs — normal and emergency — and one output</li></ul>
+        <p class="why"><em>Why</em>It watches both sources and connects its loads to whichever should be live.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q6</span><span class="qt">On utility loss, the correct sequence is…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>UPS starts the generator</li><li class=""><em>B</em>Generator builds bus, then ATS notices</li><li class=""><em>C</em>Everything shuts down safely</li><li class="ok"><em>D</em>ATS senses loss → sends start signal → generator builds the emergency bus → ATSs transfer, life safety first</li></ul>
+        <p class="why"><em>Why</em>Sense → start signal → bus builds in ~10 seconds → transfer. Life safety must be live within seconds; standby follows.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q7</span><span class="qt">When the utility returns and holds steady…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>ATSs retransfer after a time delay, then the generator runs unloaded to cool down and stops</li><li class=""><em>B</em>The generator stops instantly</li><li class=""><em>C</em>Everything must be reset by hand</li><li class=""><em>D</em>The emergency bus stays live forever</li></ul>
+        <p class="why"><em>Why</em>Retransfer on a delay (to be sure the utility is stable), then a cool-down run — back to normal automatically.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q8</span><span class="qt">The UPS exists because…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Generators are unreliable</li><li class=""><em>B</em>Code requires it everywhere</li><li class="ok"><em>C</em>Some loads cannot ride even the ~10 seconds the generator needs — batteries bridge the gap with no blink</li><li class=""><em>D</em>It is cheaper than a generator</li></ul>
+        <p class="why"><em>Why</em>Lab instruments, the BMS, and servers sit behind the UPS so they never see the transfer gap at all.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q9</span><span class="qt">A red receptacle in a lab means…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Do not use</li><li class=""><em>B</em>High voltage</li><li class="ok"><em>C</em>Generator-backed standby power — plug critical equipment like -80 freezers there</li><li class=""><em>D</em>Isolated ground only</li></ul>
+        <p class="why"><em>Why</em>Red outlets ride the emergency/standby system, so what is plugged in survives an outage.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q10</span><span class="qt">A VFD’s job is to…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Boost voltage</li><li class=""><em>B</em>Protect against lightning</li><li class="ok"><em>C</em>Vary motor speed so pumps and fans sip power at part load</li><li class=""><em>D</em>Convert AC to DC permanently</li></ul>
+        <p class="why"><em>Why</em>Most HVAC motors rarely need full speed — the VFD slows them down and the energy savings are huge.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q11</span><span class="qt">An MCC is…</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>A type of breaker</li><li class=""><em>B</em>The main utility meter</li><li class="ok"><em>C</em>A motor control center — the starters and controls for pumps and fans gathered in one lineup</li><li class=""><em>D</em>A UPS cabinet</li></ul>
+        <p class="why"><em>Why</em>One organized lineup holding the starters, overloads, and disconnects for the mechanical equipment.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q12</span><span class="qt">The arc flash rule for a new engineer is…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Never open, reset, or work in energized gear until trained and authorized — respect the labels, prove dead with LOTO</li><li class=""><em>B</em>Rubber-soled shoes make it safe</li><li class=""><em>C</em>Panels are safe if the door is closed tight</li><li class=""><em>D</em>Arc flash only happens at medium voltage</li></ul>
+        <p class="why"><em>Why</em>Arc-flash labels state the hazard and PPE. Until you are trained and authorized: hands off energized gear, and LOTO proves dead.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q13</span><span class="qt">An EPO button in a lab…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Kills power to that lab instantly — for emergencies only, know where they are</li><li class=""><em>B</em>Starts the generator</li><li class=""><em>C</em>Silences alarms</li><li class=""><em>D</em>Calls security</li></ul>
+        <p class="why"><em>Why</em>Emergency Power Off drops the lab’s power at once. Know the locations; never lean equipment against them.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q14</span><span class="qt">You walk into the generator room and the set is running. The building is completely normal. What do you read first?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The fuel level</li><li class="ok"><em>B</em>The ATS position — Normal or Emergency</li><li class=""><em>C</em>The oil pressure gauge</li><li class=""><em>D</em>Nothing; shut it down, it should not be running</li></ul>
+        <p class="why"><em>Why</em>A running generator is not information. The ATS position is the diagnostic: on Emergency, that generator is the building's power. On Normal, it is exercising, cooling down, or being tested. The engine is never the thing you look at first.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q15</span><span class="qt">Generator running, ATS on Normal, engine unloaded, a timer counting down on the controller. What is happening?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The generator is stuck on</li><li class=""><em>B</em>A utility outage</li><li class=""><em>C</em>An ATS failure</li><li class="ok"><em>D</em>A no-load exercise or a cool-down after retransfer — leave it alone</li></ul>
+        <p class="why"><em>Why</em>Both are normal, scheduled states in which the building never notices. During a no-load exercise the building is perfectly fine by design, which is exactly why people misread it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q16</span><span class="qt">Why must a hot turbocharged diesel run unloaded for a cool-down before it stops?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>To let the ATS retransfer</li><li class=""><em>B</em>To recharge the batteries</li><li class=""><em>C</em>To burn off remaining fuel</li><li class="ok"><em>D</em>Oil cokes in the turbo bearing if it is shut down hot — the damage shows up later, not today</li></ul>
+        <p class="why"><em>Why</em>Cutting the cool-down does not fail the generator now. It fails it on the night you need it. Stopping a generator mid cool-down is not a harmless act.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q17</span><span class="qt">A coworker presses the generator E-stop because he thinks it should not be running. What is the state of that generator now?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Unchanged</li><li class=""><em>B</em>Back in AUTO, ready to start</li><li class="ok"><em>C</em>In lockout — it needs a manual reset at the panel, so it is genuinely unavailable</li><li class=""><em>D</em>Running in standby</li></ul>
+        <p class="why"><em>Why</em>An E-stop locks the set out until somebody resets it by hand. The generator that merely looked wrong is now actually unable to answer an outage.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q18</span><span class="qt">During a real utility outage, which of these is riding on the emergency bus that a generator shutdown would drop?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Nothing until the UPS drains</li><li class="ok"><em>B</em>Egress lighting, fire alarm, fire pump, elevator recall, and lab exhaust</li><li class=""><em>C</em>Only the lobby lights</li><li class=""><em>D</em>Only office receptacles</li></ul>
+        <p class="why"><em>Why</em>Lab exhaust fails safe onto emergency power precisely so containment survives a blackout. Life safety transfers first, then standby loads like exhaust, freezers and cold rooms.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q19</span><span class="qt">You did not start the generator, and you cannot tell why it is running. What do you do?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Switch the controller out of AUTO</li><li class="ok"><em>B</em>Leave it running and find the person who started it</li><li class=""><em>C</em>Press the E-stop to be safe</li><li class=""><em>D</em>Stop it, then investigate</li></ul>
+        <p class="why"><em>Why</em>The person who starts a generator is the person who stops it. It is running because somebody put it there for a reason you do not yet know. Find the technician, the vendor, the on-call engineer, or the supervisor who authorized the test.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q20</span><span class="qt">Which lamp on an ATS door tells you the switch will not transfer by itself?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Emergency Source Available</li><li class="ok"><em>B</em>Not In Auto</li><li class=""><em>C</em>Normal Source Available</li><li class=""><em>D</em>Load on Normal</li></ul>
+        <p class="why"><em>Why</em>Not In Auto is the single most important light on the door. Source Available lamps tell you what power exists; Load On lamps tell you where the load is. Those are different questions, and neither one says the switch will act.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q21</span><span class="qt">An ATS shows Emergency Source Available and Load on Normal. What does that mean?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>The generator is running and its power is there, but the load has not transferred</li><li class=""><em>B</em>The utility is gone</li><li class=""><em>C</em>The generator has failed</li><li class=""><em>D</em>The building is on generator power</li></ul>
+        <p class="why"><em>Why</em>Two lamps answer two different questions. Source Available means the power exists at the switch. Load On tells you which source is actually carrying the building. During a no-load exercise this is exactly what you would see.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q22</span><span class="qt">Where do you read an ATS position?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>On the BMS graphic</li><li class="ok"><em>B</em>At the switch — controller screen, lamps, and the mechanical position indicator, read from the front without opening the door</li><li class=""><em>C</em>From the generator controller</li><li class=""><em>D</em>From the panel schedule</li></ul>
+        <p class="why"><em>Why</em>The BMS shows a point somebody mapped; the ATS shows what the contacts did. Read it from the front, through the window and off the labels. The arc-flash label on that enclosure governs.</p>
+      </div>
+    <h3 class="sub">Open questions — model answers</h3>
+    <p class="note">These are guides, not scripts. Credit any answer that gets the mechanism right, in the new hire&#8217;s own words.</p>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O1</span><span class="qt">You find the generator running. List, in order, what you read before touching anything — and name every reason the generator might legitimately be running.</span></div>
+        <p class="model"><em>A strong answer covers</em>Read five things, in order: (1) the ATS (Automatic Transfer Switch) position, Normal or Emergency — read at the switch itself: the controller screen, the Source Available and Load On lamps, the Not-In-Auto lamp, the mechanical position indicator, and on a bypass-isolation unit the bypass and isolation handle positions, all from the front without opening the door; if Emergency, that generator is the building's power. (2) The utility: volts on all three legs, or not. (3) Who started it — and was it you? The person who starts a generator is the person who stops it. If you did not start it, you do not stop it; go find whoever did. (4) The controller mode: AUTO, exercise running, cool-down timer counting, or not in AUTO. (5) The schedule and the work orders. Legitimate reasons it runs: a utility outage; a utility anomaly such as a brownout, single-phasing or a frequency excursion; the weekly no-load exercise; a monthly loaded test; an annual load bank test; a cool-down after retransfer; a manual start by a technician; the ATS test switch simulating an outage; peak shaving or demand response if the site is enrolled. The tenth possibility is a sensing fault — a drifted voltage relay, a loose neutral, a failed phase monitor — where the utility is fine but the ATS believes otherwise, and that one you investigate. In six of those ten the building is completely normal, which is why looking at the building tells you nothing. You stop a running generator for exactly one reason: a genuine emergency in front of you.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O2</span><span class="qt">Trace power from the street to a lab receptacle — name every transformation and breaker on the way.</span></div>
+        <p class="model"><em>A strong answer covers</em>Utility medium voltage into the transformer, stepped to 480V; through the main breaker and a feeder breaker in the switchgear; to a distribution panel, through a dry-type step-down transformer making 208/120V; then a branch breaker in the receptacle panel feeds the outlet.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O3</span><span class="qt">The building goes dark for ten seconds and comes back. Explain what happened — and why the −80 freezers and the BMS never noticed.</span></div>
+        <p class="model"><em>A strong answer covers</em>Utility dropped; the ATSs sensed it and signaled the generator, which built the emergency bus in about ten seconds, and the ATSs transferred — that was the gap. The freezers rode it out on generator-backed red-outlet circuits, and the BMS never blinked at all because it sits behind the UPS, whose batteries covered the seconds the generator needed.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O4</span><span class="qt">Explain the breaker hierarchy and the reset-once rule — why not just keep resetting a breaker that trips?</span></div>
+        <p class="model"><em>A strong answer covers</em>Main at the service, feeders in the switchgear, branch breakers in the panels — each protects the wiring downstream of it. A trip means overload or fault; you investigate, reset once, and if it trips again something is genuinely wrong. Repeated resetting or holding a breaker in feeds energy into a fault — that is how equipment burns and arc flash happens.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O5</span><span class="qt">Sort these onto normal, generator/standby, and UPS power, with reasoning: hallway lighting, lab exhaust fans, a −80 freezer, the BMS servers, general receptacles.</span></div>
+        <p class="model"><em>A strong answer covers</em>Hallway lighting and general receptacles: normal (egress lighting specifically is on emergency). Lab exhaust and the −80 freezer: generator/standby — they must survive an outage but can ride the ten-second gap. The BMS servers: UPS — they cannot tolerate even a blink, then the generator carries them long-term.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O6</span><span class="qt">You need to open a panel to work on a circuit. Walk the safety steps before you touch anything.</span></div>
+        <p class="model"><em>A strong answer covers</em>Read the arc-flash label for the hazard level and required PPE. Identify and open the upstream disconnect, apply your lock and tag (LOTO), then verify dead with a tester — live-dead-live. Only trained and authorized people work in energized gear; until it is proven dead, treat every conductor as live.</p>
+      </div>
+  </section>
+  <section id="s5" style="--accent:var(--violet)">
+    <div class="shead"><span class="num">05</span><h2>BMS</h2><span class="rule"></span></div>
+    <div class="strip"><span class="striplab">Answer key</span><span class="key"><i>1</i>B</span> <span class="key"><i>2</i>C</span> <span class="key"><i>3</i>D</span> <span class="key"><i>4</i>A</span> <span class="key"><i>5</i>B</span> <span class="key"><i>6</i>C</span> <span class="key"><i>7</i>A</span> <span class="key"><i>8</i>C</span> <span class="key"><i>9</i>C</span> <span class="key"><i>10</i>D</span> <span class="key"><i>11</i>B</span> <span class="key"><i>12</i>C</span> <span class="key"><i>13</i>B</span> <span class="key"><i>14</i>A</span> <span class="key"><i>15</i>B</span> <span class="key"><i>16</i>B</span> <span class="key"><i>17</i>C</span> <span class="key"><i>18</i>A</span> <span class="key"><i>19</i>C</span> <span class="key"><i>20</i>B</span> <span class="key"><i>21</i>D</span> <span class="key"><i>22</i>A</span> <span class="key"><i>23</i>D</span> <span class="key"><i>24</i>B</span> <span class="key"><i>25</i>A</span> <span class="key"><i>26</i>D</span> <span class="key"><i>27</i>C</span> <span class="key"><i>28</i>A</span> <span class="key"><i>29</i>B</span> <span class="key"><i>30</i>D</span> <span class="key"><i>31</i>A</span> <span class="key"><i>32</i>A</span> <span class="key"><i>33</i>D</span> <span class="key"><i>34</i>D</span> <span class="key"><i>35</i>C</span></div>
+    <h3 class="sub">Multiple choice — with explanations</h3>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q1</span><span class="qt">A BMS controller does not make heat or cold. What does it actually do?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>It generates chilled water</li><li class="ok"><em>B</em>It decides when equipment runs and how far valves and dampers open</li><li class=""><em>C</em>It replaces the electrician</li><li class=""><em>D</em>It powers the fans</li></ul>
+        <p class="why"><em>Why</em>The plant makes heat and cold; the BMS decides when equipment runs and how far each valve, damper, and drive is driven. A BMS in alarm is telling you about equipment, not about itself.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q2</span><span class="qt">What are the three parts of every control loop?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Panel, breaker, motor</li><li class=""><em>B</em>Chiller, pump, tower</li><li class="ok"><em>C</em>Sensor, controller, actuator</li><li class=""><em>D</em>Alarm, trend, schedule</li></ul>
+        <p class="why"><em>Why</em>A sensor measures, a controller compares the measurement to setpoint, an actuator changes something. Then the sensor measures again. That circle is the loop.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q3</span><span class="qt">The measured value the controller reads is called the…</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Deadband</li><li class=""><em>B</em>Output</li><li class=""><em>C</em>Setpoint</li><li class="ok"><em>D</em>Process variable</li></ul>
+        <p class="why"><em>Why</em>Setpoint is what you want. Process variable is what you have. The difference between them is the error, and the controller works to drive the error to zero.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q4</span><span class="qt">A valve is hunting — swinging open and closed and never settling. Most likely cause?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Loop tuning: too much gain, or integral wound up</li><li class=""><em>B</em>Wrong voltage at the actuator</li><li class=""><em>C</em>The sensor is unplugged</li><li class=""><em>D</em>The schedule is off</li></ul>
+        <p class="why"><em>Why</em>Hunting is a tuning symptom. Excess proportional gain overreacts to small errors; too much integral keeps pushing after the error is gone. It stresses the actuator and wears the valve.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q5</span><span class="qt">What is a deadband, and why does it exist?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The range a sensor cannot read</li><li class="ok"><em>B</em>A range around setpoint where nothing is commanded — it stops equipment short-cycling</li><li class=""><em>C</em>The time a controller stays offline</li><li class=""><em>D</em>A network fault</li></ul>
+        <p class="why"><em>Why</em>Without a deadband the equipment would chase every fraction of a degree. The deadband is what stops the heating and cooling from fighting each other around the same setpoint.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q6</span><span class="qt">A point reads Commanded: ON — Status: OFF. What have you learned?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Nothing — they always differ</li><li class=""><em>B</em>The sensor is broken</li><li class="ok"><em>C</em>The BMS asked, and the equipment did not answer. Investigate the equipment, not the graphic</li><li class=""><em>D</em>The setpoint is wrong</li></ul>
+        <p class="why"><em>Why</em>Command is what the BMS asked for. Status is proof it happened, usually from a current switch or an auxiliary contact. Command without status is a real fault, and it is the single most useful pair of points on any graphic.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q7</span><span class="qt">A temperature point has been reading exactly 55.0°F for three days. What is that?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>A stale point — communication is lost or the sensor is failed. Never trust a flat line</li><li class=""><em>B</em>A deadband</li><li class=""><em>C</em>Perfect control</li><li class=""><em>D</em>A schedule change</li></ul>
+        <p class="why"><em>Why</em>Real sensors wiggle. A perfectly flat value is a sensor that stopped reporting or a controller that stopped talking. The trend is what exposes it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q8</span><span class="qt">What does an interlock or permissive do?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Locks the front-end screen</li><li class=""><em>B</em>Sends the alarm email</li><li class="ok"><em>C</em>Prevents equipment from starting until safe conditions are proven</li><li class=""><em>D</em>Ties two setpoints together</li></ul>
+        <p class="why"><em>Why</em>The chiller does not start until flow is proven; the fan does not start with a closed damper. An interlock is a condition, not a suggestion — never defeat one to make an alarm go away.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q9</span><span class="qt">Where does the fire alarm sit relative to the BMS?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>The BMS controls the fire alarm</li><li class=""><em>B</em>The BMS silences alarms</li><li class="ok"><em>C</em>The FACP is a stand-alone system. The BMS may monitor it, but it does not control it</li><li class=""><em>D</em>They are the same panel</li></ul>
+        <p class="why"><em>Why</em>Life safety is stand-alone by code. The FACP commands dampers, fans, and elevators directly. The BMS may watch, and hardwired interlocks always beat a software command.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q10</span><span class="qt">Why does the BMS sit behind a UPS?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>So it can run the elevators</li><li class=""><em>B</em>To save energy</li><li class=""><em>C</em>To reduce alarms</li><li class="ok"><em>D</em>So it never sees the ten-second gap before the generator picks up</li></ul>
+        <p class="why"><em>Why</em>If the BMS rebooted during every transfer, the building would lose its controls exactly when it most needs them. The BMS rides through on the UPS.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q11</span><span class="qt">An operator leaves a point in Hand / Override. What is the consequence?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>The point is deleted</li><li class="ok"><em>B</em>The BMS no longer controls it — schedules, resets, and alarms are all bypassed</li><li class=""><em>C</em>It improves control</li><li class=""><em>D</em>Nothing, it reverts at midnight</li></ul>
+        <p class="why"><em>Why</em>An override is a promise to come back. Overrides left in place are the single most common cause of 'the BMS is broken' calls — and of unexplained energy use.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q12</span><span class="qt">What is a reset schedule (for example, outdoor-air reset)?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Rebooting a controller on a timer</li><li class=""><em>B</em>A calendar of holidays</li><li class="ok"><em>C</em>A setpoint that slides automatically with a measured condition</li><li class=""><em>D</em>Clearing the alarm log</li></ul>
+        <p class="why"><em>Why</em>Hot-water supply temperature rises as it gets colder outside; static pressure or DP setpoints fall when valves are mostly closed. Reset schedules are among the biggest energy levers a BMS has.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q13</span><span class="qt">BACnet MS/TP and BACnet/IP are…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Alarm classes</li><li class="ok"><em>B</em>Communication protocols — a shared language on the field bus and over the network</li><li class=""><em>C</em>Sensor types</li><li class=""><em>D</em>Two brands of controller</li></ul>
+        <p class="why"><em>Why</em>Protocols let controllers from different manufacturers talk. MS/TP runs on a twisted-pair field bus; BACnet/IP runs over the building network. Modbus and LON are others you will meet.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q14</span><span class="qt">The four basic point types on a controller are…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>AI, AO, BI, BO — analog and binary, in and out</li><li class=""><em>B</em>Alarm, trend, schedule, graphic</li><li class=""><em>C</em>Sensor, valve, damper, fan</li><li class=""><em>D</em>P, I, D, and E</li></ul>
+        <p class="why"><em>Why</em>Analog Input reads a varying signal (a temperature). Analog Output drives a varying signal (a valve). Binary Input reads on/off (a status contact). Binary Output commands on/off (a start relay).</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q15</span><span class="qt">Before you change a setpoint on the graphic, what should you do first?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Put the point in Hand</li><li class="ok"><em>B</em>Look at the trend — understand what the system has actually been doing</li><li class=""><em>C</em>Reboot the controller</li><li class=""><em>D</em>Silence the alarm</li></ul>
+        <p class="why"><em>Why</em>Trend before you touch. A setpoint change made blind fixes a symptom on one screen and creates a problem on another. The trend is the only place the system tells you its history.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q16</span><span class="qt">A damper actuator is spring return, normally closed. On loss of power it will…</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Alarm and hold</li><li class="ok"><em>B</em>Drive closed</li><li class=""><em>C</em>Drive open</li><li class=""><em>D</em>Stay where it was</li></ul>
+        <p class="why"><em>Why</em>Fail position is a design decision, not an accident. Outside-air dampers usually fail closed to protect coils from freezing; some safety dampers fail open. Know which is which before winter.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q17</span><span class="qt">What is cascade control, in plain terms?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Two alarms in a row</li><li class=""><em>B</em>A backup controller</li><li class="ok"><em>C</em>One loop's output becomes another loop's setpoint</li><li class=""><em>D</em>A network topology</li></ul>
+        <p class="why"><em>Why</em>A room-temperature loop sets the supply-air temperature setpoint, and a second loop drives the valve to hit that. The slow loop steers the fast one.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q18</span><span class="qt">A nuisance alarm floods the log every few minutes. The right response is to…</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Find the cause — a bad sensor, a too-tight limit, or a real fault — not to disable the alarm</li><li class=""><em>B</em>Widen every limit</li><li class=""><em>C</em>Ignore the log</li><li class=""><em>D</em>Delete the alarm</li></ul>
+        <p class="why"><em>Why</em>Alarm fatigue is a safety issue: when everything alarms, nothing does. Fix the cause or retune the limit deliberately, and record why.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q19</span><span class="qt">A modulating chilled-water valve has sat at 100% open for four days. No alarm has fired. What is going on?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Perfect control</li><li class=""><em>B</em>The valve is in Hand</li><li class="ok"><em>C</em>The loop has saturated — it is asking for everything it has and still missing setpoint</li><li class=""><em>D</em>Nothing, that is normal for summer</li></ul>
+        <p class="why"><em>Why</em>A device built to modulate is supposed to move. Pinned at 100% (or 0%) means the load exceeds capacity, a sensor is lying, or the setpoint is unachievable. It rarely alarms, because nothing crossed a limit — the controller is simply trying its hardest. You find out on the first hot day when there is no reserve left.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q20</span><span class="qt">A tenant calls about a warm room. What do you do first?</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>Change the space setpoint</li><li class="ok"><em>B</em>Open the BMS: schedule, alarms, trends, command vs status, any overrides</li><li class=""><em>C</em>Reset the controller</li><li class=""><em>D</em>Walk to the AHU</li></ul>
+        <p class="why"><em>Why</em>Every troubleshooting call and operational check starts at the BMS. You should arrive at the equipment with a hypothesis, not a flashlight. The exception is smoke, water, or anything life-safety — go now, and read the trend afterwards.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q21</span><span class="qt">A status point says a fan is running. What has that actually proven?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>That airflow is at design</li><li class=""><em>B</em>That the fan shaft is turning</li><li class=""><em>C</em>That the damper is open</li><li class="ok"><em>D</em>Only as much as the device behind it — a current switch may prove the VFD is energized, not that the shaft turns</li></ul>
+        <p class="why"><em>Why</em>Three layers can disagree: what was commanded, what the status point claims, and what the metal is doing. An aux contact can prove the starter pulled in, not that the coupling is intact. Verify at the hardware before you override anything.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q22</span><span class="qt">You need to know why a room was cold last Tuesday, but that point was never being logged. What can you do?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Nothing — you cannot trend the past. Set the trend up now, then wait</li><li class=""><em>B</em>Recover it from the alarm log</li><li class=""><em>C</em>Reboot the controller to rebuild history</li><li class=""><em>D</em>Increase the sample interval</li></ul>
+        <p class="why"><em>Why</em>If a point was never logged, that history does not exist and never will. When you meet a problem you cannot explain, the first action is often to set up the trend, then let the building tell you.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q23</span><span class="qt">Which four points should you overlay on almost any trend?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Voltage, current, frequency, power</li><li class=""><em>B</em>Four days in a row</li><li class=""><em>C</em>Four different rooms</li><li class="ok"><em>D</em>Process variable, setpoint, output %, and command/status</li></ul>
+        <p class="why"><em>Why</em>The PV shows what happened; the setpoint shows what was asked; the output % shows how hard the loop worked, and reveals saturation; command and status show whether the equipment was even running. Never trend a reading without its setpoint.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q24</span><span class="qt">Point classification — space temperature on an AHU graphic is:</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>AV — a setpoint</li><li class="ok"><em>B</em>AI — a reading</li><li class=""><em>C</em>BI — a status</li><li class=""><em>D</em>AO — a command</li></ul>
+        <p class="why"><em>Why</em>It comes from the world and it varies, so it is an analog input. It is a reading — and it means nothing until you put its setpoint beside it.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q25</span><span class="qt">Point classification — the chilled-water supply temperature setpoint is:</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>None of AI/AO/BI/BO — it is a stored value (BACnet AV), and its role is setpoint</li><li class=""><em>B</em>BI — a status</li><li class=""><em>C</em>AO — a command</li><li class=""><em>D</em>AI — a reading</li></ul>
+        <p class="why"><em>Why</em>The trap. Nothing senses a setpoint. It is a value living in the controller, written by a person or by a reset schedule. Inputs come from the world, outputs go to the world — setpoints come from us.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q26</span><span class="qt">Point classification — the supply fan start/stop issued by the BMS is:</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>AO — a command</li><li class=""><em>B</em>BI — a status</li><li class=""><em>C</em>AI — a reading</li><li class="ok"><em>D</em>BO — a command</li></ul>
+        <p class="why"><em>Why</em>On or off, going out to the world: a binary output. It is what the BMS asked for — which is not the same as proof it happened.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q27</span><span class="qt">Point classification — the supply fan current switch is:</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>BO — a command</li><li class=""><em>B</em>AI — a reading</li><li class="ok"><em>C</em>BI — a status</li><li class=""><em>D</em>AV — a setpoint</li></ul>
+        <p class="why"><em>Why</em>On or off, coming in from the world: a binary input. Its role is status — independent proof the motor is drawing current. Command ON with this reading OFF is a fault.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q28</span><span class="qt">Point classification — a cooling valve driven to 45% is:</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>AO — a command</li><li class=""><em>B</em>BO — a command</li><li class=""><em>C</em>AI — a status</li><li class=""><em>D</em>AI — a reading</li></ul>
+        <p class="why"><em>Why</em>A varying signal going out: analog output. If the graphic also shows position feedback from the actuator, that feedback is an AI acting as a status — a different point entirely.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q29</span><span class="qt">Point classification — a damper end switch is:</span><span class="ans">B</span></div>
+        <ul class="opts"><li class=""><em>A</em>AO — a command</li><li class="ok"><em>B</em>BI — a status</li><li class=""><em>C</em>BO — a command</li><li class=""><em>D</em>AI — a reading</li></ul>
+        <p class="why"><em>Why</em>On or off, coming in: binary input, and its job is to prove the blade actually reached the end of travel. An actuator can stroke while its linkage is loose.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q30</span><span class="qt">Point classification — a VFD speed command from the controller is:</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>BO — a command</li><li class=""><em>B</em>AV — a setpoint</li><li class=""><em>C</em>AI — a reading</li><li class="ok"><em>D</em>AO — a command</li></ul>
+        <p class="why"><em>Why</em>A varying signal going out: analog output. The speed the VFD reports back is a separate AI, and that one is a status.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q31</span><span class="qt">Point classification — filter differential pressure is:</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>AI — a reading</li><li class=""><em>B</em>AV — a setpoint</li><li class=""><em>C</em>AO — a command</li><li class=""><em>D</em>BI — a status</li></ul>
+        <p class="why"><em>Why</em>A varying signal coming in: analog input, and it is a reading. Compare it to its alarm limit — the number alone tells you nothing.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q32</span><span class="qt">Is the process variable an input or a status?</span><span class="ans">A</span></div>
+        <ul class="opts"><li class="ok"><em>A</em>Usually an input, and never a status — a status pairs with a command, a PV pairs with a setpoint</li><li class=""><em>B</em>Always a binary input</li><li class=""><em>C</em>Always a status</li><li class=""><em>D</em>Both mean the same thing</li></ul>
+        <p class="why"><em>Why</em>A status is independent proof that a command was carried out, almost always binary. A process variable is the reading a loop controls to. PV is a role, not a point type: it can be calculated, arrive over the network, or even be binary.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q33</span><span class="qt">In BACnet, which objects have a Present_Value property?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>Only analog inputs</li><li class=""><em>B</em>Only inputs, never outputs</li><li class=""><em>C</em>Only the ones being trended</li><li class="ok"><em>D</em>Every object — AI, AO, BI, BO and AV alike. An AO's Present_Value is the command it is sending</li></ul>
+        <p class="why"><em>Why</em>Present_Value in a point list is not the same thing as process variable in a control loop, even though both get abbreviated PV. Reading an output's Present_Value gives you the command, not a measurement.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q34</span><span class="qt">Which of these is a software point?</span><span class="ans">D</span></div>
+        <ul class="opts"><li class=""><em>A</em>The space temperature sensor</li><li class=""><em>B</em>The fan current switch</li><li class=""><em>C</em>The fan start/stop relay</li><li class="ok"><em>D</em>The chilled-water supply temperature setpoint</li></ul>
+        <p class="why"><em>Why</em>A setpoint lives only in the controller's memory — no terminal, no wire, no I/O slot. The other three are hardware points landed on terminals with real devices behind them. When a hardware point is wrong you go to the field; when a software point is wrong you go to the logic.</p>
+      </div>
+      <div class="qa">
+        <div class="qh"><span class="qn">Q35</span><span class="qt">On a graphic, a fan's status has agreed with its command every single time for a year. What should you suspect?</span><span class="ans">C</span></div>
+        <ul class="opts"><li class=""><em>A</em>Excellent maintenance</li><li class=""><em>B</em>The trend interval is too short</li><li class="ok"><em>C</em>The status may be a software echo of the command, not a hardware point wired to a current switch</li><li class=""><em>D</em>Nothing — that is what status means</li></ul>
+        <p class="why"><em>Why</em>Status is only independent proof if there is a wire behind it. Some graphics show a software point that simply mirrors the command, so it turns green because the BMS asked, not because anything happened. It can never disagree, so it can never reveal a failure.</p>
+      </div>
+    <h3 class="sub">Open questions — model answers</h3>
+    <p class="note">These are guides, not scripts. Credit any answer that gets the mechanism right, in the new hire&#8217;s own words.</p>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O1</span><span class="qt">Name every BMS vendor in use on this site, and list which buildings each vendor covers.</span></div>
+        <p class="model"><em>A strong answer covers</em>There is no generic answer — it is different in every portfolio, and that is exactly why it is the first question. Fill it in at the front end, from the site's controls documentation and from your mentor, and do not accept a verbal answer you cannot verify on a screen. For each vendor record: the product name, where the front end lives and how you log in, every building on it, the protocol carrying the traffic, and who to call when it breaks. A campus is rarely one system — older buildings carry an older front end, newer construction arrives with whatever was specified that year, and the two are stitched together over BACnet. Know which product you are logged into before you trust a screen, because the graphics, point naming, trend tools, and override procedure all differ.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O2</span><span class="qt">A room is too warm. Walk from the complaint to the fix using the BMS, naming what you look at in order.</span></div>
+        <p class="model"><em>A strong answer covers</em>Start with the trend, not the setpoint. Check the space temperature against its setpoint, and whether the zone is in occupied mode on the schedule. Look at the terminal unit: is the damper commanded open, and does the airflow reading confirm it? Check whether the reheat valve is commanded shut but the discharge temperature says otherwise — a leaking valve. Then look upstream: supply-air temperature at the AHU against its setpoint, static pressure or DP against its setpoint, and whether any point in the chain is in Hand. Only then consider changing anything, and change one thing at a time.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O3</span><span class="qt">Explain the difference between a commanded value, a status point, and a setpoint. Why does an operator need all three?</span></div>
+        <p class="model"><em>A strong answer covers</em>The setpoint is the target you want. The commanded value is what the BMS is asking the equipment to do. The status is independent proof of what actually happened — a current switch, an auxiliary contact, a proven flow. Setpoint tells you intent, command tells you the controller's decision, status tells you reality. A fault hides in the gap between command and status, and a comfort complaint usually hides in the gap between setpoint and process variable.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O4</span><span class="qt">Why is a flat trend line suspicious, and what would you do about it?</span></div>
+        <p class="model"><em>A strong answer covers</em>A real sensor always shows small movement — noise, load changes, control action. A perfectly flat line means the value is no longer being updated: comm loss to the controller, a failed sensor, or a point stuck in override. Check the point's last-updated time, look at neighbouring points on the same controller to see whether the whole device went quiet, verify at the field device if you can, and never make a control decision on a stale value.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O5</span><span class="qt">The BMS shows an AHU running normally, but the space is not being ventilated. Give at least three ways the graphic can be right and the building still wrong.</span></div>
+        <p class="model"><em>A strong answer covers</em>The graphic shows command, not reality: a fan commanded on with no status proof. A point left in Hand shows the value someone typed, not what the sensor reads. A sensor can be drifted or failed and reporting a plausible number. A damper actuator can be disconnected from its blade — the actuator strokes, the blade does not move. A filter can be loaded so the fan runs but the airflow is a fraction of design. And a point can be stale from comm loss while still displaying its last good value.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O6</span><span class="qt">Why is the fire alarm system separate from the BMS, and what does that mean when you are troubleshooting?</span></div>
+        <p class="model"><em>A strong answer covers</em>Life safety is required to stand alone so that a failure, a reboot, or a bad graphic in the BMS cannot compromise it. The FACP commands smoke dampers, fans, elevator recall, and door releases through hardwired paths. The BMS may monitor those points, but a hardwired interlock always overrides a software command. In troubleshooting, this means the BMS can be telling the truth about what it commanded while the FACP has overridden the equipment — and it means you never try to fix a life-safety device from a BMS graphic.</p>
+      </div>
+      <div class="qa open">
+        <div class="qh"><span class="qn">O7</span><span class="qt">Why is a device pinned at 100% output more dangerous than a device in alarm?</span></div>
+        <p class="model"><em>A strong answer covers</em>Because nothing crossed a limit, so nothing alarms. From the controller's point of view it is behaving correctly — it is asking for full output and still not reaching setpoint. Meanwhile the loop has no reserve left, energy is being spent at maximum, and the underlying cause is hidden: either the load genuinely exceeds capacity, a sensor is lying so the loop chases a target it can never hit, or the setpoint is unachievable as configured. An alarm at least announces itself. A saturated output is silent, and you discover it on the first hot day when there is nothing left to give.</p>
+      </div>
+  </section>
+
+  <footer>
+    Answers are generated directly from the quiz data in each overview page, so they stay in sync. If a question is edited on a page, regenerate this key.<br>
+    Explanations are the same text the new hire sees after answering on screen — use them as talking points, not as a grading rubric. Numbers quoted in questions (44°F CHW, 140–180°F HHW, 6–12 ACH, and so on) are typical ballparks; always defer to the actual setpoints and sequences of operation for the building.
+  </footer>
+</div>
+<div class="toolbar">
+  <button onclick="document.body.classList.remove('simplex');window.print()">Print — double-sided</button>
+  <button class="alt" onclick="document.body.classList.add('simplex');window.print()">Print — single-sided</button>
+</div>
+</body>
+</html>

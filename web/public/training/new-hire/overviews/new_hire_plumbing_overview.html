@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Plumbing Works — Life-Science Building (New Hire)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--blue),var(--amber),var(--green))}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--blue);margin:4px 0 9px}
+  h1{font-size:27px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:17px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:15px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:15px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:126px;flex:0 0 auto;padding-right:8px;line-height:1.5}
+  .t-cold .track-tag{color:var(--blue)} .t-hot .track-tag{color:var(--amber)} .t-waste .track-tag{color:var(--green)} .t-nonpot .track-tag{color:var(--violet)} .t-storm .track-tag{color:var(--cyan)}
+  .node{font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:62px;padding:0 3px}
+  .arr .lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.15;text-align:center;margin-bottom:2px}
+  .arr .line2{color:var(--line-2);font-size:22px;font-weight:600;line-height:1}
+  .t-cold .arr .line2{color:var(--blue)} .t-hot .arr .line2{color:var(--amber)} .t-waste .arr .line2{color:var(--green)} .t-nonpot .arr .line2{color:var(--violet)} .t-storm .arr .line2{color:var(--cyan)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:8px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:8px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:10px;
+    background:rgba(47,109,204,.05);padding:13px 16px;font-size:13.5px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:4px;font-weight:600}
+
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.waste{color:var(--green);background:rgba(31,154,85,.1)} .coil.proc{color:var(--cyan);background:rgba(14,143,166,.1)} .coil.safe{color:var(--red);background:rgba(210,59,53,.1)}
+  .coil.pot{color:var(--blue);background:rgba(47,109,204,.1)} .coil.nonpot{color:var(--violet);background:rgba(106,79,208,.1)}
+  .term-card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:16.5px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:14px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:13.5px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:13px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:16px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:14px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--blue)} .d2 .tag{color:var(--green)}
+  .d-head h2{font-size:17px;margin:0;font-weight:600}
+  .d-sub{font-size:13px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .hub{stroke-width:2.6}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:12.5px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:8px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:8.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .rowlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .roofline{stroke:var(--line-2);stroke-width:1;stroke-dasharray:4 4}
+  .rooflab{font-family:var(--mono);font-size:8px;fill:var(--ink-faint);letter-spacing:.1em}
+
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:14px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:13px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.5px;color:var(--ink-dim)}
+
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:11px} .q-opts{gap:4px}
+    .q-opts button{font-size:9.5px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:13px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:21px;line-height:1.15;color:#000} h1 .sub{font-size:14px;margin-top:2px}
+    .eyebrow{font-size:9.5px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:11.5px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:15.5px;color:#000} .s-head .n{font-size:10px}
+    p.lead{font-size:11.5px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:9px;width:100px;line-height:1.4}
+    .node{font-size:11px;padding:5px 8px;border-radius:6px;border-color:#5b6674;color:#000}
+    .arr{min-width:44px;padding:0 2px} .arr .lbl{font-size:8px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:17px}
+    .stack{gap:2px} .stack .opt{font-size:10px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7px;color:#3e4a5a} .stack .conj{font-size:7px}
+    .flow-note{font-size:10px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:11px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:8.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .card .role{font-size:8.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:13px;margin:0 0 3px;color:#000} .card .one{font-size:11.5px;margin:0 0 5px;color:#000}
+    .card p{font-size:10.8px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:10.3px;padding-top:5px;margin-top:5px} .card .why em{font-size:7.6px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:12px;color:#000} .term-card p{font-size:10.3px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:7.8px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:13.5px;margin:0 0 5px;color:#000} .downstream p{font-size:11.3px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:9.5px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:avoid;page-break-inside:avoid}
+    .downstream,.diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:9.5px;color:#242e3c;margin-top:8px} .d-head h2{font-size:13.5px} .d-sub{font-size:10px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">prints as a compact handout — few pages, tight layout</span></div>
+
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Basics</div>
+    <h1>How Plumbing Works in a Life-Science Building<span class="sub">Water in, hot water, waste out — in plain terms</span></h1>
+    <p class="intro">A life-science building uses water for far more than restrooms — <b>sinks, safety showers, humidifiers, cooling make-up, and lab process water</b> — and it has to carry away waste that can include <b>corrosive lab chemicals</b>. Plumbing is the set of systems that bring <b>clean water in</b>, heat some of it, push it everywhere it's needed, and take the <b>waste out</b> — all while protecting the city's drinking water from anything hazardous inside the building. It also runs <b>two grades of water</b> on separate piping: <b>potable</b> (safe to drink) and <b>non-potable</b> (fine for machines, not for people).</p>
+  </header>
+
+  <!-- FLOW -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">01</span><h2>How it fits together</h2><span class="line"></span></div>
+    <p class="lead">Water makes a one-way trip through the building — on <b>two separate systems</b>. The <b>potable</b> tracks (blue, amber) serve people; the <b>non-potable</b> track (violet) serves machines. Read each track left to right: cold water comes <b>in</b>, some is heated, and everything used goes <b>out</b> as waste.</p>
+    <div class="flow" style="margin-top:14px">
+
+      <div class="track t-cold">
+        <span class="track-tag">Potable · cold (in)</span>
+        <span class="node soft">City main</span>
+        <span class="arr"><span class="lbl">meter</span><span class="line2">→</span></span>
+        <span class="node">Backflow preventer</span>
+        <span class="arr"><span class="lbl">reduce</span><span class="line2">→</span></span>
+        <span class="node">PRV</span>
+        <span class="arr"><span class="lbl">boost</span><span class="line2">→</span></span>
+        <span class="node">Booster pump</span>
+        <span class="arr"><span class="lbl">supply</span><span class="line2">→</span></span>
+        <span class="node">Fixtures</span>
+      </div>
+
+      <div class="track t-nonpot">
+        <span class="track-tag">Non-potable · sources</span>
+        <span class="stack">
+          <span class="opt">Reclaimed<small>labeled line</small></span>
+          <span class="conj">/</span>
+          <span class="opt">Grey water<small>on-site</small></span>
+          <span class="conj">/</span>
+          <span class="opt">Rain / condensate<small>captured</small></span>
+        </span>
+        <span class="arr"><span class="lbl">separate<br>piping</span><span class="line2">→</span></span>
+        <span class="node">Tower make-up · Flushing · Irrigation</span>
+      </div>
+
+      <div class="track t-nonpot">
+        <span class="track-tag">Non-potable · loops &amp; make-up</span>
+        <span class="node soft">Potable water</span>
+        <span class="arr"><span class="lbl">PRV +<br>RPZ</span><span class="line2">→</span></span>
+        <span class="node hub">Becomes non-potable</span>
+        <span class="arr"><span class="lbl">feeds</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">Closed loops<small>chilled · heating · WSHP</small></span>
+          <span class="conj">+</span>
+          <span class="opt">RO / DI system<small>lab process water</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Tower make-up<small>where potable-fed</small></span>
+        </span>
+      </div>
+
+      <div class="track t-hot">
+        <span class="track-tag">Potable · hot</span>
+        <span class="node soft">Cold water</span>
+        <span class="arr"><span class="lbl">heat</span><span class="line2">→</span></span>
+        <span class="node">Water heater</span>
+        <span class="arr"><span class="lbl">keep<br>moving</span><span class="line2">⇄</span></span>
+        <span class="node">Recirc loop</span>
+        <span class="arr"><span class="lbl">temper</span><span class="line2">→</span></span>
+        <span class="node">Mixing valve</span>
+        <span class="arr"><span class="lbl">to taps</span><span class="line2">→</span></span>
+        <span class="node soft">Fixtures</span>
+      </div>
+
+      <div class="track t-waste">
+        <span class="track-tag">Waste + vent</span>
+        <span class="node soft">Fixtures</span>
+        <span class="arr"><span class="lbl">trap</span><span class="line2">→</span></span>
+        <span class="node">Sanitary drain</span>
+        <span class="arr"><span class="lbl">splits</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">City sewer<small>waste out · gravity / sump</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Vent stack → roof<small>air in, sewer gas out</small></span>
+        </span>
+      </div>
+
+      <div class="track t-storm">
+        <span class="track-tag">Storm · rain</span>
+        <span class="node soft">Roof</span>
+        <span class="arr"><span class="lbl">roof drains +<br>overflow</span><span class="line2">→</span></span>
+        <span class="node">Rain leaders</span>
+        <span class="arr"><span class="lbl">separate<br>piping</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">City storm sewer<small>never into sanitary</small></span>
+          <span class="conj">/</span>
+          <span class="opt">Capture<small>→ non-potable reuse</small></span>
+        </span>
+      </div>
+
+    </div>
+    </div>
+    <p class="flow-note"><b>The short version:</b> the city delivers cold water through a <b>meter</b>; a <b>backflow preventer</b> stops anything in the building from flowing back into the public supply. A <b>PRV</b> steps the pressure down and a <b>booster pump</b> raises it for the upper floors. Some of that cold water is heated and kept circulating in a <b>hot loop</b> so it's hot at every tap. Non-potable water comes two ways: from <b>non-potable sources</b> (reclaimed, grey, rain), or from <b>potable water that crosses an RPZ (reduced pressure zone backflow preventer)</b> into a mechanical system — the moment it does, it's non-potable. That's how the chilled, heating, and WSHP (water-source heat pump) loops, the RO/DI feed, and (in many buildings) the tower make-up get their water. After it's used, waste drains through <b>P-trapped</b> piping (each drain sealed by a U of standing water) to the sewer, while a <b>vent stack</b> runs up to the roof so air can get in and sewer gas out — without vents, drains gurgle and traps siphon dry. And rain never joins the waste: <b>roof drains</b> (with overflow backups) feed <b>rain leaders</b> down to the <b>city storm sewer</b> on completely separate piping — or into capture for non-potable reuse. One more special case: <b>garage and loading-dock drains</b> run through an <b>oil / water separator</b> — the oil floats, gets trapped, and is pumped out; only the water continues to the sanitary sewer.</p>
+
+    <div class="callout" style="border-left-color:var(--violet);background:rgba(106,79,208,.05)">
+      <span class="ttl" style="color:var(--violet)">🚰 Potable vs non-potable — two separate systems</span>
+      <b>Potable</b> water is the treated drinking water that feeds sinks, showers, safety showers — anything people touch (that's the cold and hot tracks above). <b>Non-potable</b> water is fine for machines but not for people: <b>reclaimed</b> municipal water, <b>grey</b> water, or captured <b>rain / condensate</b>, used for cooling-tower make-up, toilet flushing, and irrigation. The two are <b>never cross-connected</b> — non-potable pipe is <b>marked and labeled</b> so it is never mistaken for potable, and backflow preventers guard the potable side. Knowing which pipe is which is a real safety habit.
+    </div>
+
+    <div class="callout">
+      <span class="ttl">🛡 Backflow protection — keeping the city water clean</span>
+      In a lab building the biggest plumbing risk is a <b>cross-connection</b> — lab chemicals, process water, or equipment siphoning back into the drinking water if pressure drops. <b>Backflow preventers</b> (RPZ — reduced pressure zone assemblies) at the service and at every high-hazard connection block that. They're a code item, <b>tested every year</b>, and one of the first things you'll learn to spot.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05)">
+      <span class="ttl" style="color:var(--red)">♨ Recirculation &amp; Legionella</span>
+      Hot water is kept <b>moving in a recirc loop</b> so it's hot at every fixture instead of sitting warm in dead legs — the warm, still water where <b>Legionella</b> grows. <b>Mixing valves</b> then temper it down to a safe delivery temperature at the tap. Storing and circulating hot enough, delivering warm enough: that balance is a real part of the job.
+    </div>
+
+    <p class="lead" style="margin-top:24px"><b>What the water feeds — and which grade</b></p>
+    <p class="flow-note" style="margin-top:2px;margin-bottom:2px">Whether a connection is potable or non-potable depends on <b>what it serves</b> — and any tie into a mechanical system is a cross-connection that needs a <b>backflow preventer (RPZ)</b>.</p>
+    <div class="terms">
+      <div class="term-card"><h4>Sinks · showers · safety fixtures</h4><span class="coil pot">potable</span><p>Anything people drink or touch is <b>potable</b>, including safety showers and eyewash — no exceptions.</p></div>
+      <div class="term-card"><h4>Cooling tower make-up</h4><span class="coil nonpot">either grade</span><p>Big user (replacing evaporation). Fed by <b>reclaimed / non-potable</b> where available — or <b>directly from potable</b> through a <b>PRV + RPZ</b>.</p></div>
+      <div class="term-card"><h4>RO / DI feed</h4><span class="coil pot">potable + RPZ</span><p><b>Potable</b> water feeds the purifier — through its own <b>RPZ</b>, since it&#8217;s a high-hazard connection. (What comes <i>out</i> is the lab-water system, covered below.)</p></div>
+      <div class="term-card"><h4>Heating &amp; chilled-water loops</h4><span class="coil pot">potable + RPZ</span><p>Small top-up for the closed loops — but once inside, the water (with <b>chemicals / glycol</b>) is <b>non-potable</b>. The <b>RPZ</b> keeps it from ever getting back.</p></div>
+      <div class="term-card"><h4>WSHP condenser loop</h4><span class="coil pot">potable + RPZ</span><p><b>WSHP</b> = water-source heat pump. Same as the loops above — a small potable make-up, protected by an <b>RPZ</b> so loop water can't back up into the potable supply.</p></div>
+      <div class="term-card"><h4>Toilet &amp; urinal flushing</h4><span class="coil nonpot">non-potable</span><p>A prime <b>reclaimed / non-potable</b> use wherever such a system exists — no reason to flush with drinking water.</p></div>
+      <div class="term-card"><h4>Irrigation</h4><span class="coil nonpot">non-potable</span><p>Landscaping runs on <b>reclaimed / non-potable</b> water, keeping the potable supply for people.</p></div>
+    </div>
+  </section>
+
+  <!-- PIECES -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">02</span><h2>The seven pieces of building plumbing</h2><span class="line"></span></div>
+    <div class="cards">
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Protect</div>
+        <h3>Backflow Preventer (RPZ)</h3>
+        <p class="one">Protects the city's drinking water.</p>
+        <p>Stops water inside the building — <b>lab chemicals, boiler water, irrigation</b> — from siphoning back into the public main if pressure ever reverses.</p>
+        <p class="why"><em>Why it matters</em>It's a health-and-safety device, tested annually — the line between the building and everyone's drinking water.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--ink-dim)"></span>Service</div>
+        <h3>Water Meter &amp; Service Entrance</h3>
+        <p class="one">Where the water comes in and is measured.</p>
+        <p>The service main, the main <b>shutoff</b>, and the meter — the single point the whole building's water passes through.</p>
+        <p class="why"><em>Why it matters</em>Know where the main shutoff is before you ever need it.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Pressure</div>
+        <h3>PRV — Pressure-Reducing Valve</h3>
+        <p class="one">Steps the incoming pressure down.</p>
+        <p>City pressure is often too high for the building's fixtures; the PRV drops it to a <b>steady, safe level</b> the fixtures are built for.</p>
+        <p class="why"><em>Why it matters</em>Too much pressure wears out valves and fixtures and causes <b>water hammer</b> — the bang you hear when fast-moving water is stopped suddenly by a closing valve and slams the pipe.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--blue)"></span>Pressure</div>
+        <h3>Domestic Booster Pump</h3>
+        <p class="one">Raises pressure for the upper floors.</p>
+        <p>Water loses pressure going up a tall building; the booster keeps <b>flow strong at the top floors</b>, usually with a backup pump and pressure control.</p>
+        <p class="why"><em>Why it matters</em>Without it, upper-floor fixtures and safety showers would trickle.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--red)"></span>Hot water</div>
+        <h3>Water Heater &amp; Recirc</h3>
+        <p class="one">Makes hot water and keeps it moving.</p>
+        <p>Heats the domestic water and <b>circulates it in a loop</b> so it's hot at every fixture — which also keeps it out of the warm range where Legionella grows.</p>
+        <p class="why"><em>Why it matters</em>Comfort, hygiene, and Legionella control all ride on this loop.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Drainage</div>
+        <h3>Sanitary Waste &amp; Vent</h3>
+        <p class="one">Carries waste away and lets the system breathe.</p>
+        <p>Every drain has a <b>P-trap</b> — a U of standing water that seals the pipe and blocks sewer gas; <b>vents</b> let air in so the drains flow freely. Below-grade fixtures use a <b>sump / ejector pump</b> to lift waste up to the sewer, and <b>garage / loading-dock drains</b> pass through an <b>oil / water separator</b> first — oil never goes to the sewer (and never to storm).</p>
+        <p class="why"><em>Why it matters</em>A dry trap or blocked vent means sewer gas or slow, gurgling drains.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Drainage</div>
+        <h3>Roof &amp; Storm Drainage</h3>
+        <p class="one">Gets rain off the roof — on its own system.</p>
+        <p><b>Roof drains</b> (plus <b>overflow drains</b> as backup) feed <b>rain leaders</b> that drop through the building to the <b>city storm sewer</b>. Storm and sanitary are <b>two separate systems</b> — rain never joins the waste — and captured rain / condensate can feed the non-potable side. The field rule: <b>rain and only rain → storm; touched anything else → sanitary</b>, with treatment (separator, neutralization) on the way if needed.</p>
+        <p class="why"><em>Why it matters</em>A clogged roof drain ponds water on the roof — real weight, real leaks. Check them on rounds, especially after storms and leaf season.</p>
+      </div>
+
+    </div>
+    </div>
+  </section>
+
+  <!-- LAB LAYER -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">03</span><h2>The life-science layer — lab plumbing</h2><span class="line"></span></div>
+    <div class="downstream">
+      <h3>The extra plumbing a lab building needs</h3>
+      <p>A life-science building puts things down the drain — and needs water — that a normal office never does: <b>corrosive chemicals, ultra-pure process water, and emergency drench water</b>. So there's a plumbing layer built just for the labs.</p>
+
+      <div class="terms">
+        <div class="term-card">
+          <h4>Acid / lab waste</h4>
+          <span class="coil waste">neutralize</span>
+          <p>Corrosive lab waste runs in special <b>acid-resistant pipe</b> to a neutralization tank that corrects its <b>pH</b> — the acid/base scale, 0 (strong acid) to 14 (strong base), 7 is neutral — into the <b>safe band the sewer code allows</b> (roughly 6–9) <b>before</b> it reaches the sewer.</p>
+        </div>
+        <div class="term-card">
+          <h4>RO / DI lab water</h4>
+          <span class="coil proc">purify</span>
+          <p>Reverse-osmosis / deionized systems make <b>ultra-pure water</b> for lab equipment on dedicated piping. Purity is read two ways — <b>conductivity</b> (µS/cm, lower = purer) or its inverse <b>resistivity</b> (MΩ·cm, higher = purer):</p><p style="margin-top:6px">• <b>Tap water:</b> ~300–800 µS/cm<br>• <b>RO water:</b> ~5–50 µS/cm<br>• <b>DI / polished:</b> &lt;0.1 µS/cm ≈ up to <b>18.2 MΩ·cm</b></p><p style="margin-top:6px">A <b>rising µS/cm</b> (falling MΩ·cm) means the resin is spent.</p>
+        </div>
+        <div class="term-card">
+          <h4>Showers &amp; eyewash</h4>
+          <span class="coil safe">emergency</span>
+          <p>Drench <b>safety showers</b> and <b>eyewash</b> need <b>tepid</b> water fast; special mixing valves keep it in a safe temperature range.</p>
+        </div>
+      </div>
+
+      <p>And every one of those lab connections is a <b>cross-connection risk</b>, so backflow preventers guard the potable water wherever the labs tie in. <b>Building plumbing</b> serves the whole building; the <b>lab layer</b> serves the hazards — and both are watched to keep the drinking water clean.</p>
+    </div>
+    </div>
+  </section>
+
+  <!-- SYSTEM DIAGRAMS -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">04</span><h2>System diagrams</h2><span class="line"></span></div>
+    <p class="lead">The same story, drawn: boxes are equipment, colored lines are the flows. Trace them line by line.</p>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>potable · cold</span>
+      <span><i style="background:var(--amber)"></i>potable · hot</span>
+      <span><i style="background:var(--violet)"></i>non-potable</span>
+      <span><i style="background:var(--green)"></i>sanitary waste</span>
+      <span><i style="background:var(--red)"></i>lab / acid waste</span>
+      <span><i style="background:var(--ink-faint)"></i>dashed = vent · below grade</span>
+    </div>
+
+    <div class="diagram d1">
+    <div class="d-head"><span class="tag">Part 1</span><h2>Supply — potable &amp; non-potable</h2></div>
+    <p class="d-sub">City water is metered, backflow-protected, pressure-managed, and heated. Potable that crosses an RPZ into a mechanical system becomes non-potable; separate non-potable sources feed the rest.</p>
+    <svg viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="pB" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+        <marker id="pA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="pV" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+      </defs>
+
+      <!-- ROW A: potable cold -->
+      <text class="rowlab" x="40" y="26" fill="var(--blue)">Potable · cold (in)</text>
+      <path class="pipe p-blue" d="M140,60 H170" marker-end="url(#pB)"/>
+      <path class="pipe p-blue" d="M255,60 H285" marker-end="url(#pB)"/>
+      <path class="pipe p-blue" d="M400,60 H430" marker-end="url(#pB)"/>
+      <path class="pipe p-blue" d="M495,60 H525" marker-end="url(#pB)"/>
+      <path class="pipe p-blue" d="M630,60 H660" marker-end="url(#pB)"/>
+
+      <rect class="eq c-ink dash" x="40" y="36" width="100" height="48" rx="8"/>
+      <text class="eqt" x="90" y="57" font-size="11.5">City main</text><text class="eqs" x="90" y="71">public supply</text>
+      <rect class="eq c-blue" x="170" y="36" width="85" height="48" rx="8"/>
+      <text class="eqt" x="212" y="57" font-size="11.5">Meter</text><text class="eqs" x="212" y="71">+ main shutoff</text>
+      <rect class="eq c-green" x="285" y="36" width="115" height="48" rx="8"/>
+      <text class="eqt" x="342" y="57" font-size="11.5">Backflow (RPZ)</text><text class="eqs" x="342" y="71">protects city water</text>
+      <rect class="eq c-violet" x="430" y="36" width="65" height="48" rx="8"/>
+      <text class="eqt" x="462" y="57" font-size="11.5">PRV</text><text class="eqs" x="462" y="71">reduce</text>
+      <rect class="eq c-blue" x="525" y="36" width="105" height="48" rx="8"/>
+      <text class="eqt" x="577" y="57" font-size="11.5">Booster pump</text><text class="eqs" x="577" y="71">upper floors</text>
+      <rect class="eq c-blue" x="660" y="36" width="85" height="48" rx="8"/>
+      <text class="eqt" x="702" y="57" font-size="11.5">Fixtures</text><text class="eqs" x="702" y="71">people</text>
+
+      <!-- ROW B: potable hot -->
+      <text class="rowlab" x="40" y="136" fill="var(--amber)">Potable · hot</text>
+      <path class="pipe p-amber" d="M150,170 H180" marker-end="url(#pA)"/>
+      <path class="pipe p-amber" d="M295,170 H325" marker-end="url(#pA)" marker-start="url(#pA)"/>
+      <text class="pl pl-a" x="288" y="162">⇄ keep moving</text>
+      <path class="pipe p-amber" d="M435,170 H465" marker-end="url(#pA)"/>
+      <path class="pipe p-amber" d="M580,170 H610" marker-end="url(#pA)"/>
+
+      <rect class="eq c-ink dash" x="40" y="146" width="110" height="48" rx="8"/>
+      <text class="eqt" x="95" y="167" font-size="11.5">Cold water</text><text class="eqs" x="95" y="181">from Row A</text>
+      <rect class="eq c-amber" x="180" y="146" width="115" height="48" rx="8"/>
+      <text class="eqt" x="237" y="167" font-size="11.5">Water heater</text><text class="eqs" x="237" y="181">makes DHW</text>
+      <rect class="eq c-amber" x="325" y="146" width="110" height="48" rx="8"/>
+      <text class="eqt" x="380" y="167" font-size="11.5">Recirc loop</text><text class="eqs" x="380" y="181">Legionella control</text>
+      <rect class="eq c-amber" x="465" y="146" width="115" height="48" rx="8"/>
+      <text class="eqt" x="522" y="167" font-size="11.5">Mixing valve</text><text class="eqs" x="522" y="181">temper to safe</text>
+      <rect class="eq c-ink dash" x="610" y="146" width="100" height="48" rx="8"/>
+      <text class="eqt" x="660" y="167" font-size="11.5">Taps</text><text class="eqs" x="660" y="181">sinks · showers</text>
+
+      <!-- ROW C: non-potable via RPZ -->
+      <text class="rowlab" x="40" y="252" fill="var(--violet)">Non-potable · loops &amp; make-up</text>
+      <path class="pipe p-violet" d="M150,292 H195" marker-end="url(#pV)"/>
+      <text class="pl pl-v" x="150" y="284">PRV + RPZ</text>
+      <path class="pipe p-violet" d="M345,280 L430,259" marker-end="url(#pV)"/>
+      <path class="pipe p-violet" d="M345,292 L430,315" marker-end="url(#pV)"/>
+      <path class="pipe p-violet" d="M345,304 L430,371" marker-end="url(#pV)"/>
+      <text class="pl pl-v" x="368" y="266">feeds</text>
+
+      <rect class="eq c-ink dash" x="40" y="268" width="110" height="48" rx="8"/>
+      <text class="eqt" x="95" y="289" font-size="11.5">Potable water</text><text class="eqs" x="95" y="303">from Row A</text>
+      <rect class="eq c-violet hub" x="195" y="266" width="150" height="52" rx="10"/>
+      <text class="eqt" x="270" y="288" font-size="12">Becomes</text><text class="eqt" x="270" y="303" font-size="12">non-potable</text>
+      <rect class="eq c-violet" x="430" y="236" width="200" height="46" rx="8"/>
+      <text class="eqt" x="530" y="256" font-size="11.5">Closed loops</text><text class="eqs" x="530" y="271">chilled · heating · WSHP</text>
+      <rect class="eq c-violet" x="430" y="292" width="200" height="46" rx="8"/>
+      <text class="eqt" x="530" y="312" font-size="11.5">RO / DI system</text><text class="eqs" x="530" y="327">lab process water</text>
+      <rect class="eq c-violet" x="430" y="348" width="200" height="46" rx="8"/>
+      <text class="eqt" x="530" y="368" font-size="11.5">Tower make-up</text><text class="eqs" x="530" y="383">where potable-fed</text>
+
+      <!-- ROW D: non-potable sources -->
+      <text class="rowlab" x="40" y="436" fill="var(--violet)">Non-potable · sources</text>
+      <path class="pipe p-violet dash" d="M270,470 H330" marker-end="url(#pV)"/>
+      <text class="pl pl-v" x="272" y="462">separate piping</text>
+      <rect class="eq c-violet dash" x="40" y="446" width="230" height="48" rx="8"/>
+      <text class="eqt" x="155" y="466" font-size="11.5">Reclaimed · Grey · Rain</text><text class="eqs" x="155" y="481">marked &amp; labeled line</text>
+      <rect class="eq c-violet" x="330" y="446" width="300" height="48" rx="8"/>
+      <text class="eqt" x="480" y="466" font-size="11.5">Flushing · Irrigation · Tower make-up</text><text class="eqs" x="480" y="481">machines, not people</text>
+    </svg>
+  </div>
+    </div>
+
+  <!-- DIAGRAM 2: WASTE -->
+  <div class="diagram d2">
+    <div class="d-head"><span class="tag">Part 2</span><h2>Waste, vent &amp; lab drainage</h2></div>
+    <p class="d-sub">P-trapped fixtures drain to the sewer while the vent stack breathes through the roof; corrosive lab waste is neutralized before it joins.</p>
+    <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="wG" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+        <marker id="wR" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+        <marker id="wI" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-dim)"/></marker>
+      </defs>
+
+      <line class="roofline" x1="20" y1="92" x2="740" y2="92"/>
+      <text class="rooflab" x="24" y="86">ROOF</text>
+
+      <!-- vent -->
+      <path class="pipe p-ink dash" d="M235,140 V72" marker-end="url(#wI)"/>
+      <text class="pl" x="242" y="112">breathes</text>
+      <rect class="eq c-ink dash" x="165" y="28" width="140" height="44" rx="8"/>
+      <text class="eqt" x="235" y="47" font-size="11.5">Vent stack</text><text class="eqs" x="235" y="61">air in · sewer gas out</text>
+
+      <!-- sanitary row -->
+      <text class="rowlab" x="40" y="130" fill="var(--green)">Waste (sanitary)</text>
+      <path class="pipe p-green" d="M140,164 H170" marker-end="url(#wG)"/>
+      <text class="pl pl-g" x="140" y="156">trap</text>
+      <path class="pipe p-green" d="M300,164 H345" marker-end="url(#wG)"/>
+      <text class="pl pl-g" x="296" y="156">gravity</text>
+      <path class="pipe p-ink dash" d="M540,164 H480" marker-end="url(#wI)"/>
+      <text class="pl" x="486" y="156">lifts up</text>
+
+      <rect class="eq c-ink dash" x="40" y="140" width="100" height="48" rx="8"/>
+      <text class="eqt" x="90" y="161" font-size="11.5">Fixtures</text><text class="eqs" x="90" y="175">every one trapped</text>
+      <rect class="eq c-green" x="170" y="140" width="130" height="48" rx="8"/>
+      <text class="eqt" x="235" y="161" font-size="11.5">Sanitary drain</text><text class="eqs" x="235" y="175">trapped &amp; vented</text>
+      <rect class="eq c-green" x="345" y="140" width="120" height="48" rx="8"/>
+      <text class="eqt" x="405" y="161" font-size="11.5">City sewer</text><text class="eqs" x="405" y="175">waste out</text>
+      <rect class="eq c-ink dash" x="540" y="140" width="180" height="48" rx="8"/>
+      <text class="eqt" x="630" y="161" font-size="11.5">Sump / ejector</text><text class="eqs" x="630" y="175">below-grade fixtures</text>
+
+      <!-- lab row -->
+      <text class="rowlab" x="40" y="232" fill="var(--red)">Lab waste</text>
+      <path class="pipe p-red" d="M150,266 H195" marker-end="url(#wR)"/>
+      <text class="pl pl-r" x="146" y="258">acid pipe</text>
+      <path class="pipe p-red" d="M355,266 H420 V190" marker-end="url(#wR)"/>
+      <text class="pl pl-r" x="362" y="258">pH safe → sewer</text>
+
+      <rect class="eq c-ink dash" x="40" y="242" width="110" height="48" rx="8"/>
+      <text class="eqt" x="95" y="263" font-size="11.5">Lab sinks</text><text class="eqs" x="95" y="277">corrosive waste</text>
+      <rect class="eq c-red" x="195" y="242" width="160" height="48" rx="8"/>
+      <text class="eqt" x="275" y="263" font-size="11.5">Neutralization tank</text><text class="eqs" x="275" y="277">pH corrected first</text>
+    </svg>
+  </div>
+  
+    <div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--blue)">Illustrated</span><h2>Plumbing — supply on one side, drainage on the other</h2></div>
+      <p class="d-sub">Blue zone = the potable supply chain (meter → RPZ assembly → PRV → booster), the water heater — stored hot, tempered by a mixing valve, kept moving by the recirc loop — and the RO/DI skid, potable-fed through its own RPZ; green zone = P-trap, stack, vent through the roof, lab waste neutralized first — and the roof drain running to storm on its own leader.</p>
+      <svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="plB" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+          <marker id="plG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <marker id="plA" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+          <marker id="plR" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+          <marker id="plI" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-dim)"/></marker>
+          <marker id="plC" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+          <linearGradient id="plMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f7"/><stop offset="0.45" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4d2"/></linearGradient>
+          <linearGradient id="plBlueG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a3c4f1"/><stop offset="0.45" stop-color="#c9def8"/><stop offset="1" stop-color="#5b85c3"/></linearGradient>
+          <linearGradient id="plBronze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0c08c"/><stop offset="0.45" stop-color="#efd9b0"/><stop offset="1" stop-color="#b3894a"/></linearGradient>
+          <linearGradient id="plTank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8edf3"/><stop offset="0.5" stop-color="#f7f9fc"/><stop offset="1" stop-color="#aeb9c8"/></linearGradient>
+        </defs>
+        <rect x="16" y="14" width="356" height="404" rx="12" fill="rgba(47,109,204,0.07)"/>
+        <rect x="378" y="14" width="366" height="404" rx="12" fill="rgba(31,154,85,0.07)"/>
+        <text x="34" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--blue)" font-weight="700" letter-spacing="2">POTABLE SUPPLY</text>
+        <text x="396" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--green)" font-weight="700" letter-spacing="2">DRAIN &amp; VENT</text>
+
+        <path d="M16,96 H56" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+        <text x="20" y="86" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">city main</text>
+        <path d="M58,90 L66,96 L58,102 Z M74,90 L66,96 L74,102 Z" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1"/>
+        <line x1="66" y1="90" x2="66" y2="80" stroke="#8a6a34" stroke-width="1.6"/>
+        <circle cx="66" cy="76" r="5" fill="#fff" stroke="#8a6a34" stroke-width="1.4"/>
+        <line x1="62" y1="76" x2="70" y2="76" stroke="#8a6a34" stroke-width="1.1"/>
+        <path d="M74,96 H92" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+        <rect x="92" y="86" width="36" height="20" rx="6" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.6"/>
+        <line x1="94" y1="84" x2="94" y2="108" stroke="#8a6a34" stroke-width="1.6"/>
+        <line x1="126" y1="84" x2="126" y2="108" stroke="#8a6a34" stroke-width="1.6"/>
+        <circle cx="110" cy="76" r="9" fill="#fff" stroke="#8a6a34" stroke-width="1.5"/>
+        <line x1="110" y1="76" x2="115" y2="71" stroke="#8a6a34" stroke-width="1.3"/>
+        <line x1="104" y1="72" x2="106" y2="74" stroke="#8a6a34" stroke-width="1"/>
+        <line x1="116" y1="72" x2="114" y2="74" stroke="#8a6a34" stroke-width="1"/>
+        <text x="110" y="126" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">meter</text>
+        <path d="M128,96 H148" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+
+        <path d="M150,90 L158,96 L150,102 Z M166,90 L158,96 L166,102 Z" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1"/>
+        <line x1="158" y1="90" x2="158" y2="80" stroke="#8a6a34" stroke-width="1.4"/>
+        <circle cx="158" cy="77" r="4.5" fill="#fff" stroke="#8a6a34" stroke-width="1.3"/>
+        <path d="M166,96 H172" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+        <rect x="172" y="90" width="64" height="12" rx="4" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.5"/>
+        <path d="M178,90 q9,-14 18,0" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.4"/>
+        <path d="M208,90 q9,-14 18,0" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.4"/>
+        <rect x="199" y="102" width="9" height="9" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.2"/>
+        <path d="M196,114 h15 l-4,8 h-7 Z" fill="none" stroke="#8a6a34" stroke-width="1.3"/>
+        <path d="M236,96 H242" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+        <path d="M244,90 L252,96 L244,102 Z M260,90 L252,96 L260,102 Z" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1"/>
+        <line x1="252" y1="90" x2="252" y2="80" stroke="#8a6a34" stroke-width="1.4"/>
+        <circle cx="252" cy="77" r="4.5" fill="#fff" stroke="#8a6a34" stroke-width="1.3"/>
+        <text x="205" y="140" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">RPZ backflow assembly</text>
+        <path d="M260,96 H276" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+
+        <ellipse cx="288" cy="80" rx="12" ry="10" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.5"/>
+        <rect x="286" y="64" width="5" height="8" fill="#8a6a34"/>
+        <path d="M280,90 L288,96 L280,102 Z M296,90 L288,96 L296,102 Z" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1"/>
+        <text x="288" y="126" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">PRV</text>
+        <path d="M296,96 H318" fill="none" stroke="var(--blue)" stroke-width="3.4"/>
+
+        <rect x="314" y="114" width="54" height="5" rx="2" fill="#8a94a4"/>
+        <circle cx="332" cy="100" r="11" fill="url(#plBlueG)" stroke="#5b85c3" stroke-width="1.6"/>
+        <line x1="322" y1="92" x2="316" y2="76" stroke="#5b85c3" stroke-width="1.3"/>
+        <circle cx="314" cy="72" r="4.5" fill="#fff" stroke="#5b85c3" stroke-width="1.3"/>
+        <line x1="311" y1="72" x2="317" y2="72" stroke="#5b85c3" stroke-width="1"/>
+        <rect x="344" y="92" width="24" height="17" rx="8" fill="url(#plBlueG)" stroke="#5b85c3" stroke-width="1.4"/>
+        <line x1="350" y1="94" x2="350" y2="107" stroke="#5b85c3" stroke-width="1"/>
+        <line x1="356" y1="94" x2="356" y2="107" stroke="#5b85c3" stroke-width="1"/>
+        <text x="340" y="136" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">booster</text>
+
+        <path d="M332,89 V48 H86 V202" fill="none" stroke="var(--blue)" stroke-width="2.8" marker-end="url(#plB)"/>
+        <path d="M332,48 H372 V186 H350" fill="none" stroke="var(--blue)" stroke-width="2.4" marker-end="url(#plB)"/>
+        <text x="150" y="42" font-family="IBM Plex Mono" font-size="8.5" fill="var(--blue)">cold distribution</text>
+
+        <rect x="78" y="208" width="50" height="80" rx="14" fill="url(#plTank)" stroke="#8a94a4" stroke-width="1.7"/>
+        <path d="M78,224 q25,-22 50,0" fill="none" stroke="#c7d0dc" stroke-width="1.3"/>
+        <line x1="80" y1="248" x2="126" y2="248" stroke="#c7d0dc" stroke-width="1.2"/>
+        <rect x="98" y="186" width="10" height="22" fill="url(#plMetal)" stroke="#8a94a4" stroke-width="1.4"/>
+        <rect x="93" y="182" width="20" height="5" rx="2" fill="#8a94a4"/>
+        <rect x="70" y="224" width="9" height="8" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.1"/>
+        <line x1="74" y1="232" x2="74" y2="294" stroke="#8a94a4" stroke-width="1.5"/>
+        <rect x="90" y="268" width="22" height="11" rx="1" fill="#4a5462"/>
+        <path d="M98,296 L103,284 L108,296 Z" fill="var(--amber)"/>
+        <path d="M117,289 L123,295 M123,289 L117,295" stroke="#8a6a34" stroke-width="1.4"/>
+        <text x="103" y="318" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">water heater</text>
+
+        <path d="M118,208 V166 H286 V188" fill="none" stroke="var(--amber)" stroke-width="2.8" marker-end="url(#plA)"/>
+        <text x="232" y="160" font-family="IBM Plex Mono" font-size="8.5" fill="var(--amber)">hot supply</text>
+        <path d="M250,166 V246 H136" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#plA)"/>
+        <circle cx="196" cy="246" r="8" fill="#fff" stroke="var(--amber)" stroke-width="1.6"/>
+        <path d="M192,243 L201,246 L192,249 Z" fill="var(--amber)"/>
+        <text x="196" y="268" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)" text-anchor="middle">recirc pump</text>
+
+        <path d="M86,152 H215 V156" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#plB)"/>
+        <rect x="206" y="158" width="18" height="16" rx="3" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.4"/>
+        <circle cx="215" cy="166" r="4" fill="#fff" stroke="#8a6a34" stroke-width="1.1"/>
+        <line x1="215" y1="166" x2="218" y2="163" stroke="#8a6a34" stroke-width="1"/>
+        <text x="210" y="186" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-dim)" text-anchor="middle">mixing valve</text>
+        <text x="206" y="197" font-family="IBM Plex Mono" font-size="8" fill="var(--amber)" text-anchor="middle">140°F → ~120°F</text>
+
+        <path d="M86,130 H54 V352 H62" fill="none" stroke="var(--blue)" stroke-width="2"/>
+        <text x="58" y="332" font-family="IBM Plex Mono" font-size="8" fill="var(--blue)">potable + RPZ feed</text>
+        <rect x="62" y="345" width="36" height="14" rx="4" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.3"/>
+        <path d="M68,345 q6,-8 12,0" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.1"/>
+        <path d="M82,345 q6,-8 12,0" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1.1"/>
+        <rect x="77" y="359" width="6" height="7" fill="url(#plBronze)" stroke="#8a6a34" stroke-width="1"/>
+        <text x="80" y="382" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" text-anchor="middle">RPZ</text>
+        <path d="M98,352 H122" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#plB)"/>
+        <rect x="124" y="396" width="110" height="5" rx="2" fill="#8a94a4"/>
+        <rect x="126" y="336" width="106" height="60" rx="4" fill="#fff" stroke="var(--cyan)" stroke-width="1.6"/>
+        <rect x="134" y="344" width="16" height="44" rx="8" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.3"/>
+        <rect x="158" y="344" width="16" height="44" rx="8" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.3"/>
+        <rect x="182" y="344" width="16" height="44" rx="8" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.3"/>
+        <rect x="204" y="344" width="22" height="18" rx="2" fill="#232a34"/>
+        <text x="215" y="353" font-family="IBM Plex Mono" font-size="6" fill="#2be06c" text-anchor="middle">18.2</text>
+        <text x="215" y="359" font-family="IBM Plex Mono" font-size="4.4" fill="#2be06c" text-anchor="middle">MΩ·cm</text>
+        <text x="179" y="412" font-family="Space Grotesk" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">RO / DI skid</text>
+        <text x="179" y="424" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)" text-anchor="middle">purity = resistivity (megohm·cm); higher = purer</text>
+        <text x="252" y="316" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" font-weight="600">conductivity (µS/cm), lower = purer:</text>
+        <text x="252" y="328" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)">tap ~300–800 → RO ~5–50 → DI &lt;0.1</text>
+        <text x="252" y="340" font-family="IBM Plex Mono" font-size="7.5" fill="var(--cyan)">DI &lt;0.1 µS/cm ≈ 18.2 MΩ·cm</text>
+        <path d="M232,364 H360" fill="none" stroke="var(--cyan)" stroke-width="2.6" marker-end="url(#plC)"/>
+        <text x="252" y="356" font-family="IBM Plex Mono" font-size="8" fill="var(--cyan)">lab process water — own piping</text>
+
+        <rect x="268" y="196" width="76" height="11" rx="2" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.6"/>
+        <path d="M284,207 h42 v18 q0,9 -9,9 h-24 q-9,0 -9,-9 Z" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+        <path d="M310,196 V176 q0,-11 11,-11 q11,0 11,11 V182" fill="none" stroke="#64748b" stroke-width="2.6"/>
+        <text x="350" y="216" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)">fixture</text>
+
+        <line x1="404" y1="70" x2="744" y2="70" stroke="var(--line-2)" stroke-width="1.3" stroke-dasharray="5 4"/>
+        <text x="410" y="62" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-faint)" letter-spacing="1">ROOF</text>
+
+        <path d="M310,234 V252 q0,13 12,13 q12,0 12,-11 v-6" fill="none" stroke="var(--green)" stroke-width="3.2"/>
+        <path d="M334,248 H356 V308 H534" fill="none" stroke="var(--green)" stroke-width="3.2" marker-end="url(#plG)"/>
+        <text x="296" y="264" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)" text-anchor="end">P-trap</text>
+        <path d="M540,308 V120" fill="none" stroke="var(--green)" stroke-width="3.2"/>
+        <line x1="532" y1="240" x2="548" y2="240" stroke="var(--green)" stroke-width="2.2"/>
+        <line x1="532" y1="170" x2="548" y2="170" stroke="var(--green)" stroke-width="2.2"/>
+        <path d="M540,310 L554,320" fill="none" stroke="var(--green)" stroke-width="2.2"/>
+        <circle cx="558" cy="322" r="5" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.3"/>
+        <line x1="555" y1="322" x2="561" y2="322" stroke="#64748b" stroke-width="1.2"/>
+        <text x="570" y="326" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)">cleanout</text>
+        <path d="M532,70 h16 l-4,-12 h-8 Z" fill="url(#plMetal)" stroke="#8a94a4" stroke-width="1.2"/>
+        <path d="M540,120 V44" fill="none" stroke="var(--ink-dim)" stroke-width="2.4" stroke-dasharray="5 4" marker-end="url(#plI)"/>
+        <text x="552" y="100" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">vent stack — air in, sewer gas out</text>
+        <path d="M540,308 H724" fill="none" stroke="var(--green)" stroke-width="3.2" marker-end="url(#plG)"/>
+        <text x="626" y="328" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">to city sewer</text>
+
+        <rect x="452" y="146" width="48" height="9" rx="2" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.4"/>
+        <path d="M462,155 h28 v11 q0,7 -7,7 h-14 q-7,0 -7,-7 Z" fill="#fff" stroke="var(--red)" stroke-width="1.4"/>
+        <path d="M480,146 V134 q0,-8 8,-8 q8,0 8,8" fill="none" stroke="#64748b" stroke-width="2"/>
+        <text x="476" y="122" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">lab sink</text>
+        <path d="M476,173 V216 H552" fill="none" stroke="var(--red)" stroke-width="2.8" marker-end="url(#plR)"/>
+        <text x="452" y="200" font-family="IBM Plex Mono" font-size="8" fill="var(--red)">acid waste</text>
+        <ellipse cx="562" cy="222" rx="8" ry="18" fill="url(#plTank)" stroke="var(--red)" stroke-width="1.6"/>
+        <ellipse cx="650" cy="222" rx="8" ry="18" fill="url(#plTank)" stroke="var(--red)" stroke-width="1.6"/>
+        <rect x="562" y="204" width="88" height="36" fill="url(#plTank)" stroke="var(--red)" stroke-width="1.6"/>
+        <circle cx="602" cy="202" r="8" fill="#fff" stroke="var(--red)" stroke-width="1.5"/>
+        <circle cx="598" cy="199" r="1.2" fill="var(--red)"/><circle cx="606" cy="199" r="1.2" fill="var(--red)"/>
+        <rect x="576" y="240" width="12" height="10" fill="#8a94a4"/>
+        <rect x="624" y="240" width="12" height="10" fill="#8a94a4"/>
+        <text x="606" y="270" font-family="Space Grotesk" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">neutralization tank</text>
+        <path d="M658,222 H678 V308" fill="none" stroke="var(--red)" stroke-width="2.8" marker-end="url(#plR)"/>
+        <text x="664" y="292" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">pH safe</text>
+        <path d="M726,70 q10,-13 20,0" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.4"/>
+        <line x1="730" y1="65" x2="730" y2="70" stroke="#64748b" stroke-width="1"/>
+        <line x1="736" y1="62" x2="736" y2="70" stroke="#64748b" stroke-width="1"/>
+        <line x1="742" y1="65" x2="742" y2="70" stroke="#64748b" stroke-width="1"/>
+        <text x="724" y="46" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" text-anchor="end">roof drain</text>
+        <path d="M736,70 V396" fill="none" stroke="var(--cyan)" stroke-width="2.8" marker-end="url(#plC)"/>
+        <text x="728" y="410" font-family="IBM Plex Mono" font-size="8" fill="var(--cyan)" text-anchor="end">to storm — separate from sanitary</text>
+        <rect x="396" y="338" width="300" height="56" rx="8" fill="none" stroke="var(--line-2)" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="546" y="354" font-family="IBM Plex Mono" font-size="8.5" fill="var(--cyan)" text-anchor="middle" font-weight="600">the rule: rain &amp; only rain → storm</text>
+        <text x="546" y="369" font-family="IBM Plex Mono" font-size="8.5" fill="var(--green)" text-anchor="middle" font-weight="600">touched anything else → sanitary</text>
+        <text x="546" y="385" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" text-anchor="middle">e.g. tower blowdown (treatment chemicals) → sanitary</text>
+        <text x="388" y="240" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)">garage / dock drain</text>
+        <rect x="388" y="246" width="26" height="8" rx="2" fill="url(#plMetal)" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="394" y1="247" x2="394" y2="253" stroke="#64748b" stroke-width="1"/>
+        <line x1="401" y1="247" x2="401" y2="253" stroke="#64748b" stroke-width="1"/>
+        <line x1="408" y1="247" x2="408" y2="253" stroke="#64748b" stroke-width="1"/>
+        <path d="M401,254 V262" fill="none" stroke="var(--green)" stroke-width="2.4"/>
+        <rect x="396" y="262" width="84" height="26" rx="6" fill="url(#plTank)" stroke="#64748b" stroke-width="1.5"/>
+        <rect x="400" y="264" width="76" height="4" fill="rgba(176,116,8,0.45)"/>
+        <line x1="422" y1="262" x2="422" y2="277" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="456" y1="274" x2="456" y2="288" stroke="#64748b" stroke-width="1.2"/>
+        <text x="438" y="302" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" text-anchor="middle">oil / water separator</text>
+        <path d="M480,275 H500 V303" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#plG)"/>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- QUIZ -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">05</span><h2>Check yourself — quick quiz</h2><span class="line"></span></div>
+    <p class="lead">Tap an answer for instant feedback — nothing is graded or saved. On paper, circle your answers and review them with your mentor.</p>
+    <div class="q-score"><span><b id="qDone">0</b>/<span id="qTot">0</span> answered &middot; <b id="qRight">0</b> correct</span><button id="qReset" type="button">Reset quiz</button></div>
+    </div>
+    <div id="quizBox"></div>
+    <div class="q-openhead">Open questions — say it in your own words</div>
+    <div id="openBox"></div>
+  </section>
+
+  <script>
+  (function(){
+  var QUIZ=[{q:"RPZ stands for…",o:["Reverse Pipe Zone","Rapid Pressure Zone","Regulated Potable Zone","Reduced Pressure Zone"],a:3,e:"Reduced Pressure Zone: two checks in series with a relief valve keeping the middle zone at lower pressure — the highest level of backflow protection."},
+{q:"What is an RPZ actually protecting?",o:["The building’s fixtures","The city’s drinking water, from anything flowing backward out of the building","The water heater","The booster pump"],a:1,e:"Backflow protection is about everyone outside the building — nothing in here may ever siphon back into the public main."},
+{q:"The rule for potable vs non-potable piping is…",o:["Potable is always bigger pipe","Never cross-connected — non-potable runs on its own marked, labeled piping","Non-potable is always underground","They can share pipe if labeled"],a:1,e:"Two systems, never connected. The non-potable side is kept separate, marked, and labeled."},
+{q:"The moment potable water crosses an RPZ into a mechanical system, it…",o:["Becomes non-potable","Becomes distilled","Must be heated","Stays potable"],a:0,e:"Once it is on the far side feeding a loop, a tower, or an RO/DI skid, it is non-potable from that point on — and the RPZ keeps it from ever coming back."},
+{q:"Cooling tower make-up water can be fed by…",o:["Sanitary grey water untreated","Storm water directly","The chilled water loop","Reclaimed / non-potable where available, or potable through a PRV + RPZ"],a:3,e:"Either grade works — what is non-negotiable is the backflow protection on any potable feed."},
+{q:"Why store domestic hot water at ~140°F but deliver ~120°F?",o:["To save energy","Hot storage controls Legionella; the mixing valve tempers it down to a safe delivery temperature","Code bans hot water above 120°F everywhere","Pipes cannot handle 140°F"],a:1,e:"Store and circulate hot enough to keep Legionella from growing, temper at the mixing valve so no one gets scalded."},
+{q:"The recirc loop exists so that…",o:["The heater lasts longer","Cold water arrives faster","Hot water is hot at every tap and never sits in warm dead legs where Legionella grows","Pressure stays constant"],a:2,e:"Moving water stays hot and safe; still, lukewarm water in dead legs is the Legionella risk."},
+{q:"The vent stack’s job is to…",o:["Let air in and sewer gas out so drains flow and traps keep their seal","Catch rainwater","Cool the sanitary line","Exhaust lab fumes"],a:0,e:"Without vents, drains gurgle and traps siphon dry — then sewer gas walks right in."},
+{q:"A P-trap works by…",o:["Holding a water seal that blocks sewer gas from coming up the drain","A rubber flap","A spring-loaded valve","Air pressure"],a:0,e:"That U of standing water is the whole trick — which is why a dry trap in an unused floor drain smells."},
+{q:"Corrosive lab waste reaches the sewer by…",o:["The storm leader","Regular PVC drain straight out","Acid-resistant piping to a neutralization tank, pH corrected first, then sanitary","Evaporation"],a:2,e:"Neutralize before the sewer — the tank brings pH into the safe range before discharge."},
+{q:"The RO/DI system is fed by…",o:["The hot water loop","Condensate","Non-potable reclaimed water","Potable water through its own RPZ, producing lab process water on dedicated piping"],a:3,e:"Potable in through an RPZ; ultra-pure process water out on its own piping to the labs."},
+{q:"Roof drains discharge to…",o:["The cooling tower","Sanitary, like everything else","The storm system — completely separate piping from sanitary","The neutralization tank"],a:2,e:"Rain and only rain goes to storm — a separate system that typically discharges untreated to waterways."},
+{q:"A loading-dock drain routes…",o:["To the roof","Through an oil/water separator, then to sanitary — never storm","Straight to storm since it is outdoors","Into the RO/DI feed"],a:1,e:"Fuel and oil drips make it ‘touched something’ — separator traps the oil, only the water continues to sanitary."},
+{q:"Cooling tower blowdown goes to…",o:["Sanitary — it carries treatment chemicals and concentrated solids","Storm — it is just water","Back into the make-up line","The irrigation system"],a:0,e:"Biocides and concentrated minerals mean sanitary, often through an air gap and under a discharge permit. Never storm."}];
+  var box=document.getElementById('quizBox'),done=0,right=0;
+  function upd(){document.getElementById('qDone').textContent=done;document.getElementById('qRight').textContent=right;}
+  function render(){box.innerHTML='';done=0;right=0;upd();
+    QUIZ.forEach(function(it,i){
+      var c=document.createElement('div');c.className='q-card';
+      var top=document.createElement('div');top.className='q-top';
+      var n=document.createElement('span');n.className='q-num';n.textContent='Q'+(i+1);
+      var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+      top.appendChild(n);top.appendChild(t);c.appendChild(top);
+      var op=document.createElement('div');op.className='q-opts';
+      it.o.forEach(function(txt,j){
+        var b=document.createElement('button');b.type='button';
+        var em=document.createElement('em');em.textContent=String.fromCharCode(65+j);
+        var sp=document.createElement('span');sp.textContent=txt;
+        b.appendChild(em);b.appendChild(sp);
+        b.onclick=function(){if(c.dataset.a)return;c.dataset.a='1';done++;
+          if(j===it.a){b.classList.add('ok');right++;}
+          else{b.classList.add('bad');op.children[it.a].classList.add('ok');}
+          for(var k=0;k<op.children.length;k++){op.children[k].classList.add('lock');}
+          var e=document.createElement('div');e.className='q-exp';e.textContent=it.e;c.appendChild(e);upd();};
+        op.appendChild(b);});
+      c.appendChild(op);box.appendChild(c);});
+    document.getElementById('qTot').textContent=QUIZ.length;}
+  document.getElementById('qReset').onclick=render;
+  render();})();
+  </script>
+
+  <script>
+  (function(){
+  var OPEN=[
+{q:"Trace a drop of city water to a lab faucet — name every device it passes and what each one does.",a:"Through the meter (measurement and the main shutoff), the RPZ backflow preventer (protects the city supply), the PRV (drops street pressure to a safe level), and the booster pump (pressure for the upper floors) — then out through the cold distribution to the fixture; the hot side adds the water heater, recirc loop, and mixing valve."},
+{q:"Explain the potable / non-potable rule, and what crossing the RPZ means — use tower make-up as your example.",a:"Potable serves people, non-potable serves machines, and the two are never cross-connected. Tower make-up can come from reclaimed water, or from potable — but the moment potable passes through the PRV + RPZ toward the tower, it is non-potable from that point on, and the RPZ guarantees it can never flow back."},
+{q:"Why store hot water at about 140°F, deliver it at about 120°F, and keep it moving? Name the risk each part manages.",a:"Storing and circulating at 140°F keeps Legionella from growing; the recirc loop prevents warm, stagnant dead legs where it breeds; and the mixing valve tempers delivery to about 120°F so nobody is scalded. Hot enough to be safe from bacteria, cool enough to be safe on skin."},
+{q:"Four drains: a restroom sink, a lab sink, a loading-dock trench drain, and a roof drain. Where does each go, and why?",a:"Restroom sink: trap, then sanitary. Lab sink: acid-resistant pipe to the neutralization tank, pH corrected, then sanitary. Dock drain: through the oil/water separator, then sanitary — oil never goes to either sewer directly. Roof drain: rain and only rain, so it runs on the storm system, completely separate from sanitary."},
+{q:"You find an RPZ discharging water from its relief port. What is it telling you, and what do you check?",a:"The relief valve dumps whenever the middle zone cannot stay below supply pressure — so either a check valve is fouled or a real backflow condition occurred. It is doing its job, not failing. Check the checks for debris, verify pressures, and get it tested — never plug the relief port."}
+];
+  var box=document.getElementById('openBox');
+  OPEN.forEach(function(it,i){
+    var c=document.createElement('div');c.className='q-card';
+    var top=document.createElement('div');top.className='q-top';
+    var n=document.createElement('span');n.className='q-num';n.textContent='O'+(i+1);
+    var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+    top.appendChild(n);top.appendChild(t);c.appendChild(top);
+    var lines=document.createElement('div');lines.className='q-lines';
+    for(var k=0;k<3;k++){lines.appendChild(document.createElement('i'));}
+    c.appendChild(lines);
+    var b=document.createElement('button');b.type='button';b.className='q-show';b.textContent='Show a strong answer';
+    b.onclick=function(){var e=document.createElement('div');e.className='q-exp';e.textContent=it.a;c.appendChild(e);b.remove();};
+    c.appendChild(b);box.appendChild(c);});
+  })();
+  </script>
+
+
+  <footer>
+    <b>This is the big-picture version.</b> The details — pipe materials, trap and vent sizing, backflow test intervals, hot-water temperatures, and neutralization monitoring — come once these basics click.<br>
+    Every building is a little different; always go by the actual system, the risers and shutoffs in front of you, and the local plumbing code.
+  </footer>
+
+</div>
+
+</body>
+</html>
