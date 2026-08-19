@@ -9,6 +9,7 @@ import {
 import { useShifts } from '../../hooks/useShifts';
 import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe, type ManageScope } from '../../hooks/useMe';
+import { CoveIdFinder } from '../../components/CoveIdFinder';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -174,6 +175,11 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
 
   return (
     <div className="space-y-4">
+      {/* Paste-a-Cove-URL → one-click assign the Cove ID. Lives above the
+          roster because that's where the NO COVE ID tags are. Anyone who can
+          edit engineers can assign; leads see it read-only. */}
+      <CoveIdFinder roster={allRows} readOnly={!canManageAny} />
+
       <div className="t-card">
         <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
           <div className="flex items-baseline gap-3 flex-wrap">
