@@ -127,8 +127,8 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
   });
 
   // Built-in defaults summary: this site's managers (named — short list) and
-  // the engineer count (UPark shows it; each invite goes to the one
-  // requesting engineer).
+  // the engineer count (UPark: since notify-pto v26 EVERY active UPark
+  // engineer gets every invite/cancellation, so the count is the crew size).
   const defaultsQ = useQuery({
     queryKey: ['pto_cal_defaults', siteCode, siteQ.data ?? null],
     enabled: !!siteQ.data,
@@ -188,7 +188,7 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
         title={isBinney
           ? 'Shared calendar sync feed (admin-only) + personal invite list (muted until launch)'
-          : 'Invites go to home-site managers + the requesting engineer by default; extras (client / director / admin) are added below'}
+          : 'Every invite/cancellation goes to home-site managers + all UPark engineers; extras (client / director / admin) are added below'}
       >
         {open ? '▾' : '▸'} {isBinney
           ? `PTO calendar · ${feedRows.length} sync inbox${feedRows.length === 1 ? '' : 'es'} · ${managerNames.length + inviteRows.length} personal`
@@ -233,8 +233,8 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
                 <strong>Managers ({defaultsQ.data?.managers.length ?? 0})</strong>:{' '}
                 {defaultsQ.data?.managers.join(', ') || '—'}
                 {' · '}
-                <strong>Engineers ({defaultsQ.data?.engineerCount ?? 0})</strong>: each invite
-                goes to the engineer whose PTO it is
+                <strong>Engineers ({defaultsQ.data?.engineerCount ?? 0})</strong>: every
+                engineer gets every invite and cancellation on their own calendar
                 {' · '}
                 <strong>Extras ({inviteRows.length})</strong>: added below — any inbox, gets
                 every invite and cancellation.

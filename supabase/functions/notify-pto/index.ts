@@ -1,7 +1,20 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v25 — repo and live are identical.
+// This file was deployed VERBATIM as v26 — repo and live are identical.
+//
+// v26 (2026-08-21): WHOLE-CREW INVITES AT UPARK (user: "a calendar invite
+// to all upark engineers. after approval or cancellation"). The .ics
+// recipient set at UPark now includes EVERY active UPark engineer, so the
+// whole crew sees who's out on their own calendar — not just the person
+// whose PTO it is. Applies to all invite actions (REQUEST on approval,
+// CANCEL on retract / approved→denied, AMEND on date edits): same UID must
+// reach the same inboxes or stale events linger on 22 calendars instead of
+// one. NULL home_site_id counts as UPark (0072 backfill / 0125 convention),
+// so the crew query filters in JS rather than an .eq that would drop
+// un-homed new hires. NOTIFICATION emails are untouched: managers still get
+// submit/decision mail, the requester still gets their personal
+// approved/denied/cancelled/changed copy. Binney unchanged.
 //
 // v25 (2026-07-25): QUIET HOURS — no overnight phone dings. Events arriving
 // 9pm-6am ET are parked verbatim in pto_notify_queue (migration 0109)
@@ -118,10 +131,10 @@
 //      * The flow strips %0D/%0A before parsing so wraps can't split a marker.
 //      * The first attachment is the "External Mail" banner (0.jpg), not the
 //        .ics — parse the BODY, never attachments.
-//    Recipients per site (v19, kinds from migration 0119):
-//      UPark  — .ics invite → home-site managers + the requesting engineer,
-//               plus kind='invite' extras. 'feed' rows are ignored until
-//               UPark gets its own PA flow.
+//    Recipients per site (kinds from migration 0119):
+//      UPark  — .ics invite → home-site managers + EVERY active UPark
+//               engineer (v26; requester included) + kind='invite' extras.
+//               'feed' rows are ignored until UPark gets its own PA flow.
 //      Binney — PA feed (body-only, PTO_DATA, no .ics) → kind='feed' rows
 //               (jie.lao); .ics invite → home managers + kind='invite'
 //               extras, only when BINNEY_LIVE. The group SMTP address must
@@ -654,8 +667,29 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
           calTo = [...merged.values()];
         }
       } else {
+        // v26: whole-crew invites at UPark — every ACTIVE UPark engineer
+        // gets the .ics, and the CANCEL/AMEND for the same UID goes to the
+        // same set so nobody keeps a stale event. NULL home_site_id = UPark,
+        // so filter in JS instead of an .eq that would drop un-homed rows.
+        const { data: crew, error: cErr } = await admin
+          .from("users")
+          .select("email, engineer_profiles!inner(home_site_id)")
+          .eq("role", "engineer")
+          .eq("active", true);
+        if (cErr) throw cErr;
+        const crewEmails = ((crew ?? []) as {
+          email: string | null;
+          engineer_profiles: EpRow | EpRow[] | null;
+        }[])
+          .filter((u) => {
+            const p = Array.isArray(u.engineer_profiles) ? u.engineer_profiles[0] : u.engineer_profiles;
+            return (p?.home_site_id ?? site.id) === site.id;
+          })
+          .map((u) => (u.email ?? "").trim())
+          .filter((e) => /@/.test(e));
         const merged = new Map<string, string>();
         for (const e of managerEmails) merged.set(e.toLowerCase(), e);
+        for (const e of crewEmails) merged.set(e.toLowerCase(), e);
         const reqEmail = (requester?.email ?? "").trim();
         if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
         for (const e of lists.invite) merged.set(e.toLowerCase(), e);
