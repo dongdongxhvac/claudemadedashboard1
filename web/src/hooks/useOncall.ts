@@ -16,6 +16,14 @@ const KEY_UPCOMING = ['oncall_upcoming'];
 const KEY_PARTICIPANTS = ['oncall_participants'];
 const KEY_SETTINGS = ['oncall_settings'];
 
+/** Both "which rotation is current" queries derive that from
+ *  effectiveOncallDate() evaluated at FETCH time, and the 7am-Friday handover
+ *  changes no table — so the realtime subscription below never fires for it.
+ *  Without a timer, a long-lived tab (the shop TV kiosk, which only reloads on
+ *  its 4am reboot) keeps showing the previous week's name all day. Re-poll so
+ *  the handover lands on screen within a few minutes. (2026-08-21) */
+const ONCALL_POLL_MS = 5 * 60_000;
+
 /** On-call handover happens at 7am local on Friday. To pick the right
  *  rotation row, shift "now" back by 7 hours: that maps Friday 06:59 onto
  *  the previous calendar day (so the prior week's row still wins) and
@@ -106,7 +114,8 @@ export function useCurrentOncall() {
         secondary: data.secondary_user_id ? byId.get(data.secondary_user_id) ?? null : null,
       };
     },
-    staleTime: 5 * 60_000,
+    staleTime: ONCALL_POLL_MS,
+    refetchInterval: ONCALL_POLL_MS,
   });
 }
 
@@ -180,7 +189,8 @@ export function useUpcomingOncall(count: number) {
         is_current: r.week_start === currentWeek,
       }));
     },
-    staleTime: 5 * 60_000,
+    staleTime: ONCALL_POLL_MS,
+    refetchInterval: ONCALL_POLL_MS,
   });
 }
 
