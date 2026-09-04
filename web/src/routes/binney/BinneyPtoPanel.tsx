@@ -58,6 +58,33 @@ function daysBetween(a: string, b: string): number {
   ) + 1;
 }
 
+/** "2026-10-05" → "OCTOBER"; January carries the year ("JANUARY 2027") so
+ *  lists spanning New Year stay unambiguous. Shared by the heatmap's month
+ *  dividers and the Upcoming-approved "Later" bucket. */
+function monthLabel(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  const name = d.toLocaleDateString(undefined, { month: 'long' }).toUpperCase();
+  return d.getMonth() === 0 ? `${name} ${d.getFullYear()}` : name;
+}
+
+/** Thin labelled rule ("─── OCTOBER ───") used between month groups. */
+function MonthDivider({ label, width }: { label: string; width?: number }) {
+  return (
+    <div
+      className="t-muted"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        width, margin: '2px 0 5px',
+        fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+      }}
+    >
+      <span style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+      <span>{label}</span>
+      <span style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+    </div>
+  );
+}
+
 // Each PTO type maps to an accent color used across the panel (out-today
 // chips, upcoming-row left border, heatmap intensity). Kept here so any
 // future component can import a single source of truth.
@@ -350,10 +377,11 @@ export function BinneyPtoPanel() {
               defined below, removed from the layout 2026-07-17 at the
               user's request; likely to return. */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            {/* Pinned to the grid's width (34 labels + 4 gap + 7×40 cells +
-                18 gaps = 336) — otherwise the title/legend rows set the
-                flex-basis and starve the roll beside it. */}
-            <div style={{ flex: '0 0 336px', width: 336 }}>
+            {/* Pinned to the grid's width (34 gutter + 7×40 cells + 21 gaps
+                = 335) plus room for a non-overlay scrollbar on the 52w
+                view — otherwise the title/legend rows set the flex-basis
+                and starve the roll beside it. */}
+            <div style={{ flex: '0 0 350px', width: 350 }}>
               <CapHeatmap
                 requests={buckets.all}
                 onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
@@ -678,22 +706,34 @@ function UpcomingGroupedList({ rows, ...actions }: { rows: PtoRequest[] } & Upco
       <div className="space-y-2">
         {groups.thisWeek.length > 0  && <UpcomingBucket label="This week"  rows={groups.thisWeek}  {...actions} />}
         {groups.thisMonth.length > 0 && <UpcomingBucket label="This month" rows={groups.thisMonth} {...actions} />}
-        {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     {...actions} />}
+        {groups.later.length > 0     && <UpcomingBucket label="Later"      rows={groups.later}     monthDividers {...actions} />}
       </div>
     </div>
   );
 }
 
-function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: string; rows: PtoRequest[] } & UpcomingActions) {
+function UpcomingBucket({ label, rows, monthDividers, onCancel, onEdit, onDelete }: {
+  label: string;
+  rows: PtoRequest[];
+  /** "Later" spans many months — group its rows under month rules. Rows
+   *  arrive sorted by starts_on, so a divider renders whenever the month
+   *  changes (and above the first row, naming the bucket's first month). */
+  monthDividers?: boolean;
+} & UpcomingActions) {
   return (
     <div>
       <div className="t-small font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
         {label} <span className="t-muted ml-1">({rows.length})</span>
       </div>
       <ul className="space-y-1">
-        {rows.map((r) => (
+        {rows.map((r, i) => (
+          <Fragment key={r.id}>
+          {monthDividers && (i === 0 || rows[i - 1].starts_on.slice(0, 7) !== r.starts_on.slice(0, 7)) && (
+            <li style={{ listStyle: 'none' }}>
+              <MonthDivider label={monthLabel(r.starts_on)} />
+            </li>
+          )}
           <li
-            key={r.id}
             className="t-small flex items-center gap-1.5"
             title={`${r.user_full_name ?? '?'} — ${ptoTypeLabel(r.type)} ${fmtRange(r.starts_on, r.ends_on)} (${r.days}d · ${r.hours}h)${r.reason ? ` · ${r.reason}` : ''}`}
             style={{
@@ -742,6 +782,7 @@ function UpcomingBucket({ label, rows, onCancel, onEdit, onDelete }: { label: st
               >🗑</button>
             </span>
           </li>
+          </Fragment>
         ))}
       </ul>
     </div>
@@ -890,7 +931,7 @@ function TodayAttendance({
   };
 
   // 7 columns: today (wider, featured) + 6 preview days. Shares its section
-  // row with the rotated heatmap (pinned at 336px), so the minimums are
+  // row with the rotated heatmap (pinned at 350px), so the minimums are
   // tight: 220 + 6×135 + 60 gaps = 1090px, which fits unscrolled beside the
   // heatmap inside the 1600px page container on a 1536px laptop and up.
   // Smaller windows scroll horizontally instead of squeezing — PC is the
@@ -1519,11 +1560,13 @@ function CapHeatmap({ requests, onPickDate }: {
   requests: PtoRequest[];
   onPickDate?: (iso: string) => void;
 }) {
-  // Horizon picker — 4 / 9 / 13 FUTURE weeks (1mo / 2mo / 3mo). On top of
-  // that, PAST_WEEKS weeks of history always render before the current week
-  // so last week's call-outs stay visible (faded, not clickable) — useful
-  // when reconciling documented hours in COVE after the fact.
-  const [weeks, setWeeks] = useState<4 | 9 | 13>(9);
+  // Horizon picker — 9 / 13 / 26 / 52 FUTURE weeks (2mo / 3mo / 6mo / 1y).
+  // On top of that, PAST_WEEKS weeks of history always render before the
+  // current week so last week's call-outs stay visible (faded, not
+  // clickable) — useful when reconciling documented hours in COVE after
+  // the fact. Views taller than 24+2 week rows scroll (see the maxHeight
+  // on the grid's scroll window below).
+  const [weeks, setWeeks] = useState<9 | 13 | 26 | 52>(13);
   const PAST_WEEKS = 2;
   const today = todayIso();
 
@@ -1641,14 +1684,39 @@ function CapHeatmap({ requests, onPickDate }: {
     });
   }
 
-  // Row labels — the grid is rotated (days across the top, weeks stacked
+  // Week rows — the grid is rotated (days across the top, weeks stacked
   // down), so each week row is labelled with its Monday date as m/d
   // ("7/13") and any date can be located without hovering cell by cell.
-  // The current week's row gets accent styling.
+  // The current week's row gets accent styling. Month distinction: a
+  // boundary week with 2+ days still in the OLD month stays with the old
+  // month; it only counts as the new month when at most its Monday hangs
+  // back — equivalently, a week belongs to the month of its TUESDAY. The
+  // divider lands above the first week of each month by that rule, and the
+  // alternating band tint uses the same rule so the two never disagree
+  // (e.g. Nov 1 on a Sunday: that week is 6/7 October days, so NOVEMBER
+  // divides above the following, fully-November week).
   const todayRow = cells.find((c) => c.isToday)?.col ?? -1;
-  const weekLabels: { col: number; label: string }[] = [];
+  type WeekRow = {
+    col: number;
+    label: string;          // Monday m/d
+    cells: Cell[];          // the 7 Mon–Sun cells
+    banded: boolean;        // odd month → faint band behind the row
+    divider: string | null; // month name when a new month starts this week
+  };
+  const weekRows: WeekRow[] = [];
   for (let c = 0; c < totalWeeks; c++) {
-    weekLabels.push({ col: c, label: fmtMd(cells[c * 7].iso) });
+    const wk = cells.slice(c * 7, c * 7 + 7);
+    const tue = new Date(wk[1].iso + 'T00:00:00');
+    const prevTue = c > 0 ? new Date(cells[(c - 1) * 7 + 1].iso + 'T00:00:00') : null;
+    const startsMonth = prevTue !== null &&
+      (tue.getMonth() !== prevTue.getMonth() || tue.getFullYear() !== prevTue.getFullYear());
+    weekRows.push({
+      col: c,
+      label: fmtMd(wk[0].iso),
+      cells: wk,
+      banded: tue.getMonth() % 2 === 1,
+      divider: startsMonth ? monthLabel(wk[1].iso) : null,
+    });
   }
 
   // Slightly more saturated palette so the eye reads cap-pinning quickly.
@@ -1727,12 +1795,12 @@ function CapHeatmap({ requests, onPickDate }: {
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2 flex items-baseline justify-between gap-2 flex-wrap">
-        {/* Short title — the column is pinned at 246px; the prev-{PAST_WEEKS}w
+        {/* Short title — the column is pinned at 350px; the prev-{PAST_WEEKS}w
             history shows as the faded rows above the accent-marked current
             week, so it doesn't need to be spelled out here. */}
         <span>Vacation cap heatmap</span>
         <span style={{ textTransform: 'none', display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
-          {([4, 9, 13] as const).map((w) => (
+          {([9, 13, 26, 52] as const).map((w) => (
             <button
               key={w}
               type="button"
@@ -1775,38 +1843,59 @@ function CapHeatmap({ requests, onPickDate }: {
         </span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-        {/* Week-label column — one label per week ROW (Monday's m/d date).
-            paddingTop matches the day-of-week header row (14 + 4 margin). */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingTop: 18 }}>
-          {weekLabels.map((w) => (
-            <div
-              key={w.col}
-              className="t-mono"
-              style={{
-                fontSize: 9, height: 26, lineHeight: '26px', textAlign: 'right', width: 34,
-                color: w.col === todayRow ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                fontWeight: w.col === todayRow ? 700 : 400,
-              }}
-            >
-              {w.label}
+      {/* Scroll window — capped at the natural height of 26 week rows
+          (24 future + 2 past: header ~18 + 26×29 rows + ~6 dividers).
+          9w/13w/26w render in full with no scrollbar; 52w scrolls with
+          the day-of-week header pinned. */}
+      <div style={{ maxHeight: 860, overflowY: 'auto' }}>
+        {/* Sticky day-of-week header — 34px gutter spacer + Mon–Sun, with
+            an opaque card background so week rows slide underneath it. */}
+        <div
+          style={{
+            display: 'grid', gridTemplateColumns: `34px repeat(7, ${CELL_W}px)`, gap: 3,
+            position: 'sticky', top: 0, zIndex: 1,
+            background: 'var(--color-card)', paddingBottom: 4,
+          }}
+        >
+          <div />
+          {dayLabels.map((d) => (
+            <div key={d} className="t-muted" style={{ fontSize: 9, height: 14, lineHeight: '14px', textAlign: 'center' }}>
+              {d}
             </div>
           ))}
         </div>
-        {/* Heatmap grid — rotated: days Mon–Sun across, weeks stacked down */}
-        <div>
-          {/* Day-of-week header row */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL_W}px)`, gap: 3, marginBottom: 4 }}>
-            {dayLabels.map((d) => (
-              <div key={d} className="t-muted" style={{ fontSize: 9, height: 14, lineHeight: '14px', textAlign: 'center' }}>
-                {d}
+        {/* One grid row per Mon–Sun week: gutter label (Monday m/d, accent
+            on the current week) + 7 cells. The row-level background paints
+            the alternating month band — it reads through the gutter and
+            the 3px cell gaps without touching the cap cell colours. */}
+        {weekRows.map((wk) => (
+          <Fragment key={wk.col}>
+            {wk.divider && (
+              /* Month divider — above the first week that belongs to the
+                 new month (at most its Monday left behind). Width = 34
+                 gutter + 7×40 cells + 7×3 gaps, matching the grid rows. */
+              <MonthDivider label={wk.divider} width={34 + CELL_W * 7 + 21} />
+            )}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `34px repeat(7, ${CELL_W}px)`,
+                gap: 3, marginBottom: 3,
+                background: wk.banded ? 'rgba(99,102,241,0.05)' : 'transparent',
+                borderRadius: 4,
+              }}
+            >
+              <div
+                className="t-mono"
+                style={{
+                  fontSize: 9, height: CELL_H, lineHeight: `${CELL_H}px`, textAlign: 'right',
+                  color: wk.col === todayRow ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  fontWeight: wk.col === todayRow ? 700 : 400,
+                }}
+              >
+                {wk.label}
               </div>
-            ))}
-          </div>
-          {/* Row-major flow: cells are in date order, so each 7-cell run is
-              one Mon–Sun week row. */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL_W}px)`, gridTemplateRows: `repeat(${totalWeeks}, ${CELL_H}px)`, gap: 3 }}>
-            {cells.map((cell) => {
+              {wk.cells.map((cell) => {
               const count = cell.people.length;
               const parts = cellParts(cell.people, cell.sick, cell.other);
               // Approximate rendered length (chars + separators) for sizing.
@@ -1894,8 +1983,9 @@ function CapHeatmap({ requests, onPickDate }: {
                 </button>
               );
             })}
-          </div>
-        </div>
+            </div>
+          </Fragment>
+        ))}
       </div>
       <div className="t-muted" style={{ fontSize: 9, marginTop: 4, fontStyle: 'italic' }}>
         Click a future cell to add PTO

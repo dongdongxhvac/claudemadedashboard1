@@ -582,7 +582,9 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'p',
               text:
-                'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. ' +
+                (s.binney
+                  ? 'The vacation heatmap shows the next 13 weeks by default; the buttons in its corner switch between 9, 13, 26 and 52 weeks — up to a full year out. Month names divide the grid (and the "Later" bucket of the Upcoming list) and every other month sits on a faint tinted band, so month boundaries read at a glance without counting rows; views longer than about six months scroll inside the panel with the day-of-week header staying pinned. '
+                  : 'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. ') +
                 'Each week is one ROW: days run Monday to Sunday across the top, and every row is labelled on the left with its Monday date — the current week highlighted — so you can locate the exact day to book or check without counting squares; hovering any cell shows the full date. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.',
             },
             {
