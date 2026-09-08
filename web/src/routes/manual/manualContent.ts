@@ -582,9 +582,7 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'p',
               text:
-                (s.binney
-                  ? 'The vacation heatmap shows the next 13 weeks by default; the buttons in its corner switch between 9, 13, 26 and 52 weeks — up to a full year out. Month names divide the grid (and the "Later" bucket of the Upcoming list) and every other month sits on a faint tinted band, so month boundaries read at a glance without counting rows; views longer than about six months scroll inside the panel with the day-of-week header staying pinned. '
-                  : 'The vacation heatmap shows the next 9 weeks by default; the buttons in its corner switch between 4, 9 and 13 weeks. ') +
+                'The vacation heatmap shows the next 13 weeks by default; the buttons in its corner switch between 9, 13, 26 and 52 weeks — up to a full year out. Month names divide the grid (and the "Later" bucket of the Upcoming list) and every other month sits on a faint tinted band, so month boundaries read at a glance without counting rows; views longer than about six months scroll inside the panel with the day-of-week header staying pinned. ' +
                 'Each week is one ROW: days run Monday to Sunday across the top, and every row is labelled on the left with its Monday date — the current week highlighted — so you can locate the exact day to book or check without counting squares; hovering any cell shows the full date. Clicking a future cell opens Add PTO with that date filled in and the type pre-set to Vacation. The grid also keeps the two weeks BEFORE today on screen: past cells are faded but keep their colours and sick/leave markers, so last week’s call-outs stay visible when you are reconciling documented hours after the fact.',
             },
             {
@@ -601,12 +599,7 @@ export function buildManual(site: ManualSite): Chapter[] {
                   'A BMR-observed building holiday — hover the cell for its name. Calendar marker only: it is not PTO, does not count toward the cap, and is unrelated to the Floating Holiday PTO type',
                 ],
                 ['Red dot, top-right', 'Someone is sick that day. Does not count toward the cap or change the colour'],
-                [
-                  'Purple square, bottom-right',
-                  s.binney
-                    ? 'Someone is out on any other absence type — floating holiday, bereavement, leave, short-term, jury duty or a legacy unpaid/personal entry. Hover the cell for who and which type. Does not count toward the cap'
-                    : 'Someone is on bereavement, leave, short-term or jury duty. Does not count toward the cap',
-                ],
+                ['Purple square, bottom-right', 'Someone is out on any other absence type — floating holiday, bereavement, leave, short-term, jury duty or a legacy unpaid/personal entry. Hover the cell for who and which type. Does not count toward the cap'],
               ],
             },
             {
