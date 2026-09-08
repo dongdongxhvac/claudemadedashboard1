@@ -181,19 +181,24 @@ function computeConflicts(
         pto: p,
         kind: 'primary_building',
         severity: 'medium',
-        detail: `Primary on ${prims.map((b) => b.short_code ?? b.code).join(', ')} — assign coverage`,
+        detail: `Primary: ${prims.map((b) => b.short_code ?? b.code).join(', ')}`,
       });
     }
     // Building rounds — the engineer currently holds a daily round, so every
     // PTO day leaves that round unwalked. Standing assignment (no end date),
     // so it flags once per PTO, like primary buildings.
+    // One entry per round, naming the round AND its stop buildings so the
+    // manager can hand the buildings off without opening the round.
     const rnds = roundsByUser.get(p.user_id);
-    if (rnds && rnds.length > 0) {
+    for (const rd of rnds ?? []) {
+      const stops = [...rd.stops]
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((st) => st.short_code ?? st.code);
       out.push({
         pto: p,
         kind: 'round',
         severity: 'medium',
-        detail: `Runs the ${rnds.map((rd) => rd.name).join(', ')} round${rnds.length === 1 ? '' : 's'} — assign coverage`,
+        detail: `${rd.name} round${stops.length ? `: ${stops.join(', ')}` : ''}`,
       });
     }
   }
@@ -346,6 +351,22 @@ export function PtoPanel() {
     () => computeConflicts(buckets.upcoming, oncallWeeks, otSignups, primaryByUser, roundsByUser),
     [buckets.upcoming, oncallWeeks, otSignups, primaryByUser, roundsByUser],
   );
+  // One line per engineer per PTO entry (user 2026-09-08): the per-kind
+  // conflicts for the same request are merged — primary buildings, round
+  // buildings, on-call, OT — instead of one row each. Severity is the
+  // worst of the merged parts.
+  type ConflictRow = { pto: PtoRequest; severity: 'high' | 'medium'; details: string[] };
+  const conflictRows = useMemo(() => {
+    const byPto = new Map<string, ConflictRow>();
+    for (const c of conflicts) {
+      const row = byPto.get(c.pto.id) ?? { pto: c.pto, severity: 'medium' as const, details: [] };
+      if (c.severity === 'high') row.severity = 'high';
+      row.details.push(c.detail);
+      byPto.set(c.pto.id, row);
+    }
+    return [...byPto.values()];
+  }, [conflicts]);
+  const [conflictsOpen, setConflictsOpen] = useState(false);
 
   const [showAdd, setShowAdd]               = useState(false);
   const [addPresetDate, setAddPresetDate]   = useState<string | null>(null);
@@ -365,11 +386,11 @@ export function PtoPanel() {
       </span>
       {' · '}
       {buckets.upcoming.length} upcoming
-      {conflicts.length > 0 && (
+      {conflictRows.length > 0 && (
         <>
           {' · '}
           <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
-            {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
+            {conflictRows.length} conflict{conflictRows.length === 1 ? '' : 's'}
           </span>
         </>
       )}
@@ -398,31 +419,43 @@ export function PtoPanel() {
             onDeny={(id, note)    => review.mutate({ id, decision: 'denied', review_note: note })}
           />
 
-          {/* Conflict alerts — approved PTO vs on-call/OT/primary building */}
-          {conflicts.length > 0 && (
+          {/* Conflict alerts — approved PTO vs on-call/OT/primary building/
+              round. Collapsible (user 2026-09-08); one line per engineer per
+              PTO entry, merging that entry's primary buildings, round
+              buildings, on-call and OT parts. */}
+          {conflictRows.length > 0 && (
             <div>
-              <div className="t-small uppercase tracking-wider mb-2" style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
-                Conflicts ({conflicts.length}) — assign coverage
-              </div>
-              <ul className="space-y-1">
-                {conflicts.map((c, i) => (
-                  <li
-                    key={`${c.pto.id}-${c.kind}-${i}`}
-                    className="t-small"
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      borderLeft: `3px solid ${c.severity === 'high' ? 'var(--color-danger)' : '#d97706'}`,
-                      background: c.severity === 'high' ? 'rgba(220,38,38,0.06)' : 'rgba(217,119,6,0.05)',
-                      borderRadius: 4,
-                    }}
-                  >
-                    <span style={{ marginRight: 6 }}>{c.severity === 'high' ? '🔴' : '🟡'}</span>
-                    <strong>{c.pto.user_full_name ?? '?'}</strong>
-                    <span className="t-muted"> · PTO {fmtRange(c.pto.starts_on, c.pto.ends_on)} · </span>
-                    {c.detail}
-                  </li>
-                ))}
-              </ul>
+              <button
+                type="button"
+                onClick={() => setConflictsOpen((v) => !v)}
+                className="t-small uppercase tracking-wider mb-2 hover:underline"
+                style={{ color: 'var(--color-danger)', fontWeight: 600 }}
+                title={conflictsOpen ? 'Collapse' : 'Expand'}
+              >
+                {conflictsOpen ? '▾' : '▸'} Conflicts ({conflictRows.length}) — assign coverage
+              </button>
+              {conflictsOpen && (
+                <ul className="space-y-1">
+                  {conflictRows.map((c) => (
+                    <li
+                      key={c.pto.id}
+                      className="t-small"
+                      style={{
+                        padding: '0.3rem 0.6rem',
+                        borderLeft: `3px solid ${c.severity === 'high' ? 'var(--color-danger)' : '#d97706'}`,
+                        background: c.severity === 'high' ? 'rgba(220,38,38,0.06)' : 'rgba(217,119,6,0.05)',
+                        borderRadius: 4,
+                      }}
+                    >
+                      <span style={{ marginRight: 6 }}>{c.severity === 'high' ? '🔴' : '🟡'}</span>
+                      <strong>{c.pto.user_full_name ?? '?'}</strong>
+                      <span className="t-muted"> · PTO {fmtRange(c.pto.starts_on, c.pto.ends_on)} · </span>
+                      {c.details.join(' · ')}
+                      <span className="t-muted"> — assign coverage</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
