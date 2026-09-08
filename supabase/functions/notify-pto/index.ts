@@ -1,7 +1,26 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v26 — repo and live are identical.
+// This file was deployed VERBATIM as v27 — repo and live are identical.
+//
+// v27 (2026-09-08): UPARK SHARED (GROUP) CALENDAR via the PA feed (user:
+// "insert the approved pto to the upark shared calendar on top of existing
+// list" — uparkengineeringbusinesssupporto365group@cushwake1.onmicrosoft.com).
+// Same mechanism as Binney: UPark now sends the body-only PTO_DATA feed
+// email to its kind='feed' rows too, ON TOP OF the v26 whole-crew .ics
+// invite (which is untouched). A Power Automate flow watching the feed
+// inbox writes the event onto the UPark M365 group calendar. Behaviour is
+// unchanged until an admin adds a UPark feed row in the PTO panel — with
+// no feed rows nothing new is sent. Two differences from the Binney feed
+// email so a flow can tell the sites apart when they share an inbox:
+//   * subject  "PTO UPark - <name> (<type>) <range>"  (Binney stays
+//              "PTO - ..." — its flow's subject filter is untouched)
+//   * PTO_DATA gains a trailing "|site:upark" field. Binney's line is
+//     byte-identical to v26 (its flow's parser is cloud-only; don't risk it).
+// !! Before adding the UPark feed row, make sure the Binney flow's trigger
+// does not also match "PTO UPark" subjects (or condition it on the sender /
+// the site field), or UPark PTO lands on the Binney calendar. !!
+// The group SMTP address itself must NOT be a recipient (see below).
 //
 // v26 (2026-08-21): WHOLE-CREW INVITES AT UPARK (user: "a calendar invite
 // to all upark engineers. after approval or cancellation"). The .ics
@@ -133,8 +152,9 @@
 //        .ics — parse the BODY, never attachments.
 //    Recipients per site (kinds from migration 0119):
 //      UPark  — .ics invite → home-site managers + EVERY active UPark
-//               engineer (v26; requester included) + kind='invite' extras.
-//               'feed' rows are ignored until UPark gets its own PA flow.
+//               engineer (v26; requester included) + kind='invite' extras;
+//               PA feed (body-only, PTO_DATA + site:upark, no .ics) →
+//               kind='feed' rows (v27) for the UPark group calendar flow.
 //      Binney — PA feed (body-only, PTO_DATA, no .ics) → kind='feed' rows
 //               (jie.lao); .ics invite → home managers + kind='invite'
 //               extras, only when BINNEY_LIVE. The group SMTP address must
@@ -652,7 +672,7 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
     const live = site.code === "binney" ? await binneyLive(admin) : true;
 
     let calTo: string[] = [];     // .ics invite — books personal calendars
-    let paFeedTo: string[] = [];  // Binney body-only PTO_DATA email — PA flow feed
+    let paFeedTo: string[] = [];  // body-only PTO_DATA email — PA flow feed (both sites since v27)
     if (inviteAction) {
       const lists = await calRecipients(admin, site.id as string, site.code as string);
       if (site.code === "binney") {
@@ -694,6 +714,9 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
         if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
         for (const e of lists.invite) merged.set(e.toLowerCase(), e);
         calTo = [...merged.values()];
+        // v27: UPark group calendar — feed rows get the PTO_DATA sync email
+        // on top of the invite. Empty until an admin adds a feed inbox.
+        paFeedTo = lists.feed;
       }
     }
 
@@ -795,9 +818,11 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
         engineerSentTo = engineerTo;
       }
 
-      // Binney PA feed: body-only, NO .ics — Power Automate parses the
-      // PTO_DATA line and writes the event to the group calendar. Subject
-      // must keep containing "PTO" (the flow's trigger filter). An AMEND
+      // PA feed (Binney since v19, UPark since v27): body-only, NO .ics —
+      // Power Automate parses the PTO_DATA line and writes the event to the
+      // site's group calendar. Subject must keep containing "PTO" (the
+      // flow's trigger filter); UPark's carries "PTO UPark" and a trailing
+      // site field so a flow can route by site. An AMEND
       // becomes two feed emails: CANCEL with the OLD values (so the flow's
       // cancel branch can find and delete the old event), then REQUEST with
       // the new ones. Sent in that order over one SMTP session.
@@ -832,17 +857,22 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
             note: "Approved PTO - group calendar sync record.",
           });
         }
+        // Binney's subject and PTO_DATA line stay byte-identical to v26 —
+        // its flow's parser lives in the cloud and is not in this repo.
+        const feedIsUpark = site.code !== "binney";
+        const feedTag = feedIsUpark ? "PTO UPark" : "PTO";
+        const feedSiteField = feedIsUpark ? `|site:${site.code}` : "";
         for (const f of feedSends) {
           const fRange = fmtRange(f.s, f.e);
           await client.send({
             from: `${site.name} Dashboard <${gmailUser}>`,
             to: paFeedTo,
             subject: asciiSafe(
-              (f.action === "CANCEL" ? "Canceled: " : "") + `PTO - ${who} (${f.t}) ${fRange}`,
+              (f.action === "CANCEL" ? "Canceled: " : "") + `${feedTag} - ${who} (${f.t}) ${fRange}`,
             ),
             content: asciiSafe(
               `${f.note}\n\n${who} - ${f.t} ${fRange} (${f.h}h)` +
-              `\n\nPTO_DATA|action:${f.action}|id:${r.id}|starts:${f.s}|ends:${f.e}|hours:${f.h}|engineer:${who}|type:${f.t}`,
+              `\n\nPTO_DATA|action:${f.action}|id:${r.id}|starts:${f.s}|ends:${f.e}|hours:${f.h}|engineer:${who}|type:${f.t}${feedSiteField}`,
             ),
           });
         }

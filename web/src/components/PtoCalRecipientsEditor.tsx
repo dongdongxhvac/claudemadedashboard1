@@ -1,10 +1,13 @@
 // Manager-editable pto_cal_recipients — TWO lists per site since migration
 // 0119 added `kind` (read by notify-pto v19):
-//   kind='feed'   — SHARED calendar sync inboxes. Binney: the Power Automate
-//                   feed (jie.lao) — a body-only PTO_DATA email goes here and
-//                   the PA flow writes the event onto the M365 group
+//   kind='feed'   — SHARED calendar sync inboxes, BOTH sites since
+//                   notify-pto v27 (2026-09-08; Binney since v19). A
+//                   body-only PTO_DATA email goes here and a Power Automate
+//                   flow writes the event onto the site's M365 group
 //                   calendar. ADMIN-ONLY writes (RLS + UI). Emptying it
 //                   silently kills the group calendar sync — no fallback.
+//                   NEVER put the group's own SMTP address here — that
+//                   emails every group member directly.
 //   kind='invite' — PERSONAL calendar .ics extras, on top of the built-in
 //                   home managers (+ requester at UPark). admin/manager
 //                   writes. At Binney these are muted until launch
@@ -188,11 +191,11 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
         className="t-small t-muted uppercase tracking-wider hover:t-accent"
         title={isBinney
           ? 'Shared calendar sync feed (admin-only) + personal invite list (muted until launch)'
-          : 'Every invite/cancellation goes to home-site managers + all UPark engineers; extras (client / director / admin) are added below'}
+          : 'Shared calendar sync feed (admin-only) + every invite/cancellation to home-site managers + all UPark engineers; extras (client / director / admin) are added below'}
       >
         {open ? '▾' : '▸'} {isBinney
           ? `PTO calendar · ${feedRows.length} sync inbox${feedRows.length === 1 ? '' : 'es'} · ${managerNames.length + inviteRows.length} personal`
-          : `Calendar invites · ${defaultsQ.data?.managers.length ?? '…'} managers · ${defaultsQ.data?.engineerCount ?? '…'} engineers · ${inviteRows.length} extras`}
+          : `PTO calendar · ${feedRows.length} sync inbox${feedRows.length === 1 ? '' : 'es'} · ${defaultsQ.data?.managers.length ?? '…'} managers · ${defaultsQ.data?.engineerCount ?? '…'} engineers · ${inviteRows.length} extras`}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
@@ -229,7 +232,23 @@ export function PtoCalRecipientsEditor({ siteCode }: { siteCode: 'upark' | 'binn
             </>
           ) : (
             <>
-              <p className="t-small t-muted">
+              {/* ── Shared calendar (PA feed) — admin-only (v27) ────────── */}
+              <p className="t-small t-muted" style={{ marginBottom: 4 }}>
+                <strong>Shared calendar sync ({feedRows.length})</strong> — admin only. A
+                body-only sync email goes to these inboxes; a Power Automate flow writes the
+                event onto the UPark group calendar. <strong>Not an invite list</strong> — add
+                the inbox the flow watches, never the group address itself.
+                {feedRows.length === 0 && (
+                  <span className="t-warn"> Sync is OFF — no feed inbox configured.</span>
+                )}
+              </p>
+              <Chips rows={feedRows} canEdit={isAdmin} onRemove={(id) => remove.mutate(id)} removing={remove.isPending} />
+              {isAdmin
+                ? <AddRow rows={feedRows} pending={add.isPending} error={add.error as Error | null} onAdd={onAdd('feed')} />
+                : <p className="t-small t-muted" style={{ fontStyle: 'italic' }}>Only an admin can edit the sync list.</p>}
+
+              {/* ── Personal calendar invites ──────────────────────────── */}
+              <p className="t-small t-muted" style={{ margin: '10px 0 4px' }}>
                 <strong>Managers ({defaultsQ.data?.managers.length ?? 0})</strong>:{' '}
                 {defaultsQ.data?.managers.join(', ') || '—'}
                 {' · '}
