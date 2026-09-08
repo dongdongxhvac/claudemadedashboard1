@@ -1,6 +1,11 @@
 // /engineer/me — field-tech mobile surface. Phone-first single-column,
-// bottom-nav with Now / PTO / Profile. Locked to the signed-in user.
-// Read-only per plan: engineers can't edit data here.
+// one scrolling page: 4 compact stat tiles + PTO. Locked to the signed-in
+// user. Read-only per plan: engineers can't edit data here.
+//
+// 2026-09-08 (per user): the Now / PTO / Profile bottom tabs and the
+// Buildings link are gone. After the 08-10 trim there was too little content
+// to justify tabs, and the technician surface should focus on performance
+// (the tiles) and PTO. Profile, when shared by the admin, is a header link.
 //
 // Trimmed 2026-08-10 (per user): the UPark engineer view is now stats + PTO
 // + snapshot footer only. The Now tab's PM/WO lists, the whole "Mine" tab
@@ -8,7 +13,7 @@
 // focus board were removed from this surface. The PM/labor/close hooks that
 // feed the stat strip still run — "Done this week" and "Due now" derive
 // from them.
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
@@ -25,7 +30,6 @@ import { isClosed, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dash
 import { OncallBadge } from '../../components/OncallBadge';
 import { MyPtoSection } from '../../components/MyPtoSection';
 
-type Tab = 'now' | 'pto' | 'profile';
 
 export default function EngineerMobile() {
   const { signOut } = useAuth();
@@ -38,7 +42,6 @@ export default function EngineerMobile() {
   const laborQ = useMyLaborRows(ctx.data?.cmms_assignee_name);
   const closesQ = useMyPmCloses(ctx.data?.cmms_assignee_name, 14);
 
-  const [tab, setTab] = useState<Tab>('now');
 
   // Friendly routing: admin/manager who land here, send them home.
   if (me.data && me.data.role !== 'engineer') {
@@ -63,7 +66,7 @@ export default function EngineerMobile() {
     );
   }
 
-  const profileTabAllowed = ctx.data.visible_to_self;
+  const profileAllowed = ctx.data.visible_to_self;
 
   // Binney St engineers have no CMMS feed (PMs/WOs/labor are UPark-only), so
   // their phone surface is PTO-only: header + PTO, no tab nav.
@@ -94,9 +97,13 @@ export default function EngineerMobile() {
         </div>
         <div className="flex items-center gap-3">
           <OncallBadge />
-          <Link to="/buildings" className="t-small t-accent hover:underline">
-            Buildings
-          </Link>
+          {profileAllowed && (
+            <Link to={`/engineer/${ctx.data.user_id}/profile`} className="t-small t-accent hover:underline">
+              Profile
+            </Link>
+          )}
+          {/* Buildings link removed 2026-09-08 per user — technicians don't
+              need the KB index from this surface. */}
           {/* No Admin link on the phone surface (removed 2026-07-29 per user):
               the admin tabs are desktop-density pages, and leads should do
               proposal work from a PC. Leads still get "Admin (lead)" in the
@@ -106,57 +113,20 @@ export default function EngineerMobile() {
         </div>
       </header>
 
-      {/* tab body — pad bottom for the fixed nav */}
-      <main className="pb-24">
-        {tab === 'now' && (
-          <NowTab
-            pmRows={pmQ.data ?? []}
-            laborRows={laborQ.data ?? []}
-            closes={closesQ.data ?? []}
-            loading={pmQ.isLoading}
-          />
-        )}
-        {tab === 'pto' && (
-          <div className="p-4">
-            {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
-            <MyPtoSection userId={ctx.data.user_id} compact />
-          </div>
-        )}
-        {tab === 'profile' && profileTabAllowed && (
-          <Navigate to={`/engineer/${ctx.data.user_id}/profile`} replace />
-        )}
+      {/* one page: compact stat tiles, then PTO — no tabs */}
+      <main className="pb-8">
+        <NowTab
+          pmRows={pmQ.data ?? []}
+          laborRows={laborQ.data ?? []}
+          closes={closesQ.data ?? []}
+          loading={pmQ.isLoading}
+        />
+        <div className="px-4 pb-4">
+          {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
+          <MyPtoSection userId={ctx.data.user_id} compact />
+        </div>
       </main>
-
-      {/* fixed bottom nav */}
-      <nav
-        className="fixed bottom-0 inset-x-0 border-t flex"
-        style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
-      >
-        <TabBtn label="Now" icon="•" active={tab === 'now'} onClick={() => setTab('now')} />
-        <TabBtn label="PTO" icon="▤" active={tab === 'pto'} onClick={() => setTab('pto')} />
-        {profileTabAllowed ? (
-          <TabBtn label="Profile" icon="◆" active={tab === 'profile'} onClick={() => setTab('profile')} />
-        ) : (
-          <div className="flex-1 py-3 text-center t-small" style={{ color: 'var(--color-text-muted)', opacity: 0.4 }} title="Profile not yet shared by your admin">
-            <div>—</div>
-            <div className="t-small">Profile</div>
-          </div>
-        )}
-      </nav>
     </Wrap>
-  );
-}
-
-function TabBtn({ label, icon, active, onClick }: { label: string; icon: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex-1 py-3 text-center"
-      style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
-    >
-      <div className="text-lg">{icon}</div>
-      <div className="t-small">{label}</div>
-    </button>
   );
 }
 
@@ -189,8 +159,12 @@ function NowTab({
   const weekStart = mondayOf(new Date());
   const weekEnd = addDays(weekStart, 6);
   const weekStartStr = localISODate(weekStart);
+  // "Next 7 days" tile (2026-09-08 per user): tomorrow plus the six days
+  // after it, calendar days.
   const tomorrow = addDays(new Date(), 1);
   const tomorrowStr = localISODate(tomorrow);
+  const windowEnd = addDays(tomorrow, 6);
+  const windowEndStr = localISODate(windowEnd);
 
   const { overdue, today, tomorrowPms, weekHours, doneThisWeek, snapshotTaken } = useMemo(() => {
     let overdue = 0, today = 0, tomorrowPms = 0;
@@ -199,7 +173,7 @@ function NowTab({
       if (!r.due_date) continue;
       if (r.due_date < todayStr) overdue++;
       else if (r.due_date === todayStr) today++;
-      else if (r.due_date === tomorrowStr) tomorrowPms++;
+      else if (r.due_date >= tomorrowStr && r.due_date <= windowEndStr) tomorrowPms++;
     }
 
     // PM completions this week — from explicit close-event log (Phase 5.5).
@@ -215,15 +189,15 @@ function NowTab({
       .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
     const snapshotTaken = pmRows[0]?.snapshot_taken_at ?? null;
     return { overdue, today, tomorrowPms, weekHours, doneThisWeek, snapshotTaken };
-  }, [pmRows, laborRows, closes, todayStr, tomorrowStr, weekStartStr, weekStart, weekEnd]);
+  }, [pmRows, laborRows, closes, todayStr, tomorrowStr, windowEndStr, weekStartStr, weekStart, weekEnd]);
 
   if (loading) return <p className="t-text t-muted p-4">Loading your day...</p>;
 
   const dueNowTotal = overdue + today;
   const dueNowAccent: 'danger' | 'warn' | undefined =
     overdue > 0 ? 'danger' : today > 0 ? 'warn' : undefined;
-  const dueNowSub =
-    dueNowTotal === 0 ? 'all caught up' : `${overdue} overdue · ${today} today`;
+  // Always show the split (2026-09-08 per user): due today and past due.
+  const dueNowSub = `${today} today · ${overdue} past due`;
 
   const snapshotLocal = snapshotTaken
     ? new Date(snapshotTaken).toLocaleString(undefined, {
@@ -232,18 +206,18 @@ function NowTab({
     : null;
 
   return (
-    <div className="p-4 space-y-4">
-      {/* glance stats — 4 cards in 2x2 (phones) / 1x4 (md+) */}
+    <div className="p-4 space-y-2">
+      {/* glance stats — 4 compact cards in 2x2 (phones) / 1x4 (md+) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Stat
-          label="Hours · this week"
+          label="Hours"
           value={weekHours.toFixed(1)}
-          sub={`${fmtMd(localISODate(weekStart))} → ${fmtMd(localISODate(weekEnd))}`}
+          sub={`/ ${workingDaysElapsed(weekStart)} ${workingDaysElapsed(weekStart) === 1 ? 'day' : 'days'}`}
         />
         <Stat
-          label="Done · this week"
+          label="Completed PMs"
           value={doneThisWeek}
-          sub="completed PMs"
+          sub={`/ ${workingDaysElapsed(weekStart)} ${workingDaysElapsed(weekStart) === 1 ? 'day' : 'days'}`}
         />
         <Stat
           label="Due now"
@@ -252,20 +226,34 @@ function NowTab({
           sub={dueNowSub}
         />
         <Stat
-          label="Tomorrow"
+          label="Next 7 days"
           value={tomorrowPms}
-          sub={tomorrowPms === 0 ? 'nothing scheduled' : 'PMs due tomorrow'}
+          sub={`${fmtMd(tomorrowStr)} → ${fmtMd(windowEndStr)}`}
         />
       </div>
 
       {/* snapshot freshness footer */}
       {snapshotLocal && (
-        <p className="t-small t-muted text-center pt-2 pb-1">
+        <p className="t-small t-muted text-center">
           Data as of {snapshotLocal}
         </p>
       )}
     </div>
   );
+}
+
+/** Weekdays elapsed so far this week, Monday through today, capped at 5.
+ *  The hours tile renders "12.5 / 2 days" (2026-09-08 per user) — hours logged
+ *  over the working days so far — instead of the week's date range. */
+function workingDaysElapsed(weekStart: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let n = 0;
+  for (let d = new Date(weekStart); d <= today && n < 5; d = addDays(d, 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) n++;
+  }
+  return n;
 }
 
 // ============================================================================
@@ -286,11 +274,16 @@ function Stat({
     accent === 'danger' ? 'var(--color-danger)' :
     accent === 'warn'   ? 'var(--color-warn)'   :
     'var(--color-text)';
+  // Compact two-line tile (2026-09-08 per user): label on top, then the
+  // number with its note beside it on one line, so the 2x2 grid stays
+  // short and PTO is visible below it without scrolling.
   return (
-    <div className="t-card text-center">
-      <div className="t-small t-muted uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-3xl font-medium font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="t-small t-muted mt-1">{sub}</div>}
+    <div className="t-card" style={{ padding: '8px 10px' }}>
+      <div className="t-muted uppercase tracking-wider" style={{ fontSize: 10 }}>{label}</div>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-2xl font-medium font-mono leading-tight" style={{ color }}>{value}</span>
+        {sub && <span className="t-small t-muted">{sub}</span>}
+      </div>
     </div>
   );
 }

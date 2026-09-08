@@ -36,8 +36,11 @@ export default function EngineerPc() {
   const closesQ = useMyPmCloses(ctx.data?.cmms_assignee_name, 14);
 
   const todayStr = localISODate(new Date());
+  // "Next 7 days" tile (2026-09-08 per user): tomorrow plus the six days
+  // after it, calendar days. Mirrors Mobile.tsx.
   const tomorrow = addDays(new Date(), 1);
   const tomorrowStr = localISODate(tomorrow);
+  const windowEndStr = localISODate(addDays(tomorrow, 6));
   const weekStart = mondayOf(new Date());
   const weekEnd = addDays(weekStart, 6);
   const weekStartStr = localISODate(weekStart);
@@ -56,7 +59,7 @@ export default function EngineerPc() {
       if (!r.due_date) continue;
       if (r.due_date < todayStr) overdue.push(r);
       else if (r.due_date === todayStr) today.push(r);
-      else if (r.due_date === tomorrowStr) tomorrowPms.push(r);
+      else if (r.due_date >= tomorrowStr && r.due_date <= windowEndStr) tomorrowPms.push(r);
     }
     // PM completions this week — from explicit close-event log.
     const weekEndExclusive = addDays(weekEnd, 1);
@@ -71,7 +74,7 @@ export default function EngineerPc() {
       .filter((l) => l.week_start === weekStartStr)
       .reduce((s, l) => s + (l.labor_hours ?? 0), 0);
     return { overdue, today, tomorrowPms, weekHours, doneThisWeek };
-  }, [pmRows, laborRows, closes, todayStr, tomorrowStr, weekStart, weekEnd, weekStartStr]);
+  }, [pmRows, laborRows, closes, todayStr, tomorrowStr, windowEndStr, weekStart, weekEnd, weekStartStr]);
 
   const snapshotTaken = pmRows[0]?.snapshot_taken_at;
   const snapshotLocal = snapshotTaken
@@ -126,13 +129,8 @@ export default function EngineerPc() {
                 View profile →
               </Link>
             )}
-            {/* /buildings is the UPark KB index (site-fenced in App.tsx) —
-                Binney has no buildings surface yet, so don't offer the link. */}
-            {!binneyOnly && (
-              <Link to="/buildings" className="t-small t-accent hover:underline">
-                Buildings
-              </Link>
-            )}
+            {/* Buildings link removed 2026-09-08 per user — technicians
+                don't need the KB index from this surface. */}
             {canAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 {isAdmin ? 'Admin' : 'Admin (lead)'}
@@ -152,13 +150,13 @@ export default function EngineerPc() {
         <>
         {/* stat strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Hours · this week" value={stats.weekHours.toFixed(1)}
-            sub={`${fmtMd(localISODate(weekStart))} → ${fmtMd(localISODate(weekEnd))}`} />
-          <StatCard label="Done · this week" value={stats.doneThisWeek} sub="completed PMs" />
+          <StatCard label="Hours" value={stats.weekHours.toFixed(1)}
+            sub={workingDaysNote(weekStart)} />
+          <StatCard label="Completed PMs" value={stats.doneThisWeek} sub={workingDaysNote(weekStart)} />
           <StatCard label="Due now" value={dueNowTotal} accent={dueNowAccent}
-            sub={dueNowTotal === 0 ? 'all caught up' : `${stats.overdue.length} ovd · ${stats.today.length} td`} />
-          <StatCard label="Tomorrow" value={stats.tomorrowPms.length}
-            sub={stats.tomorrowPms.length === 0 ? 'nothing' : 'PMs due tomorrow'} />
+            sub={`${stats.today.length} today · ${stats.overdue.length} past due`} />
+          <StatCard label="Next 7 days" value={stats.tomorrowPms.length}
+            sub={`${fmtMd(tomorrowStr)} → ${fmtMd(windowEndStr)}`} />
         </div>
 
         {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
@@ -175,6 +173,20 @@ export default function EngineerPc() {
 }
 
 // ----- Small helpers -----------------------------------------------------
+
+/** Weekdays elapsed so far this week, Monday through today, capped at 5.
+ *  Mirrors Mobile.tsx — the hours tile shows this instead of the week's
+ *  date range (2026-09-08 per user). */
+function workingDaysNote(weekStart: Date): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let n = 0;
+  for (let d = new Date(weekStart); d <= today && n < 5; d = addDays(d, 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) n++;
+  }
+  return `${n} working day${n === 1 ? '' : 's'}`;
+}
 
 function StatCard({
   label, value, sub, accent,
