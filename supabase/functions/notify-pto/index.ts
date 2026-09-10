@@ -1,7 +1,17 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v28 — repo and live are identical.
+// This file was deployed VERBATIM as v29 — repo and live are identical.
+//
+// v29 (2026-09-10): NO DASHBOARD LINKS IN ANY EMAIL (user: "the link in
+// manager email is not good which blocked by mimecast once the link is
+// clicked"). Mimecast URL Protect rewrites every link and blocks the
+// vercel.app destination on click by policy, so the v21 "anchor text ==
+// href" form still dead-ends. The manager and engineer emails (both
+// sites) and the .ics DESCRIPTION now say "open the <site> dashboard"
+// with NO address at all — nothing to rewrite, nothing to block. Bring the
+// link back only once IT permits the domain in Mimecast Managed URLs.
+// DASHBOARD_BASE / PTO_DASHBOARD_BASE dropped (no remaining reader).
 //
 // v28 (2026-09-10): UPARK_LIVE — a feed-only test switch for UPark, the
 // mirror of BINNEY_LIVE but with the OPPOSITE default: unset/anything but
@@ -188,7 +198,6 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DASHBOARD_BASE = Deno.env.get("PTO_DASHBOARD_BASE") ?? "https://claudemadedashboard1.vercel.app";
 const QA_FORCE_TO = Deno.env.get("PTO_QA_FORCE_TO") ?? "";
 
 /** Binney launch switch (develop mode when false) — env first, then Vault,
@@ -586,7 +595,8 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
     const tl = typeLabel(r.type);
     const partial = partialLabel(r);
     const decision = r.status === "approved" ? "Approved" : r.status === "denied" ? "Denied" : r.status;
-    const dashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/manager" : "/upark/manager"}`;
+    // v29: plain wording, no URL — see header.
+    const dashHint = `Open the ${site.name} dashboard to review.`;
 
     const subject = asciiSafe(payload.event === "submitted"
       ? `[PTO - ${site.name}] New request - ${who} - ${tl} ${range}`
@@ -621,14 +631,11 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
             `<tr><td style="padding: 4px 12px 4px 0; color:#666;">${escapeHtml(k)}</td><td><strong>${escapeHtml(String(v))}</strong></td></tr>`
           ).join("")}
         </table>
-        <p style="margin-top:16px;">
-          ${escapeHtml(site.name)} dashboard:<br/>
-          <a href="${dashUrl}">${dashUrl}</a>
-        </p>
+        <p style="margin-top:16px;">${escapeHtml(dashHint)}</p>
       </div>`;
     const text = asciiSafe(`${heading}\n\n` +
       rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-      `\n\n${dashUrl}`);
+      `\n\n${dashHint}`);
 
     // Personalized engineer email (v23 'decided'; v24 adds 'retracted' +
     // 'amended'). Explicit rows — no "Engineer" row (it's about them), no
@@ -636,7 +643,7 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
     // not whoever cancelled). Second-person heading; link points at the
     // engineer's own page, not the manager dashboard. Subject + text stay
     // ASCII-safe (denomailer folds non-ASCII subjects into raw MIME).
-    const engDashUrl = `${DASHBOARD_BASE}${site.code === "binney" ? "/binney/engineer" : "/upark/engineer"}`;
+    const engDashHint = `Open the ${site.name} dashboard to see your time off.`;
     const engWord =
       payload.event === "retracted" ? "cancelled"
       : payload.event === "amended" ? "changed"
@@ -669,14 +676,11 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
             `<tr><td style="padding: 4px 12px 4px 0; color:#666;">${escapeHtml(k)}</td><td><strong>${escapeHtml(String(v))}</strong></td></tr>`
           ).join("")}
         </table>
-        <p style="margin-top:16px;">
-          Your time off page:<br/>
-          <a href="${engDashUrl}">${engDashUrl}</a>
-        </p>
+        <p style="margin-top:16px;">${escapeHtml(engDashHint)}</p>
       </div>`;
     const engText = asciiSafe(`${engHeading}\n\n` +
       engRows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-      `\n\n${engDashUrl}`);
+      `\n\n${engDashHint}`);
 
     let inviteAction: "REQUEST" | "CANCEL" | "AMEND" | null = null;
     if (payload.event === "decided" && r.status === "approved") {
@@ -921,8 +925,7 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
           description:
             `${who} - ${tl} ${range} (${r.hours}h)` +
             (partial ? ` - ${partial}` : "") +
-            (r.reason ? `\nReason: ${r.reason}` : "") +
-            `\n${dashUrl}`,
+            (r.reason ? `\nReason: ${r.reason}` : ""),
           startIso: r.starts_on,
           endIso: r.ends_on,
           organizerEmail: gmailUser,
