@@ -1,7 +1,16 @@
 // notify-pto — Supabase Edge Function.
 //
 // !! THIS FILE MUST STAY IN SYNC WITH THE DEPLOYED FUNCTION !!
-// This file was deployed VERBATIM as v27 — repo and live are identical.
+// This file was deployed VERBATIM as v28 — repo and live are identical.
+//
+// v28 (2026-09-10): UPARK_LIVE — a feed-only test switch for UPark, the
+// mirror of BINNEY_LIVE but with the OPPOSITE default: unset/anything but
+// "false" = live (nothing changes for today's traffic). While 'false', a
+// UPark event sends ONLY the PA feed email (group calendar sync) — no
+// manager/engineer notification emails and no whole-crew .ics invite — so
+// the UPark group-calendar flow can be proven without inviting 22 people.
+//   select set_app_secret('UPARK_LIVE', 'false');  -- feed-only test
+//   select set_app_secret('UPARK_LIVE', 'true');   -- back to normal
 //
 // v27 (2026-09-08): UPARK SHARED (GROUP) CALENDAR via the PA feed (user:
 // "insert the approved pto to the upark shared calendar on top of existing
@@ -214,6 +223,18 @@ async function paCancelReady(admin: ReturnType<typeof createClient>): Promise<bo
 }
 
 type SupaAdmin = ReturnType<typeof createClient>;
+
+/** UPARK_LIVE (v28) — feed-only test switch. Env first, then Vault. Only
+ *  the literal string "false" mutes UPark; unset = live, so this can never
+ *  silently switch UPark off. */
+async function uparkLive(admin: SupaAdmin): Promise<boolean> {
+  let v = (Deno.env.get("UPARK_LIVE") ?? "").trim();
+  if (!v) {
+    const { data } = await admin.rpc("get_app_secret", { k: "UPARK_LIVE" });
+    v = ((data as string) ?? "").trim();
+  }
+  return v.toLowerCase() !== "false";
+}
 
 /** Quiet hours (v25) — no overnight phone dings. Events arriving inside the
  *  window are parked verbatim in pto_notify_queue; the pg_cron job
@@ -669,7 +690,7 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
       inviteAction = "AMEND";
     }
 
-    const live = site.code === "binney" ? await binneyLive(admin) : true;
+    const live = site.code === "binney" ? await binneyLive(admin) : await uparkLive(admin);
 
     let calTo: string[] = [];     // .ics invite — books personal calendars
     let paFeedTo: string[] = [];  // body-only PTO_DATA email — PA flow feed (both sites since v27)
@@ -713,7 +734,8 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
         const reqEmail = (requester?.email ?? "").trim();
         if (/@/.test(reqEmail)) merged.set(reqEmail.toLowerCase(), reqEmail);
         for (const e of lists.invite) merged.set(e.toLowerCase(), e);
-        calTo = [...merged.values()];
+        // v28: the whole-crew .ics invite is muted while UPARK_LIVE=false.
+        if (live) calTo = [...merged.values()];
         // v27: UPark group calendar — feed rows get the PTO_DATA sync email
         // on top of the invite. Empty until an admin adds a feed inbox.
         paFeedTo = lists.feed;
@@ -737,9 +759,9 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
     // (engineerTo) still goes out (v24).
     if (payload.event === "retracted" || payload.event === "amended") effectiveTo = [];
 
-    // Develop mode: no Binney notification emails (manager or engineer)
-    // until launch.
-    if (site.code === "binney" && !live) { effectiveTo = []; engineerTo = []; }
+    // Develop mode (BINNEY_LIVE=false) / feed-only test (UPARK_LIVE=false):
+    // no notification emails (manager or engineer) — only the PA feed.
+    if (!live) { effectiveTo = []; engineerTo = []; }
 
     // CANCEL feed legs only once the PA flow can actually process them —
     // see paCancelReady(). null = no feed recipients, gate irrelevant.
@@ -755,6 +777,7 @@ async function handlePtoEvent(payload: Payload, admin: SupaAdmin): Promise<Respo
         pa_feed: paFeedTo.length ? paFeedTo : null,
         pa_cancel_ready: cancelReady,
         binney_live: site.code === "binney" ? live : null,
+        upark_live: site.code === "binney" ? null : live,
       });
     }
     if (effectiveTo.length === 0 && engineerTo.length === 0 &&
