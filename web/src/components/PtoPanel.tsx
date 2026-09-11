@@ -1078,42 +1078,11 @@ function DayAttendanceGroup({
   // down so they read as "preview" without losing legibility.
   const headerSize = isPrimary ? '0.85rem' : '0.78rem';
 
-  // Capped cards ("capped + expand" UX): if the roster grows, over-cap cards
-  // collapse behind a "+N more" toggle. Engineers who are out/partial are
-  // ALWAYS kept visible — the cap only hides healthy "in" chips, so collapsed
-  // cards never mask an absence. The remaining in-chip budget is dealt
-  // round-robin across the shift groups so no group renders as a bare label
-  // and the visible sample isn't biased to the first shift; each group shows
-  // a muted "+n" for its own hidden share.
-  const CHIP_CAP = isPrimary ? 14 : 10;
-  const [expanded, setExpanded] = useState(false);
+  // Every engineer always shows. The old "capped + expand" UX (a "+N more"
+  // toggle hiding healthy in-chips) was removed 2026-09-11: the heatmap
+  // column beside this roll now runs 13–52 weeks tall, so the cards have
+  // the vertical room to list the whole roster.
   const visibleGroups = shiftGroups.filter((g) => crewWorksOn(g.crew, day.iso));
-  const allEngineers  = visibleGroups.flatMap((g) => g.engineers);
-  const overCap = allEngineers.length > CHIP_CAP;
-  let shownIds: Set<string> | null = null;   // null = show everyone
-  if (overCap && !expanded) {
-    const ids = new Set<string>();
-    for (const e of allEngineers) {
-      if (ptoLookup.get(`${e.user_id}|${day.iso}`)) ids.add(e.user_id);
-    }
-    // In-chip budget: at least one per group (so every shift keeps a face)
-    // and at least a few overall so a bad day still reads as staffed.
-    let budget = Math.max(CHIP_CAP - ids.size, visibleGroups.length, 4);
-    const queues = visibleGroups.map((g) => g.engineers.filter((e) => !ids.has(e.user_id)));
-    let dealt = true;
-    while (budget > 0 && dealt) {
-      dealt = false;
-      for (const q of queues) {
-        if (budget <= 0) break;
-        const e = q.shift();
-        if (e) { ids.add(e.user_id); budget--; dealt = true; }
-      }
-    }
-    // If the cap wouldn't actually hide anyone (e.g. most of the card is
-    // out-chips), fall back to show-all so no "+0 more" ghost renders.
-    shownIds = ids.size >= allEngineers.length ? null : ids;
-  }
-  const hiddenCount = shownIds ? allEngineers.length - shownIds.size : 0;
 
   return (
     <div
@@ -1150,11 +1119,6 @@ function DayAttendanceGroup({
             UPark (all crews NULL → every group shows on every listed day);
             the '_noshift' bucket (crew undefined) always shows. */}
         {visibleGroups.map((g) => {
-          const shown = shownIds;   // const capture so TS narrows in closures
-          const engs = shown
-            ? g.engineers.filter((e) => shown.has(e.user_id))
-            : g.engineers;
-          const hiddenInGroup = g.engineers.length - engs.length;
           return (
             <div key={g.shift_id}>
               {/* Label sits tight on top of its chip group (2px) — as a
@@ -1169,7 +1133,7 @@ function DayAttendanceGroup({
                 {g.label}
               </div>
               <div className="flex flex-wrap gap-1" style={{ alignItems: 'center' }}>
-                {engs.map((eng) => {
+                {g.engineers.map((eng) => {
                   const pto = ptoLookup.get(`${eng.user_id}|${day.iso}`) ?? null;
                   return (
                     <DayChip
@@ -1184,33 +1148,11 @@ function DayAttendanceGroup({
                     />
                   );
                 })}
-                {hiddenInGroup > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(true)}
-                    className="t-muted hover:t-accent"
-                    style={{ fontSize: 9, lineHeight: 1, whiteSpace: 'nowrap' }}
-                    title={`${hiddenInGroup} more on ${g.label} (all in) — click to expand`}
-                  >
-                    +{hiddenInGroup}
-                  </button>
-                )}
               </div>
             </div>
           );
         })}
       </div>
-      {(expanded || hiddenCount > 0) && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="t-accent hover:underline"
-          style={{ marginTop: 4, fontSize: 10, fontWeight: 600 }}
-          title={expanded ? 'Collapse back to the compact view' : `Show the ${hiddenCount} hidden engineers (all of them are in — anyone out always shows)`}
-        >
-          {expanded ? 'show less ▴' : `+${hiddenCount} more ▾`}
-        </button>
-      )}
     </div>
   );
 }

@@ -557,8 +557,8 @@ export function buildManual(site: ManualSite): Chapter[] {
             {
               kind: 'p',
               text: s.binney
-                ? 'The attendance roll shows today plus the next six CALENDAR days — a full week, Saturday and Sunday included, because weekends are real workdays here. On any given day it hides the crews that are not scheduled, so you only see who is meant to be in. The "No shift" group is the exception and always shows. If the screen is too narrow for all seven day cards, the row scrolls sideways. Busy cards cap how many chips they show — Wednesday lists BOTH crews, so it collapses behind a "+N more" toggle; anyone who is out or partial is always kept visible, the cap only ever hides healthy "in" chips.'
-                : 'The attendance roll shows today plus the next six WEEKdays — Saturday and Sunday are skipped, so the seven day cards span about a week and a half. If the screen is too narrow for all seven cards, the row scrolls sideways. Busy cards cap how many chips they show behind a "+N more" toggle; anyone who is out or partial is always kept visible — the cap only ever hides healthy "in" chips.',
+                ? 'The attendance roll shows today plus the next six CALENDAR days — a full week, Saturday and Sunday included, because weekends are real workdays here. On any given day it hides the crews that are not scheduled, so you only see who is meant to be in. The "No shift" group is the exception and always shows. If the screen is too narrow for all seven day cards, the row scrolls sideways. Every scheduled engineer is always listed — even on Wednesday, when BOTH crews are in; nothing collapses behind a "+N more" toggle any more.'
+                : 'The attendance roll shows today plus the next six WEEKdays — Saturday and Sunday are skipped, so the seven day cards span about a week and a half. If the screen is too narrow for all seven cards, the row scrolls sideways. Every engineer is always listed — nothing collapses behind a "+N more" toggle any more.',
             },
             ...(s.binney
               ? [
