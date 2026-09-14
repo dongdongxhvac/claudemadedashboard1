@@ -1216,7 +1216,7 @@ function CrewSection({ closes, laborDaily, pto, now }: {
           denominator stops at yesterday (see dayCountAsOf above). Saying so
           keeps the ratio honest — today's partial totals sit over a count of
           complete days, rather than pretending today is already a full day. */}
-      <div className="tv-crew-legend">hrs/days · days counted through yesterday</div>
+      <div className="tv-crew-legend">hrs/days · days counted through yesterday · holidays excluded</div>
       {data.rows.length === 0 ? (
         <p className="tv-muted" style={{ fontSize: '1.0vw' }}>No data.</p>
       ) : (
