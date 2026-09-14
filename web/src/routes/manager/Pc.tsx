@@ -191,8 +191,10 @@ export default function ManagerPc() {
         {/* §12 at the very top — PTO is the page's most-used panel (user
             2026-07-12); the announcement banner + button and the §00 stat
             cards all moved BELOW it (user 2026-07-25) so the page opens
-            straight on the PTO band. */}
+            straight on the PTO band. §11 Overtime sits directly under it
+            (user 2026-09-14) so the two coverage boards read together. */}
         <PtoPanel />
+        <OvertimePanel />
         <FocusBoardBanner siteCode="upark" />
         <AnnouncementComposer siteCode="upark" />
         {pmQ.isLoading || woQ.isLoading ? (
@@ -226,7 +228,6 @@ export default function ManagerPc() {
           <BmsEmailAlarmsPanel />
           <EmailAlarmsHistoryPanel />
           <EquipmentDownPanel />
-          <OvertimePanel />
           <MonthlyMeterReadingsPanel />
         </div>
         <JumpNav />

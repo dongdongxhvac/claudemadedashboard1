@@ -2,7 +2,7 @@
 //
 // Four-column category grid (Cold WX · Major PM · Repair · Vendor escort).
 // Each card shows a post + signup chips. Engineers self-serve via [Sign me up];
-// admin/manager/lead get [+ Assign…] and [Cancel post] controls.
+// admin/manager/lead get [+ Assign…], [Edit] and [Cancel post] controls.
 //
 // Layout philosophy: a digital whiteboard. Reads top-to-bottom in chrono order
 // within each category column. Filled = grey card · open = brighter card with
@@ -12,6 +12,7 @@ import {
   useOvertimePosts,
   useOvertimeRealtime,
   useCreateOvertimePost,
+  useUpdateOvertimePost,
   useCancelOvertimePost,
   useRestoreOvertimePost,
   useArchivePastOvertimePosts,
@@ -114,6 +115,10 @@ export function OvertimePanel() {
 
   const [showNew, setShowNew] = useState(false);
   const [showAssignFor, setShowAssignFor] = useState<string | null>(null);
+  // Edit modal — keyed by post id (not the row) so a realtime refresh while
+  // the form is open doesn't leave us holding a stale copy.
+  const [showEditFor, setShowEditFor] = useState<string | null>(null);
+  const editingPost = showEditFor ? (postsQ.data ?? []).find((p) => p.id === showEditFor) ?? null : null;
   const [showRecent, setShowRecent] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   // Last-cancelled toast — surfaces an [Undo] for ~10s right after a Cancel,
@@ -270,6 +275,7 @@ export function OvertimePanel() {
                 myUserId={myUserId}
                 canManage={!!canManage}
                 onAssign={(postId) => setShowAssignFor(postId)}
+                onEdit={(postId) => setShowEditFor(postId)}
                 onCancel={handleCancel}
               />
             ))}
@@ -338,8 +344,17 @@ export function OvertimePanel() {
       )}
 
       {showNew && (
-        <NewPostModal
+        <PostFormModal
           onClose={() => setShowNew(false)}
+          buildings={buildingsQ.data ?? []}
+        />
+      )}
+
+      {editingPost && (
+        <PostFormModal
+          key={editingPost.id}
+          initial={editingPost}
+          onClose={() => setShowEditFor(null)}
           buildings={buildingsQ.data ?? []}
         />
       )}
@@ -357,13 +372,14 @@ export function OvertimePanel() {
 }
 
 function CategoryColumn({
-  category, posts, myUserId, canManage, onAssign, onCancel,
+  category, posts, myUserId, canManage, onAssign, onEdit, onCancel,
 }: {
   category: OvertimeCategory;
   posts: OvertimePost[];
   myUserId: string | null;
   canManage: boolean;
   onAssign: (postId: string) => void;
+  onEdit: (postId: string) => void;
   onCancel: (postId: string) => void;
 }) {
   const accent = CATEGORY_ACCENT[category];
@@ -388,6 +404,7 @@ function CategoryColumn({
               myUserId={myUserId}
               canManage={canManage}
               onAssign={() => onAssign(p.id)}
+              onEdit={() => onEdit(p.id)}
               onCancel={() => onCancel(p.id)}
             />
           ))}
@@ -501,13 +518,14 @@ function fmtRelative(iso: string): string {
 }
 
 function PostCard({
-  post, accent, myUserId, canManage, onAssign, onCancel,
+  post, accent, myUserId, canManage, onAssign, onEdit, onCancel,
 }: {
   post: OvertimePost;
   accent: string;
   myUserId: string | null;
   canManage: boolean;
   onAssign: () => void;
+  onEdit: () => void;
   onCancel: () => void;
 }) {
   const signUp     = useSignUpForOvertime();
@@ -677,8 +695,16 @@ function PostCard({
         )}
         {!cancelled && canManage && (
           <button
+            onClick={onEdit}
+            className="t-small t-muted hover:underline ml-auto"
+            style={{ fontSize: '0.7rem' }}
+            title="Edit this post (time, building, scope, slots, notes)"
+          >Edit</button>
+        )}
+        {!cancelled && canManage && (
+          <button
             onClick={onCancel}
-            className="t-small t-muted hover:t-danger ml-auto"
+            className="t-small t-muted hover:t-danger"
             style={{ fontSize: '0.7rem' }}
             title="Cancel this post (undo for 10s via toast, or anytime in the next 3 days via Recently Cancelled drawer)"
           >Cancel</button>
@@ -695,7 +721,7 @@ function PostCard({
 }
 
 // ============================================================================
-// New-post modal
+// New / edit post modal
 // ============================================================================
 
 // 15-minute time choices for the new-post form — '06:15' → '6:15 AM'.
@@ -715,23 +741,60 @@ const QUARTER_HOUR_TIMES: { value: string; label: string }[] = Array.from(
   },
 );
 
-function NewPostModal({
-  onClose, buildings,
+/** ISO timestamp → local 'YYYY-MM-DD' + 'HH:MM' for the form fields. */
+function toLocalParts(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: d.toLocaleDateString('en-CA'),
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+/** The quarter-hour dropdown plus any off-grid value an existing post
+ *  carries (e.g. 11:50 PM from a calendar-synced escort), so editing
+ *  never blanks the select. */
+function timeOptions(extra: string[]): { value: string; label: string }[] {
+  const out = [...QUARTER_HOUR_TIMES];
+  for (const v of extra) {
+    if (!v || out.some((t) => t.value === v)) continue;
+    const [h, m] = v.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    out.push({ value: v, label: `${h12}:${String(m).padStart(2, '0')} ${ap}` });
+  }
+  return out.sort((a, b) => a.value.localeCompare(b.value));
+}
+
+/** Create a post (no `initial`) or edit an existing one (`initial` set).
+ *  Same fields either way; edit pre-fills from the row and PATCHes via
+ *  useUpdateOvertimePost. Signups are untouched by an edit — the slot
+ *  count just can't drop below the number already filled. */
+function PostFormModal({
+  onClose, buildings, initial,
 }: {
   onClose: () => void;
   buildings: { id: string; code: string; short_code: string | null; name: string }[];
+  initial?: OvertimePost;
 }) {
   const create = useCreateOvertimePost();
-  const [category, setCategory]       = useState<OvertimeCategory>('major_off_hour_pm');
-  const [dateIso, setDateIso]         = useState('');   // YYYY-MM-DD
-  const [startTime, setStartTime]     = useState('');   // 'HH:MM'
-  const [endTime, setEndTime]         = useState('');   // '' = no end time
-  const [buildingId, setBuildingId]   = useState<string>('');
-  const [buildingLabel, setBuildingLabel] = useState<string>('');
-  const [scope, setScope]             = useState('');
-  const [slotsNeeded, setSlotsNeeded] = useState(1);
-  const [notes, setNotes]             = useState('');
+  const update = useUpdateOvertimePost();
+  const isEdit = !!initial;
+  const initStart = initial ? toLocalParts(initial.starts_at) : null;
+  const initEnd   = initial?.ends_at ? toLocalParts(initial.ends_at) : null;
+  const minSlots  = initial ? Math.max(1, initial.slots_filled) : 1;
+
+  const [category, setCategory]       = useState<OvertimeCategory>(initial?.category ?? 'major_off_hour_pm');
+  const [dateIso, setDateIso]         = useState(initStart?.date ?? '');   // YYYY-MM-DD
+  const [startTime, setStartTime]     = useState(initStart?.time ?? '');   // 'HH:MM'
+  const [endTime, setEndTime]         = useState(initEnd?.time ?? '');     // '' = no end time
+  const [buildingId, setBuildingId]   = useState<string>(initial?.building_id ?? '');
+  const [buildingLabel, setBuildingLabel] = useState<string>(initial?.building_id ? '' : (initial?.building_label ?? ''));
+  const [scope, setScope]             = useState(initial?.scope ?? '');
+  const [slotsNeeded, setSlotsNeeded] = useState(initial?.slots_needed ?? 1);
+  const [notes, setNotes]             = useState(initial?.notes ?? '');
   const [err, setErr]                 = useState<string | null>(null);
+  const times = useMemo(() => timeOptions([startTime, endTime]), [startTime, endTime]);
 
   // End at-or-before start = overnight post (e.g. 11:00 PM → 3:00 AM):
   // the end rolls to the next day, and the form says so.
@@ -747,17 +810,23 @@ function NewPostModal({
       ends = new Date(`${dateIso}T${endTime}:00`);
       if (overnight) ends.setDate(ends.getDate() + 1);
     }
+    if (slotsNeeded < minSlots) {
+      setErr(`${minSlots} engineer${minSlots === 1 ? ' is' : 's are'} already on this post — remove a signup first to go lower.`);
+      return;
+    }
+    const payload = {
+      category,
+      starts_at:      starts.toISOString(),
+      ends_at:        ends ? ends.toISOString() : null,
+      building_id:    buildingId || null,
+      building_label: buildingId ? null : (buildingLabel.trim() || null),
+      scope:          scope.trim(),
+      slots_needed:   slotsNeeded,
+      notes:          notes.trim() || null,
+    };
     try {
-      await create.mutateAsync({
-        category,
-        starts_at:      starts.toISOString(),
-        ends_at:        ends ? ends.toISOString() : null,
-        building_id:    buildingId || null,
-        building_label: buildingId ? null : (buildingLabel.trim() || null),
-        scope,
-        slots_needed:   slotsNeeded,
-        notes:          notes.trim() || null,
-      });
+      if (initial) await update.mutateAsync({ id: initial.id, ...payload });
+      else         await create.mutateAsync(payload);
       onClose();
     } catch (e: unknown) {
       setErr((e as Error).message);
@@ -765,7 +834,7 @@ function NewPostModal({
   };
 
   return (
-    <ModalShell onClose={onClose} title="New overtime post">
+    <ModalShell onClose={onClose} title={isEdit ? 'Edit overtime post' : 'New overtime post'}>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <div className="t-small t-muted mb-1">Category</div>
@@ -780,9 +849,13 @@ function NewPostModal({
           </select>
         </label>
         <label className="block">
-          <div className="t-small t-muted mb-1">Slots needed</div>
+          <div className="t-small t-muted mb-1">
+            Slots needed{isEdit && minSlots > 1 && (
+              <span className="ml-1">· min {minSlots} (already filled)</span>
+            )}
+          </div>
           <input
-            type="number" min={1} max={6}
+            type="number" min={minSlots} max={6}
             value={slotsNeeded}
             onChange={(e) => setSlotsNeeded(Math.max(1, Math.min(6, +e.target.value || 1)))}
             className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
@@ -807,7 +880,7 @@ function NewPostModal({
             className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           >
             <option value="">— pick time —</option>
-            {QUARTER_HOUR_TIMES.map((t) => (
+            {times.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>
@@ -824,7 +897,7 @@ function NewPostModal({
             className="w-full border rounded px-2 py-1 t-text" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
           >
             <option value="">— none —</option>
-            {QUARTER_HOUR_TIMES.map((t) => (
+            {times.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}{startTime && t.value <= startTime ? ' (next day)' : ''}
               </option>
@@ -887,10 +960,12 @@ function NewPostModal({
         <button onClick={onClose} className="t-small">Cancel</button>
         <button
           onClick={submit}
-          disabled={create.isPending}
+          disabled={create.isPending || update.isPending}
           className="t-small t-accent font-semibold"
         >
-          {create.isPending ? 'Posting…' : 'Post'}
+          {isEdit
+            ? (update.isPending ? 'Saving…' : 'Save changes')
+            : (create.isPending ? 'Posting…' : 'Post')}
         </button>
       </div>
     </ModalShell>
