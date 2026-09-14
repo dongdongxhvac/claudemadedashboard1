@@ -595,18 +595,20 @@ function OncallPanel({ participants, settings, notes, now }: {
   if (!grid) {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
-        {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
-        <p className="tv-muted">No rotation set.</p>
+        <div className="tv-oncall-body">
+          <p className="tv-muted">No rotation set.</p>
+          {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
+        </div>
       </Panel>
     );
   }
 
   return (
     <Panel title="On-call schedule" accent="#dc2626">
+      <div className="tv-oncall-body">
       <div className="tv-oncall-sub">
         {grid.N} engineers · {grid.cycles} cycles + 1 preview
       </div>
-      {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
       <div className="tv-oncall-scroll">
         <table className="tv-oncall-grid">
           <thead>
@@ -644,13 +646,16 @@ function OncallPanel({ participants, settings, notes, now }: {
           </tbody>
         </table>
       </div>
+      {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
+      </div>
     </Panel>
   );
 }
 
 /** Read-only display of the sticky-notes set on the Admin → On-call tab.
- *  Renders one line per non-empty slot, with subtle "note 1:" / "note 2:"
- *  prefixes that won't compete with the table data for the eye. */
+ *  Pinned to the BOTTOM of the panel (user 2026-09-14), one compact row per
+ *  non-empty slot, with subtle slot-number tags that won't compete with
+ *  the table data for the eye. */
 function OncallNotesStrip({ notes }: { notes: OncallNote[] }) {
   return (
     <div className="tv-oncall-notes">
@@ -2378,31 +2383,37 @@ function TvStyles() {
       }
       .tv-pto-out-partial { opacity: 0.85; }
 
-      /* Sticky notes from Admin → On-call tab (full-width strip above table) */
+      /* On-call panel body: flex column so the rotation table takes the
+         space and the notes strip sits pinned to the panel's bottom edge. */
+      .tv-oncall-body { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+      .tv-oncall-body > .tv-oncall-scroll { flex: 1 1 auto; min-height: 0; }
+      /* Sticky notes from Admin → On-call tab — compact strip at the
+         BOTTOM, one row per slot (moved from above the table 2026-09-14). */
       .tv-oncall-notes {
-        margin-bottom: 0.4vw;
-        padding: 0.25vw 0.4vw;
+        margin-top: auto;
+        padding: 0.12vw 0.35vw;
         background: rgba(217, 119, 6, 0.10);
         border-left: 2px solid #d97706;
         border-radius: 2px;
         display: flex;
         flex-direction: column;
-        gap: 0.15vw;
+        gap: 0.05vw;
+        flex: 0 0 auto;
       }
       .tv-oncall-note {
         display: flex;
         align-items: baseline;
-        gap: 0.4vw;
-        font-size: 0.72vw;
-        line-height: 1.25;
+        gap: 0.3vw;
+        font-size: 0.64vw;
+        line-height: 1.2;
         color: #fde68a;
       }
       .tv-oncall-note-tag {
-        font-size: 0.55vw;
+        font-size: 0.5vw;
         font-weight: 700;
         color: #d97706;
         background: rgba(217, 119, 6, 0.25);
-        padding: 0 0.25vw;
+        padding: 0 0.2vw;
         border-radius: 2px;
         flex-shrink: 0;
       }
