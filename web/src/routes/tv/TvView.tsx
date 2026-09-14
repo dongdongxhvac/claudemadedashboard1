@@ -1698,7 +1698,13 @@ function OvertimeTvPanel({ now }: { now: Date }) {
   return (
     <section className="tv-panel tv-ot-panel" style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Overtime · §11 open posts</h2>
+        <h2 className="tv-panel-title">Overtime coverage posts</h2>
+        {/* Sign-up prompt lives in the title row between the title and the
+            counts (user 2026-09-14) — no path shown; engineers know the
+            phone page. Only while there's an open slot to sign up for. */}
+        {totalOpenSlots > 0 && (
+          <span className="tv-ot-cta-inline">→ Sign up on your phone</span>
+        )}
         <div className="tv-panel-meta">
           {open.length === 0 ? 'no OT posts' : (
             <>
@@ -1773,13 +1779,6 @@ function OvertimeTvPanel({ now }: { now: Date }) {
                 <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
               )}
             </ul>
-            {/* Call-to-action footer — shows whenever there's at least one
-                open slot. Tells engineers exactly where to go. */}
-            {totalOpenSlots > 0 && (
-              <div className="tv-ot-cta">
-                → Sign up on your phone at <strong>/engineer/me</strong>
-              </div>
-            )}
           </>
         )}
       </div>
@@ -3050,19 +3049,18 @@ function TvStyles() {
         border-radius: 3px;
         border: 1px solid rgba(251, 191, 36, 0.45);
       }
-      .tv-ot-cta {
-        margin-top: 0.4vw;
-        padding: 0.25vw 0.5vw;
-        font-size: 0.78vw;
+      /* Sign-up prompt chip in the OT title row (between title and counts). */
+      .tv-ot-cta-inline {
+        margin: 0 auto;
+        padding: 0.1vw 0.5vw;
+        font-size: 0.72vw;
+        line-height: 1.2;
         color: #fde68a;
         background: rgba(251, 191, 36, 0.08);
         border: 1px solid rgba(251, 191, 36, 0.35);
         border-radius: 3px;
-        text-align: center;
-      }
-      .tv-ot-cta strong {
-        color: #fbbf24;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+        flex: 0 0 auto;
       }
       .tv-ot-name { color: #e2e8f0; }
       .tv-ot-empty { color: #475569; font-style: italic; }
