@@ -2,18 +2,18 @@
 // Six panels for the morning huddle / glanceable read.
 //
 // Layout (3 equal cols; left col spans the full height; the right 2/3 is
-// an OT strip over a 2-col grid — per user 2026-09-14):
+// a 2-col grid with the OT strip along the bottom — per user 2026-09-14):
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
-//   ├──────────────────┬─────────────────────────────────────────────────┤
-//   │ WORKLOAD +       │ OVERTIME · §11 open posts (content-sized,       │
-//   │ PERFORMANCE      │           up to 5 rows, then "+N more")         │
-//   │  · Workload      ├──────────────────┬──────────────────────────────┤
-//   │  · Crew 7d       │ BMS HEALTH       │ COVERAGE                     │
-//   │  · Recent closes │ §08 + §09 + §10  │  §12 PTO next 5 work days    │
-//   │                  ├──────────────────┼──────────────────────────────┤
-//   │                  │ PROJECTS         │ ON-CALL SCHEDULE             │
-//   └──────────────────┴──────────────────┴──────────────────────────────┘
+//   ├──────────────────┬──────────────────┬──────────────────────────────┤
+//   │ WORKLOAD +       │ BMS HEALTH       │ COVERAGE                     │
+//   │ PERFORMANCE      │ §08 + §09 + §10  │  §12 PTO next 5 work days    │
+//   │  · Workload      ├──────────────────┼──────────────────────────────┤
+//   │  · Crew 7d       │ PROJECTS         │ ON-CALL SCHEDULE             │
+//   │  · Recent closes ├──────────────────┴──────────────────────────────┤
+//   │                  │ OVERTIME · §11 open posts (content-sized,       │
+//   │                  │           up to 5 rows, then "+N more")         │
+//   └──────────────────┴─────────────────────────────────────────────────┘
 //
 // Focus-board announcements still surface via the header strip (top-2);
 // the standalone panel got displaced when BMS health moved in.
@@ -225,13 +225,12 @@ function TvViewInner() {
           rounds={roundsQ.data ?? []}
           now={now}
         />
-        {/* Right two-thirds — one block spanning both grid rows: the OT
-            strip on top (content-sized, capped at 5 posts) and, below it,
-            a 2-col grid whose columns match the outer thirds exactly.
-            Each lower column is a flex stack (.tv-mid-flex / .tv-right-flex)
-            so the two panels in it share height by content. */}
+        {/* Right two-thirds — one block spanning both grid rows: a 2-col
+            grid whose columns match the outer thirds exactly, with the OT
+            strip along the BOTTOM (content-sized, capped at 5 posts). Each
+            upper column is a flex stack (.tv-mid-flex / .tv-right-flex) so
+            the two panels in it share height by content. */}
         <div className="tv-right-block">
-          <OvertimeTvPanel now={now} />
           <div className="tv-right-cols">
             <div className="tv-mid-flex">
               <BmsHealthPanel />
@@ -251,6 +250,7 @@ function TvViewInner() {
               />
             </div>
           </div>
+          <OvertimeTvPanel now={now} />
         </div>
       </main>
     </div>
@@ -596,19 +596,24 @@ function OncallPanel({ participants, settings, notes, now }: {
     return (
       <Panel title="On-call schedule" accent="#dc2626">
         <div className="tv-oncall-body">
-          <p className="tv-muted">No rotation set.</p>
           {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
+          <p className="tv-muted">No rotation set.</p>
         </div>
       </Panel>
     );
   }
 
   return (
-    <Panel title="On-call schedule" accent="#dc2626">
+    <Panel
+      title="On-call schedule"
+      accent="#dc2626"
+      meta={`${grid.N} engineers · ${grid.cycles} cycles + 1 preview`}
+    >
       <div className="tv-oncall-body">
-      <div className="tv-oncall-sub">
-        {grid.N} engineers · {grid.cycles} cycles + 1 preview
-      </div>
+      {/* Header is exactly two rows (user 2026-09-14): the title row above
+          carries the roster summary as its meta; this row carries both
+          notes inline. */}
+      {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
       <div className="tv-oncall-scroll">
         <table className="tv-oncall-grid">
           <thead>
@@ -646,21 +651,20 @@ function OncallPanel({ participants, settings, notes, now }: {
           </tbody>
         </table>
       </div>
-      {visibleNotes.length > 0 && <OncallNotesStrip notes={visibleNotes} />}
       </div>
     </Panel>
   );
 }
 
 /** Read-only display of the sticky-notes set on the Admin → On-call tab.
- *  Pinned to the BOTTOM of the panel (user 2026-09-14), one compact row per
- *  non-empty slot, with subtle slot-number tags that won't compete with
- *  the table data for the eye. */
+ *  ONE compact row directly under the title row (user 2026-09-14): every
+ *  non-empty slot sits inline with a slot-number tag; long notes ellipsize
+ *  (full text in the title attribute) rather than wrapping to a third row. */
 function OncallNotesStrip({ notes }: { notes: OncallNote[] }) {
   return (
     <div className="tv-oncall-notes">
       {notes.map((n) => (
-        <div key={n.slot} className="tv-oncall-note">
+        <div key={n.slot} className="tv-oncall-note" title={n.body}>
           <span className="tv-oncall-note-tag">{n.slot}</span>
           <span className="tv-oncall-note-body">{n.body}</span>
         </div>
@@ -2141,9 +2145,9 @@ function TvStyles() {
         overflow: hidden;
       }
 
-      /* Right two-thirds block: OT strip (flex 0 — takes exactly its
-         content height, which the row cap bounds) over the 2-col lower
-         grid (flex 1 — everything that's left). */
+      /* Right two-thirds block: the 2-col upper grid (flex 1 — everything
+         that's left) with the OT strip along the bottom (flex 0 — takes
+         exactly its content height, which the row cap bounds). */
       .tv-right-block {
         grid-column: 2 / span 2;
         grid-row: 1 / span 2;
@@ -2162,7 +2166,7 @@ function TvStyles() {
         gap: 0.6vw;
       }
       .tv-right-cols > * { min-width: 0; min-height: 0; }
-      /* Lower-column flex stacks: the two panels in each column share the
+      /* Upper-column flex stacks: the two panels in each column share the
          column's height by content (flex 1 1 auto) — when one gains rows
          (equipment-down items, PTO chips) it expands into the other's
          slack instead of clipping. */
@@ -2323,11 +2327,6 @@ function TvStyles() {
       .tv-warn    { color: #f59e0b; font-size: 1.2vw; font-weight: 600; margin-bottom: 0.4em; }
 
       /* On-call schedule — rotation grid (engineer rows × cycle columns) */
-      .tv-oncall-sub {
-        font-size: 0.7vw;
-        color: #94a3b8;
-        margin-bottom: 0.3vw;
-      }
       /* PTO attendance strip — surfaces who's currently off so the shop
          floor knows who's not available before paging them. */
       .tv-pto-out {
@@ -2384,21 +2383,24 @@ function TvStyles() {
       .tv-pto-out-partial { opacity: 0.85; }
 
       /* On-call panel body: flex column so the rotation table takes the
-         space and the notes strip sits pinned to the panel's bottom edge. */
+         space left under the two header rows. */
       .tv-oncall-body { display: flex; flex-direction: column; height: 100%; min-height: 0; }
       .tv-oncall-body > .tv-oncall-scroll { flex: 1 1 auto; min-height: 0; }
-      /* Sticky notes from Admin → On-call tab — compact strip at the
-         BOTTOM, one row per slot (moved from above the table 2026-09-14). */
+      /* Sticky notes from Admin → On-call tab — ONE compact row under the
+         title row, all slots inline (user 2026-09-14). Each note shrinks
+         with ellipsis rather than wrapping, so the header stays 2 rows. */
       .tv-oncall-notes {
-        margin-top: auto;
+        margin: 0 0 0.3vw;
         padding: 0.12vw 0.35vw;
         background: rgba(217, 119, 6, 0.10);
         border-left: 2px solid #d97706;
         border-radius: 2px;
         display: flex;
-        flex-direction: column;
-        gap: 0.05vw;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0.9vw;
         flex: 0 0 auto;
+        min-width: 0;
       }
       .tv-oncall-note {
         display: flex;
@@ -2407,6 +2409,8 @@ function TvStyles() {
         font-size: 0.64vw;
         line-height: 1.2;
         color: #fde68a;
+        flex: 0 1 auto;
+        min-width: 0;
       }
       .tv-oncall-note-tag {
         font-size: 0.5vw;
