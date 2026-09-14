@@ -1,15 +1,18 @@
 // /tv — Shop-floor TV view. Static 3-column grid, large fonts, no nav chrome.
-// Five panels for the morning huddle / glanceable read.
+// Six panels for the morning huddle / glanceable read.
 //
-// Layout (3 cols × 2 rows; left col spans both rows):
+// Layout (3 equal cols; left col spans the full height; the right 2/3 is
+// an OT strip over a 2-col grid — per user 2026-09-14):
 //   ┌── header ──────────────────────────────────────────────────────────┐
 //   │ UPark Operation · On-call · Weather · ddd MMM D · data age         │
-//   ├──────────────────┬──────────────────┬──────────────────────────────┤
-//   │ WORKLOAD +       │ BMS HEALTH       │ COVERAGE                     │
-//   │ PERFORMANCE      │ §08 + §09 + §10  │  §12 PTO next 5 work days +  │
-//   │  · Workload      ├──────────────────┤  §11 open OT posts           │
-//   │  · Crew 7d       │ BUILDINGS        ├──────────────────────────────┤
-//   │  · Recent closes │ (rounds + assign)│ ON-CALL SCHEDULE             │
+//   ├──────────────────┬─────────────────────────────────────────────────┤
+//   │ WORKLOAD +       │ OVERTIME · §11 open posts (content-sized,       │
+//   │ PERFORMANCE      │           up to 5 rows, then "+N more")         │
+//   │  · Workload      ├──────────────────┬──────────────────────────────┤
+//   │  · Crew 7d       │ BMS HEALTH       │ COVERAGE                     │
+//   │  · Recent closes │ §08 + §09 + §10  │  §12 PTO next 5 work days    │
+//   │                  ├──────────────────┼──────────────────────────────┤
+//   │                  │ PROJECTS         │ ON-CALL SCHEDULE             │
 //   └──────────────────┴──────────────────┴──────────────────────────────┘
 //
 // Focus-board announcements still surface via the header strip (top-2);
@@ -222,26 +225,33 @@ function TvViewInner() {
           rounds={roundsQ.data ?? []}
           now={now}
         />
-        {/* Middle column — wrapper spans both grid rows. BMS panel on top,
-            Projects panel on bottom. flex sizing in .tv-mid-flex lets the
-            two share the column's total height based on content. */}
-        <div className="tv-mid-flex">
-          <BmsHealthPanel />
-          <ProjectsTvPanel />
+        {/* Right two-thirds — one block spanning both grid rows: the OT
+            strip on top (content-sized, capped at 5 posts) and, below it,
+            a 2-col grid whose columns match the outer thirds exactly.
+            Each lower column is a flex stack (.tv-mid-flex / .tv-right-flex)
+            so the two panels in it share height by content. */}
+        <div className="tv-right-block">
+          <OvertimeTvPanel now={now} />
+          <div className="tv-right-cols">
+            <div className="tv-mid-flex">
+              <BmsHealthPanel />
+              <ProjectsTvPanel />
+            </div>
+            <div className="tv-right-flex">
+              <CoverageTvPanel
+                engineers={engineers}
+                pto={ptoRows}
+                now={now}
+              />
+              <OncallPanel
+                participants={participantsQ.data ?? []}
+                settings={oncallSettingsQ.data ?? null}
+                notes={oncallNotesQ.data ?? []}
+                now={now}
+              />
+            </div>
+          </div>
         </div>
-        {/* Right column top — Coverage (§12 PTO + §11 OT in one panel) */}
-        <CoverageTvPanel
-          engineers={engineers}
-          pto={ptoRows}
-          now={now}
-        />
-        {/* Right column bottom */}
-        <OncallPanel
-          participants={participantsQ.data ?? []}
-          settings={oncallSettingsQ.data ?? null}
-          notes={oncallNotesQ.data ?? []}
-          now={now}
-        />
       </main>
     </div>
   );
@@ -1638,15 +1648,12 @@ function tvBuildingLabel(p: OvertimePost): string {
  *  posts on the bottom. Replaces the standalone OvertimeTvPanel and the
  *  PtoOutStrip-on-OncallPanel approach so the shop floor has ONE place to
  *  scan for coverage gaps. */
-function CoverageTvPanel({
-  engineers,
-  pto,
-  now,
-}: {
-  engineers: EngineerRow[];
-  pto: PtoRequest[];
-  now: Date;
-}) {
+// §11 Overtime — its own tile across the right two-thirds (user
+// 2026-09-14). Content-sized: grows one row per open post up to
+// OT_TV_MAX_ROWS, then "+N more"; with nothing open it's a one-line strip.
+const OT_TV_MAX_ROWS = 5;
+
+function OvertimeTvPanel({ now }: { now: Date }) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
   // Filter to OT posts that are CURRENTLY relevant — status='open' AND the
@@ -1667,10 +1674,7 @@ function CoverageTvPanel({
     () => [...open].sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
     [open],
   );
-  // Fewer rows visible than the standalone OT panel had — we share space
-  // with the 5-work-day PTO preview above. The "+N more" line still
-  // surfaces overflow so nothing gets silently hidden.
-  const visibleOt = sortedOt.slice(0, 3);
+  const visibleOt = sortedOt.slice(0, OT_TV_MAX_ROWS);
   const overflowOt = sortedOt.length - visibleOt.length;
 
   const catTotals = useMemo(() => {
@@ -1682,6 +1686,109 @@ function CoverageTvPanel({
   }, [open]);
   const totalOpenSlots = Object.values(catTotals).reduce((s, n) => s + n, 0);
 
+  return (
+    <section className="tv-panel tv-ot-panel" style={{ borderTopColor: '#fbbf24' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Overtime · §11 open posts</h2>
+        <div className="tv-panel-meta">
+          {open.length === 0 ? 'no OT posts' : (
+            <>
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{open.length}</span> post{open.length === 1 ? '' : 's'}
+              <span style={{ color: '#475569', margin: '0 0.35vw' }}>·</span>
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> open slot{totalOpenSlots === 1 ? '' : 's'}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="tv-panel-body tv-cov-ot">
+        {open.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.85vw', margin: 0 }}>No open OT posts.</p>
+        ) : (
+          <>
+            <div className="tv-ot-catbar">
+              {OVERTIME_CATEGORY_ORDER.map((c) => (
+                <span key={c} className="tv-ot-catbar-item">
+                  <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[c] }} />
+                  <span className="tv-ot-catbar-label">{OVERTIME_CATEGORY_LABELS[c]}</span>
+                  <span className="tv-ot-catbar-count">{catTotals[c]}</span>
+                </span>
+              ))}
+            </div>
+            <ul className="tv-ot-list">
+              {visibleOt.map((p) => {
+                const isFull   = p.slots_filled >= p.slots_needed;
+                const urgency  = urgencyTag(p.starts_at, now);
+                const cls = [
+                  'tv-ot-row',
+                  isFull && 'tv-ot-row-full',
+                  !isFull && 'tv-ot-row-open',
+                ].filter(Boolean).join(' ');
+                return (
+                  <li key={p.id} className={cls}>
+                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
+                    <span className="tv-ot-when">
+                      {urgency.tone && (
+                        <span className={`tv-ot-urgency tv-ot-urgency-${urgency.tone}`}>
+                          {urgency.text}
+                        </span>
+                      )}
+                      <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
+                    </span>
+                    <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
+                      {tvBuildingLabel(p)}
+                    </span>
+                    <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
+                    <span className="tv-ot-slots">
+                      {p.signups.length > 0 ? (
+                        p.signups.map((s, i) => (
+                          <span key={s.id}>
+                            {i > 0 && <span className="tv-ot-sep">·</span>}
+                            <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
+                          </span>
+                        ))
+                      ) : (
+                        /* Replace the empty "—" with a louder "OPEN" cue
+                           so the engineer's eye lands on unfilled slots. */
+                        <span className="tv-ot-empty-open">OPEN</span>
+                      )}
+                    </span>
+                    <span className="tv-ot-filled">
+                      <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
+                        {p.slots_filled}/{p.slots_needed}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+              {overflowOt > 0 && (
+                <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
+              )}
+            </ul>
+            {/* Call-to-action footer — shows whenever there's at least one
+                open slot. Tells engineers exactly where to go. */}
+            {totalOpenSlots > 0 && (
+              <div className="tv-ot-cta">
+                → Sign up on your phone at <strong>/engineer/me</strong>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// §12 Coverage — the 5-work-day PTO attendance preview. OT moved out to
+// OvertimeTvPanel (2026-09-14).
+function CoverageTvPanel({
+  engineers,
+  pto,
+  now,
+}: {
+  engineers: EngineerRow[];
+  pto: PtoRequest[];
+  now: Date;
+}) {
   // Active engineer headcount drives the "X/Y in" denominator. Engineers
   // only — leads/managers don't show up on the daily roster.
   const totalEngineers = useMemo(
@@ -1749,13 +1856,10 @@ function CoverageTvPanel({
   return (
     <section className="tv-panel" style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Coverage · §12 PTO + §11 OT</h2>
+        <h2 className="tv-panel-title">Coverage · §12 PTO</h2>
         <div className="tv-panel-meta">
-          {open.length === 0 ? 'no OT posts' : (
-            <>
-              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> OT slot{totalOpenSlots === 1 ? '' : 's'}
-            </>
-          )}
+          <span style={{ color: '#f8fafc', fontWeight: 700 }}>{days[0]?.inCount ?? totalEngineers}</span>
+          <span style={{ color: '#475569' }}>/{totalEngineers}</span> in today
         </div>
       </div>
       <div className="tv-panel-body tv-cov-body">
@@ -1813,83 +1917,6 @@ function CoverageTvPanel({
           ))}
         </div>
 
-        <div className="tv-cov-divider" />
-
-        {/* Bottom: OT posts */}
-        <div className="tv-cov-ot">
-          {open.length === 0 ? (
-            <p className="tv-muted" style={{ fontSize: '0.85vw' }}>No open OT posts.</p>
-          ) : (
-            <>
-              <div className="tv-ot-catbar">
-                {OVERTIME_CATEGORY_ORDER.map((c) => (
-                  <span key={c} className="tv-ot-catbar-item">
-                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[c] }} />
-                    <span className="tv-ot-catbar-label">{OVERTIME_CATEGORY_LABELS[c]}</span>
-                    <span className="tv-ot-catbar-count">{catTotals[c]}</span>
-                  </span>
-                ))}
-              </div>
-              <ul className="tv-ot-list">
-                {visibleOt.map((p) => {
-                  const isFull   = p.slots_filled >= p.slots_needed;
-                  const urgency  = urgencyTag(p.starts_at, now);
-                  const cls = [
-                    'tv-ot-row',
-                    isFull && 'tv-ot-row-full',
-                    !isFull && 'tv-ot-row-open',
-                  ].filter(Boolean).join(' ');
-                  return (
-                    <li key={p.id} className={cls}>
-                      <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
-                      <span className="tv-ot-when">
-                        {urgency.tone && (
-                          <span className={`tv-ot-urgency tv-ot-urgency-${urgency.tone}`}>
-                            {urgency.text}
-                          </span>
-                        )}
-                        <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
-                      </span>
-                      <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
-                        {tvBuildingLabel(p)}
-                      </span>
-                      <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
-                      <span className="tv-ot-slots">
-                        {p.signups.length > 0 ? (
-                          p.signups.map((s, i) => (
-                            <span key={s.id}>
-                              {i > 0 && <span className="tv-ot-sep">·</span>}
-                              <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
-                            </span>
-                          ))
-                        ) : (
-                          /* Replace the empty "—" with a louder "OPEN" cue
-                             so the engineer's eye lands on unfilled slots. */
-                          <span className="tv-ot-empty-open">OPEN</span>
-                        )}
-                      </span>
-                      <span className="tv-ot-filled">
-                        <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
-                          {p.slots_filled}/{p.slots_needed}
-                        </span>
-                      </span>
-                    </li>
-                  );
-                })}
-                {overflowOt > 0 && (
-                  <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
-                )}
-              </ul>
-              {/* Call-to-action footer — shows whenever there's at least one
-                  open slot. Tells engineers exactly where to go. */}
-              {totalOpenSlots > 0 && (
-                <div className="tv-ot-cta">
-                  → Sign up on your phone at <strong>/engineer/me</strong>
-                </div>
-              )}
-            </>
-          )}
-        </div>
       </div>
     </section>
   );
@@ -2037,17 +2064,17 @@ function TvStyles() {
         flex: 0 0 auto;
       }
 
-      /* LOCKED LAYOUT — do not change column/row ratios or panel spans.
-         User signed off on this space distribution: ~30% tall left panel,
-         four ~15% single-cell panels, ~4% header. Content must adapt to
-         the grid, not the other way around. See memory:
-         feedback_tv_layout_locked.md for the full rule. */
-      /* Column widths are LOCKED at three equal thirds; row heights are
-         LOCKED at two equal halves. Only VERTICAL adaptiveness is allowed
-         (see .tv-mid-flex below) — never column-width adaptiveness. The
-         min-width: 0 on the grid + every direct child is what guarantees
-         this: without it, a long line inside (e.g. a multi-issue equipment
-         row's detail text) would force its track wider than 1fr. */
+      /* LOCKED LAYOUT (revised by user 2026-09-14) — column widths are three
+         equal thirds and the left Workload panel spans the full height.
+         The right two-thirds is ONE block: the Overtime strip on top,
+         content-sized and capped at OT_TV_MAX_ROWS posts, over a 2-col grid
+         (BMS/Projects | Coverage/On-call) whose columns match the outer
+         thirds. Only VERTICAL adaptiveness is allowed — never column-width
+         adaptiveness. The min-width: 0 on the grid + every direct child is
+         what guarantees this: without it, a long line inside (e.g. a
+         multi-issue equipment row's detail text) would force its track
+         wider than 1fr. Content must adapt to the grid, not the other way
+         around. */
       .tv-grid {
         flex: 1;
         display: grid;
@@ -2109,19 +2136,38 @@ function TvStyles() {
         overflow: hidden;
       }
 
-      /* Middle-column flex container: BMS panel takes the full column for
-         now; the bottom slot is an invisible placeholder reserved for
-         future content. When BMS gains rows (more equipment-down items,
-         more vendors), it expands into the placeholder's space because
-         the placeholder is flex: 0 — it never claims height of its own. */
-      .tv-mid-flex {
+      /* Right two-thirds block: OT strip (flex 0 — takes exactly its
+         content height, which the row cap bounds) over the 2-col lower
+         grid (flex 1 — everything that's left). */
+      .tv-right-block {
+        grid-column: 2 / span 2;
         grid-row: 1 / span 2;
         display: flex;
         flex-direction: column;
         gap: 0.6vw;
         min-height: 0;
+        min-width: 0;
       }
-      .tv-mid-flex > .tv-panel {
+      .tv-ot-panel { flex: 0 0 auto; }
+      .tv-right-cols {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;   /* = the outer thirds, exactly */
+        gap: 0.6vw;
+      }
+      .tv-right-cols > * { min-width: 0; min-height: 0; }
+      /* Lower-column flex stacks: the two panels in each column share the
+         column's height by content (flex 1 1 auto) — when one gains rows
+         (equipment-down items, PTO chips) it expands into the other's
+         slack instead of clipping. */
+      .tv-mid-flex, .tv-right-flex {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6vw;
+        min-height: 0;
+      }
+      .tv-mid-flex > .tv-panel, .tv-right-flex > .tv-panel {
         flex: 1 1 auto;
         min-height: 0;
       }
@@ -2845,7 +2891,6 @@ function TvStyles() {
       /* Coverage panel — combines §12 PTO (5-work-day attendance preview)
          on top with §11 open OT posts on the bottom. */
       .tv-cov-body { display: flex; flex-direction: column; gap: 0.35vw; min-height: 0; overflow: hidden; }
-      .tv-cov-divider { height: 1px; background: #1e293b; margin: 0.15vw 0; flex: 0 0 auto; }
       .tv-cov-days {
         display: flex; flex-direction: column; gap: 0.25vw;
         flex: 0 0 auto;
