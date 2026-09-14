@@ -50,6 +50,7 @@ import {
   usePtoRequests, usePtoRealtime, isPartialDay, partialDayLabel,
   type PtoRequest,
 } from '../../hooks/usePto';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 import { daysWorkedByName, workdaysInWindow, type PtoDayRow } from '../../lib/daysWorked';
@@ -76,7 +77,41 @@ function shortName(fullName: string | null | undefined): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
+// ── Kiosk-grade query client ──────────────────────────────────────────────
+// The TV runs unattended: nobody refocuses the window and nothing remounts,
+// so under the app's root client (retry: 1, no focus refetch) ONE transient
+// fetch failure — a Supabase hiccup, a Wi-Fi blip that never fires the
+// browser's reconnect event — strands that query in its error state until
+// the 4am reboot. Seen live 2026-09-14: PTO (kept fresh by realtime) still
+// rendered while the errored roster/site-scope queries emptied every other
+// tile and let Binney PTO leak through the failed-open site filter.
+//
+// This nested provider gives everything under /upark/tv its own defaults:
+// errored queries retry, and refetchInterval re-fetches even settled-error
+// queries forever. Query-level options (the on-call re-poll, per-hook
+// staleTimes) still win over these defaults. Scoped here so the rest of the
+// app keeps the root client's behavior untouched.
+const kioskClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 5,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      refetchInterval: 5 * 60_000,
+      staleTime: 60_000,
+    },
+  },
+});
+
 export default function TvView() {
+  return (
+    <QueryClientProvider client={kioskClient}>
+      <TvViewInner />
+    </QueryClientProvider>
+  );
+}
+
+function TvViewInner() {
   // Live data
   useSnapshotRealtime();
   useOncallRealtime();

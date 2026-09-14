@@ -11,8 +11,11 @@
 // the column NULL for newly added people — excluding them would silently hide
 // a new UPark hire from the roll.
 //
-// Fails OPEN: while loading (or if the sites lookup errors) it returns
-// undefined and consumers render unfiltered, matching pre-scope behavior.
+// Fails OPEN only while LOADING (undefined → consumers render unfiltered,
+// matching pre-scope behavior for the sub-second gap). On ERROR it fails
+// CLOSED (empty set): the 2026-09-14 kiosk incident showed a stranded
+// errored query rendering Binney PTO on the UPark TV for hours — briefly
+// showing nobody is strictly better than showing the wrong site's people.
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -136,7 +139,11 @@ export function useUparkBuildingIds(): Set<string> | undefined {
     },
     staleTime: 60_000,
   });
-  return useMemo(() => (q.data ? new Set(q.data) : undefined), [q.data]);
+  // loading → undefined (fail open); error → empty set (fail closed).
+  return useMemo(
+    () => (q.data ? new Set(q.data) : q.isError ? new Set<string>() : undefined),
+    [q.data, q.isError],
+  );
 }
 
 export function useUparkUserIds(): Set<string> | undefined {
@@ -156,5 +163,9 @@ export function useUparkUserIds(): Set<string> | undefined {
     },
     staleTime: 60_000,
   });
-  return useMemo(() => (q.data ? new Set(q.data) : undefined), [q.data]);
+  // loading → undefined (fail open); error → empty set (fail closed).
+  return useMemo(
+    () => (q.data ? new Set(q.data) : q.isError ? new Set<string>() : undefined),
+    [q.data, q.isError],
+  );
 }
