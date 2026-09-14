@@ -1628,10 +1628,11 @@ function urgencyTag(starts: string, now: Date): { text: string; tone: 'red' | 'a
   return { text: `in ${days}d`, tone: 'muted' };
 }
 
+/** Long form for the 2-col-wide OT tile (user 2026-09-14): "Sat Sep 20 ·
+ *  7a–3p · 8h". Multi-day posts show the end day too. */
 function fmtOvertimeWhen(starts: string, ends: string | null): string {
   const s = new Date(starts);
-  // "Sat 6/6" — drop the locale comma so it fits the narrow TV column.
-  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' })
+  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
                  .replace(/,\s*/g, ' ');
   // "7a" / "7:30a" — single-letter am/pm, minutes only when non-zero.
   const compactTime = (d: Date) => {
@@ -1640,17 +1641,26 @@ function fmtOvertimeWhen(starts: string, ends: string | null): string {
     const ampm = d.getHours() < 12 ? 'a' : 'p';
     return min === 0 ? `${h12}${ampm}` : `${h12}:${String(min).padStart(2, '0')}${ampm}`;
   };
-  if (!ends) return `${dStr} ${compactTime(s)}`;
+  if (!ends) return `${dStr} · ${compactTime(s)} · open-ended`;
   const e = new Date(ends);
   const sameDay =
     s.getFullYear() === e.getFullYear() &&
     s.getMonth() === e.getMonth() &&
     s.getDate() === e.getDate();
-  return sameDay ? `${dStr} ${compactTime(s)}–${compactTime(e)}` : `${dStr} ${compactTime(s)}+`;
+  const hrs = Math.max(0, (e.getTime() - s.getTime()) / 3_600_000);
+  const dur = hrs >= 1 ? `${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)}h` : `${Math.round(hrs * 60)}m`;
+  if (sameDay) return `${dStr} · ${compactTime(s)}–${compactTime(e)} · ${dur}`;
+  const eStr = e.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).replace(/,\s*/g, ' ');
+  return `${dStr} ${compactTime(s)} → ${eStr} ${compactTime(e)} · ${dur}`;
 }
 
+/** "26 · 26 Landsdowne St" — short code plus the full name when the name
+ *  adds something; falls back through code → label → dash. */
 function tvBuildingLabel(p: OvertimePost): string {
-  return p.building_short_code ?? p.building_code ?? p.building_label ?? '—';
+  const code = p.building_short_code ?? p.building_code ?? null;
+  const name = p.building_name ?? p.building_label ?? null;
+  if (code && name && !name.startsWith(code)) return `${code} · ${name}`;
+  return name ?? code ?? '—';
 }
 
 /** Combined Coverage panel — §12 PTO (next 5 work days) on top, §11 open OT
@@ -1738,40 +1748,59 @@ function OvertimeTvPanel({ now }: { now: Date }) {
                   isFull && 'tv-ot-row-full',
                   !isFull && 'tv-ot-row-open',
                 ].filter(Boolean).join(' ');
+                const openSlots = Math.max(0, p.slots_needed - p.slots_filled);
+                const postedOn = new Date(p.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
                 return (
                   <li key={p.id} className={cls}>
                     <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
-                    <span className="tv-ot-when">
-                      {urgency.tone && (
-                        <span className={`tv-ot-urgency tv-ot-urgency-${urgency.tone}`}>
-                          {urgency.text}
+                    <div className="tv-ot-main">
+                      {/* Line 1 — the facts in fixed lanes so rows line up:
+                          when · building · category · x/y · who's on it. */}
+                      <div className="tv-ot-l1">
+                        <span className="tv-ot-when">
+                          {urgency.tone && (
+                            <span className={`tv-ot-urgency tv-ot-urgency-${urgency.tone}`}>
+                              {urgency.text}
+                            </span>
+                          )}
+                          <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
                         </span>
-                      )}
-                      <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
-                    </span>
-                    <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
-                      {tvBuildingLabel(p)}
-                    </span>
-                    <span className="tv-ot-scope" title={p.scope}>{p.scope}</span>
-                    <span className="tv-ot-slots">
-                      {p.signups.length > 0 ? (
-                        p.signups.map((s, i) => (
-                          <span key={s.id}>
-                            {i > 0 && <span className="tv-ot-sep">·</span>}
-                            <span className="tv-ot-name">{shortName(s.user_name ?? '—')}</span>
+                        <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
+                          {tvBuildingLabel(p)}
+                        </span>
+                        <span className="tv-ot-cat" style={{ color: TV_CATEGORY_DOT[p.category] }}>
+                          {OVERTIME_CATEGORY_LABELS[p.category]}
+                        </span>
+                        <span className="tv-ot-filled">
+                          <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
+                            {p.slots_filled}/{p.slots_needed}
                           </span>
-                        ))
-                      ) : (
-                        /* Replace the empty "—" with a louder "OPEN" cue
-                           so the engineer's eye lands on unfilled slots. */
-                        <span className="tv-ot-empty-open">OPEN</span>
-                      )}
-                    </span>
-                    <span className="tv-ot-filled">
-                      <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
-                        {p.slots_filled}/{p.slots_needed}
-                      </span>
-                    </span>
+                        </span>
+                        <span className="tv-ot-slots">
+                          {p.signups.map((s, i) => (
+                            <span key={s.id}>
+                              {i > 0 && <span className="tv-ot-sep">·</span>}
+                              <span className="tv-ot-name">{s.user_name ?? '—'}</span>
+                            </span>
+                          ))}
+                          {openSlots > 0 && (
+                            <span className="tv-ot-empty-open" style={{ marginLeft: p.signups.length ? '0.5vw' : 0 }}>
+                              OPEN{openSlots > 1 ? ` ×${openSlots}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {/* Line 2 — scope, notes, who posted it. */}
+                      <div className="tv-ot-l2">
+                        <span className="tv-ot-scope" title={p.scope}>
+                          {p.scope}
+                          {p.notes && <span className="tv-ot-notes"> — {p.notes}</span>}
+                        </span>
+                        <span className="tv-ot-posted">
+                          posted {postedOn}{p.created_by_name ? ` by ${shortName(p.created_by_name)}` : ''}
+                        </span>
+                      </div>
+                    </div>
                   </li>
                 );
               })}
@@ -2978,24 +3007,47 @@ function TvStyles() {
         display: flex; flex-direction: column; gap: 0.18vw;
         min-height: 0; overflow: hidden;
       }
-      /* OT row grid: dot · when (with urgency tag) · building (wider so
-         names aren't truncated to 3 chars) · scope · slots · fraction. */
+      /* OT row (2-col-wide tile, user 2026-09-14): category dot + a
+         two-line block. Line 1 = fixed lanes so rows line up (when ·
+         building · category · x/y · names); line 2 = scope/notes with the
+         poster right-aligned. Every lane is nowrap+ellipsis. */
       .tv-ot-row {
         display: grid;
-        grid-template-columns: 0.6vw 7.6vw 3.6vw 1fr 5vw 1.8vw;
-        gap: 0.35vw;
-        align-items: baseline;
-        font-size: 0.78vw;
-        line-height: 1.2;
-        padding: 0.12vw 0.25vw;
+        grid-template-columns: 0.6vw 1fr;
+        gap: 0.4vw;
+        align-items: start;
+        font-size: 0.82vw;
+        line-height: 1.25;
+        padding: 0.18vw 0.35vw;
         border-radius: 3px;
       }
-      .tv-ot-row > span {
+      .tv-ot-row > .tv-ot-dot { margin-top: 0.38vw; }
+      .tv-ot-main { min-width: 0; display: flex; flex-direction: column; gap: 0.05vw; }
+      .tv-ot-l1 {
+        display: grid;
+        grid-template-columns: 12.5vw 10vw 7vw 2.2vw 1fr;
+        gap: 0.6vw;
+        align-items: baseline;
+        min-width: 0;
+      }
+      .tv-ot-l1 > span,
+      .tv-ot-l2 > span {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         min-width: 0;
       }
+      .tv-ot-l2 {
+        display: flex;
+        gap: 0.8vw;
+        align-items: baseline;
+        font-size: 0.76vw;
+        min-width: 0;
+      }
+      .tv-ot-l2 > .tv-ot-scope { flex: 1 1 auto; }
+      .tv-ot-cat { font-weight: 600; font-size: 0.74vw; }
+      .tv-ot-notes { color: #94a3b8; }
+      .tv-ot-posted { color: #64748b; font-size: 0.66vw; flex: 0 0 auto; }
       /* Filled rows: dim, no decoration — they're informational only. */
       .tv-ot-row-full { opacity: 0.45; }
       /* Open rows: amber tint + left border + slightly heavier text so an
@@ -3034,8 +3086,8 @@ function TvStyles() {
       .tv-ot-scope { color: #f1f5f9; }
       .tv-ot-slots {
         color: #cbd5e1;
-        font-size: 0.72vw;
-        text-align: right;
+        font-size: 0.78vw;
+        text-align: left;
       }
       /* Empty-slots cue replaces the meek "—" dash with a louder OPEN
          pill so the eye lands on action-needed rows immediately. */
@@ -3066,7 +3118,7 @@ function TvStyles() {
       .tv-ot-empty { color: #475569; font-style: italic; }
       .tv-ot-sep { color: #334155; margin: 0 0.18vw; }
       .tv-ot-filled {
-        text-align: right;
+        text-align: left;
         font-variant-numeric: tabular-nums;
       }
       .tv-ot-overflow {
