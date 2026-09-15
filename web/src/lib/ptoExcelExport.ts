@@ -1,14 +1,14 @@
-// §12 — UPark PTO Excel export.
+// §12 — PTO Excel export (UPark + Binney St).
 //
 // Builds the same workbook the manager asked for by hand on 2026-09-15
-// (UPark-only PTO with a per-engineer detail log), straight from the data
-// the PtoPanel already holds — no extra queries. Triggered from the
-// "Export .xlsx" link in the Balances title line.
+// (one site's PTO with a per-engineer detail log), straight from the data
+// the site's PTO panel already holds — no extra queries. Triggered from the
+// "Export .xlsx" link in each Balances title line.
 //
-// Sheets:
-//   UPark Summary   — allotted / used / remaining per engineer (remaining +
+// Sheets (<Site> = "UPark" or "Binney St"):
+//   <Site> Summary  — allotted / used / remaining per engineer (remaining +
 //                     entry counts are live formulas over the log sheet)
-//   UPark PTO Log   — every entry for the year, one row each
+//   <Site> PTO Log  — every entry for the year, one row each
 //   <Engineer name> — that engineer's chronological detail log with running
 //                     vacation / sick / floating-holiday balances (formulas;
 //                     allotments sit in input cells at the top of the tab)
@@ -28,7 +28,15 @@ type Cell = XLSXNS.CellObject;
 
 export type PtoExportEngineer = { user_id: string; full_name: string; active: boolean };
 
+export type PtoExportSite = {
+  /** Sheet-name / title prefix, e.g. "UPark" or "Binney St". */
+  label: string;
+  /** Filename prefix, e.g. "UPark" or "BinneySt". */
+  slug: string;
+};
+
 export type PtoExportInput = {
+  site: PtoExportSite;
   year: number;
   summaries: PtoSummary[];
   requests: PtoRequest[];
@@ -140,8 +148,10 @@ function logRow(r: PtoRequest): unknown[] {
   ];
 }
 
-export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.WorkBook {
-  const { year, engineers } = input;
+export function buildPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.WorkBook {
+  const { year, engineers, site } = input;
+  const SUMMARY_SHEET = `${site.label} Summary`;
+  const LOG_SHEET = `${site.label} PTO Log`;
   const yr = String(year);
   const exportedOn = input.exportedOn ?? new Date().toLocaleDateString('en-CA');
   const isTest = (n: string) => /test/i.test(n);
@@ -164,9 +174,9 @@ export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.Wo
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const wb = X.utils.book_new();
-  const LOG = "'UPark PTO Log'!";
+  const LOG = `'${LOG_SHEET}'!`;
 
-  // ---------------- UPark Summary ----------------
+  // ---------------- <Site> Summary ----------------
   const sumRows: unknown[][] = [[
     'Engineer', 'Active', 'Vacation allotted', 'Vacation used', 'Vacation remaining',
     'Sick allotted', 'Sick used', 'Sick remaining',
@@ -201,13 +211,13 @@ export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.Wo
   sumRows.push([]);
   sumRows.push([
     `Hours. Allotted/used come from the dashboard balance table; "remaining" and the entry counts are live formulas. ` +
-    `Each engineer also has a detail-log tab. Exported ${exportedOn}; UPark engineers only, ${year}.`,
+    `Each engineer also has a detail-log tab. Exported ${exportedOn}; ${site.label} engineers only, ${year}.`,
   ]);
   const wsSum = grid(X, sumRows, [20, 7, 10, 10, 11, 10, 10, 11, 11, 11, 11, 9, 9, 10, 50]);
   if (people.length > 0) wsSum['!autofilter'] = { ref: `A1:O${last}` };
-  X.utils.book_append_sheet(wb, wsSum, 'UPark Summary');
+  X.utils.book_append_sheet(wb, wsSum, SUMMARY_SHEET);
 
-  // ---------------- UPark PTO Log ----------------
+  // ---------------- <Site> PTO Log ----------------
   const logRows: unknown[][] = [['Engineer', ...LOG_HEADS]];
   const byPerson = [...requests].sort((a, b) =>
     (nameById.get(a.user_id) ?? '').localeCompare(nameById.get(b.user_id) ?? '') ||
@@ -215,10 +225,10 @@ export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.Wo
   for (const r of byPerson) logRows.push([nameById.get(r.user_id) ?? r.user_full_name, ...logRow(r)]);
   const wsLog = grid(X, logRows, [20, ...LOG_WIDTHS]);
   if (byPerson.length > 0) wsLog['!autofilter'] = { ref: `A1:S${byPerson.length + 1}` };
-  X.utils.book_append_sheet(wb, wsLog, 'UPark PTO Log');
+  X.utils.book_append_sheet(wb, wsLog, LOG_SHEET);
 
   // ---------------- One detail-log tab per engineer ----------------
-  const taken = new Set(['upark summary', 'upark pto log']);
+  const taken = new Set([SUMMARY_SHEET.toLowerCase(), LOG_SHEET.toLowerCase()]);
   for (const p of people) {
     const mine = requests.filter((r) => r.user_id === p.user_id);
     const b = balById.get(p.user_id);
@@ -226,7 +236,7 @@ export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.Wo
     // Row 1-2: title + allotment inputs feeding the running balances.
     rows.push([p.name, null, null, null, 'Vacation allotted', 'Sick allotted', 'Floating Holiday allotted', null,
       'Allotted hours come from the dashboard balance table — change them here and the running balances follow. Running balances count Approved + Pending entries, like the dashboard.']);
-    rows.push([`UPark · ${year} PTO detail log`, null, null, null,
+    rows.push([`${site.label} · ${year} PTO detail log`, null, null, null,
       num(b?.vacation_alloted ?? 0), num(b?.sick_alloted ?? 0), num(b?.holiday_alloted ?? 0)]);
     rows.push([]);
     const HDR = 4;                                   // 1-based header row
@@ -267,9 +277,9 @@ export function buildUparkPtoWorkbook(X: XLSX, input: PtoExportInput): XLSXNS.Wo
 
 /** Build + download. Lazy-loads SheetJS so the ~400 kB library stays out of
  *  the main bundle until someone actually clicks Export. */
-export async function downloadUparkPtoWorkbook(input: PtoExportInput): Promise<void> {
+export async function downloadPtoWorkbook(input: PtoExportInput): Promise<void> {
   const X = await import('xlsx');
-  const wb = buildUparkPtoWorkbook(X, input);
+  const wb = buildPtoWorkbook(X, input);
   const day = new Date().toLocaleDateString('en-CA');
-  X.writeFile(wb, `UPark_PTO_${input.year}_${day}.xlsx`, { compression: true });
+  X.writeFile(wb, `${input.site.slug}_PTO_${input.year}_${day}.xlsx`, { compression: true });
 }

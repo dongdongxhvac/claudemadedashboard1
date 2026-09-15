@@ -32,7 +32,7 @@ import { useRounds, type Round } from '../hooks/useRounds';
 import { useUparkUserIds } from '../hooks/useSiteScope';
 import { BMR_HOLIDAYS } from '../lib/bmrHolidays';
 import { Section } from './Section';
-import { downloadUparkPtoWorkbook } from '../lib/ptoExcelExport';
+import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
 
 // ───────────────────────────── helpers
@@ -2195,7 +2195,8 @@ function BalancesGrid({
           onClick={async () => {
             setExporting(true);
             try {
-              await downloadUparkPtoWorkbook({
+              await downloadPtoWorkbook({
+                site: { label: 'UPark', slug: 'UPark' },
                 year: currentYear,
                 summaries,
                 requests: allRequests,

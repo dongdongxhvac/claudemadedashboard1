@@ -35,6 +35,7 @@ import { useOvertimePosts, type OvertimePost } from '../../hooks/useOvertime';
 import { useCurrentBuildingAssignments, type BuildingAssignment } from '../../hooks/useBuildingAssignments';
 import { useBuildings, type Building } from '../../hooks/useBuildings';
 import { Section } from '../../components/Section';
+import { downloadPtoWorkbook } from '../../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from '../../components/PtoCalRecipientsEditor';
 
 // ───────────────────────────── helpers
@@ -2222,6 +2223,7 @@ function BalancesGrid({
   type SortKey = 'name' | 'vacation' | 'sick' | 'holiday';
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const [exporting, setExporting] = useState(false);
   const onSort = (k: SortKey) => {
     if (sortKey === k) {
       setSortDir((d) => (d === 1 ? -1 : 1));
@@ -2324,6 +2326,34 @@ function BalancesGrid({
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">
         Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
+        {/* Excel export — same workbook as UPark's (lib/ptoExcelExport):
+            summary + full log + one detail-log tab per engineer, built from
+            the props already on this grid. */}
+        <button
+          type="button"
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await downloadPtoWorkbook({
+                site: { label: 'Binney St', slug: 'BinneySt' },
+                year: currentYear,
+                summaries,
+                requests: allRequests,
+                engineers: engineers.filter((e) => e.role === 'engineer'),
+              });
+            } catch (e) {
+              alert(`Export failed: ${(e as Error).message}`);
+            } finally {
+              setExporting(false);
+            }
+          }}
+          disabled={exporting}
+          className="t-accent hover:underline ml-3"
+          style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
+          title="Download an Excel workbook: balances summary, the full year's PTO log, and a detail-log tab per engineer with running balances."
+        >
+          {exporting ? 'Exporting…' : '⤓ Export .xlsx'}
+        </button>
       </div>
       <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (
