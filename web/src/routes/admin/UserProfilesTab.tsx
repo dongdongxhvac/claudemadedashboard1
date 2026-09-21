@@ -12,7 +12,8 @@ import { useMe, type ManageScope } from '../../hooks/useMe';
 import { CoveIdFinder } from '../../components/CoveIdFinder';
 import { NewHireProgramDrawer } from '../../components/NewHireProgramDrawer';
 import { useNewHireAll, nhUserState } from '../../hooks/useNewHire';
-import { NH_WEEKS, NH_TOTAL_ITEMS, nhWeekFor } from '../../lib/newHireProgram';
+import { NH_WEEKS, nhWeekFor } from '../../lib/newHireProgram';
+import { useSignoffSheet } from '../../hooks/useSignoffSheet';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'newhire' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -122,6 +123,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   // fetch) — drives the New hires filter, the progress pill under the name,
   // and the Training drawer.
   const nhQ = useNewHireAll();
+  const { sheet: nhSheet } = useSignoffSheet();
   const enrolledIds = useMemo(() => new Set(nhQ.data?.enrollments.keys() ?? []), [nhQ.data]);
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
@@ -300,7 +302,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                         </div>
                       )}
                       {enrolledIds.has(r.user_id) && (() => {
-                        const st = nhUserState(nhQ.data, r.user_id);
+                        const st = nhUserState(nhQ.data, r.user_id, nhSheet);
                         const wk = nhWeekFor(st.enrollment?.start_date);
                         const done = st.enrollment?.status === 'completed';
                         const wkText = done ? 'Certified' : wk === 0 ? 'not started' : wk > NH_WEEKS ? 'past wk 8' : `Wk ${wk}/${NH_WEEKS}`;
@@ -314,7 +316,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                               color: done ? '#047857' : 'var(--color-accent)',
                               fontSize: 10, fontWeight: 600, letterSpacing: '0.02em',
                             }}
-                            title={`New-hire program — ${st.progress.itemsDone}/${NH_TOTAL_ITEMS} items · ${st.progress.repsDone}/${st.progress.repsTotal} reps at target · ${st.progress.pct}%. Click to open the tracker.`}
+                            title={`New-hire program — ${st.progress.weekItemsDone}/${st.progress.weekItemsTotal} week items · ${st.progress.repsDone}/${st.progress.repsTotal} reps at target · ${st.progress.pct}%. Click to open the sign-off sheet.`}
                           >
                             <span>8-WK</span>
                             <span>{wkText}</span>
@@ -400,7 +402,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                             borderColor: 'var(--color-border)',
                             background: 'var(--color-card)',
                           }}
-                          title={enrolledIds.has(r.user_id) ? 'Open the 8-week new-hire tracker' : 'Enroll in the 8-week new-hire program'}
+                          title={enrolledIds.has(r.user_id) ? 'Open the sign-off sheet' : 'Assign training (8-week new-hire program)'}
                         >
                           Training
                         </button>
