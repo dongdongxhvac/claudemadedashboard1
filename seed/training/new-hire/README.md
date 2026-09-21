@@ -11,7 +11,7 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 
 | What | Where |
 |---|---|
-| The handouts themselves (21 self-contained HTML pages) | `web/public/training/new-hire/` — served as static files at `/training/new-hire/…` (Vercel serves real files before the SPA rewrite). The folder is whatever `base` in the manifest says. |
+| The handouts themselves (23 self-contained HTML pages) | `web/public/training/new hire 8 weeks training package/` (the Sep-21 package: 5 overviews, 4 equipment SPAs, plan, site maps, building check, print station, terminology, answer key, plus five Aug-19 pages carried over — glossary, Find It & Tag It, Find It On Screen + example, Level-2 curriculum — because the sign-off items link them). Served as static files under `/training/…` (Vercel serves real files before the SPA rewrite). The folder is whatever `base` in the manifest says. |
 | **The handout list (what the dashboard shows)** | `web/public/training/manifest.json` — see "How to add or update training" below |
 | The program as data — 8 weeks × verified items, rep tally, evals, cert | `web/src/lib/newHireProgram.ts` (transcribed from the sign-off sheet inside `new_hire_8_week_plan.html`; refers to handouts by manifest key) |
 | Progress tables + RLS | `supabase/migrations/0128_new_hire_program.sql` (enrollment, check-offs, rep logs) + `0131_new_hire_doc_activity.sql` (engineer's own opened / quiz rows) |
@@ -29,8 +29,8 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 - Item keys in `newHireProgram.ts` are permanent — progress is keyed on them.
   Change labels freely; never rename a key.
 - Handouts are hosted inside the dashboard (works on the kiosk/phones, no
-  Downloads dependency). To update a handout, replace the file under
-  `web/public/training/new-hire/` and rebuild.
+  Downloads dependency). To update a handout, replace the file in the package
+  folder under `web/public/training/` (see "How to add or update training").
 
 ## How to add or update training (2026-09-21)
 
@@ -41,7 +41,7 @@ change for any of these. Push to `master` and Vercel deploys it.
 |---|---|
 | **Replace a handout** with a newer build | Overwrite the file, same name. Done. |
 | **Add a handout** | Drop the HTML into the folder and add one entry to `docs`: `{ "key": "…", "label": "…", "file": "…html", "group": "overview\|equipment\|field\|reference\|program\|mentor", "week": 3, "quiz": true }` |
-| **Move / rename the package folder** (e.g. to `new hire 8 weeks training package`) | Copy the files there, set `base` to the new folder (`/training/new hire 8 weeks training package` — spaces are fine), fix each `file` if names changed, delete the old folder. |
+| **Move / rename the package folder** | Copy the files there, set `base` to the new folder (spaces are fine — the current one is `/training/new hire 8 weeks training package`), fix each `file` if names changed, delete the old folder. |
 | **Retire a handout** | Delete its entry. Recorded quiz results and sign-offs stay in the database under its key. |
 | **Rename a handout** | Change `label` only. **Never change `key`** — quiz results, "opened" history and the mentor's ticks are all stored against it. |
 | Hide a handout from engineers | `"group": "mentor"` (answer key etc.). |
@@ -56,7 +56,10 @@ handout is never edited):
   inside it. The equipment pages use `srcdoc` (quizzes save); `new_hire_overviews_all.html`
   uses `data:` (marked `"quiz": false`; its five quizzes save from the single overview pages);
 - set `"quiz": true` only on pages that really have one; a run is saved when every
-  question is answered, and "Reset quiz" + answering again saves another run.
+  question is answered, and "Reset quiz" + answering again saves another run;
+- the Print Station (`new_hire_print_station.html`) previews all 27 documents through
+  `srcdoc`, so its quizzes *would* be visible — it is deliberately `"quiz": false` so
+  results are only recorded under the handout's own key, never under `print_station`.
 
 Mentor sign-off is separate from the engineer's score: the engineer's best run shows as
 a chip; the mentor ticks **Reviewed** and **Quiz passed** per handout in the drawer, and the
