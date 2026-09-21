@@ -13,11 +13,11 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 |---|---|
 | **All training content — one file** | `web/public/training/new hire 8 weeks training package/new_hire_print_station.html` — the Print Station SPA embeds every document (27 today: schedule, sign-off sheet, week guides/checklists, both site maps, building check, 5 overviews, 8 equipment pages, worked example, glossary, terminology, answer key, manager SOP). Served as a static file under `/training/…`. The dashboard reads the documents out of it at load time. |
 | How the dashboard reads it | `web/src/hooks/useTrainingDocs.ts` — parses the print station's `TITLES` / `DOCS` arrays and group headings, derives a permanent key per document from its title (alias rules in that file), detects quizzes (`id="qDone"`). |
-| The program as data — 8 weeks × verified items, rep tally, evals, cert | `web/src/lib/newHireProgram.ts` (transcribed from the sign-off sheet inside `new_hire_8_week_plan.html`; refers to handouts by manifest key) |
+| **The program definition** — groups, verified items, rep tally, COVE audit, certification | The **Master Sign-Off Sheet document inside the print station**, parsed at load time by `web/src/lib/signoffSheet.ts` (served by `hooks/useSignoffSheet.ts`). Nothing is transcribed into code. `web/src/lib/newHireProgram.ts` keeps only the program key, the week-from-start-date rule and the per-handout tick keys. |
 | Progress tables + RLS | `supabase/migrations/0128_new_hire_program.sql` (enrollment, check-offs, rep logs) + `0131_new_hire_doc_activity.sql` (engineer's own opened / quiz rows) |
 | Data hooks | `web/src/hooks/useNewHire.ts` (progress + activity), `useTrainingDocs.ts` (documents from the print station), `useQuizWatcher.ts` (detects a finished quiz inside the viewer) |
-| UI — the **sign-off sheet**, live (Admin › User Profiles → Training) | `web/src/components/NewHireProgramDrawer.tsx` — mirrors the printed sheet: header strip (new hire · mentor · manager · start), Week × Verified items with Initials + Date, PM rep tally boxes, COVE audit grid, Level-1 certification; then per-handout Reviewed / Quiz-passed ticks and the engineer's activity. "Assign training" for people with nothing assigned (program picker — only Plan B exists today). |
-| UI — the **8-week schedule**, live (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` — the printed schedule with the mentor's sign-offs shown read-only on each week's CHECK OFF row, handout chips open the in-page viewer, quiz runs save automatically (best run shows beside the quiz item); UPark only |
+| UI — the **sign-off sheet**, live (Admin › User Profiles → Training) | `web/src/components/NewHireProgramDrawer.tsx` + `LiveDoc.tsx` — the actual sheet document rendered in the drawer: click an item's Initials/Date cell to verify (your initials + date), NOTES to add a note, rep tally / COVE boxes to tick, signature lines to sign. "Assign training" (program · start · mentor) for people with nothing assigned. |
+| UI — the engineer's page (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` + `LiveDoc.tsx` — tabs: the actual **8-Week Schedule** document (file chips open the handout; Check off ticks mirror the mentor's sign-offs), **My sign-off record** (the sheet, read-only, filled in), All handouts. Quiz runs save automatically from the viewer. UPark only. |
 | Original build notes for the handouts (conventions, site facts) | `HANDOFF.md` here |
 
 ## Decisions (2026-09-21)
@@ -68,8 +68,20 @@ What the dashboard reads from it:
   (`Mentor only` is hidden from engineers);
 - `id="qDone"` inside a document — it has a quiz the dashboard records.
 
-**Keys are permanent.** Quiz results, "opened" history and the mentor's ticks are stored
-against a key derived from each document's TITLE (`keyForTitle` in
+**The sign-off sheet is the program.** Its groups (`tbody.wkgrp`), items (`tbody.pair`
+rows), rep tally (P/D/S or plain boxes), COVE audit boxes and signature lines are what the
+dashboard records against. Keys: item = `<group>.<slug of the item text>` (e.g.
+`wk1.all_assigned_workday_trainings_complete`, `admin_first_day_on_site.uniform_issued`),
+rep = `rep.<slug of the label>`, `cove.<n>`, `cert.new_hire|mentor|manager`. **Rewording an
+item changes its key** — the mentor re-ticks it (the old tick stays in the DB, harmless);
+reordering, regrouping or adding items is free. The sheet's markup (classes `idrow`, `wkgrp`,
+`wkhead`, `wkeys`, `pair`, `init`, `date`, `noter`, `reps`, `box`, `lv`, `cert`, `sig`,
+`sigline`, `sigk`) must survive a rebuild — if it doesn't, both pages show a parse error
+instead of a blank record. The schedule's Check off ticks are matched to sheet items by
+words (same week); a tick with no close item shows as "not tracked" — harmless.
+
+**Document keys are permanent.** Quiz results, "opened" history and the per-handout ticks are
+stored against a key derived from each document's TITLE (`keyForTitle` in
 `web/src/hooks/useTrainingDocs.ts`: "HVAC Overview" → `hvac`, "Boiler — Find It & Tag It
 (24)" → `boiler_tagit`, "Quiz Answer Key — MENTOR COPY" → `answer_key`, …; an unknown
 title gets a slug of itself). So:
@@ -78,10 +90,10 @@ title gets a slug of itself). So:
 - a brand-new kind of document needs no rule — it appears under its group with a slug
   key. Add a rule only if you want a nicer key, and do it before anyone records against
   the slug;
-- the program's weeks (`web/src/lib/newHireProgram.ts`) link documents by key. Three
-  keys the weeks reference are NOT in the print station yet — `find_on_screen`
-  (Week 6), `find_it_tag_it` (Weeks 7–8, the portfolio 117) and `level2` (Week 8).
-  Their chips show "not in print station" until the documents are added to it.
+- the schedule's file chips (`new_hire_hvac_overview.html` …) map to documents by file
+  name (`docKeyForFile` in `signoffSheet.ts`); a chip whose document is not in the print
+  station stays plain (today: `new_hire_find_it_on_screen.html`,
+  `training_level2_curriculum.html`).
 
 Quiz auto-save rules (the dashboard watches each document's own counters, so the
 documents are never edited): keep the ids `qDone`, `qTot`, `qRight`, `qReset`; a run is

@@ -1,7 +1,8 @@
 // New-hire 8-week program — data hooks (migration 0128).
 //
-// The program DEFINITION is code (lib/newHireProgram.ts) + the handout
-// print-station document list (hooks/useTrainingDocs.ts); these hooks move PROGRESS:
+// The program DEFINITION is the Master Sign-Off Sheet document inside the
+// Print Station (lib/signoffSheet.ts parses it; hooks/useSignoffSheet.ts
+// serves it); these hooks move PROGRESS:
 // enrollments, check-offs (presence = verified — weekly items, week/COVE
 // initials, cert signatures AND the per-handout mentor ticks
 // 'doc.<key>.reviewed' / 'doc.<key>.quiz'), rep logs (one row per completed
@@ -18,7 +19,8 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
-import { NH_PROGRAM_KEY, DOC_KEY_RE, nhProgress, type NhProgress } from '../lib/newHireProgram';
+import { NH_PROGRAM_KEY, DOC_KEY_RE } from '../lib/newHireProgram';
+import { sheetProgress, type SignoffSheet, type SheetProgress } from '../lib/signoffSheet';
 
 export type NhStatus = 'active' | 'completed' | 'paused' | 'withdrawn';
 
@@ -123,7 +125,7 @@ export type NhUserState = {
   checkoffs: Map<string, NhCheckoff>;
   repLogs: NhRepLog[];
   repCounts: Map<string, number>;
-  progress: NhProgress;
+  progress: SheetProgress;
   /** Handout activity, newest first. */
   activity: NhDocActivity[];
   /** Best quiz run per handout (highest score; latest on a tie). */
@@ -134,7 +136,7 @@ export type NhUserState = {
   docTicks: Map<string, { reviewed: boolean; quiz: boolean }>;
 };
 
-export function nhUserState(all: NhAll | undefined, userId: string): NhUserState {
+export function nhUserState(all: NhAll | undefined, userId: string, sheet: SignoffSheet | null = null): NhUserState {
   const enrollment = all?.enrollments.get(userId) ?? null;
   const checkoffs = all?.checkoffs.get(userId) ?? new Map<string, NhCheckoff>();
   const checked = new Set(checkoffs.keys());
@@ -161,12 +163,12 @@ export function nhUserState(all: NhAll | undefined, userId: string): NhUserState
     if (m[2] === 'reviewed') t.reviewed = true; else t.quiz = true;
     docTicks.set(m[1], t);
   }
-  return { enrollment, checked, checkoffs, repLogs, repCounts, progress: nhProgress(checked, repCounts), activity, bestQuizByDoc, openedByDoc, docTicks };
+  return { enrollment, checked, checkoffs, repLogs, repCounts, progress: sheetProgress(sheet, checked, repCounts), activity, bestQuizByDoc, openedByDoc, docTicks };
 }
 
-export function useNewHireUser(userId: string) {
+export function useNewHireUser(userId: string, sheet: SignoffSheet | null = null) {
   const q = useNewHireAll();
-  const state = useMemo(() => nhUserState(q.data, userId), [q.data, userId]);
+  const state = useMemo(() => nhUserState(q.data, userId, sheet), [q.data, userId, sheet]);
   return { ...q, state };
 }
 
