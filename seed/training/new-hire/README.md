@@ -42,9 +42,25 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 
 **One file.** The dashboard takes every handout from
 `web/public/training/new hire 8 weeks training package/new_hire_print_station.html`.
-Rebuild the print station with the changed or added documents, overwrite that file,
-push to `master` — Vercel deploys, and the schedule page, the sign-off sheet and the
-viewer pick the documents up. No other file to edit.
+Change that file, push to `master` — Vercel deploys, and the schedule page, the sign-off
+sheet and the viewer pick the documents up. No other file to edit.
+
+Two ways to change it:
+
+1. **Rebuild the whole print station** (the way it was made in Claude chat) and overwrite
+   the file. Fine when many documents change.
+2. **Edit one document** with the tool in this folder — the documents are base64 inside
+   the file, so you can't edit them directly:
+   ```
+   python3 seed/training/new-hire/print_station.py unpack      # → seed/training/new-hire/print-station-src/ (27 .html files + index.json)
+   #   replace 09_hvac_overview.html with the new build, or edit it in place;
+   #   add a document: drop the .html in the folder + add an entry to index.json (file, title, group);
+   #   remove / reorder / retitle / regroup: edit index.json
+   python3 seed/training/new-hire/print_station.py pack        # rebuilds the print station in place
+   python3 seed/training/new-hire/print_station.py list        # what's inside, with the dashboard keys
+   ```
+   Then commit the print station and push. `print-station-src/` is git-ignored scratch —
+   the print station itself stays the only source of truth.
 
 What the dashboard reads from it:
 - `const TITLES=[…]` and `const DOCS=[…]` (base64, index-aligned) — the documents;
