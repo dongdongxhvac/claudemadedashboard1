@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How the BMS Works — Life-Science Building (New Hire)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--amber),var(--green),var(--violet))}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--amber);margin:4px 0 9px}
+  h1{font-size:27px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:17px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:15px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:15px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:126px;flex:0 0 auto;padding-right:8px;line-height:1.5}
+  .t-norm .track-tag{color:var(--amber)} .t-emerg .track-tag{color:var(--green)} .t-crit .track-tag{color:var(--violet)}
+  .node{font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:62px;padding:0 3px}
+  .arr .lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.15;text-align:center;margin-bottom:2px}
+  .arr .line2{color:var(--line-2);font-size:22px;font-weight:600;line-height:1}
+  .t-norm .arr .line2{color:var(--amber)} .t-emerg .arr .line2{color:var(--green)} .t-crit .arr .line2{color:var(--violet)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:8px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:8px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--red);border-radius:10px;
+    background:rgba(210,59,53,.05);padding:13px 16px;font-size:13.5px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);display:block;margin-bottom:4px;font-weight:600}
+
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.crit{color:var(--violet);background:rgba(106,79,208,.1)} .coil.safe{color:var(--red);background:rgba(210,59,53,.1)} .coil.mon{color:var(--cyan);background:rgba(14,143,166,.1)}
+  .term-card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:16.5px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:14px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:13.5px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:13px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:16px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:14px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--amber)} .d2 .tag{color:var(--green)}
+  .d-head h2{font-size:17px;margin:0;font-weight:600}
+  .d-sub{font-size:13px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .hub{stroke-width:2.6}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:12.5px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:8px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:8.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .rowlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .busbar{fill:rgba(31,154,85,.09);stroke:var(--green);stroke-width:1.7}
+  .bust{font-family:var(--mono);font-size:10px;fill:var(--green);font-weight:600;text-anchor:middle;letter-spacing:.14em}
+
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:14px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:13px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.5px;color:var(--ink-dim)}
+
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:11px} .q-opts{gap:4px}
+    .q-opts button{font-size:9.5px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:13px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:21px;line-height:1.15;color:#000} h1 .sub{font-size:14px;margin-top:2px}
+    .eyebrow{font-size:9.5px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:11.5px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:15.5px;color:#000} .s-head .n{font-size:10px}
+    p.lead{font-size:11.5px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:9px;width:100px;line-height:1.4}
+    .node{font-size:11px;padding:5px 8px;border-radius:6px;border-color:#5b6674;color:#000}
+    .arr{min-width:44px;padding:0 2px} .arr .lbl{font-size:8px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:17px}
+    .stack{gap:2px} .stack .opt{font-size:10px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7px;color:#3e4a5a} .stack .conj{font-size:7px}
+    .flow-note{font-size:10px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:11px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:8.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .card .role{font-size:8.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:13px;margin:0 0 3px;color:#000} .card .one{font-size:11.5px;margin:0 0 5px;color:#000}
+    .card p{font-size:10.8px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:10.3px;padding-top:5px;margin-top:5px} .card .why em{font-size:7.6px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:12px;color:#000} .term-card p{font-size:10.3px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:7.8px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:13.5px;margin:0 0 5px;color:#000} .downstream p{font-size:11.3px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:9.5px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:avoid;page-break-inside:avoid}
+    .downstream,.diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:9.5px;color:#242e3c;margin-top:8px} .d-head h2{font-size:13.5px} .d-sub{font-size:10px} }
+  .ptab{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.5px}
+  .ptab th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line-2)}
+  .ptab td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  .ptab td b{color:var(--ink)}
+  .neg{color:var(--red);font-weight:700;font-family:var(--mono)}
+  .pos{color:var(--blue);font-weight:700;font-family:var(--mono)}
+
+  @media print{.ptab{font-size:9.5px} .ptab td,.ptab th{padding:3px 5px} .fx{font-size:10.5px;padding:5px 7px} .ptab,.fx{break-inside:avoid}}
+
+    .rotpage{margin:0}
+    @media print{
+      /* Each system diagram gets its own sheet, rotated 90deg — a true landscape
+         drawing on a portrait sheet, so it works in every browser and in wkhtmltopdf.
+         Usable page area with the 5mm/11mm margins is 200 x 281mm. The sheet is kept
+         well inside that (196 x 270mm) so no stray margin, line-height, or rounding
+         can push it over and trigger a clipped page + a blank one. */
+      .rotpage{
+        position:relative;
+        width:196mm; height:270mm;
+        overflow:hidden;
+        break-before:page; break-inside:avoid;
+        margin:0; padding:0; line-height:0;
+        border:0; box-shadow:none;
+      }
+      .rotpage > .diagram{
+        position:absolute; top:0; left:0;
+        width:270mm; height:196mm;
+        margin:0 !important; padding:5mm;
+        border:0; box-shadow:none; border-radius:0; background:#fff;
+        line-height:1.35;
+        transform-origin:0 0;
+        transform:rotate(90deg) translate(0,-196mm);
+        break-inside:avoid; overflow:hidden;
+      }
+      .rotpage .d-head{margin:0 0 1.5mm}
+      .rotpage .d-head h2{font-size:12.5px}
+      .rotpage .d-sub{font-size:9.5px;margin:0 0 2.5mm}
+      /* height fixed; width follows the viewBox ratio → fills the sheet, no distortion.
+         148mm is the largest height at which the widest drawing (ratio 1.73) still
+         fits the 260mm of rotated width available. */
+      /* One drawing per landscape sheet. Content box is 260 x 186mm; the heading strip
+         takes ~16mm, leaving 170mm of height. Width-driven, because both drawings are
+         wider than they are tall: arch 1.70:1 -> 152mm tall · loop 1.94:1 -> 133mm tall. */
+      .rotpage svg{width:100%;max-width:258mm;height:auto;max-height:165mm;display:block;margin:0 auto}
+      section.land{margin:0;padding:0}
+    }
+
+
+
+  .filltab{width:100%;border-collapse:collapse;margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+  .filltab th{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;text-align:left;padding:7px 9px;border-bottom:1px solid var(--line-2);background:var(--panel-2)}
+  .filltab td{border-bottom:1px solid var(--line);padding:7px 9px;font-size:12px;vertical-align:middle;height:30px}
+  .filltab tr:last-child td{border-bottom:0}
+  .filltab td.eq{font-weight:600;color:var(--ink);white-space:nowrap;background:none}
+  .filltab td.blank{border-bottom:1px solid var(--line)}
+  .filltab td.blank::after{content:"";display:block;border-bottom:1px dotted var(--line-2);height:1px;margin-top:9px}
+  @media print{.filltab td{height:26px;font-size:9.5px;padding:5px 7px} .filltab th{font-size:7px;padding:4px 7px} .filltab,.filltab tr{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">prints as a compact handout — few pages, tight layout</span></div>
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Basics</div>
+    <h1>How the BMS Works in a Life-Science Building<span class="sub">Building Management System — the nervous system of the plant</span></h1>
+    <p class="intro">The plant makes heat and cold. The <b>BMS decides when</b>. It is a network of small computers wired to <b>sensors</b> that measure and <b>actuators</b> that move, with a screen on top so people can watch. Nothing on that screen makes air cold — the BMS opens a valve, and the chiller does the rest. Learning the BMS is learning to ask the building what it has actually been doing, instead of guessing.</p>
+  </header>
+
+  <!-- 01 -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">01</span><h2>Start here — what is a BMS?</h2><span class="line"></span></div>
+    <p class="lead">Three things repeat everywhere in this system. Learn them once and the rest is detail.</p>
+    <div class="terms" style="margin-top:12px">
+      <div class="term-card"><h4>Sensor</h4><span class="coil mon">it measures</span><p>Reads one number about the real world: a temperature, a pressure, an airflow, or simply <b>is it running, yes or no</b>.</p></div>
+      <div class="term-card"><h4>Controller</h4><span class="coil crit">it decides</span><p>Compares that number to a <b>setpoint</b> and calculates an output. A small computer, usually sitting on the equipment it controls.</p></div>
+      <div class="term-card"><h4>Actuator</h4><span class="coil safe">it moves</span><p>The valve, damper, or drive that changes something. The <b>only</b> part of the loop that touches the building.</p></div>
+    </div>
+    </div>
+
+    <div class="callout" style="margin-top:16px">
+      <span class="ttl">If you remember nothing else</span>
+      <b>Sensor → controller → actuator → the building changes → the sensor reads it again.</b> That circle is a <b>control loop</b>, and a large building runs thousands of them at once. Every alarm, every complaint, and every energy problem is a loop that is not closing properly — a sensor lying, a controller mis-tuned, or an actuator that never moved.
+    </div>
+
+    <p class="lead" style="margin-top:22px"><b>Words you will hear on the radio</b></p>
+    <table class="ptab">
+      <thead><tr><th>Term</th><th>Stands for</th><th>In one line</th></tr></thead>
+      <tbody>
+        <tr><td><b>BMS / BAS</b></td><td>Building Management / Automation System</td><td>The whole thing — controllers, network, and front end.</td></tr>
+        <tr><td><b>DDC</b></td><td>Direct Digital Control</td><td>Control done by a computer rather than by a pneumatic or mechanical device.</td></tr>
+        <tr><td><b>Point</b></td><td>—</td><td>One value the system knows: a reading, a command, or a status.</td></tr>
+        <tr><td><b>AI / AO</b></td><td>Analog Input / Output</td><td>A varying value read in, or driven out — a temperature, a valve position.</td></tr>
+        <tr><td><b>BI / BO</b></td><td>Binary Input / Output</td><td>On or off, read in or commanded out — a status contact, a start relay.</td></tr>
+        <tr><td><b>PV</b></td><td>Process Variable</td><td>What the sensor actually reads right now.</td></tr>
+        <tr><td><b>SP</b></td><td>Setpoint</td><td>What you want the process variable to be.</td></tr>
+        <tr><td><b>PID</b></td><td>Proportional · Integral · Derivative</td><td>The arithmetic a controller uses to close the gap.</td></tr>
+        <tr><td><b>Hardware point</b></td><td>physical point</td><td>Wired to a real device on a controller terminal. Wrong value → go to the field.</td></tr>
+        <tr><td><b>Software point</b></td><td>virtual point (AV / BV)</td><td>Lives only in memory: setpoints, calculated values, flags. Wrong value → go to the logic.</td></tr>
+        <tr><td><b>BACnet</b></td><td>—</td><td>The common language controllers speak to each other.</td></tr>
+        <tr><td><b>Trend</b></td><td>—</td><td>A point recorded over time. The building&#8217;s memory.</td></tr>
+        <tr><td><b>Override / Hand</b></td><td>—</td><td>A person has forced a point. Automatic control is switched off for it.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+
+  <!-- 02 RULES -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">02</span><h2>Four rules of thumb</h2><span class="line"></span></div>
+    <p class="lead">Learn these before you learn anything else on this page. They are what separates using the BMS from merely looking at it.</p>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--violet);background:rgba(106,79,208,.05)">
+      <span class="ttl" style="color:var(--violet)">Rule 1 &nbsp;·&nbsp; Start at the BMS. Always. Then go to the field.</span>
+      Every troubleshooting call and every operational check begins at a screen, not at a ladder. Before you walk anywhere, read the <b>schedule</b> (is it even supposed to be running?), the <b>alarms</b>, the <b>trends</b>, the <b>command and status</b> pair, and whether anything is in <b>Hand</b>.<br><br>
+      You should arrive at the equipment carrying a <b>hypothesis</b>, not a flashlight. Half the time the trend has already told you the answer, and the trip is only to confirm it. The other half, you at least know which of the five things it isn&#8217;t.<br><br>
+      <b>The exception that proves it:</b> smoke, water, a burning smell, or anything with a life-safety flavour — you go now. But when you come back, the BMS still holds the record of what the building saw while it happened.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:12px">
+      <span class="ttl" style="color:var(--cyan)">Rule 2 &nbsp;·&nbsp; Read every value against its setpoint — not against whether the number looks reasonable.</span>
+      <b>&#8220;55°F&#8221; is not information.</b> 55°F against a 55°F setpoint is control working. 55°F against a 44°F setpoint is a problem that has been quietly running for a week.<br><br>
+      A number in the right units, in a plausible range, on the right screen, can still be completely wrong. The unit tells you the reading is <i>believable</i>. The setpoint tells you whether it is <i>right</i>. Only one of those is useful.<br><br>
+      So: never log or report a reading without the setpoint beside it. <b>Process variable and setpoint travel together</b>, always — on a round sheet, in a work order, and in your head.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--amber);background:rgba(176,116,8,.05);margin-top:12px">
+      <span class="ttl" style="color:var(--amber)">Rule 3 &nbsp;·&nbsp; Anything built to modulate, sitting pinned at 100% (or 0%), is a fault — even without an alarm.</span>
+      A modulating device is supposed to <b>move</b>. When a valve sits wide open for days, a VFD holds 60Hz around the clock, a damper never leaves full open, or a chiller runs at 100% RLA through a mild afternoon, the loop has <b>saturated</b> — it is asking for everything it has and still not reaching setpoint.<br><br>
+      That means one of three things: the load genuinely exceeds capacity, a <b>sensor is lying</b> so the loop chases a target it can never hit, or the <b>setpoint is unachievable</b> as configured.<br><br>
+      <b>This is the fault that almost never alarms</b>, because from the controller&#8217;s point of view nothing is wrong — it is trying its hardest. Nothing crosses a limit. The building just quietly burns energy and loses capacity headroom, and you find out on the first hot day when there is nothing left in reserve.<br><br>
+      Pinned at <b>0%</b> is the same fault wearing the other hat: a reheat valve commanded shut that never opens, an output that has bottomed out.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05);margin-top:12px">
+      <span class="ttl" style="color:var(--red)">Rule 4 &nbsp;·&nbsp; Know the difference between command and status — on the graphic <i>and</i> at the hardware — before you override anything.</span>
+      On the graphic: <b>command</b> is what the BMS asked for; <b>status</b> is a separate point claiming it happened.<br>
+      At the hardware: the status point is itself only as good as the device behind it. A current switch may be proving the <b>VFD</b> is energized, not that the <b>shaft</b> is turning. An auxiliary contact may be proving the <b>starter pulled in</b>, not that the coupling is intact. An actuator can stroke perfectly while its <b>linkage is loose</b> and the damper blade never moves.<br><br>
+      So there are three layers, and they can all disagree: <b>what was commanded · what the status point claims · what the metal is actually doing.</b><br><br>
+      <b>Never override on a false premise.</b> An override placed on top of a misunderstanding does not fix the fault — it hides it, removes the loop that would have exposed it, and leaves a point in Hand that someone will find in six months.
+    </div>
+
+    <p class="lead" style="margin-top:22px"><b>Before you place any override</b></p>
+    <table class="ptab">
+      <thead><tr><th>Ask</th><th>Because</th></tr></thead>
+      <tbody>
+        <tr><td>What is the <b>setpoint</b>, and is the PV actually failing to meet it?</td><td>Rule 2. A value alone proves nothing.</td></tr>
+        <tr><td>Is the output <b>saturated</b> at 100% or 0%?</td><td>Rule 3. If so, the loop is not the problem — capacity, a sensor, or the setpoint is.</td></tr>
+        <tr><td>Does <b>status</b> agree with <b>command</b>? Does the <b>hardware</b> agree with status?</td><td>Rule 4. Overriding a command that was already obeyed changes nothing.</td></tr>
+        <tr><td>Is an <b>interlock</b> holding it off?</td><td>The interlock is telling you something true. Do not override it — satisfy it.</td></tr>
+        <tr><td>Who else needs to know, and <b>when will I take it out</b>?</td><td>An override is a promise to come back. Write it down with the date.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 03 -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">03</span><h2>How it fits together</h2><span class="line"></span></div>
+    <p class="lead">Read each track left to right. The layers are stacked, and <b>each one survives the loss of the one above it</b>.</p>
+    <div class="flow" style="margin-top:14px">
+
+      <div class="track t-crit">
+        <span class="track-tag">People layer</span>
+        <span class="node soft">Operator</span>
+        <span class="arr"><span class="lbl">looks at</span><span class="line2">→</span></span>
+        <span class="node hub">Front end</span>
+        <span class="arr"><span class="lbl">graphics<br>trends · alarms</span><span class="line2">→</span></span>
+        <span class="node soft">a window, not a controller</span>
+      </div>
+
+      <div class="track t-emerg">
+        <span class="track-tag">Supervisory layer</span>
+        <span class="node hub">Supervisory controller</span>
+        <span class="arr"><span class="lbl">schedules<br>resets</span><span class="line2">→</span></span>
+        <span class="node">Field bus</span>
+        <span class="arr"><span class="lbl">BACnet<br>MS/TP</span><span class="line2">→</span></span>
+        <span class="node">Field controllers</span>
+      </div>
+
+      <div class="track t-norm">
+        <span class="track-tag">The loop itself</span>
+        <span class="node">Sensor</span>
+        <span class="arr"><span class="lbl">PV</span><span class="line2">→</span></span>
+        <span class="node hub">Controller</span>
+        <span class="arr"><span class="lbl">output</span><span class="line2">→</span></span>
+        <span class="node">Actuator</span>
+        <span class="arr"><span class="lbl">the building<br>changes</span><span class="line2">→</span></span>
+        <span class="node soft">back to the sensor</span>
+      </div>
+
+    </div>
+
+    <p class="lead" style="margin-top:24px"><b>A few ideas that explain a lot</b></p>
+    <div class="terms">
+      <div class="term-card"><h4>Standalone control</h4><span class="coil crit">resilience</span><p>Field controllers keep running their loops when the network goes quiet. Losing comms should cost you <b>visibility</b>, not control. If a comm loss actually stops equipment, something is wired wrong.</p></div>
+      <div class="term-card"><h4>The graphic is a claim</h4><span class="coil safe">skepticism</span><p>A screen showing a fan &#8220;on&#8221; is showing a <b>command</b>. Only a <b>status</b> point proves it. The building is the authority; the graphic is a report about it.</p></div>
+      <div class="term-card"><h4>Trend before you touch</h4><span class="coil mon">method</span><p>A setpoint changed blind fixes one screen and breaks another. The trend is the only place the system tells you its history — and history is where the fault is.</p></div>
+      <div class="term-card"><h4>The BMS does not do life safety</h4><span class="coil safe">boundary</span><p>The <b>FACP</b> stands alone and commands dampers, fans, and elevators directly. The BMS may <b>monitor</b>. A hardwired interlock always beats a software command.</p></div>
+    </div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">04</span><h2>The pieces</h2><span class="line"></span></div>
+    <p class="lead">Nine things make up every BMS you will ever meet, from a single rooftop unit to a campus.</p>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Interface</div>
+        <h3>Front end / workstation</h3>
+        <p class="one">Where you look, not where control happens.</p>
+        <p>The server and its <b>graphics</b>, <b>trends</b>, <b>alarms</b>, and <b>schedules</b>. It is a window onto the controllers — it is not doing the controlling.</p>
+        <p class="why"><span class="ttl">Why it matters</span>Pull the front end off the network and the building keeps running. If someone says &#8220;the BMS is down,&#8221; ask whether they mean the screen or the controllers.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Supervisory</div>
+        <h3>Supervisory controller</h3>
+        <p class="one">The floor above the field controllers.</p>
+        <p>Holds <b>schedules</b>, <b>reset schedules</b>, global setpoints, trend storage and alarm logic. Often called a network controller or by a vendor name.</p>
+        <p class="why"><span class="ttl">Why it matters</span>It is the layer that turns the building on and off in the morning and slides setpoints with the weather. Most of the energy savings a BMS delivers live here.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Field</div>
+        <h3>Field / unitary controller</h3>
+        <p class="one">One small computer per piece of equipment.</p>
+        <p>A <b>DDC controller</b> on an AHU, a plant, or inside every VAV box. It runs its own <b>control loops</b> and keeps running them if the network goes quiet.</p>
+        <p class="why"><span class="ttl">Why it matters</span>&#8220;Standalone&#8221; is the important word. A comm loss should mean you lose <i>visibility</i>, not control.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Inputs</div>
+        <h3>Sensors</h3>
+        <p class="one">How the building tells the truth.</p>
+        <p>Temperature, humidity, <b>differential pressure</b>, airflow, CO₂, and <b>status contacts</b> — current switches and auxiliary contacts that prove a thing is really running.</p>
+        <p class="why"><span class="ttl">Why it matters</span>Every control decision rests on a sensor. A drifted or failed sensor produces confident, plausible, wrong numbers — and the loop obediently controls to the wrong value.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Outputs</div>
+        <h3>Actuators &amp; commands</h3>
+        <p class="one">The only parts that move.</p>
+        <p>Valve actuators, <b>damper actuators</b>, VFD speed commands, and start/stop relays. Analog outputs modulate; binary outputs switch.</p>
+        <p class="why"><span class="ttl">Why it matters</span><b>Fail position</b> matters: spring-return actuators drive to a known place on power loss. OA dampers usually fail closed to protect coils from freezing.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Network</div>
+        <h3>Network &amp; protocols</h3>
+        <p class="one">A shared language between vendors.</p>
+        <p><b>BACnet MS/TP</b> on a twisted-pair field bus; <b>BACnet/IP</b> over the building network. <b>Modbus</b> on chillers and meters, <b>LON</b> on older gear.</p>
+        <p class="why"><span class="ttl">Why it matters</span>A protocol is not a brand. Knowing which bus a controller is on tells you where to look when a whole branch of the graphic goes stale at once.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Data</div>
+        <h3>Points</h3>
+        <p class="one">The vocabulary of the system.</p>
+        <p><b>AI</b> analog input (a temperature) · <b>AO</b> analog output (a valve) · <b>BI</b> binary input (a status) · <b>BO</b> binary output (a start command). Virtual points hold calculated values.</p>
+        <p class="why"><span class="ttl">Why it matters</span>Learn to read a point name. Most sites encode building, equipment, and function into it, and the name will find you the device faster than the graphic will.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>History</div>
+        <h3>Trends &amp; alarms</h3>
+        <p class="one">The system's memory and its voice.</p>
+        <p>A <b>trend</b> is a point sampled over time. An <b>alarm</b> is a limit crossed. Together they turn a snapshot into a story.</p>
+        <p class="why"><span class="ttl">Why it matters</span><b>Trend before you touch.</b> And treat a flood of nuisance alarms as a defect, not as background noise — when everything alarms, nothing does.</p>
+      </div>
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Time</div>
+        <h3>Schedules &amp; setpoints</h3>
+        <p class="one">When, and how much.</p>
+        <p>Occupied and unoccupied modes, holidays, <b>optimal start</b> (start early enough to hit setpoint at occupancy, no earlier), and <b>setback</b>.</p>
+        <p class="why"><span class="ttl">Why it matters</span>A comfort complaint at 7am is usually a schedule question, not an equipment question. Check occupancy before you chase a valve.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">05</span><h2>Control vocabulary — what the words mean</h2><span class="line"></span></div>
+    <p class="lead">These are the terms that separate someone who can <i>read</i> a graphic from someone who can <i>use</i> one.</p>
+    <table class="ptab">
+      <thead><tr><th>Type</th><th>Direction</th><th>Example</th><th>Its role</th></tr></thead>
+      <tbody>
+        <tr><td><b>AI</b> — analog input</td><td>from the world</td><td>space temperature, filter DP, valve position feedback</td><td>a <b>reading</b> (or a status, if it proves position)</td></tr>
+        <tr><td><b>BI</b> — binary input</td><td>from the world</td><td>current switch, damper end switch, flow switch</td><td>a <b>status</b> — independent proof</td></tr>
+        <tr><td><b>AO</b> — analog output</td><td>to the world</td><td>valve to 45%, VFD speed</td><td>a <b>command</b></td></tr>
+        <tr><td><b>BO</b> — binary output</td><td>to the world</td><td>fan start/stop relay</td><td>a <b>command</b></td></tr>
+        <tr><td><b>AV / BV</b> — value</td><td>neither</td><td>a setpoint, a calculated value</td><td>a <b>setpoint</b> — it comes from us, nothing senses it</td></tr>
+      </tbody>
+    </table>
+    <p class="flow-note"><b>Inputs come from the world. Outputs go to the world. Setpoints come from us.</b> Analog varies; binary is on or off. Get this straight and half of every graphic reads itself.</p>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:14px">
+      <span class="ttl" style="color:var(--cyan)">So is the process variable an input, or a status?</span>
+      <b>Usually an input. Never a status.</b> They answer different questions, and the pairs are what keep it straight:<br><br>
+      <b>Command</b> pairs with <b>status</b> — <i>did the thing I asked for actually happen?</i><br>
+      <b>Setpoint</b> pairs with <b>process variable</b> — <i>is the value where I want it?</i><br><br>
+      A <b>status</b> is independent proof, almost always binary: a current switch, an aux contact, an end switch. A <b>process variable</b> is simply <b>the reading a particular loop is controlling to</b>. The same AI can be the PV of the supply-air loop and, on the next graphic, just a monitored reading that is nobody&#8217;s PV. <b>PV is a role, not a point type.</b><br><br>
+      &#8220;Input&#8221; is right most of the time, but not by definition. A PV can be <b>calculated</b> (a virtual point — mixed-air temperature from two sensors), it can <b>arrive over the network</b> from another controller, and it can be <b>binary</b> (a sump pump loop whose PV is a float switch, a BI).
+    </div>
+
+    <p class="lead" style="margin-top:22px"><b>Hardware points vs software points</b></p>
+    <p class="flow-note">Every value on a graphic is one of three things, and knowing which one <b>tells you where to go to fix it</b>. A bad hardware point is a trip to the field. A bad software point is a trip to the logic.</p>
+
+    <table class="ptab">
+      <thead><tr><th style="width:18%">Kind</th><th style="width:24%">Where it lives</th><th style="width:28%">Examples</th><th>When it is wrong, the fault is…</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Hardware point</b><br><span style="font-family:var(--mono);font-size:9px;color:var(--ink-faint)">physical · AI AO BI BO</span></td>
+          <td>Landed on a <b>terminal</b> of a controller, with wire running to a real device. It occupies an <b>I/O slot</b>.</td>
+          <td>Space temperature sensor · fan current switch · valve actuator signal · start/stop relay</td>
+          <td><b>In the field.</b> The sensor, the wiring, the terminal, the transmitter, the calibration, the linkage. Something physical.</td>
+        </tr>
+        <tr>
+          <td><b>Software point</b><br><span style="font-family:var(--mono);font-size:9px;color:var(--ink-faint)">virtual · AV BV</span></td>
+          <td>Only in the controller&#8217;s <b>memory</b>. No terminal, no wire, no cost.</td>
+          <td>Setpoints · alarm limits · occupancy flag · calculated mixed-air temp · runtime totals · a PID output before it reaches the AO</td>
+          <td><b>In the logic.</b> A program, a mapping, a schedule — or somebody typed it. Nothing in the field will help you.</td>
+        </tr>
+        <tr>
+          <td><b>Network point</b><br><span style="font-family:var(--mono);font-size:9px;color:var(--ink-faint)">mapped / integrated</span></td>
+          <td>Read from <b>another device</b> over BACnet or Modbus. Wired to that device, not to yours.</td>
+          <td>Chiller amps and evap temp from the chiller&#8217;s own controller · a meter&#8217;s kWh · a VFD&#8217;s reported speed</td>
+          <td><b>In the integration.</b> The gateway, the register map, the address — or the third-party device itself. Your controller is only repeating what it was told.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05);margin-top:14px">
+      <span class="ttl" style="color:var(--red)">The trap that matters — a &#8220;status&#8221; that is really software</span>
+      Rule 4 says status is <b>independent proof</b> that a command was carried out. That is only true if the status is a <b>hardware point</b> — a current switch, an aux contact, an end switch, wired back to a terminal.<br><br>
+      On some graphics, the &#8220;status&#8221; you are looking at is a <b>software point that simply echoes the command</b>. It turns green because the BMS asked, not because anything happened. It will <b>never</b> disagree with the command, so it can never tell you about a failure.<br><br>
+      <b>Before you trust a status, find out whether there is a wire behind it.</b> If command and status have never once disagreed in a year of trends, you may be looking at an echo, not a proof.
+    </div>
+
+    <p class="flow-note" style="margin-top:12px"><b>Two more things worth knowing.</b> Hardware points cost money — they consume I/O and drive how many controllers a building needs; software points are effectively free, which is why there are so many of them. And a software point cannot fail on its own, but <b>its source can</b>: a calculated mixed-air temperature is only as good as the two sensors feeding it, and it will keep displaying a confident number long after one of them dies.</p>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05);margin-top:12px">
+      <span class="ttl" style="color:var(--red)">A trap: two different things are both abbreviated PV</span>
+      In <b>BACnet</b>, <b>Present_Value</b> is a property that <b>every object has</b> — AI, AO, BI, BO, and AV alike. Read an AO&#8217;s Present_Value and you get the <b>command</b> it is sending, not a measurement.<br><br>
+      So <b>&#8220;present value&#8221; in a point list is not &#8220;process variable&#8221; in a control loop</b>, even though both collapse to PV. Learn PV from a point list and you will assume an output has one — and you will be right, just not in the sense the loop means.
+    </div>
+
+    </div>
+    <div class="terms">
+        <div class="term-card">
+          <h4>Setpoint vs process variable</h4>
+          <span class="coil mon">concept</span>
+          <p><b>Setpoint</b> is what you want. The <b>process variable</b> is what you have. Their difference is the <b>error</b>, and the whole loop exists to drive the error to zero.</p>
+        </div>
+        <div class="term-card">
+          <h4>PID, in plain words</h4>
+          <span class="coil mon">concept</span>
+          <p><b>P</b> reacts to how big the error is now. <b>I</b> reacts to how long it has persisted. <b>D</b> reacts to how fast it is changing. Most HVAC loops use P and I; D is rare and twitchy.</p>
+        </div>
+        <div class="term-card">
+          <h4>Hunting</h4>
+          <span class="coil safe">safety</span>
+          <p>A valve swinging open and shut and never settling. Too much gain, or integral wind-up. It wears actuators and burns energy — it is a tuning fault, not a mechanical one.</p>
+        </div>
+        <div class="term-card">
+          <h4>Deadband</h4>
+          <span class="coil mon">concept</span>
+          <p>A band around setpoint where nothing is commanded. Without it, heating and cooling chase each other around the same number and the equipment short-cycles.</p>
+        </div>
+        <div class="term-card">
+          <h4>Command vs status</h4>
+          <span class="coil crit">critical</span>
+          <p><b>Command</b> is what the BMS asked for. <b>Status</b> is independent proof — a current switch, an aux contact. <b>Command ON with status OFF is a fault</b>, and it is the most useful pair of points on any graphic.</p>
+        </div>
+        <div class="term-card">
+          <h4>Stale point</h4>
+          <span class="coil safe">safety</span>
+          <p>A value that has stopped updating: comm loss, dead sensor, or an override. Real sensors always wiggle. <b>Never trust a perfectly flat trend line.</b></p>
+        </div>
+        <div class="term-card">
+          <h4>Interlock / permissive</h4>
+          <span class="coil crit">critical</span>
+          <p>A condition that must be proven before equipment may run — flow proven before a chiller starts, damper open before a fan starts. <b>Never defeat one to clear an alarm.</b></p>
+        </div>
+        <div class="term-card">
+          <h4>Override / Hand</h4>
+          <span class="coil safe">safety</span>
+          <p>A point forced to a value by a person. The BMS no longer controls it: schedules, resets, and alarms are all bypassed. <b>An override is a promise to come back.</b></p>
+        </div>
+        <div class="term-card">
+          <h4>Reset schedule</h4>
+          <span class="coil mon">concept</span>
+          <p>A setpoint that slides with a measured condition — hot water hotter as it gets colder out; DP setpoint down when valves are mostly closed. The biggest energy lever the BMS has.</p>
+        </div>
+        <div class="term-card">
+          <h4>Cascade control</h4>
+          <span class="coil mon">concept</span>
+          <p>One loop's output becomes another loop's setpoint. A slow room-temperature loop steers a fast supply-air loop.</p>
+        </div>
+        <div class="term-card">
+          <h4>Fail position</h4>
+          <span class="coil crit">critical</span>
+          <p>Where a spring-return actuator goes on power loss. Normally closed, normally open — a design decision. Know which before winter.</p>
+        </div>
+        <div class="term-card">
+          <h4>Alarm fatigue</h4>
+          <span class="coil safe">safety</span>
+          <p>When everything alarms, nothing does. A nuisance alarm is a defect: fix the sensor, retune the limit deliberately, and write down why.</p>
+        </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">06</span><h2>What you actually do with it</h2><span class="line"></span></div>
+    <p class="lead">A new hire is not asked to program the BMS. You are asked to <b>interrogate</b> it.</p>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05)">
+      <span class="ttl" style="color:var(--cyan)">Working a comfort complaint, in order</span>
+      <b>1.</b> Is the zone <b>occupied</b> right now? Half of all 7am complaints end here.<br>
+      <b>2.</b> What is the <b>space temperature</b> versus its <b>setpoint</b>? Trend it, don&#8217;t glance at it.<br>
+      <b>3.</b> At the terminal: is the damper commanded open, and does the <b>airflow reading</b> agree?<br>
+      <b>4.</b> Is the reheat valve commanded shut but the discharge air says otherwise? A <b>leaking valve</b>.<br>
+      <b>5.</b> Upstream: <b>supply-air temperature</b> and <b>static pressure / DP</b> against their setpoints.<br>
+      <b>6.</b> Is anything in that chain in <b>Hand</b>?<br>
+      <b>7.</b> Only now change something — and change <b>one thing at a time</b>.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05);margin-top:14px">
+      <span class="ttl" style="color:var(--red)">Six ways the graphic is right and the building is wrong</span>
+      A fan <b>commanded</b> on with no status proof · a point left in <b>Hand</b>, showing what someone typed · a <b>drifted sensor</b> reporting a plausible number · an actuator stroking while its <b>linkage is loose</b> and the blade never moves · a loaded <b>filter</b> so the fan runs but the airflow is a fraction of design · a <b>stale point</b> from comm loss, still displaying its last good value.
+    </div>
+
+    <p class="lead" style="margin-top:22px"><b>Alarms are information, not noise</b></p>
+    <p class="flow-note">An alarm is a limit someone chose. When a limit is too tight, the alarm fires constantly and the log becomes wallpaper — and the one alarm that mattered scrolls past unread. That is <b>alarm fatigue</b>, and it is a safety problem, not an annoyance. The fix is never to disable the alarm: find the bad sensor, correct the real fault, or retune the limit <b>deliberately</b> and record why.</p>
+  </section>
+
+
+  <!-- SITE SPECIFICS -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">07</span><h2>BMS navigation — the three skills</h2><span class="line"></span></div>
+    <p class="lead">Before you can troubleshoot anything you have to be able to <b>get in</b>, <b>find the machine</b>, and <b>read its history</b>. Three skills, in that order. Everything else on this page is useless without them.</p>
+    <p class="flow-note">Walking to the equipment comes later, with your mentor. This section is about the screen only. Do all of it <b>sitting at the front end</b>, not from memory.</p>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--violet);background:rgba(106,79,208,.05);margin-top:14px">
+      <span class="ttl" style="color:var(--violet)">Skill 1 &nbsp;·&nbsp; Log in — and know which BMS you are logged into</span>
+      A campus is rarely one system. Older buildings carry an older front end; newer construction arrives with whatever was specified that year; the two are stitched together over <b>BACnet</b> and a bit of hope. The graphics, the point naming, the trend tools, and the override procedure <b>all differ between products</b>. Know which one you are looking at before you trust a screen.
+    </div>
+
+    <table class="filltab">
+      <thead><tr><th style="width:24%">Vendor / product</th><th style="width:22%">Front end — where &amp; how to log in</th><th style="width:26%">Buildings covered</th><th style="width:12%">Protocol</th><th style="width:16%">Support contact</th></tr></thead>
+      <tbody>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:20px">
+      <span class="ttl" style="color:var(--cyan)">Skill 2 &nbsp;·&nbsp; Find the major equipment on the graphic</span>
+      For each machine: which <b>graphic page</b> it lives on and the clicks to get there, its <b>point-name prefix</b> (how you would search for it), and the <b>first points you would read</b> when the page opens.<br><br>
+      <b>Learn the point-name convention before you learn the graphics.</b> Most sites encode building, equipment, and function into the name — and a search box will find a device faster than clicking through pages ever will.
+    </div>
+
+    <table class="filltab">
+      <thead><tr>
+        <th style="width:12%">Equipment</th><th style="width:14%">Building / plant</th>
+        <th style="width:26%">Graphic page &amp; navigation path</th><th style="width:16%">Point-name prefix</th><th style="width:32%">First points to read</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="eq">AHU</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">Chiller</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">Boiler</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">Cooling tower</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">LEF</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">ERM</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">GEF</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="eq">Pumps</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+        <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:14px">
+      <span class="ttl" style="color:var(--cyan)">The moment a graphic opens, read these five things — in this order</span>
+      <b>1.</b> Is it commanded on, and does <b>status</b> agree? Command without status is a fault, not a display glitch.<br>
+      <b>2.</b> Every <b>reading beside its setpoint</b>. A number alone proves nothing. <i>(Rule 2)</i><br>
+      <b>3.</b> Every modulating <b>output — what percent?</b> Pinned at 100% or 0% is a fault that never alarms. <i>(Rule 3)</i><br>
+      <b>4.</b> Anything in <b>Hand</b>? An override means the BMS is not controlling that point at all.<br>
+      <b>5.</b> <b>When did these values last update?</b> A perfectly steady number is a stale point, not good control.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--amber);background:rgba(176,116,8,.05);margin-top:20px">
+      <span class="ttl" style="color:var(--amber)">Skill 3 &nbsp;·&nbsp; Pull a trend, and read it</span>
+      A graphic shows you <b>this instant</b>. A trend shows you <b>what has been happening</b> — and the fault almost always lives in the history, not the snapshot. This is the single most valuable thing you will learn to do on the BMS.<br><br>
+      <b>The one rule that has no workaround: you cannot trend the past.</b> If a point was never being logged, that history does not exist and never will. When you meet a problem you cannot explain, the <i>first</i> action is often to set up the trend — then wait, and let the building tell you.
+    </div>
+
+    <p class="lead" style="margin-top:18px"><b>How to pull a trend</b></p>
+    <table class="ptab">
+      <thead><tr><th style="width:26%">Step</th><th>What you are doing</th></tr></thead>
+      <tbody>
+        <tr><td><b>1. Find the point</b></td><td>Search by point name rather than clicking through graphics. Right-click or select the value on the graphic — on most front ends that is the fastest route to its history.</td></tr>
+        <tr><td><b>2. Check it is logged</b></td><td>Is there a trend log configured, and at what <b>sample interval</b>? Some points log on a timer, some only on <b>change of value (COV)</b>. A five-minute interval will not show you a valve hunting on a thirty-second cycle.</td></tr>
+        <tr><td><b>3. Overlay the right points</b></td><td>Never trend one point alone. See the four below.</td></tr>
+        <tr><td><b>4. Choose the window</b></td><td><b>24 hours</b> shows the daily cycle and the schedule boundaries. <b>7 days</b> shows the weekend, which is the cleanest test of a schedule. <b>A season</b> shows reset schedules and saturation.</td></tr>
+        <tr><td><b>5. Capture it</b></td><td>Export or screenshot with the time axis visible, and attach it to the work order. A trend is evidence.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="lead" style="margin-top:18px"><b>The four points to overlay — they answer almost every question</b></p>
+    <table class="ptab">
+      <thead><tr><th style="width:24%">Overlay</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td><b>Process variable</b></td><td>The <b>reading this loop controls to</b> — what the building actually did. Not a status: a status pairs with a command, a PV pairs with a setpoint.</td></tr>
+        <tr><td><b>Setpoint</b></td><td>What it was asked to do. <b>Never trend a reading without its setpoint</b> — the gap between the two lines <i>is</i> the problem. <i>(Rule 2)</i></td></tr>
+        <tr><td><b>Output %</b></td><td>How hard the loop was working. A line riding along 100% or 0% is a <b>saturated</b> loop — the fault that never alarms. <i>(Rule 3)</i></td></tr>
+        <tr><td><b>Command &amp; status</b></td><td>Whether the equipment was even running while all this happened. <i>(Rule 4)</i></td></tr>
+      </tbody>
+    </table>
+
+    <p class="lead" style="margin-top:18px"><b>Reading the shape of the line</b></p>
+    <table class="ptab">
+      <thead><tr><th style="width:30%">What you see</th><th>What it usually means</th></tr></thead>
+      <tbody>
+        <tr><td><b>Perfectly flat</b></td><td>A <b>stale point</b> — comm loss, dead sensor, or an override. Real sensors always wiggle. It is not good control.</td></tr>
+        <tr><td><b>Sawtooth / oscillating</b></td><td><b>Hunting.</b> Too much gain or integral wind-up. A tuning fault, not a mechanical one.</td></tr>
+        <tr><td><b>Output pinned at 100% (or 0%)</b></td><td><b>Saturation.</b> Capacity, a lying sensor, or an unachievable setpoint. Nothing alarms, because the loop is trying its hardest.</td></tr>
+        <tr><td><b>PV never reaches setpoint</b></td><td>Read the output. If it is <b>not</b> saturated, the loop is mis-tuned. If it <b>is</b>, the problem is upstream of the loop.</td></tr>
+        <tr><td><b>Steps at the same time every day</b></td><td>A <b>schedule</b>, not a fault. Check occupancy before chasing a valve.</td></tr>
+        <tr><td><b>A step change with no schedule</b></td><td>Somebody did something. Check for an <b>override</b> and check the audit log.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="flow-note" style="margin-top:16px">Prove you have the skill: pick one AHU, pull a <b>7-day trend</b> of its supply-air temperature, its supply-air setpoint, its cooling valve output, and its fan status — on one chart. Then explain what the building did over the weekend. If you can do that, you can use the BMS.</p>
+  </section>
+
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">08</span><h2>Where the BMS stops</h2><span class="line"></span></div>
+    <p class="lead">Knowing the boundaries is as important as knowing the system.</p>
+    </div>
+    <table class="ptab">
+      <thead><tr><th>Boundary</th><th>What that means on the floor</th></tr></thead>
+      <tbody>
+        <tr><td><b>Fire alarm is stand-alone</b></td><td>The <b>FACP</b> commands smoke dampers, fans, elevator recall, and door releases through hardwired paths. The BMS may monitor those points. You never troubleshoot a life-safety device from a BMS graphic.</td></tr>
+        <tr><td><b>Hardwired beats software</b></td><td>Freezestats, high-static cutouts, low-limit switches, and proof-of-flow interlocks act whether or not the BMS agrees. That is the point of them.</td></tr>
+        <tr><td><b>Lab exhaust fails safe</b></td><td>Loss of a lab exhaust fan starts the standby fan. It is not a BMS decision to make, and it is not a BMS decision to defeat.</td></tr>
+        <tr><td><b>The BMS rides the UPS</b></td><td>So it never sees the ten-second gap before the generator picks up. A building loses its controls exactly when it most needs them otherwise.</td></tr>
+        <tr><td><b>Overrides expire on a person, not a clock</b></td><td>Nothing takes a point out of Hand except someone remembering. Write down every override you place, with the date.</td></tr>
+        <tr><td><b>An interlock is a condition</b></td><td>Not a suggestion, and not an alarm to be silenced. If a chiller will not start, the interlock is telling you something true.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 07 -->
+  <section class="land">
+    <div class="pgroup">
+    <div class="s-head"><span class="n">09</span><h2>System diagrams</h2><span class="line"></span></div>
+    <p class="lead">Two drawings: how the system is <b>stacked</b>, and how a single loop <b>closes</b>.</p>
+    <div class="legend">
+      <span><i style="background:var(--violet)"></i>network / command</span>
+      <span><i style="background:var(--cyan)"></i>sensing (inputs)</span>
+      <span><i style="background:var(--green)"></i>actuation (outputs)</span>
+      <span><i style="background:var(--red)"></i>setpoint</span>
+    </div>
+    </div>
+
+    <div class="rotpage">
+      <div class="diagram d1">
+      <div class="d-head"><span class="tag">Layer 1</span><h2>BMS architecture — front end, supervisor, field bus, devices</h2></div>
+      <p class="d-sub">The screen sits on top, but control lives at the bottom. Each layer keeps working when the one above it goes away.</p>
+      <svg viewBox="0 0 700 412" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BMS architecture: front end, supervisory controller, field bus, field controllers, sensors and actuators">
+  <defs>
+    <marker id="bmA" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--violet)"/></marker>
+    <marker id="bmC" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--cyan)"/></marker>
+    <marker id="bmG" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--green)"/></marker>
+  </defs>
+
+  <text x="26" y="30" class="pl" font-size="8" fill="var(--ink-faint)">SUPERVISORY LAYER</text>
+  <rect class="eq" x="240" y="40" width="220" height="52" rx="8" stroke="var(--ink)"/>
+  <text class="eqt" x="350" y="63">Front end / workstation</text>
+  <text class="eqs" x="350" y="79">graphics · trends · alarms · schedules</text>
+
+  <path class="pipe" d="M350,92 V128" stroke="var(--violet)" marker-end="url(#bmA)"/>
+  <text class="pl pl-v" x="358" y="114">BACnet/IP over the building network</text>
+
+  <rect class="eq" x="240" y="128" width="220" height="50" rx="8" stroke="var(--violet)"/>
+  <text class="eqt" x="350" y="150">Supervisory controller</text>
+  <text class="eqs" x="350" y="166">schedules · resets · trends · alarming</text>
+
+  <text x="26" y="205" class="pl" font-size="8" fill="var(--ink-faint)">FIELD BUS</text>
+  <path class="pipe" d="M350,178 V206" stroke="var(--violet)" marker-end="url(#bmA)"/>
+  <path class="pipe" d="M70,212 H630" stroke="var(--violet)" stroke-width="3"/>
+  <text class="pl pl-v" x="512" y="204">BACnet MS/TP · twisted pair</text>
+
+  <path class="pipe" d="M140,212 V244" stroke="var(--violet)" marker-end="url(#bmA)"/>
+  <path class="pipe" d="M350,212 V244" stroke="var(--violet)" marker-end="url(#bmA)"/>
+  <path class="pipe" d="M560,212 V244" stroke="var(--violet)" marker-end="url(#bmA)"/>
+
+  <rect class="eq" x="66" y="244" width="148" height="46" rx="7" stroke="var(--ink)"/>
+  <text class="eqt" x="140" y="264" font-size="11">AHU controller</text>
+  <text class="eqs" x="140" y="279">DDC · its own loops</text>
+
+  <rect class="eq" x="276" y="244" width="148" height="46" rx="7" stroke="var(--ink)"/>
+  <text class="eqt" x="350" y="264" font-size="11">Plant controller</text>
+  <text class="eqs" x="350" y="279">chiller · boiler · pumps</text>
+
+  <rect class="eq" x="486" y="244" width="148" height="46" rx="7" stroke="var(--ink)"/>
+  <text class="eqt" x="560" y="264" font-size="11">Terminal controllers</text>
+  <text class="eqs" x="560" y="279">VAV · FPT boxes</text>
+
+  <text x="26" y="322" class="pl" font-size="8" fill="var(--ink-faint)">FIELD DEVICES</text>
+  <text x="26" y="334" class="pl" font-size="7" fill="var(--cyan)">↑ inputs</text>
+  <text x="26" y="346" class="pl" font-size="7" fill="var(--green)">↓ outputs</text>
+
+  <path class="pipe" d="M101,326 V296" stroke="var(--cyan)" marker-end="url(#bmC)" stroke-width="2"/>
+  <path class="pipe" d="M179,290 V320" stroke="var(--green)" marker-end="url(#bmG)" stroke-width="2"/>
+  <rect x="66" y="326" width="70" height="56" rx="6" fill="rgba(14,143,166,.07)" stroke="var(--cyan)" stroke-width="1.3"/>
+  <text class="eqs" x="101" y="342" fill="var(--cyan)" font-size="7.5">SENSORS</text>
+  <text class="eqs" x="101" y="357" font-size="7">temp · DP</text>
+  <text class="eqs" x="101" y="371" font-size="7">status</text>
+  <rect x="144" y="326" width="70" height="56" rx="6" fill="rgba(31,154,85,.07)" stroke="var(--green)" stroke-width="1.3"/>
+  <text class="eqs" x="179" y="342" fill="var(--green)" font-size="7.5">ACTUATORS</text>
+  <text class="eqs" x="179" y="357" font-size="7">valves</text>
+  <text class="eqs" x="179" y="371" font-size="7">dampers · VFDs</text>
+  <path class="pipe" d="M311,326 V296" stroke="var(--cyan)" marker-end="url(#bmC)" stroke-width="2"/>
+  <path class="pipe" d="M389,290 V320" stroke="var(--green)" marker-end="url(#bmG)" stroke-width="2"/>
+  <rect x="276" y="326" width="70" height="56" rx="6" fill="rgba(14,143,166,.07)" stroke="var(--cyan)" stroke-width="1.3"/>
+  <text class="eqs" x="311" y="342" fill="var(--cyan)" font-size="7.5">SENSORS</text>
+  <text class="eqs" x="311" y="357" font-size="7">flow · press</text>
+  <text class="eqs" x="311" y="371" font-size="7">temp</text>
+  <rect x="354" y="326" width="70" height="56" rx="6" fill="rgba(31,154,85,.07)" stroke="var(--green)" stroke-width="1.3"/>
+  <text class="eqs" x="389" y="342" fill="var(--green)" font-size="7.5">ACTUATORS</text>
+  <text class="eqs" x="389" y="357" font-size="7">pumps · valves</text>
+  <text class="eqs" x="389" y="371" font-size="7">start / stop</text>
+  <path class="pipe" d="M521,326 V296" stroke="var(--cyan)" marker-end="url(#bmC)" stroke-width="2"/>
+  <path class="pipe" d="M599,290 V320" stroke="var(--green)" marker-end="url(#bmG)" stroke-width="2"/>
+  <rect x="486" y="326" width="70" height="56" rx="6" fill="rgba(14,143,166,.07)" stroke="var(--cyan)" stroke-width="1.3"/>
+  <text class="eqs" x="521" y="342" fill="var(--cyan)" font-size="7.5">SENSORS</text>
+  <text class="eqs" x="521" y="357" font-size="7">space temp</text>
+  <text class="eqs" x="521" y="371" font-size="7">airflow</text>
+  <rect x="564" y="326" width="70" height="56" rx="6" fill="rgba(31,154,85,.07)" stroke="var(--green)" stroke-width="1.3"/>
+  <text class="eqs" x="599" y="342" fill="var(--green)" font-size="7.5">ACTUATORS</text>
+  <text class="eqs" x="599" y="357" font-size="7">damper</text>
+  <text class="eqs" x="599" y="371" font-size="7">reheat valve</text>
+
+  <text class="pl" x="26" y="399" font-size="8.5" fill="var(--ink-dim)">Every layer can run without the one above it. Pull the front end and the controllers keep controlling.</text>
+</svg>
+    </div>
+    </div>
+
+    <div class="rotpage">
+      <div class="diagram d2">
+      <div class="d-head"><span class="tag">Layer 2</span><h2>One control loop — the circle everything is built from</h2></div>
+      <p class="d-sub">Setpoint in, error calculated, actuator driven, building changes, sensor reads it back. Thousands of these run at once.</p>
+      <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A control loop: setpoint, controller, actuator, process, sensor">
+  <defs>
+    <marker id="lpA" markerWidth="10" markerHeight="10" refX="8" refY="3.4" orient="auto"><path d="M0,0 L8,3.4 L0,6.8 Z" fill="var(--ink-dim)"/></marker>
+    <marker id="lpR" markerWidth="10" markerHeight="10" refX="8" refY="3.4" orient="auto"><path d="M0,0 L8,3.4 L0,6.8 Z" fill="var(--red)"/></marker>
+    <marker id="lpC" markerWidth="10" markerHeight="10" refX="8" refY="3.4" orient="auto"><path d="M0,0 L8,3.4 L0,6.8 Z" fill="var(--cyan)"/></marker>
+  </defs>
+
+  <text class="pl" x="60" y="52" font-size="9" fill="var(--red)">SETPOINT — what you want</text>
+  <path class="pipe" d="M125,60 V102" stroke="var(--red)" marker-end="url(#lpR)" stroke-width="2.2"/>
+
+  <rect class="eq" x="60" y="110" width="130" height="58" rx="8" stroke="var(--violet)"/>
+  <text class="eqt" x="125" y="133" font-size="11.5">Controller</text>
+  <text class="eqs" x="125" y="149">compares PV to setpoint</text>
+  <text class="eqs" x="125" y="161">P · I · D</text>
+
+  <rect class="eq" x="285" y="110" width="130" height="58" rx="8" stroke="var(--green)"/>
+  <text class="eqt" x="350" y="133" font-size="11.5">Actuator</text>
+  <text class="eqs" x="350" y="149">valve · damper · VFD</text>
+  <text class="eqs" x="350" y="161">the only thing that moves</text>
+
+  <rect class="eq" x="510" y="110" width="130" height="58" rx="8" stroke="var(--ink)"/>
+  <text class="eqt" x="575" y="133" font-size="11.5">Process</text>
+  <text class="eqs" x="575" y="149">the room · the coil</text>
+  <text class="eqs" x="575" y="161">the water · the air</text>
+
+  <path class="pipe" d="M190,139 H278" stroke="var(--ink-dim)" marker-end="url(#lpA)" stroke-width="2.2"/>
+  <text class="pl" x="196" y="131" font-size="8">output 0–100%</text>
+  <path class="pipe" d="M415,139 H503" stroke="var(--ink-dim)" marker-end="url(#lpA)" stroke-width="2.2"/>
+  <text class="pl" x="424" y="131" font-size="8">flow · heat · air</text>
+
+  <rect class="eq" x="285" y="210" width="130" height="46" rx="8" stroke="var(--cyan)"/>
+  <text class="eqt" x="350" y="230" font-size="11.5">Sensor</text>
+  <text class="eqs" x="350" y="246">measures the result</text>
+
+  <path class="pipe" d="M575,168 V233 H422" stroke="var(--cyan)" marker-end="url(#lpC)" stroke-width="2.2"/>
+  <path class="pipe" d="M285,233 H125 V174" stroke="var(--cyan)" marker-end="url(#lpC)" stroke-width="2.2"/>
+  <text class="pl pl-c" x="150" y="226" font-size="8.5">process variable</text>
+  <text class="pl pl-c" x="150" y="248" font-size="8.5">what you actually have</text>
+
+  <rect x="60" y="286" width="580" height="28" rx="6" fill="rgba(106,79,208,.05)" stroke="var(--line-2)" stroke-width="1"/>
+  <text class="pl" x="350" y="304" font-size="8.5" text-anchor="middle" fill="var(--ink-dim)">error = setpoint − process variable · the controller exists to drive this to zero, and then leave it alone</text>
+</svg>
+    </div>
+    </div>
+
+  </section>
+
+  <!-- QUIZ -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">10</span><h2>Check yourself — quick quiz</h2><span class="line"></span></div>
+    <p class="lead">Tap an answer for instant feedback — nothing is graded or saved. On paper, circle your answers and review them with your mentor.</p>
+    <div class="q-score"><span><b id="qDone">0</b>/<span id="qTot">0</span> answered &middot; <b id="qRight">0</b> correct</span><button id="qReset" type="button">Reset quiz</button></div>
+    </div>
+    <div id="quizBox"></div>
+    <div class="q-openhead">Open questions — say it in your own words</div>
+    <div id="openBox"></div>
+  </section>
+
+  <footer style="margin-top:26px;border-top:1px solid var(--line);padding-top:14px;color:var(--ink-faint);font-size:12px">
+    Point names, protocols, alarm limits, and reset schedules vary by building and by vendor. Everything here is the shape of the thing — always defer to the actual <b>sequence of operation</b> and the site&#8217;s BMS documentation.
+  </footer>
+</div>
+
+<script>
+var QUIZ=[{q:"A BMS controller does not make heat or cold. What does it actually do?",o:["It generates chilled water","It decides when equipment runs and how far valves and dampers open","It replaces the electrician","It powers the fans"],a:1,e:"The plant makes heat and cold; the BMS decides when equipment runs and how far each valve, damper, and drive is driven. A BMS in alarm is telling you about equipment, not about itself."},
+{q:"What are the three parts of every control loop?",o:["Panel, breaker, motor","Chiller, pump, tower","Sensor, controller, actuator","Alarm, trend, schedule"],a:2,e:"A sensor measures, a controller compares the measurement to setpoint, an actuator changes something. Then the sensor measures again. That circle is the loop."},
+{q:"The measured value the controller reads is called the…",o:["Deadband","Output","Setpoint","Process variable"],a:3,e:"Setpoint is what you want. Process variable is what you have. The difference between them is the error, and the controller works to drive the error to zero."},
+{q:"A valve is hunting — swinging open and closed and never settling. Most likely cause?",o:["Loop tuning: too much gain, or integral wound up","Wrong voltage at the actuator","The sensor is unplugged","The schedule is off"],a:0,e:"Hunting is a tuning symptom. Excess proportional gain overreacts to small errors; too much integral keeps pushing after the error is gone. It stresses the actuator and wears the valve."},
+{q:"What is a deadband, and why does it exist?",o:["The range a sensor cannot read","A range around setpoint where nothing is commanded — it stops equipment short-cycling","The time a controller stays offline","A network fault"],a:1,e:"Without a deadband the equipment would chase every fraction of a degree. The deadband is what stops the heating and cooling from fighting each other around the same setpoint."},
+{q:"A point reads Commanded: ON — Status: OFF. What have you learned?",o:["Nothing — they always differ","The sensor is broken","The BMS asked, and the equipment did not answer. Investigate the equipment, not the graphic","The setpoint is wrong"],a:2,e:"Command is what the BMS asked for. Status is proof it happened, usually from a current switch or an auxiliary contact. Command without status is a real fault, and it is the single most useful pair of points on any graphic."},
+{q:"A temperature point has been reading exactly 55.0°F for three days. What is that?",o:["A stale point — communication is lost or the sensor is failed. Never trust a flat line","A deadband","Perfect control","A schedule change"],a:0,e:"Real sensors wiggle. A perfectly flat value is a sensor that stopped reporting or a controller that stopped talking. The trend is what exposes it."},
+{q:"What does an interlock or permissive do?",o:["Locks the front-end screen","Sends the alarm email","Prevents equipment from starting until safe conditions are proven","Ties two setpoints together"],a:2,e:"The chiller does not start until flow is proven; the fan does not start with a closed damper. An interlock is a condition, not a suggestion — never defeat one to make an alarm go away."},
+{q:"Where does the fire alarm sit relative to the BMS?",o:["The BMS controls the fire alarm","The BMS silences alarms","The FACP is a stand-alone system. The BMS may monitor it, but it does not control it","They are the same panel"],a:2,e:"Life safety is stand-alone by code. The FACP commands dampers, fans, and elevators directly. The BMS may watch, and hardwired interlocks always beat a software command."},
+{q:"Why does the BMS sit behind a UPS?",o:["So it can run the elevators","To save energy","To reduce alarms","So it never sees the ten-second gap before the generator picks up"],a:3,e:"If the BMS rebooted during every transfer, the building would lose its controls exactly when it most needs them. The BMS rides through on the UPS."},
+{q:"An operator leaves a point in Hand / Override. What is the consequence?",o:["The point is deleted","The BMS no longer controls it — schedules, resets, and alarms are all bypassed","It improves control","Nothing, it reverts at midnight"],a:1,e:"An override is a promise to come back. Overrides left in place are the single most common cause of 'the BMS is broken' calls — and of unexplained energy use."},
+{q:"What is a reset schedule (for example, outdoor-air reset)?",o:["Rebooting a controller on a timer","A calendar of holidays","A setpoint that slides automatically with a measured condition","Clearing the alarm log"],a:2,e:"Hot-water supply temperature rises as it gets colder outside; static pressure or DP setpoints fall when valves are mostly closed. Reset schedules are among the biggest energy levers a BMS has."},
+{q:"BACnet MS/TP and BACnet/IP are…",o:["Alarm classes","Communication protocols — a shared language on the field bus and over the network","Sensor types","Two brands of controller"],a:1,e:"Protocols let controllers from different manufacturers talk. MS/TP runs on a twisted-pair field bus; BACnet/IP runs over the building network. Modbus and LON are others you will meet."},
+{q:"The four basic point types on a controller are…",o:["AI, AO, BI, BO — analog and binary, in and out","Alarm, trend, schedule, graphic","Sensor, valve, damper, fan","P, I, D, and E"],a:0,e:"Analog Input reads a varying signal (a temperature). Analog Output drives a varying signal (a valve). Binary Input reads on/off (a status contact). Binary Output commands on/off (a start relay)."},
+{q:"Before you change a setpoint on the graphic, what should you do first?",o:["Put the point in Hand","Look at the trend — understand what the system has actually been doing","Reboot the controller","Silence the alarm"],a:1,e:"Trend before you touch. A setpoint change made blind fixes a symptom on one screen and creates a problem on another. The trend is the only place the system tells you its history."},
+{q:"A damper actuator is spring return, normally closed. On loss of power it will…",o:["Alarm and hold","Drive closed","Drive open","Stay where it was"],a:1,e:"Fail position is a design decision, not an accident. Outside-air dampers usually fail closed to protect coils from freezing; some safety dampers fail open. Know which is which before winter."},
+{q:"What is cascade control, in plain terms?",o:["Two alarms in a row","A backup controller","One loop's output becomes another loop's setpoint","A network topology"],a:2,e:"A room-temperature loop sets the supply-air temperature setpoint, and a second loop drives the valve to hit that. The slow loop steers the fast one."},
+{q:"A nuisance alarm floods the log every few minutes. The right response is to…",o:["Find the cause — a bad sensor, a too-tight limit, or a real fault — not to disable the alarm","Widen every limit","Ignore the log","Delete the alarm"],a:0,e:"Alarm fatigue is a safety issue: when everything alarms, nothing does. Fix the cause or retune the limit deliberately, and record why."},
+{q:"A modulating chilled-water valve has sat at 100% open for four days. No alarm has fired. What is going on?",o:["Perfect control","The valve is in Hand","The loop has saturated — it is asking for everything it has and still missing setpoint","Nothing, that is normal for summer"],a:2,e:"A device built to modulate is supposed to move. Pinned at 100% (or 0%) means the load exceeds capacity, a sensor is lying, or the setpoint is unachievable. It rarely alarms, because nothing crossed a limit — the controller is simply trying its hardest. You find out on the first hot day when there is no reserve left."},
+{q:"A tenant calls about a warm room. What do you do first?",o:["Change the space setpoint","Open the BMS: schedule, alarms, trends, command vs status, any overrides","Reset the controller","Walk to the AHU"],a:1,e:"Every troubleshooting call and operational check starts at the BMS. You should arrive at the equipment with a hypothesis, not a flashlight. The exception is smoke, water, or anything life-safety — go now, and read the trend afterwards."},
+{q:"A status point says a fan is running. What has that actually proven?",o:["That airflow is at design","That the fan shaft is turning","That the damper is open","Only as much as the device behind it — a current switch may prove the VFD is energized, not that the shaft turns"],a:3,e:"Three layers can disagree: what was commanded, what the status point claims, and what the metal is doing. An aux contact can prove the starter pulled in, not that the coupling is intact. Verify at the hardware before you override anything."},
+{q:"You need to know why a room was cold last Tuesday, but that point was never being logged. What can you do?",o:["Nothing — you cannot trend the past. Set the trend up now, then wait","Recover it from the alarm log","Reboot the controller to rebuild history","Increase the sample interval"],a:0,e:"If a point was never logged, that history does not exist and never will. When you meet a problem you cannot explain, the first action is often to set up the trend, then let the building tell you."},
+{q:"Which four points should you overlay on almost any trend?",o:["Voltage, current, frequency, power","Four days in a row","Four different rooms","Process variable, setpoint, output %, and command/status"],a:3,e:"The PV shows what happened; the setpoint shows what was asked; the output % shows how hard the loop worked, and reveals saturation; command and status show whether the equipment was even running. Never trend a reading without its setpoint."},
+{q:"Point classification — space temperature on an AHU graphic is:",o:["AV — a setpoint","AI — a reading","BI — a status","AO — a command"],a:1,e:"It comes from the world and it varies, so it is an analog input. It is a reading — and it means nothing until you put its setpoint beside it."},
+{q:"Point classification — the chilled-water supply temperature setpoint is:",o:["None of AI/AO/BI/BO — it is a stored value (BACnet AV), and its role is setpoint","BI — a status","AO — a command","AI — a reading"],a:0,e:"The trap. Nothing senses a setpoint. It is a value living in the controller, written by a person or by a reset schedule. Inputs come from the world, outputs go to the world — setpoints come from us."},
+{q:"Point classification — the supply fan start/stop issued by the BMS is:",o:["AO — a command","BI — a status","AI — a reading","BO — a command"],a:3,e:"On or off, going out to the world: a binary output. It is what the BMS asked for — which is not the same as proof it happened."},
+{q:"Point classification — the supply fan current switch is:",o:["BO — a command","AI — a reading","BI — a status","AV — a setpoint"],a:2,e:"On or off, coming in from the world: a binary input. Its role is status — independent proof the motor is drawing current. Command ON with this reading OFF is a fault."},
+{q:"Point classification — a cooling valve driven to 45% is:",o:["AO — a command","BO — a command","AI — a status","AI — a reading"],a:0,e:"A varying signal going out: analog output. If the graphic also shows position feedback from the actuator, that feedback is an AI acting as a status — a different point entirely."},
+{q:"Point classification — a damper end switch is:",o:["AO — a command","BI — a status","BO — a command","AI — a reading"],a:1,e:"On or off, coming in: binary input, and its job is to prove the blade actually reached the end of travel. An actuator can stroke while its linkage is loose."},
+{q:"Point classification — a VFD speed command from the controller is:",o:["BO — a command","AV — a setpoint","AI — a reading","AO — a command"],a:3,e:"A varying signal going out: analog output. The speed the VFD reports back is a separate AI, and that one is a status."},
+{q:"Point classification — filter differential pressure is:",o:["AI — a reading","AV — a setpoint","AO — a command","BI — a status"],a:0,e:"A varying signal coming in: analog input, and it is a reading. Compare it to its alarm limit — the number alone tells you nothing."},
+{q:"Is the process variable an input or a status?",o:["Usually an input, and never a status — a status pairs with a command, a PV pairs with a setpoint","Always a binary input","Always a status","Both mean the same thing"],a:0,e:"A status is independent proof that a command was carried out, almost always binary. A process variable is the reading a loop controls to. PV is a role, not a point type: it can be calculated, arrive over the network, or even be binary."},
+{q:"In BACnet, which objects have a Present_Value property?",o:["Only analog inputs","Only inputs, never outputs","Only the ones being trended","Every object — AI, AO, BI, BO and AV alike. An AO's Present_Value is the command it is sending"],a:3,e:"Present_Value in a point list is not the same thing as process variable in a control loop, even though both get abbreviated PV. Reading an output's Present_Value gives you the command, not a measurement."},
+{q:"Which of these is a software point?",o:["The space temperature sensor","The fan current switch","The fan start/stop relay","The chilled-water supply temperature setpoint"],a:3,e:"A setpoint lives only in the controller's memory — no terminal, no wire, no I/O slot. The other three are hardware points landed on terminals with real devices behind them. When a hardware point is wrong you go to the field; when a software point is wrong you go to the logic."},
+{q:"On a graphic, a fan's status has agreed with its command every single time for a year. What should you suspect?",o:["Excellent maintenance","The trend interval is too short","The status may be a software echo of the command, not a hardware point wired to a current switch","Nothing — that is what status means"],a:2,e:"Status is only independent proof if there is a wire behind it. Some graphics show a software point that simply mirrors the command, so it turns green because the BMS asked, not because anything happened. It can never disagree, so it can never reveal a failure."}];;;
+
+var OPEN=[
+{q:"Name every BMS vendor in use on this site, and list which buildings each vendor covers.",a:"There is no generic answer — it is different in every portfolio, and that is exactly why it is the first question. Fill it in at the front end, from the site's controls documentation and from your mentor, and do not accept a verbal answer you cannot verify on a screen. For each vendor record: the product name, where the front end lives and how you log in, every building on it, the protocol carrying the traffic, and who to call when it breaks. A campus is rarely one system — older buildings carry an older front end, newer construction arrives with whatever was specified that year, and the two are stitched together over BACnet. Know which product you are logged into before you trust a screen, because the graphics, point naming, trend tools, and override procedure all differ."},
+
+{q:"A room is too warm. Walk from the complaint to the fix using the BMS, naming what you look at in order.",a:"Start with the trend, not the setpoint. Check the space temperature against its setpoint, and whether the zone is in occupied mode on the schedule. Look at the terminal unit: is the damper commanded open, and does the airflow reading confirm it? Check whether the reheat valve is commanded shut but the discharge temperature says otherwise — a leaking valve. Then look upstream: supply-air temperature at the AHU against its setpoint, static pressure or DP against its setpoint, and whether any point in the chain is in Hand. Only then consider changing anything, and change one thing at a time."},
+{q:"Explain the difference between a commanded value, a status point, and a setpoint. Why does an operator need all three?",a:"The setpoint is the target you want. The commanded value is what the BMS is asking the equipment to do. The status is independent proof of what actually happened — a current switch, an auxiliary contact, a proven flow. Setpoint tells you intent, command tells you the controller's decision, status tells you reality. A fault hides in the gap between command and status, and a comfort complaint usually hides in the gap between setpoint and process variable."},
+{q:"Why is a flat trend line suspicious, and what would you do about it?",a:"A real sensor always shows small movement — noise, load changes, control action. A perfectly flat line means the value is no longer being updated: comm loss to the controller, a failed sensor, or a point stuck in override. Check the point's last-updated time, look at neighbouring points on the same controller to see whether the whole device went quiet, verify at the field device if you can, and never make a control decision on a stale value."},
+{q:"The BMS shows an AHU running normally, but the space is not being ventilated. Give at least three ways the graphic can be right and the building still wrong.",a:"The graphic shows command, not reality: a fan commanded on with no status proof. A point left in Hand shows the value someone typed, not what the sensor reads. A sensor can be drifted or failed and reporting a plausible number. A damper actuator can be disconnected from its blade — the actuator strokes, the blade does not move. A filter can be loaded so the fan runs but the airflow is a fraction of design. And a point can be stale from comm loss while still displaying its last good value."},
+{q:"Why is the fire alarm system separate from the BMS, and what does that mean when you are troubleshooting?",a:"Life safety is required to stand alone so that a failure, a reboot, or a bad graphic in the BMS cannot compromise it. The FACP commands smoke dampers, fans, elevator recall, and door releases through hardwired paths. The BMS may monitor those points, but a hardwired interlock always overrides a software command. In troubleshooting, this means the BMS can be telling the truth about what it commanded while the FACP has overridden the equipment — and it means you never try to fix a life-safety device from a BMS graphic."},
+{q:"Why is a device pinned at 100% output more dangerous than a device in alarm?",a:"Because nothing crossed a limit, so nothing alarms. From the controller's point of view it is behaving correctly — it is asking for full output and still not reaching setpoint. Meanwhile the loop has no reserve left, energy is being spent at maximum, and the underlying cause is hidden: either the load genuinely exceeds capacity, a sensor is lying so the loop chases a target it can never hit, or the setpoint is unachievable as configured. An alarm at least announces itself. A saturated output is silent, and you discover it on the first hot day when there is nothing left to give."}
+];
+
+(function(){
+  
+  var box=document.getElementById('quizBox'),done=0,right=0;
+  function upd(){document.getElementById('qDone').textContent=done;document.getElementById('qRight').textContent=right;}
+  function render(){box.innerHTML='';done=0;right=0;upd();
+    QUIZ.forEach(function(it,i){
+      var c=document.createElement('div');c.className='q-card';
+      var top=document.createElement('div');top.className='q-top';
+      var n=document.createElement('span');n.className='q-num';n.textContent='Q'+(i+1);
+      var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+      top.appendChild(n);top.appendChild(t);c.appendChild(top);
+      var op=document.createElement('div');op.className='q-opts';
+      it.o.forEach(function(txt,j){
+        var b=document.createElement('button');b.type='button';
+        var em=document.createElement('em');em.textContent=String.fromCharCode(65+j);
+        var sp=document.createElement('span');sp.textContent=txt;
+        b.appendChild(em);b.appendChild(sp);
+        b.onclick=function(){if(c.dataset.a)return;c.dataset.a='1';done++;
+          if(j===it.a){b.classList.add('ok');right++;}
+          else{b.classList.add('bad');op.children[it.a].classList.add('ok');}
+          for(var k=0;k<op.children.length;k++){op.children[k].classList.add('lock');}
+          var e=document.createElement('div');e.className='q-exp';e.textContent=it.e;c.appendChild(e);upd();};
+        op.appendChild(b);});
+      c.appendChild(op);box.appendChild(c);});
+    document.getElementById('qTot').textContent=QUIZ.length;}
+  document.getElementById('qReset').onclick=render;
+  render();})();
+
+(function(){
+  var box=document.getElementById('openBox');
+  OPEN.forEach(function(it,i){
+    var c=document.createElement('div');c.className='q-card';
+    var top=document.createElement('div');top.className='q-top';
+    var n=document.createElement('span');n.className='q-num';n.textContent='O'+(i+1);
+    var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+    top.appendChild(n);top.appendChild(t);c.appendChild(top);
+    var lines=document.createElement('div');lines.className='q-lines';
+    for(var k=0;k<3;k++){lines.appendChild(document.createElement('i'));}
+    c.appendChild(lines);
+    var b=document.createElement('button');b.type='button';b.className='q-show';b.textContent='Show a strong answer';
+    b.onclick=function(){var e=document.createElement('div');e.className='q-exp';e.textContent=it.a;c.appendChild(e);b.remove();};
+    c.appendChild(b);box.appendChild(c);});
+  })();
+</script>
+</body>
+</html>

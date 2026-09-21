@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Life Safety Works — Life-Science Building (New Hire)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--red),var(--amber),var(--violet))}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--red);margin:4px 0 9px}
+  h1{font-size:27px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:17px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:15px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:15px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  /* flow diagram — three simple tracks */
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:104px;flex:0 0 auto;padding-right:8px}
+  .t-detect .track-tag{color:var(--red)} .t-suppress .track-tag{color:var(--cyan)} .t-protect .track-tag{color:var(--violet)} .t-power .track-tag{color:var(--amber)}
+  .node{font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:62px;padding:0 3px}
+  .arr .lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.15;text-align:center;margin-bottom:2px}
+  .arr .line2{color:var(--line-2);font-size:22px;font-weight:600;line-height:1}
+  .t-detect .arr .line2{color:var(--red)} .t-suppress .arr .line2{color:var(--cyan)} .t-protect .arr .line2{color:var(--violet)} .t-power .arr .line2{color:var(--amber)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  /* parallel command stacks inside a track */
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:8px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:8px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .node.term{border-color:var(--violet);color:var(--violet)}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;
+    background:rgba(176,116,8,.05);padding:13px 16px;font-size:13.5px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);display:block;margin-bottom:4px;font-weight:600}
+  /* lab-layer mini-cards */
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.haz{color:var(--red);background:rgba(210,59,53,.1)} .coil.chem{color:var(--amber);background:rgba(176,116,8,.1)} .coil.exh{color:var(--green);background:rgba(31,154,85,.1)}
+  .term-card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+
+  /* system cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:16.5px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:14px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:13.5px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:13px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:16px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:14px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--red)} .d2 .tag{color:var(--cyan)}
+  .d-head h2{font-size:17px;margin:0;font-weight:600}
+  .d-sub{font-size:13px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .hub{stroke-width:2.6}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:12.5px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:8px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:8.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .rowlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:14px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:13px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.5px;color:var(--ink-dim)}
+
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:11px} .q-opts{gap:4px}
+    .q-opts button{font-size:9.5px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:13px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:21px;line-height:1.15;color:#000} h1 .sub{font-size:14px;margin-top:2px}
+    .eyebrow{font-size:9.5px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:11.5px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:15.5px;color:#000} .s-head .n{font-size:10px}
+    p.lead{font-size:11.5px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:9px;width:100px;line-height:1.4}
+    .node{font-size:11px;padding:5px 8px;border-radius:6px;border-color:#5b6674;color:#000}
+    .arr{min-width:44px;padding:0 2px} .arr .lbl{font-size:8px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:17px}
+    .stack{gap:2px} .stack .opt{font-size:10px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7px;color:#3e4a5a} .stack .conj{font-size:7px}
+    .flow-note{font-size:10px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:11px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:8.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .card .role{font-size:8.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:13px;margin:0 0 3px;color:#000} .card .one{font-size:11.5px;margin:0 0 5px;color:#000}
+    .card p{font-size:10.8px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:10.3px;padding-top:5px;margin-top:5px} .card .why em{font-size:7.6px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:12px;color:#000} .term-card p{font-size:10.3px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:7.8px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:13.5px;margin:0 0 5px;color:#000} .downstream p{font-size:11.3px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:9.5px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:avoid;page-break-inside:avoid}
+    .downstream,.diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:9.5px;color:#242e3c;margin-top:8px} .d-head h2{font-size:13.5px} .d-sub{font-size:10px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">prints as a compact handout — few pages, tight layout</span></div>
+
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Basics</div>
+    <h1>How Life Safety Works in a Life-Science Building<span class="sub">Detect, alert, protect, evacuate — in plain terms</span></h1>
+    <p class="intro">A life-science building is full of people — and often <b>chemicals, hazardous gases, and exhaust that can't stop</b>. Life safety is the layered set of systems that <b>detect</b> a problem, <b>alert</b> everyone, <b>contain and suppress</b> it, keep the <b>exits usable</b>, and support the fire department. Nearly all of it reports to one brain — the <b>Fire Alarm Control Panel (FACP)</b> — which, the instant it sees trouble, commands the whole building at once.</p>
+  </header>
+
+  <!-- FLOW -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">01</span><h2>How it fits together</h2><span class="line"></span></div>
+    <p class="lead">When something goes wrong, the systems fire in sequence — and all of it has to keep running through a power outage. Read each track left to right: the <b>Fire Alarm Panel</b> is the brain of the top three, and the bottom track is the <b>backup power</b> that keeps them alive.</p>
+    <div class="flow" style="margin-top:14px">
+
+      <div class="track t-detect">
+        <span class="track-tag">Detect &amp; alert</span>
+        <span class="node soft">Smoke / heat</span>
+        <span class="arr"><span class="lbl">or</span><span class="line2">·</span></span>
+        <span class="node soft">Pull station</span>
+        <span class="arr"><span class="lbl">signal</span><span class="line2">→</span></span>
+        <span class="node hub">Fire Alarm Panel</span>
+        <span class="arr"><span class="lbl">sound</span><span class="line2">→</span></span>
+        <span class="node">Horns · Strobes · Voice</span>
+      </div>
+
+      <div class="track t-suppress">
+        <span class="track-tag">Suppress</span>
+        <span class="node soft">Water supply</span>
+        <span class="arr"><span class="lbl">boost</span><span class="line2">→</span></span>
+        <span class="node">Fire Pump</span>
+        <span class="arr"><span class="lbl">feeds</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">Wet pipe<small>heated areas</small></span>
+          <span class="conj">/</span>
+          <span class="opt">Dry pipe<small>freeze-prone</small></span>
+          <span class="conj">/</span>
+          <span class="opt">Pre-action<small>labs / sensitive</small></span>
+        </span>
+        <span class="arr"><span class="lbl">water<br>flows</span><span class="line2">→</span></span>
+        <span class="node hub">Fire Alarm Panel</span>
+      </div>
+
+      <div class="track t-protect">
+        <span class="track-tag">Protect &amp; evacuate</span>
+        <span class="node hub">Fire Alarm Panel</span>
+        <span class="arr"><span class="lbl">commands</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">Smoke control</span>
+          <span class="conj">+</span>
+          <span class="opt">Elevator recall</span>
+          <span class="conj">+</span>
+          <span class="opt">Door release</span>
+        </span>
+        <span class="arr"><span class="lbl">keeps lit</span><span class="line2">→</span></span>
+        <span class="node">Egress lighting</span>
+        <span class="arr"><span class="lbl">to</span><span class="line2">→</span></span>
+        <span class="node soft">Exits</span>
+      </div>
+
+      <div class="track t-power">
+        <span class="track-tag">Power (backup)</span>
+        <span class="stack">
+          <span class="opt">Utility<small>normal</small></span>
+          <span class="conj">or</span>
+          <span class="opt">Generator<small>on outage</small></span>
+        </span>
+        <span class="arr"><span class="lbl">auto-<br>switch</span><span class="line2">→</span></span>
+        <span class="node hub">ATS</span>
+        <span class="arr"><span class="lbl">powers</span><span class="line2">→</span></span>
+        <span class="node soft">FACP · fire pump · smoke fans · egress lighting · elevators</span>
+      </div>
+
+    </div>
+    </div>
+    <p class="flow-note"><b>The short version:</b> a detector or pull station tells the Fire Alarm Panel; the panel sounds the alarm (horns, strobes, voice) and, at the same instant, commands the building — it shuts the HVAC down or flips it to smoke mode, recalls the elevators, releases held-open doors, and starts smoke exhaust and stairwell pressurization. Sprinklers and the fire pump put water on the fire, and egress lighting keeps the exits visible the whole way out.</p>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05)">
+      <span class="ttl" style="color:var(--cyan)">💧 Wet, dry &amp; pre-action — which sprinkler where</span>
+      Not all sprinkler pipe is the same. A <b>wet-pipe</b> system keeps the pipe full of water, so a head that opens flows <b>instantly</b> — the default in heated spaces. A <b>dry-pipe</b> system holds <b>pressurized air</b> in the pipe for areas that can freeze (garages, loading docks, unheated shafts); when a head opens the air bleeds off, the dry-pipe valve trips, and water follows a moment later. A <b>pre-action</b> system keeps the pipe dry and holds the water back until a <b>separate detector</b> also confirms a fire — used around <b>sensitive lab equipment</b> so a knocked head can't dump water by accident.
+    </div>
+
+    <div class="callout">
+      <span class="ttl">⚡ Emergency power — the system behind the systems</span>
+      Life safety has to work when everything else is dark. On a utility power loss, the <b>generator</b> and <b>automatic transfer switch (ATS)</b> keep the life-safety loads energized — the <b>fire pump</b>, <b>smoke-control fans</b>, <b>egress and exit lighting</b>, <b>elevator recall</b>, and the <b>fire alarm panel itself</b>. That's why the generator and its weekly test are a life-safety item, not just a convenience.
+    </div>
+  </section>
+
+  <!-- SYSTEMS -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">02</span><h2>The six pieces of building life safety</h2><span class="line"></span></div>
+    <div class="cards">
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--red)"></span>The brain</div>
+        <h3>Fire Alarm Control Panel (FACP)</h3>
+        <p class="one">Detects, then commands the whole building.</p>
+        <p>Monitors every device on the system. On an alarm it notifies occupants, signals the fire department through the monitoring service, and <b>triggers smoke control, elevator recall, and door release</b> all at once.</p>
+        <p class="why"><em>Why it matters</em>It's the single point that ties detection to every response — the one panel you'll learn to read first.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--red)"></span>Detect</div>
+        <h3>Detection Devices</h3>
+        <p class="one">Sense fire, smoke, and heat early.</p>
+        <p>Smoke detectors, heat detectors, <b>duct smoke detectors</b> in the airstream (which stop the AHU), and manual <b>pull stations</b> by the exits.</p>
+        <p class="why"><em>Why it matters</em>The earlier the catch, the more time everyone has to get out.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Alert</div>
+        <h3>Notification &amp; Communication</h3>
+        <p class="one">Tells everyone to get out — clearly.</p>
+        <p>Horns and <b>strobes</b> throughout, <b>voice evacuation</b> for spoken instructions, and two-way communication at <b>areas of refuge</b> for anyone who can't use the stairs.</p>
+        <p class="why"><em>Why it matters</em>Fast, clear alerting saves lives; strobes reach those who can't hear the horns.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Suppress</div>
+        <h3>Sprinklers &amp; Fire Pump</h3>
+        <p class="one">Puts water on the fire automatically.</p>
+        <p>Sprinkler heads open <b>one at a time</b>, right over the heat — not all at once. The <b>fire pump</b> boosts building water pressure to feed the sprinklers and standpipes, while a small <b>jockey pump</b> holds the system pressurized so the fire pump only starts on real flow. The pipe itself is <b>wet, dry, or pre-action</b> depending on whether the space can freeze or holds sensitive equipment. On each floor a <b>floor control valve</b> — valve, flow switch, tamper switch, test &amp; drain — isolates and monitors that floor&#8217;s sprinklers.</p>
+        <p class="why"><em>Why it matters</em>It controls or knocks down the fire before it can spread — often before anyone arrives.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--violet)"></span>Contain</div>
+        <h3>Smoke Control</h3>
+        <p class="one">Keeps smoke out of the exit paths.</p>
+        <p>HVAC shuts down or flips to <b>smoke mode</b>; <b>smoke/fire dampers</b> close to hold each compartment; dedicated fans <b>exhaust smoke</b> and <b>pressurize the stairwells</b> so they stay clear.</p>
+        <p class="why"><em>Why it matters</em>Smoke — not flame — is the biggest killer. Clear stairs mean people can actually leave.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Support</div>
+        <h3>Emergency Power &amp; Egress</h3>
+        <p class="one">Keeps the way out lit and the critical systems running.</p>
+        <p>A <b>generator + ATS</b> back up the life-safety loads; <b>exit signs</b> and <b>egress lighting</b> stay on; <b>elevators recall</b> to a safe floor and give firefighters control.</p>
+        <p class="why"><em>Why it matters</em>People must find the exits and responders must have working tools even with no utility power.</p>
+      </div>
+
+    </div>
+    </div>
+  </section>
+
+  <!-- LAB LAYER -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">03</span><h2>The life-science layer — lab hazards</h2><span class="line"></span></div>
+    <div class="downstream">
+      <h3>The extra life safety a lab building needs</h3>
+      <p>A life-science building adds dangers a normal office doesn't — <b>chemicals, compressed and toxic gases, and exhaust that must never stop</b>. So there's a second layer of life safety built into the labs, on top of the building systems above.</p>
+
+      <div class="terms">
+        <div class="term-card">
+          <h4>Gas detection &amp; shutoff</h4>
+          <span class="coil haz">hazard</span>
+          <p>Monitors for toxic or flammable gas and can alarm and trip <b>emergency gas shutoff</b> valves before a leak becomes dangerous.</p>
+        </div>
+        <div class="term-card">
+          <h4>Showers &amp; eyewash</h4>
+          <span class="coil chem">chemical</span>
+          <p>Drench <b>safety showers</b> and <b>eyewash</b> stations for chemical exposure — they must stay unobstructed, tested, and ready.</p>
+        </div>
+        <div class="term-card">
+          <h4>Exhaust that fails safe</h4>
+          <span class="coil exh">exhaust</span>
+          <p>Fume hoods and lab exhaust are life safety too: on trouble they're built to <b>keep pulling or alarm</b> — never to trap fumes. Hood monitors and emergency power-off (EPO) back them up.</p>
+        </div>
+      </div>
+
+      <p>So the split is simple: <b>building life safety</b> — alarm, sprinklers, smoke control, power — protects everyone in the building; the <b>lab layer</b> — gas, chemical, exhaust — protects the people working with the hazards. You'll learn the lab side suite by suite; for now, just know both layers exist and both report trouble back to the same alarm system.</p>
+    </div>
+    </div>
+  </section>
+
+  <!-- SYSTEM DIAGRAMS -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">04</span><h2>System diagrams</h2><span class="line"></span></div>
+    <p class="lead">The same story, drawn: boxes are equipment, colored lines are the flows. Trace them line by line.</p>
+    <div class="legend">
+      <span><i style="background:var(--red)"></i>detect &amp; alarm</span>
+      <span><i style="background:var(--amber)"></i>notify / alert</span>
+      <span><i style="background:var(--violet)"></i>protect &amp; evacuate</span>
+      <span><i style="background:var(--cyan)"></i>water · suppression</span>
+      <span><i style="background:var(--green)"></i>backup power</span>
+      <span><i style="background:var(--ink-faint)"></i>fire dept · loads</span>
+    </div>
+
+    <div class="diagram d1">
+    <div class="d-head"><span class="tag">Part 1</span><h2>The alarm brain — detect, then command</h2></div>
+    <p class="d-sub">Detectors and pull stations report to the Fire Alarm Panel; it alerts everyone, signals the fire department, and commands the building all at once.</p>
+    <svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="aR1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+        <marker id="aA1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="aV1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+        <marker id="aI1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-dim)"/></marker>
+      </defs>
+
+      <!-- inputs -> FACP -->
+      <path class="pipe p-red" d="M190,90 L285,182" marker-end="url(#aR1)"/>
+      <path class="pipe p-red" d="M190,172 L285,206" marker-end="url(#aR1)"/>
+      <path class="pipe p-red" d="M190,254 L285,230" marker-end="url(#aR1)"/>
+      <text class="pl pl-r" x="212" y="150">detect</text>
+
+      <!-- FACP -> Fire Dept -->
+      <path class="pipe p-ink" d="M360,160 V76" marker-end="url(#aI1)"/>
+      <text class="pl" x="366" y="120">signal fire dept</text>
+
+      <!-- FACP -> outputs -->
+      <path class="pipe p-amber" d="M435,182 L530,86" marker-end="url(#aA1)"/>
+      <text class="pl pl-a" x="452" y="128">alert</text>
+      <path class="pipe p-violet" d="M435,202 L530,168" marker-end="url(#aV1)"/>
+      <text class="pl pl-v" x="452" y="188">command</text>
+      <path class="pipe p-violet" d="M435,216 L530,246" marker-end="url(#aV1)"/>
+      <path class="pipe p-violet" d="M435,232 L530,320" marker-end="url(#aV1)"/>
+
+      <!-- Fire Dept -->
+      <rect class="eq c-ink" x="300" y="32" width="120" height="44" rx="8"/>
+      <text class="eqt" x="360" y="52" font-size="11.5">Fire Dept</text><text class="eqs" x="360" y="66">via monitoring</text>
+
+      <!-- inputs -->
+      <rect class="eq c-red" x="40" y="66" width="150" height="48" rx="8"/>
+      <text class="eqt" x="115" y="87" font-size="12">Smoke / Heat</text><text class="eqs" x="115" y="101">detectors</text>
+      <rect class="eq c-red" x="40" y="148" width="150" height="48" rx="8"/>
+      <text class="eqt" x="115" y="169" font-size="12">Pull stations</text><text class="eqs" x="115" y="183">manual</text>
+      <rect class="eq c-red" x="40" y="230" width="150" height="48" rx="8"/>
+      <text class="eqt" x="115" y="251" font-size="12">Duct detectors</text><text class="eqs" x="115" y="265">in the airstream</text>
+
+      <!-- FACP -->
+      <rect class="eq c-red hub" x="285" y="160" width="150" height="92" rx="10"/>
+      <text class="eqt" x="360" y="196" font-size="13.5">Fire Alarm Panel</text>
+      <text class="eqs" x="360" y="212" font-size="9">FACP · the brain</text>
+      <text class="eqs" x="360" y="228" font-size="9">detects &amp; commands</text>
+
+      <!-- outputs -->
+      <rect class="eq c-amber" x="530" y="58" width="165" height="56" rx="8"/>
+      <text class="eqt" x="612" y="80" font-size="12">Notification</text><text class="eqs" x="612" y="96">horns · strobes · voice</text>
+      <rect class="eq c-violet" x="530" y="140" width="165" height="56" rx="8"/>
+      <text class="eqt" x="612" y="162" font-size="12">Smoke control</text><text class="eqs" x="612" y="178">HVAC off · exhaust · stairs</text>
+      <rect class="eq c-violet" x="530" y="222" width="165" height="46" rx="8"/>
+      <text class="eqt" x="612" y="249" font-size="12">Elevator recall</text>
+      <rect class="eq c-violet" x="530" y="296" width="165" height="46" rx="8"/>
+      <text class="eqt" x="612" y="323" font-size="12">Door release</text>
+    </svg>
+  </div>
+    </div>
+
+  <!-- DIAGRAM 2 -->
+  <div class="diagram d2">
+    <div class="d-head"><span class="tag">Part 2</span><h2>Suppression &amp; backup power</h2></div>
+    <p class="d-sub">Water puts the fire out and its flow switch tells the panel; the generator and ATS keep the life-safety systems alive when the power drops.</p>
+    <svg viewBox="0 0 720 310" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="aC2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+        <marker id="aR2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+        <marker id="aG2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+      </defs>
+
+      <text class="rowlab" x="40" y="34" fill="var(--cyan)">Suppress</text>
+      <text class="rowlab" x="40" y="176" fill="var(--green)">Power (backup)</text>
+
+      <!-- suppress flow -->
+      <path class="pipe p-cyan" d="M160,74 H210" marker-end="url(#aC2)"/>
+      <text class="pl pl-c" x="168" y="66">boost</text>
+      <path class="pipe p-cyan" d="M330,74 H380" marker-end="url(#aC2)"/>
+      <text class="pl pl-c" x="338" y="66">feeds</text>
+      <path class="pipe p-red" d="M540,74 H580" marker-end="url(#aR2)"/>
+      <text class="pl pl-r" x="500" y="52">flow switch → alarm</text>
+
+      <rect class="eq c-cyan" x="40" y="50" width="120" height="48" rx="8"/>
+      <text class="eqt" x="100" y="71" font-size="11.5">Water supply</text><text class="eqs" x="100" y="85">city / tank</text>
+      <rect class="eq c-cyan" x="210" y="50" width="120" height="48" rx="8"/>
+      <text class="eqt" x="270" y="71" font-size="11.5">Fire Pump</text><text class="eqs" x="270" y="85">boosts pressure</text>
+      <rect class="eq c-cyan" x="380" y="44" width="160" height="60" rx="8"/>
+      <text class="eqt" x="460" y="68" font-size="12">Sprinklers</text><text class="eqs" x="460" y="84">wet / dry / pre-action</text>
+      <rect class="eq c-red" x="580" y="50" width="110" height="48" rx="8"/>
+      <text class="eqt" x="635" y="71" font-size="11">Fire Alarm</text><text class="eqs" x="635" y="85">Panel</text>
+
+      <!-- power flow -->
+      <path class="pipe p-green" d="M160,214 L360,206" marker-end="url(#aG2)"/>
+      <path class="pipe p-green" d="M320,214 L360,222" marker-end="url(#aG2)"/>
+      <path class="pipe p-green" d="M460,214 H520" marker-end="url(#aG2)"/>
+      <text class="pl pl-g" x="466" y="206">powers</text>
+
+      <rect class="eq c-amber" x="40" y="190" width="120" height="48" rx="8"/>
+      <text class="eqt" x="100" y="211" font-size="11.5">Generator</text><text class="eqs" x="100" y="225">backup source</text>
+      <rect class="eq c-ink dash" x="200" y="190" width="120" height="48" rx="8"/>
+      <text class="eqt" x="260" y="211" font-size="11.5">Utility power</text><text class="eqs" x="260" y="225">normal</text>
+      <rect class="eq c-green hub" x="360" y="182" width="100" height="64" rx="8"/>
+      <text class="eqt" x="410" y="211" font-size="12.5">ATS</text><text class="eqs" x="410" y="226">auto-switch</text>
+      <rect class="eq c-ink" x="520" y="170" width="170" height="92" rx="8"/>
+      <text class="eqt" x="605" y="196" font-size="12">Life-safety loads</text>
+      <text class="eqs" x="605" y="214">FACP · fire pump</text>
+      <text class="eqs" x="605" y="228">smoke fans · egress</text>
+      <text class="eqs" x="605" y="242">lighting · elevators</text>
+    </svg>
+  </div>
+  
+    <div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--red)">Illustrated</span><h2>Life safety — detect, suppress, control the zones, backed by power</h2></div>
+      <p class="d-sub">Red = detection &amp; alarm to the FACP; cyan = fire pump + jockey, floor control valves, sprinklers; violet = the FACP commanding zone controls — dampers, doors, stair pressurization, elevators; green = emergency power.</p>
+      <svg viewBox="0 0 760 486" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="lsG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <marker id="lsC" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+          <marker id="lsV" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+          <linearGradient id="lfRedG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ec8c85"/><stop offset="0.45" stop-color="#f3b3ae"/><stop offset="1" stop-color="#ad3b35"/></linearGradient>
+          <linearGradient id="lfMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f7"/><stop offset="0.45" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4d2"/></linearGradient>
+          <linearGradient id="lfYel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4d98e"/><stop offset="0.45" stop-color="#f9e9b8"/><stop offset="1" stop-color="#cfa842"/></linearGradient>
+        </defs>
+        <rect x="16" y="14" width="356" height="288" rx="12" fill="rgba(210,59,53,0.07)"/>
+        <rect x="378" y="14" width="366" height="288" rx="12" fill="rgba(14,143,166,0.07)"/>
+        <rect x="16" y="308" width="728" height="64" rx="12" fill="rgba(106,79,208,0.07)"/>
+        <rect x="16" y="378" width="728" height="100" rx="12" fill="rgba(31,154,85,0.08)"/>
+        <text x="34" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--red)" font-weight="700" letter-spacing="2">DETECT &amp; ALARM</text>
+        <text x="396" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--cyan)" font-weight="700" letter-spacing="2">SUPPRESS</text>
+        <text x="34" y="326" font-family="IBM Plex Mono" font-size="9.5" fill="var(--violet)" font-weight="700" letter-spacing="2">ZONE CONTROL — FACP COMMANDS</text>
+        <text x="34" y="400" font-family="IBM Plex Mono" font-size="9.5" fill="var(--green)" font-weight="700" letter-spacing="2">EMERGENCY POWER</text>
+
+        <line x1="60" y1="60" x2="350" y2="60" stroke="var(--line-2)" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <ellipse cx="140" cy="66" rx="14" ry="6" fill="url(#lfMetal)" stroke="#8a94a4" stroke-width="1.5"/>
+        <ellipse cx="140" cy="62" rx="9" ry="4" fill="#fff" stroke="#8a94a4" stroke-width="1.2"/>
+        <text x="140" y="92" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">smoke det.</text>
+        <ellipse cx="228" cy="66" rx="12" ry="5" fill="url(#lfMetal)" stroke="#8a94a4" stroke-width="1.5"/>
+        <circle cx="228" cy="63" r="2.5" fill="var(--red)"/>
+        <text x="228" y="92" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">heat det.</text>
+        <rect x="290" y="118" width="30" height="40" rx="3" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.6"/>
+        <rect x="297" y="126" width="16" height="5" fill="#fff"/>
+        <rect x="301" y="131" width="8" height="16" rx="2" fill="#fff"/>
+        <text x="305" y="176" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">pull station</text>
+        <rect x="282" y="214" width="38" height="28" rx="3" fill="url(#lfMetal)" stroke="#8a94a4" stroke-width="1.6"/>
+        <rect x="290" y="220" width="22" height="8" rx="2" fill="var(--red)"/>
+        <line x1="288" y1="234" x2="314" y2="234" stroke="#8a94a4" stroke-width="1.2"/>
+        <line x1="288" y1="238" x2="314" y2="238" stroke="#8a94a4" stroke-width="1.2"/>
+        <text x="301" y="262" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">horn / strobe</text>
+
+        <rect x="66" y="126" width="94" height="136" rx="5" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="2"/>
+        <rect x="74" y="134" width="78" height="120" rx="3" fill="none" stroke="#8c2f2a" stroke-width="1"/>
+        <rect x="82" y="142" width="62" height="24" rx="2" fill="#232a34"/>
+        <line x1="88" y1="150" x2="126" y2="150" stroke="var(--green)" stroke-width="1.6"/>
+        <line x1="88" y1="157" x2="116" y2="157" stroke="var(--green)" stroke-width="1.6"/>
+        <circle cx="90" cy="182" r="3.5" fill="#2be06c"/><circle cx="106" cy="182" r="3.5" fill="var(--amber)"/><circle cx="122" cy="182" r="3.5" fill="#ffd23f"/>
+        <circle cx="138" cy="222" r="5" fill="#fff" stroke="#8c2f2a" stroke-width="1.4"/>
+        <line x1="82" y1="236" x2="120" y2="236" stroke="#8c2f2a" stroke-width="1.2"/>
+        <line x1="82" y1="242" x2="120" y2="242" stroke="#8c2f2a" stroke-width="1.2"/>
+        <text x="113" y="282" font-family="Space Grotesk" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">FACP</text>
+
+        <path d="M140,72 V116 H113 V126" fill="none" stroke="var(--red)" stroke-width="1.6"/>
+        <path d="M228,71 V110 H120 V126" fill="none" stroke="var(--red)" stroke-width="1.6"/>
+        <path d="M290,138 H180 V150 H160" fill="none" stroke="var(--red)" stroke-width="1.6"/>
+        <path d="M282,228 H190 V196 H160" fill="none" stroke="var(--amber)" stroke-width="1.6"/>
+
+        <path d="M388,252 H414" fill="none" stroke="var(--cyan)" stroke-width="3.2" marker-end="url(#lsC)"/>
+        <text x="384" y="242" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">water in</text>
+        <path d="M400,252 V292 H562 V272" fill="none" stroke="var(--cyan)" stroke-width="1.8"/>
+        <path d="M562,254 V218 H438" fill="none" stroke="var(--cyan)" stroke-width="1.8" marker-end="url(#lsC)"/>
+        <path d="M432,226 V88 H716" fill="none" stroke="var(--cyan)" stroke-width="3.2"/>
+
+        <rect x="402" y="274" width="106" height="6" rx="2" fill="#8a94a4"/>
+        <circle cx="432" cy="252" r="16" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.8"/>
+        <rect x="425" y="228" width="14" height="9" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.4"/>
+        <line x1="420" y1="228" x2="444" y2="228" stroke="#8c2f2a" stroke-width="2"/>
+        <rect x="452" y="240" width="42" height="24" rx="11" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.6"/>
+        <line x1="462" y1="242" x2="462" y2="262" stroke="#8c2f2a" stroke-width="1.1"/>
+        <line x1="470" y1="242" x2="470" y2="262" stroke="#8c2f2a" stroke-width="1.1"/>
+        <line x1="478" y1="242" x2="478" y2="262" stroke="#8c2f2a" stroke-width="1.1"/>
+        <rect x="504" y="222" width="34" height="52" rx="3" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.6"/>
+        <rect x="510" y="230" width="22" height="12" rx="1" fill="#232a34"/>
+        <circle cx="521" cy="256" r="3" fill="#2be06c"/>
+        <text x="466" y="298" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Fire Pump + Controller</text>
+
+        <circle cx="562" cy="263" r="9" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.5"/>
+        <rect x="572" y="256" width="20" height="14" rx="6" fill="url(#lfRedG)" stroke="#8c2f2a" stroke-width="1.3"/>
+        <text x="644" y="266" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">jockey pump</text>
+        <text x="644" y="277" font-family="IBM Plex Mono" font-size="8" fill="var(--ink-faint)" text-anchor="middle">holds pressure</text>
+
+        <circle cx="474" cy="88" r="8" fill="#fff" stroke="var(--cyan)" stroke-width="2"/>
+        <line x1="469" y1="93" x2="479" y2="83" stroke="var(--cyan)" stroke-width="2"/>
+        <rect x="471" y="72" width="6" height="8" fill="#fff" stroke="var(--cyan)" stroke-width="1.3"/>
+        <rect x="504" y="70" width="20" height="18" rx="3" fill="#fff" stroke="var(--green)" stroke-width="1.7"/>
+        <path d="M544,88 V104" fill="none" stroke="var(--cyan)" stroke-width="1.8" marker-end="url(#lsC)"/>
+        <path d="M539,105 L544,110 L549,105" fill="none" stroke="var(--cyan)" stroke-width="1.6"/>
+        <text x="528" y="126" font-family="IBM Plex Mono" font-size="8" fill="var(--cyan)" text-anchor="middle">floor control valve — per floor</text>
+        <text x="528" y="137" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)" text-anchor="middle">valve · tamper · flow sw · test&amp;drain</text>
+        <path d="M614,88 V102 M605,102 H623 M618,102 A6,6 0 0 1 610,102" stroke="var(--cyan)" stroke-width="2" fill="none"/>
+        <path d="M664,88 V102 M655,102 H673 M668,102 A6,6 0 0 1 660,102" stroke="var(--cyan)" stroke-width="2" fill="none"/>
+        <path d="M710,88 V102 M701,102 H719 M714,102 A6,6 0 0 1 706,102" stroke="var(--cyan)" stroke-width="2" fill="none"/>
+        <text x="678" y="126" font-family="Space Grotesk" font-size="10" fill="var(--ink-dim)" text-anchor="middle">sprinkler heads</text>
+
+        <path d="M140,262 V304" fill="none" stroke="var(--violet)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#lsV)"/>
+        <path d="M60,316 H700" fill="none" stroke="var(--violet)" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <path d="M170,316 V322" fill="none" stroke="var(--violet)" stroke-width="1.6" marker-end="url(#lsV)"/>
+        <path d="M310,316 V322" fill="none" stroke="var(--violet)" stroke-width="1.6" marker-end="url(#lsV)"/>
+        <path d="M450,316 V320" fill="none" stroke="var(--violet)" stroke-width="1.6" marker-end="url(#lsV)"/>
+        <path d="M600,316 V320" fill="none" stroke="var(--violet)" stroke-width="1.6" marker-end="url(#lsV)"/>
+
+        <rect x="140" y="326" width="60" height="18" rx="2" fill="url(#lfMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <line x1="147" y1="341" x2="193" y2="329" stroke="var(--violet)" stroke-width="2"/>
+        <circle cx="170" cy="335" r="2.2" fill="var(--violet)"/>
+        <rect x="202" y="330" width="9" height="10" rx="1" fill="#8a94a4"/>
+        <text x="170" y="362" font-family="Space Grotesk" font-size="9.5" fill="var(--ink-dim)" text-anchor="middle">smoke / fire damper</text>
+
+        <line x1="296" y1="326" x2="296" y2="350" stroke="#64748b" stroke-width="2.2"/>
+        <line x1="296" y1="350" x2="322" y2="338" stroke="#64748b" stroke-width="2.2"/>
+        <path d="M322,338 A27,27 0 0 0 296,326" fill="none" stroke="var(--line-2)" stroke-width="1.2" stroke-dasharray="3 3"/>
+        <circle cx="325" cy="330" r="2.5" fill="var(--violet)"/>
+        <text x="310" y="362" font-family="Space Grotesk" font-size="9.5" fill="var(--ink-dim)" text-anchor="middle">door release</text>
+
+        <rect x="430" y="324" width="40" height="28" rx="2" fill="url(#lfMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <circle cx="450" cy="346" r="6" fill="#fff" stroke="var(--violet)" stroke-width="1.5"/>
+        <path d="M450,346 L450,341 M450,346 L454,349 M450,346 L446,349" stroke="var(--violet)" stroke-width="1.3" fill="none"/>
+        <path d="M441,338 V329 M438,332 L441,328 L444,332" stroke="var(--violet)" stroke-width="1.4" fill="none"/>
+        <path d="M459,338 V329 M456,332 L459,328 L462,332" stroke="var(--violet)" stroke-width="1.4" fill="none"/>
+        <text x="450" y="366" font-family="Space Grotesk" font-size="9.5" fill="var(--ink-dim)" text-anchor="middle">stair pressurization</text>
+
+        <rect x="584" y="322" width="32" height="30" rx="2" fill="url(#lfMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <rect x="590" y="330" width="20" height="16" rx="1" fill="#fff" stroke="#64748b" stroke-width="1.2"/>
+        <path d="M624,326 V344 M620,340 L624,345 L628,340" stroke="var(--violet)" stroke-width="1.6" fill="none"/>
+        <text x="602" y="366" font-family="Space Grotesk" font-size="9.5" fill="var(--ink-dim)" text-anchor="middle">elevator recall</text>
+
+        <rect x="86" y="448" width="164" height="12" rx="3" fill="#6b7686" stroke="#4a5462" stroke-width="1.3"/>
+        <rect x="90" y="410" width="24" height="40" rx="2" fill="url(#lfYel)" stroke="#a97f16" stroke-width="1.5"/>
+        <line x1="95" y1="414" x2="95" y2="446" stroke="#a97f16" stroke-width="1"/>
+        <line x1="101" y1="414" x2="101" y2="446" stroke="#a97f16" stroke-width="1"/>
+        <line x1="107" y1="414" x2="107" y2="446" stroke="#a97f16" stroke-width="1"/>
+        <rect x="114" y="414" width="72" height="36" rx="3" fill="url(#lfYel)" stroke="#a97f16" stroke-width="1.5"/>
+        <rect x="122" y="408" width="20" height="8" rx="2" fill="url(#lfYel)" stroke="#a97f16" stroke-width="1.2"/>
+        <rect x="150" y="408" width="20" height="8" rx="2" fill="url(#lfYel)" stroke="#a97f16" stroke-width="1.2"/>
+        <rect x="186" y="418" width="36" height="32" rx="14" fill="url(#lfYel)" stroke="#a97f16" stroke-width="1.5"/>
+        <circle cx="222" cy="434" r="10" fill="#fff" stroke="#a97f16" stroke-width="1.4"/>
+        <line x1="216" y1="434" x2="228" y2="434" stroke="#a97f16" stroke-width="1.2"/>
+        <line x1="222" y1="428" x2="222" y2="440" stroke="#a97f16" stroke-width="1.2"/>
+        <rect x="128" y="396" width="6" height="14" fill="#8a94a4"/>
+        <rect x="118" y="388" width="26" height="9" rx="4" fill="#8a94a4"/>
+        <rect x="150" y="422" width="18" height="12" rx="1" fill="#232a34"/>
+        <text x="156" y="474" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">Generator</text>
+
+        <rect x="316" y="400" width="66" height="60" rx="4" fill="url(#lfMetal)" stroke="#64748b" stroke-width="1.9"/>
+        <rect x="322" y="406" width="54" height="48" rx="2" fill="none" stroke="#8a94a4" stroke-width="1"/>
+        <rect x="376" y="422" width="5" height="14" rx="2" fill="#64748b"/>
+        <rect x="328" y="412" width="30" height="13" rx="2" fill="#232a34"/>
+        <line x1="332" y1="418" x2="352" y2="418" stroke="#2be06c" stroke-width="1.4"/>
+        <circle cx="331" cy="436" r="3" fill="var(--amber)"/><circle cx="331" cy="446" r="3" fill="var(--green)"/><circle cx="366" cy="441" r="3" fill="#4a5462"/>
+        <line x1="334" y1="445" x2="363" y2="441" stroke="var(--green)" stroke-width="2"/>
+        <text x="349" y="474" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">ATS</text>
+        <path d="M250,430 H316" fill="none" stroke="var(--green)" stroke-width="3" marker-end="url(#lsG)"/>
+        <path d="M382,430 H700" fill="none" stroke="var(--green)" stroke-width="3"/>
+        <path d="M440,430 V382" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#lsG)"/>
+        <path d="M600,430 V382" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#lsG)"/>
+        <text x="548" y="452" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-dim)">powers FACP · fire pump · smoke fans · egress lighting</text>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- QUIZ -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">05</span><h2>Check yourself — quick quiz</h2><span class="line"></span></div>
+    <p class="lead">Tap an answer for instant feedback — nothing is graded or saved. On paper, circle your answers and review them with your mentor.</p>
+    <div class="q-score"><span><b id="qDone">0</b>/<span id="qTot">0</span> answered &middot; <b id="qRight">0</b> correct</span><button id="qReset" type="button">Reset quiz</button></div>
+    </div>
+    <div id="quizBox"></div>
+    <div class="q-openhead">Open questions — say it in your own words</div>
+    <div id="openBox"></div>
+  </section>
+
+  <script>
+  (function(){
+  var QUIZ=[{q:"What is the ‘brain’ that everything in life safety reports to?",o:["The sprinkler riser","The BMS","The generator","The FACP — fire alarm control panel"],a:3,e:"Every detector and pull station reports to the FACP, and the FACP commands everything else."},
+{q:"On an alarm, the FACP does which three things?",o:["Starts the chiller, closes valves, silences horns","Notifies occupants, signals the fire department, commands the zone controls","Calls the elevator, opens windows, starts the AHU","Only sounds the horns"],a:1,e:"Alert people, bring the fire department, and command the building — smoke control, doors, elevators."},
+{q:"Sprinkler heads open…",o:["One at a time, each triggered by heat right over the fire","When the pull station is pulled","Only when the FACP commands them","All at once like the movies"],a:0,e:"Each head is its own heat-activated valve. Movies lie — one head over the fire opens, the rest stay shut."},
+{q:"The fire pump’s job is to…",o:["Drain the system","Fill the tower","Boost water pressure so sprinklers and standpipes get real flow","Circulate hot water"],a:2,e:"City pressure alone often is not enough, especially up high — the fire pump provides the boost."},
+{q:"What does the jockey pump do?",o:["Pumps the neutralization tank","Backs up the fire pump if it fails","Holds system pressure day-to-day so the fire pump only starts on real flow","Tests the sprinklers weekly"],a:2,e:"The little jockey tops up small pressure losses. If pressure drops fast — real flow — the big pump starts, and that start is itself an alarm signal."},
+{q:"A floor control valve assembly includes…",o:["A smoke detector and horn","Valve, tamper switch, flow switch, test & drain","A PRV and an RPZ","Just a shutoff valve"],a:1,e:"Per floor: an isolation valve (with a tamper switch watching it), a flow switch to detect discharge, and a test & drain to prove it all works."},
+{q:"‘Zone control’ in life safety refers to…",o:["The sprinkler floor valves","Thermostat zones","The security card readers","Smoke/fire dampers, door release, stair pressurization, elevator recall — commanded by the FACP"],a:3,e:"When a zone alarms, the FACP closes its dampers, releases its doors, pressurizes stairs, and recalls elevators."},
+{q:"Stair pressurization exists to…",o:["Ventilate the roof","Cool the stairwells","Keep smoke out of the egress stairs so people can escape","Dry the sprinkler pipes"],a:2,e:"Fans blow air into the stairs so pressure pushes smoke out — the escape path stays clear."},
+{q:"Pre-action sprinkler piping is used where…",o:["An accidental discharge would be unacceptable — it needs detection AND a fused head before water flows","There are no detectors","Freezing is impossible","Water is cheap"],a:0,e:"Two independent triggers (detection fills the pipe, heat opens the head) protect spaces where a false discharge would be a disaster."},
+{q:"On a utility power loss, the correct sequence is…",o:["Everything transfers instantly with no delay","ATS senses loss → start signal → generator builds the emergency bus → ATSs transfer, life safety first","Generator builds bus → ATS senses → transfer","Fire pump starts → generator follows"],a:1,e:"Sense → start → build the bus → transfer. Life-safety loads must be live within seconds; standby follows."},
+{q:"Why does the generator get a weekly test?",o:["To charge its battery only","Code requires daily fuel checks","To warm the building","Because a generator that has not run is a generator you cannot trust — the test proves the whole start-and-transfer chain"],a:3,e:"The weekly run proves it starts, takes load, and the ATSs will have real power to transfer to."},
+{q:"Duct detectors exist to…",o:["Detect smoke in the airstream and shut down the AHU so it is not spread through the building","Sense humidity","Count filter changes","Measure airflow"],a:0,e:"If smoke gets into the ductwork, the duct detector stops the air handler from distributing it."},
+{q:"‘Lab exhaust fails safe’ means…",o:["Exhaust keeps running — it is on emergency power, because fume control must never stop","It only runs during business hours","It shuts off in a fire","It reverses direction"],a:0,e:"Fume hoods and lab exhaust are life safety for the people at the bench — they ride the generator and never stop."}];
+  var box=document.getElementById('quizBox'),done=0,right=0;
+  function upd(){document.getElementById('qDone').textContent=done;document.getElementById('qRight').textContent=right;}
+  function render(){box.innerHTML='';done=0;right=0;upd();
+    QUIZ.forEach(function(it,i){
+      var c=document.createElement('div');c.className='q-card';
+      var top=document.createElement('div');top.className='q-top';
+      var n=document.createElement('span');n.className='q-num';n.textContent='Q'+(i+1);
+      var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+      top.appendChild(n);top.appendChild(t);c.appendChild(top);
+      var op=document.createElement('div');op.className='q-opts';
+      it.o.forEach(function(txt,j){
+        var b=document.createElement('button');b.type='button';
+        var em=document.createElement('em');em.textContent=String.fromCharCode(65+j);
+        var sp=document.createElement('span');sp.textContent=txt;
+        b.appendChild(em);b.appendChild(sp);
+        b.onclick=function(){if(c.dataset.a)return;c.dataset.a='1';done++;
+          if(j===it.a){b.classList.add('ok');right++;}
+          else{b.classList.add('bad');op.children[it.a].classList.add('ok');}
+          for(var k=0;k<op.children.length;k++){op.children[k].classList.add('lock');}
+          var e=document.createElement('div');e.className='q-exp';e.textContent=it.e;c.appendChild(e);upd();};
+        op.appendChild(b);});
+      c.appendChild(op);box.appendChild(c);});
+    document.getElementById('qTot').textContent=QUIZ.length;}
+  document.getElementById('qReset').onclick=render;
+  render();})();
+  </script>
+
+  <script>
+  (function(){
+  var OPEN=[
+{q:"A smoke detector activates on the third floor. Walk the first sixty seconds — name everything the FACP commands.",a:"The detector reports to the FACP. It sounds horns and strobes, signals the fire department through monitoring, and commands the zone: smoke/fire dampers close, held-open doors release, stair pressurization fans start, elevators recall to the safe floor, and the AHU shuts down or flips to smoke mode."},
+{q:"Explain wet, dry, and pre-action piping — and give a space where each one belongs.",a:"Wet pipe is water-filled and simplest — most occupied spaces. Dry pipe holds air and fills only on discharge — spaces that can freeze, like a parking garage or loading dock. Pre-action needs detection AND a fused head before water flows — spaces where an accidental discharge is unacceptable, like an electrical room or server room."},
+{q:"One sprinkler head opens over a fire. Why does the fire pump start — and what was the jockey pump doing before this?",a:"The jockey had been holding system pressure, topping up small losses. A head opening dumps pressure faster than the jockey can keep up, so the fire pump controller sees the drop and starts the big pump — and that pressure drop and flow are themselves alarm signals to the FACP."},
+{q:"Explain zone control to a tenant: what physically happens on their floor during an alarm?",a:"Their floor is a zone. On alarm, its smoke dampers close to hold the smoke in that compartment, magnetically-held doors release and swing shut, the stair pressurization fans keep their escape stairs clear, and the elevators stop serving the floor and recall — all commanded automatically by the fire alarm panel."},
+{q:"Utility power just dropped. Describe the whole generator/ATS sequence until the building is back to normal.",a:"Each ATS senses the loss and sends the start signal; the generator comes up to speed and voltage and builds the emergency bus in about ten seconds; the ATSs transfer their loads onto it, life safety first, standby after. When the utility returns and holds, the ATSs retransfer on a delay, and the generator runs unloaded to cool down, then stops."}
+];
+  var box=document.getElementById('openBox');
+  OPEN.forEach(function(it,i){
+    var c=document.createElement('div');c.className='q-card';
+    var top=document.createElement('div');top.className='q-top';
+    var n=document.createElement('span');n.className='q-num';n.textContent='O'+(i+1);
+    var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+    top.appendChild(n);top.appendChild(t);c.appendChild(top);
+    var lines=document.createElement('div');lines.className='q-lines';
+    for(var k=0;k<3;k++){lines.appendChild(document.createElement('i'));}
+    c.appendChild(lines);
+    var b=document.createElement('button');b.type='button';b.className='q-show';b.textContent='Show a strong answer';
+    b.onclick=function(){var e=document.createElement('div');e.className='q-exp';e.textContent=it.a;c.appendChild(e);b.remove();};
+    c.appendChild(b);box.appendChild(c);});
+  })();
+  </script>
+
+
+  <footer>
+    <b>This is the big-picture version.</b> The details — device types, monthly/annual testing, and the codes behind it (fire alarm, sprinklers, smoke control) — come once these basics click.<br>
+    Every building is a little different; always go by the actual system, the panel in front of you, and the authority having jurisdiction (AHJ).
+  </footer>
+
+</div>
+
+</body>
+</html>
