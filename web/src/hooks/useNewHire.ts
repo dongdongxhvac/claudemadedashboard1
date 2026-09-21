@@ -1,7 +1,7 @@
 // New-hire 8-week program — data hooks (migration 0128).
 //
 // The program DEFINITION is code (lib/newHireProgram.ts) + the handout
-// manifest (hooks/useTrainingManifest.ts); these hooks move PROGRESS:
+// print-station document list (hooks/useTrainingDocs.ts); these hooks move PROGRESS:
 // enrollments, check-offs (presence = verified — weekly items, week/COVE
 // initials, cert signatures AND the per-handout mentor ticks
 // 'doc.<key>.reviewed' / 'doc.<key>.quiz'), rep logs (one row per completed

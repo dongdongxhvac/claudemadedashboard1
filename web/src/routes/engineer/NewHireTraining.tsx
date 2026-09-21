@@ -16,6 +16,10 @@
 // full-width viewer that replaces the schedule (they are full-page
 // documents; two panes would squeeze both).
 //
+// Every handout comes from the Print Station file (hooks/useTrainingDocs.ts)
+// — one file to overwrite when training changes. Documents open as
+// iframe.srcdoc; "New tab" uses a blob: URL.
+//
 // Every signed-in UPark person can open it (site-fenced in App.tsx, not
 // manager-gated — it is course material). Not enrolled → the schedule still
 // reads and quizzes still save; there is just no record row to show.
@@ -25,7 +29,7 @@ import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useEngineers } from '../../hooks/useEngineers';
-import { useTrainingManifest, type NhDoc } from '../../hooks/useTrainingManifest';
+import { useTrainingDocs, type NhDoc } from '../../hooks/useTrainingDocs';
 import { useNewHireUser, useCanEditNewHire, useRecordDocActivity, type NhDocActivity, type NhCheckoff } from '../../hooks/useNewHire';
 import { useQuizWatcher } from '../../hooks/useQuizWatcher';
 import {
@@ -43,7 +47,7 @@ export default function NewHireTraining() {
   const { signOut } = useAuth();
   const me = useMe();
   const isMobile = useIsMobile();
-  const manifest = useTrainingManifest();
+  const manifest = useTrainingDocs();
   const myId = me.data?.id ?? '';
   const { state, isLoading: nhLoading } = useNewHireUser(myId);
   const canSeeMentorDocs = useCanEditNewHire(state.enrollment?.mentor_user_id);
@@ -103,7 +107,7 @@ export default function NewHireTraining() {
           <button type="button" onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch { /* blocked */ } }} className="t-small px-2 py-0.5 rounded border" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>Print</button>
           <a href={manifest.href(openDoc)} target="_blank" rel="noreferrer" className="t-small px-2 py-0.5 rounded border no-underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>New tab ↗</a>
         </div>
-        <iframe key={openDoc.key} ref={iframeRef} src={manifest.href(openDoc)} title={openDoc.label} style={{ flex: '1 1 auto', width: '100%', border: 0, background: '#fff', minHeight: 0 }} />
+        <iframe key={openDoc.key} ref={iframeRef} srcDoc={openDoc.html} title={openDoc.label} style={{ flex: '1 1 auto', width: '100%', border: 0, background: '#fff', minHeight: 0 }} />
         {toast && <Toast toast={toast} />}
       </div>
     );
@@ -162,13 +166,14 @@ export default function NewHireTraining() {
         ))}
 
         <div className="t-card">
-          <div className="t-small t-muted uppercase tracking-wider mb-1" style={mono}>Also in the package</div>
+          <div className="t-small t-muted uppercase tracking-wider mb-1" style={mono}>Also in the print station</div>
           <div className="flex flex-wrap gap-1.5">
-            {manifest.docs.filter((d) => !DOCS_IN_SCHEDULE.has(d.key) && (d.group !== 'mentor' || canSeeMentorDocs)).map((d) => (
-              <button key={d.key} type="button" onClick={() => openByKey(d.key)} className="t-small px-2 py-0.5 rounded border hover:underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>{d.label.split(' — ')[0]}</button>
+            {manifest.docs.filter((d) => !DOCS_IN_SCHEDULE.has(d.key) && (d.group !== 'mentor_only' || canSeeMentorDocs)).map((d) => (
+              <button key={d.key} type="button" onClick={() => openByKey(d.key)} className="t-small px-2 py-0.5 rounded border hover:underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>{d.label}</button>
             ))}
           </div>
-          {manifest.isError && <p className="t-small mt-1" style={{ color: 'var(--color-danger)' }}>Handout list missing or invalid: {(manifest.error as Error).message}</p>}
+          {manifest.isLoading && <p className="t-small t-muted mt-1">Loading the print station…</p>}
+          {manifest.isError && <p className="t-small mt-1" style={{ color: 'var(--color-danger)' }}>Print station missing or unreadable: {(manifest.error as Error).message}</p>}
         </div>
       </main>
       {toast && <Toast toast={toast} />}
@@ -211,10 +216,10 @@ function Collapsible({ title, defaultOpen, children }: { title: string; defaultO
 /** A handout name rendered like the printout's inline file chips, opening the viewer. */
 function DocLink({ k, byKey, onOpen }: { k: string; byKey: Map<string, NhDoc>; onOpen: (k: string) => void }) {
   const d = byKey.get(k);
-  if (!d) return <span className="t-muted">{k}</span>;
+  if (!d) return <span className="px-1.5 py-0.5 rounded t-muted" style={{ ...mono, fontSize: 11, border: '1px dashed var(--color-border)' }} title="Not in the print station yet">{k.replace(/_/g, ' ')} · not in print station</span>;
   return (
     <button type="button" onClick={() => onOpen(k)} className="px-1.5 py-0.5 rounded hover:underline" style={{ ...mono, fontSize: 11, background: 'rgba(94,106,210,0.08)', color: 'var(--color-accent)', border: '1px solid rgba(94,106,210,0.25)', verticalAlign: 'baseline' }} title={`Open ${d.label}`}>
-      {d.label.split(' — ')[0]}{d.quiz ? ' · quiz' : ''}
+      {d.label}{d.quiz ? ' · quiz' : ''}
     </button>
   );
 }

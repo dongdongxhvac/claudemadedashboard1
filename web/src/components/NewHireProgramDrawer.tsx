@@ -14,6 +14,8 @@
 // Plan B; later programs (Licensed HVAC development, the 5 category tracks)
 // are listed as coming — enrollments carry program_key, so they slot in.
 //
+// Handouts come from the Print Station file (hooks/useTrainingDocs.ts).
+//
 // Opened from Admin › User Profiles (row "Training" button). Read-only for
 // anyone who can't edit this person (DB decides; useCanEditNewHire mirrors
 // it so buttons aren't offered that would 0-row). The engineer sees the
@@ -30,7 +32,7 @@ import {
   useSetCheckoff, useSetCheckoffNote, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
   type NhStatus, type NhCheckoff, type NhRepLog, type NhDocActivity, type NhUserState,
 } from '../hooks/useNewHire';
-import { useTrainingManifest, type NhDoc } from '../hooks/useTrainingManifest';
+import { useTrainingDocs, type NhDoc } from '../hooks/useTrainingDocs';
 import { useMe } from '../hooks/useMe';
 
 export type NhPerson = { user_id: string; full_name: string; role: string; active: boolean; is_lead: boolean; hiring_date?: string | null };
@@ -64,7 +66,7 @@ const mono = { fontFamily: 'var(--font-mono)' } as const;
 const SHEET_INK = '#1a1f2b';
 
 function DocLinks({ keys, compact = false }: { keys?: NhDocKey[]; compact?: boolean }) {
-  const { byKey, href } = useTrainingManifest();
+  const { byKey, href } = useTrainingDocs();
   if (!keys?.length) return null;
   return (
     <span className="inline-flex flex-wrap gap-1 align-middle">
@@ -133,7 +135,7 @@ export function NewHireProgramDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const manifest = useTrainingManifest();
+  const manifest = useTrainingDocs();
   const enr = state.enrollment;
   const curWeek = nhWeekFor(enr?.start_date);
   const hasQuiz = (k: string) => manifest.byKey.get(k)?.quiz === true;
@@ -630,7 +632,7 @@ function HandoutsCard({
 }: {
   userId: string; state: NhUserState; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
 }) {
-  const { docs, groups, href, isLoading, isError, error } = useTrainingManifest();
+  const { docs, groups, href, isLoading, isError, error } = useTrainingDocs();
   const set = useSetCheckoff();
   const [err, setErr] = useState<string | null>(null);
   const toggle = async (item_key: string, on: boolean) => {
@@ -644,8 +646,8 @@ function HandoutsCard({
         <span className="t-text font-medium">Handouts — reviewed &amp; quiz sign-off</span>
         <span className="t-small t-muted">Mentor ticks per handout · score = the engineer's own best run from the training page</span>
       </div>
-      {isLoading && <p className="t-small t-muted">Loading manifest…</p>}
-      {isError && <p className="t-small" style={{ color: 'var(--color-danger)' }}>Handout manifest missing or invalid: {(error as Error).message}</p>}
+      {isLoading && <p className="t-small t-muted">Loading the print station…</p>}
+      {isError && <p className="t-small" style={{ color: 'var(--color-danger)' }}>Print station missing or unreadable: {(error as Error).message}</p>}
       {groups.map((g) => {
         const list = docs.filter((d) => d.group === g.key);
         if (!list.length) return null;
@@ -661,7 +663,6 @@ function HandoutsCard({
                   <li key={d.key} className="flex items-center gap-2 flex-wrap py-1 border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
                     <a href={href(d)} target="_blank" rel="noreferrer" className="t-small hover:underline" style={{ color: 'var(--color-accent)', flex: '1 1 220px', minWidth: 0 }}>
                       ↗ {d.label}
-                      {d.week && <span className="t-mono t-muted ml-1.5" style={{ fontSize: 10 }}>WK {d.week}</span>}
                     </a>
                     <span className="t-small t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>
                       {opened ? `opened ×${opened.days} · last ${fmtDate(opened.last.at)}` : 'not opened yet'}
@@ -688,7 +689,7 @@ function HandoutsCard({
 }
 
 function ActivityCard({ state, canEdit }: { state: NhUserState; canEdit: boolean }) {
-  const { byKey } = useTrainingManifest();
+  const { byKey } = useTrainingDocs();
   const del = useDeleteDocActivity();
   const [open, setOpen] = useState(false);
   const [showOpened, setShowOpened] = useState(false);
@@ -714,7 +715,7 @@ function ActivityCard({ state, canEdit }: { state: NhUserState; canEdit: boolean
               {rows.map((a) => (
                 <tr key={a.id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
                   <td className="py-1 pr-2 t-mono t-muted whitespace-nowrap">{fmtDate(a.at)}</td>
-                  <td className="py-1 pr-2">{byKey.get(a.doc_key)?.label ?? a.doc_key}{a.kind === 'quiz' && a.quiz_title && <span className="t-muted"> — {a.quiz_title}</span>}</td>
+                  <td className="py-1 pr-2">{byKey.get(a.doc_key)?.label ?? a.doc_key}{a.kind === 'quiz' && a.quiz_title && a.quiz_title !== byKey.get(a.doc_key)?.label && <span className="t-muted"> — {a.quiz_title}</span>}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">{a.kind === 'quiz' ? <QuizScoreChip row={a} compact /> : <span className="t-muted">opened</span>}</td>
                   <td className="py-1 text-right whitespace-nowrap">
                     {canEdit && <button type="button" onClick={() => del.mutate(a.id)} className="hover:underline" style={{ color: 'var(--color-danger)' }} title="Remove this entry">remove</button>}

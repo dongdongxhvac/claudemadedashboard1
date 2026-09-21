@@ -1,8 +1,8 @@
 // UPark New-Hire 8-Week Program — Plan B (Level 1), as data.
 //
 // Transcribed from the printed packet — 2026-09-21 edition of the schedule
-// + sign-off sheet (handout key 'plan' in the training manifest,
-// web/public/training/manifest.json). vs the 2026-08-19 edition: boiler
+// + sign-off sheet (print-station documents 'plan' / 'signoff_sheet',
+// hooks/useTrainingDocs.ts). vs the 2026-08-19 edition: boiler
 // plant moves to Week 2 and the chiller to Week 5 ("why boiler first"),
 // the HVAC overview is handed out in Week 1. Those two items got new keys
 // (no progress existed on the old ones).
@@ -25,9 +25,10 @@ export const NH_SIGNOFF_TITLE = 'New-Hire 8-Week Schedule — Sign-Off Sheet';
 export const NH_SIGNOFF_INTRO = 'Initial and date each week only when every listed item is verified. Standing dailies (COVE labor hours, PlantLog rounds, access card) are audited weekly, not listed per item.';
 export const NH_WEEKS = 8;
 
-/** Handouts are DATA — web/public/training/manifest.json (served at
- *  /training/manifest.json, loaded by hooks/useTrainingManifest.ts). Weeks and
- *  items below refer to handouts by manifest `key`; keys are permanent. */
+/** Handouts are DATA — every one lives inside the Print Station file
+ *  (hooks/useTrainingDocs.ts parses it). Weeks and items below refer to
+ *  handouts by the key that hook derives from the document title; keys are
+ *  permanent. */
 export type NhDocKey = string;
 
 /** new_hire_checkoffs keys for the per-handout MENTOR ticks. */
@@ -105,13 +106,13 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     n: 2, title: 'HVAC ↔ Boiler Plant', short: 'HVAC ↔ Boiler', accent: '#0891b2',
     plan: [
       { title: 'Theory', text: 'HVAC overview — handed out in Week 1; finish all sections this week + quiz. End-of-week review #1 of all Week-1/2 handouts.', docs: ['hvac', 'answer_key'] },
-      { title: 'Equipment', text: 'Boiler plant — Overview + Find It & Tag It, 24 items at 75SS Boiler 1 (Cleaver-Brooks CB-700) and the Patterson-Kelley N-2000. Summer advantage: boilers offline and under PM — open, cool, hands-on with the PM crew. Every row: access badge respected, purpose stated aloud, IF IT IS WRONG read, proof captured. Verbal: P-K return >130°F, lo-hi-lo staging, flow-switch LWCO.', docs: ['boiler'] },
+      { title: 'Equipment', text: 'Boiler plant — Overview + Find It & Tag It, 24 items at 75SS Boiler 1 (Cleaver-Brooks CB-700) and the Patterson-Kelley N-2000. Summer advantage: boilers offline and under PM — open, cool, hands-on with the PM crew. Every row: access badge respected, purpose stated aloud, IF IT IS WRONG read, proof captured. Verbal: P-K return >130°F, lo-hi-lo staging, flow-switch LWCO.', docs: ['boiler', 'boiler_tagit'] },
       { title: 'Building check', text: 'BMS on-site rows (vendor/product, workstation location, own login, view/full) for every building entered this week.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'First solo PlantLog circuit. Non-MEP rep 1: water treatment (coupon/chemical round with mentor).' },
     ],
     items: [
       { key: 'w2.hvac_quiz',          short: 'HVAC quiz · review #1',     label: 'HVAC quiz passed · review #1 held', cat: 'theory', docs: ['hvac', 'answer_key'] },
-      { key: 'w2.boiler_24_verbals',  short: 'Boiler 24/24 · verbals ×3', label: 'Boiler Find It & Tag It 24/24, proof on every row · P-K >130°F / lo-hi-lo / flow-switch LWCO verbals', cat: 'orient', docs: ['boiler'] },
+      { key: 'w2.boiler_24_verbals',  short: 'Boiler 24/24 · verbals ×3', label: 'Boiler Find It & Tag It 24/24, proof on every row · P-K >130°F / lo-hi-lo / flow-switch LWCO verbals', cat: 'orient', docs: ['boiler_tagit', 'boiler'] },
       { key: 'w2.plantlog_solo',      short: 'First solo PlantLog · water treatment rep 1', label: 'First solo PlantLog circuit · water treatment rep 1 logged', cat: 'ops' },
       { key: 'w2.bms_rows',           short: 'BMS rows started',          label: 'Building check BMS rows for buildings visited', cat: 'controls', docs: ['building_check'] },
     ],
@@ -121,13 +122,13 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     n: 3, title: 'Plumbing ↔ Cooling Tower', short: 'Plumbing ↔ Tower', accent: '#2563eb',
     plan: [
       { title: 'Theory', text: 'Plumbing overview — all sections + quiz.', docs: ['plumbing'] },
-      { title: 'Equipment', text: 'Cooling tower — Overview + field sheet, 18 items. Trace make-up water from the plumbing systems just learned to the tower.', docs: ['tower'] },
+      { title: 'Equipment', text: 'Cooling tower — Overview + field sheet, 18 items. Trace make-up water from the plumbing systems just learned to the tower.', docs: ['tower', 'tower_tagit'] },
       { title: 'Safety gate', text: 'LOTO / PPE / Meter lab — eval #2 GATE: must pass before any MEP PM in Week 4+. Hands-on: BMS check → locate disconnect/VFD → LOTO → meter power verification → enable check → restore → BMS confirm.' },
       { title: 'Building check', text: 'BMS rows continue for buildings visited.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'Non-MEP reps: drum-drip and fire pump test (support role).' },
     ],
     items: [
-      { key: 'w3.plumbing_quiz_tower_18', short: 'Plumbing quiz · tower 18/18', label: 'Plumbing quiz passed · tower sheet 18/18', cat: 'theory', docs: ['plumbing', 'tower'] },
+      { key: 'w3.plumbing_quiz_tower_18', short: 'Plumbing quiz · tower 18/18', label: 'Plumbing quiz passed · tower sheet 18/18', cat: 'theory', docs: ['plumbing', 'tower_tagit'] },
       { key: 'w3.loto_eval_2',            short: 'LOTO eval #2 — MEP gate', label: 'LOTO eval #2 passed (gate for MEP PMs)', cat: 'safety', gate: true },
       { key: 'w3.drumdrip_firepump_reps', short: 'Drum-drip + fire pump reps', label: 'Drum-drip + fire pump test reps logged', cat: 'pm' },
     ],
@@ -137,13 +138,13 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     n: 4, title: 'Electrical ↔ AHU', short: 'Electrical ↔ AHU', accent: '#d97706',
     plan: [
       { title: 'Theory', text: 'Electrical overview — all sections + quiz. End-of-week review #2: HVAC / Plumbing / Electrical quizzes re-checked against answer key.', docs: ['electrical', 'answer_key'] },
-      { title: 'Equipment', text: 'AHU — Overview + Find It & Tag It, 17 items on a running unit. Narrate air path intake → discharge.', docs: ['ahu'] },
+      { title: 'Equipment', text: 'AHU — Overview + Find It & Tag It, 17 items on a running unit. Narrate air path intake → discharge.', docs: ['ahu', 'ahu_tagit'] },
       { title: 'Building check', text: 'BMS rows continue. Read arc-flash labels aloud at gear located this week — open nothing.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'First MEP rep (LOTO gate passed): exhaust fan PM. SCHWP / CWP full names, locations, systems — quizzed on rounds.' },
     ],
     items: [
       { key: 'w4.electrical_quiz_review_2', short: 'Electrical quiz · review #2', label: 'Electrical quiz passed · review #2 held (HVAC/Plumbing/Electrical)', cat: 'theory', docs: ['electrical', 'answer_key'] },
-      { key: 'w4.ahu_17',                   short: 'AHU 17/17', label: 'AHU sheet 17/17 on a running unit', cat: 'orient', docs: ['ahu'] },
+      { key: 'w4.ahu_17',                   short: 'AHU 17/17', label: 'AHU sheet 17/17 on a running unit', cat: 'orient', docs: ['ahu_tagit'] },
       { key: 'w4.exhaust_fan_first_mep',    short: 'Exhaust fan PM — first MEP · SCHWP/CWP verbal', label: 'Exhaust fan PM rep 1 (first MEP PM) · SCHWP/CWP names + locations verbal', cat: 'pm' },
     ],
     friday: 'Initial Week 4. COVE audit: 7 h/day, ≥35 h this week.',
@@ -152,13 +153,13 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     n: 5, title: 'Life Safety ↔ Chiller Plant', short: 'Life Safety ↔ Chiller', accent: '#dc2626',
     plan: [
       { title: 'Theory', text: 'Life Safety overview — all sections + quiz. Scenario sort: act vs. escalate, three cases.', docs: ['life_safety'] },
-      { title: 'Equipment', text: 'Chiller plant — Overview tab, then Find It & Tag It, 36 items on the running plant. Fault-index drill: mentor names symptoms, new hire points to tags and states consequences.', docs: ['chiller'] },
+      { title: 'Equipment', text: 'Chiller plant — Overview tab, then Find It & Tag It, 36 items on the running plant. Fault-index drill: mentor names symptoms, new hire points to tags and states consequences.', docs: ['chiller', 'chiller_tagit'] },
       { title: 'Building check', text: 'BMS rows finish — all buildings covered by end of week.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'Non-MEP rep: generator test (support). MEP rep: UH/CUH PM.' },
     ],
     items: [
       { key: 'w5.ls_quiz_scenarios',      short: 'Life Safety quiz · scenarios 3/3', label: 'Life Safety quiz passed · scenario sort 3/3', cat: 'theory', docs: ['life_safety'] },
-      { key: 'w5.chiller_36_fault_drill', short: 'Chiller 36/36 · fault drill',      label: 'Chiller sheet 36/36 · fault drill passed', cat: 'orient', docs: ['chiller'] },
+      { key: 'w5.chiller_36_fault_drill', short: 'Chiller 36/36 · fault drill',      label: 'Chiller sheet 36/36 · fault drill passed', cat: 'orient', docs: ['chiller_tagit'] },
       { key: 'w5.generator_uhcuh_reps',   short: 'Generator + UH/CUH reps',          label: 'Generator test + UH/CUH PM reps logged', cat: 'pm' },
       { key: 'w5.bms_rows_complete',      short: 'BMS rows complete',                label: 'Building check BMS rows complete, all buildings', cat: 'controls', docs: ['building_check'] },
     ],
@@ -184,7 +185,7 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     plan: [
       { title: 'Field capstone', text: 'Portfolio-wide Find It & Tag It — 117 items across 8 systems, no location prompting. Target ≥60 by Friday.', docs: ['find_it_tag_it'] },
       { title: 'Reps', text: 'Second reps for every PM still under target (2×): water treatment, drum-drip, fire pump, generator, roof, exhaust fan, UH/CUH, pump/motor as the calendar allows. Vendor escorts closed out.' },
-      { title: 'Re-tag', text: 'Weak areas from Weeks 2–5 tag sheets re-walked.', docs: ['boiler', 'tower', 'ahu', 'chiller'] },
+      { title: 'Re-tag', text: 'Weak areas from Weeks 2–5 tag sheets re-walked.', docs: ['boiler_tagit', 'tower_tagit', 'ahu_tagit', 'chiller_tagit'] },
     ],
     items: [
       { key: 'w7.capstone_60',  short: 'Capstone ≥60/117', label: 'Portfolio capstone ≥60/117', cat: 'orient', docs: ['find_it_tag_it'] },
