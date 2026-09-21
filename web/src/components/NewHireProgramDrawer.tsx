@@ -3,24 +3,28 @@
 // Opened from Admin › User Profiles (row "Training" button). One drawer per
 // person: enroll (start date + mentor), then per-week verified items with
 // who/when, the mentor's weekly initials + COVE ≥35 h audit, the PM rep
-// tally (2× each) and LOTO evals, the Level-1 certification block, and a
-// shelf of every handout (served from /training/new-hire/). Definition
-// lives in lib/newHireProgram.ts; progress via hooks/useNewHire.ts (0128).
+// tally (2× each) and LOTO evals, the Level-1 certification block, the
+// handouts shelf with per-handout mentor ticks (Reviewed / Quiz passed)
+// beside the engineer's own best quiz score + opened dates, and the
+// engineer's activity trail. Definition lives in lib/newHireProgram.ts +
+// the manifest (hooks/useTrainingManifest.ts); progress via
+// hooks/useNewHire.ts (0128 + 0131).
 //
 // Read-only for anyone who can't edit this person (DB decides; we mirror
 // with useCanEditNewHire so buttons aren't offered that would 0-row).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   NH_PROGRAM_TITLE, NH_WEEKS, NH_WEEKS_DEF, NH_REPS, NH_EVALS, NH_CERT_SIGNERS, NH_CERT_TEXT,
-  NH_DOCS, NH_CAT_META, NH_STANDING_DAILY, NH_SEASONAL_NOTE, NH_TOTAL_ITEMS,
-  nhDocHref, nhWeekFor, weekKey, coveKey,
+  NH_CAT_META, NH_STANDING_DAILY, NH_SEASONAL_NOTE, NH_TOTAL_ITEMS,
+  nhWeekFor, weekKey, coveKey, docKeyFor, nhQuizDocForItem,
   type NhWeek, type NhItem, type NhRep, type NhDocKey,
 } from '../lib/newHireProgram';
 import {
   useNewHireUser, useCanEditNewHire, useEnrollNewHire, useUpdateEnrollment, useUnenrollNewHire,
-  useSetCheckoff, useSetCheckoffNote, useAddRepLog, useDeleteRepLog,
-  type NhStatus, type NhCheckoff, type NhRepLog,
+  useSetCheckoff, useSetCheckoffNote, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
+  type NhStatus, type NhCheckoff, type NhRepLog, type NhDocActivity, type NhUserState,
 } from '../hooks/useNewHire';
+import { useTrainingManifest, type NhDoc } from '../hooks/useTrainingManifest';
 import { useMe } from '../hooks/useMe';
 
 export type NhPerson = { user_id: string; full_name: string; role: string; active: boolean; is_lead: boolean; hiring_date?: string | null };
@@ -43,15 +47,17 @@ const inputStyle = { borderColor: 'var(--color-border)', background: 'var(--colo
 const btnGhost = { color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' } as const;
 
 function DocLinks({ keys, compact = false }: { keys?: NhDocKey[]; compact?: boolean }) {
+  const { byKey, href } = useTrainingManifest();
   if (!keys?.length) return null;
   return (
     <span className="inline-flex flex-wrap gap-1 align-middle">
       {keys.map((k) => {
-        const d = NH_DOCS.find((x) => x.key === k)!;
+        const d = byKey.get(k);
+        if (!d) return null; // not in the manifest (yet) — link silently absent
         return (
           <a
             key={k}
-            href={nhDocHref(k)}
+            href={href(d)}
             target="_blank"
             rel="noreferrer"
             className="t-small px-1.5 py-0.5 rounded no-underline hover:underline"
@@ -85,6 +91,22 @@ function Dots({ n, target }: { n: number; target: number }) {
   );
 }
 
+/** The engineer's best self-recorded quiz run for a handout. Green ≥ 80 %. */
+function QuizScoreChip({ row, compact = false }: { row?: NhDocActivity; compact?: boolean }) {
+  if (!row || row.score == null || row.total == null) return null;
+  const pct = row.total ? row.score / row.total : 0;
+  const ok = pct >= 0.8;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded t-mono"
+      style={{ fontSize: compact ? 10 : 11, background: ok ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.14)', color: ok ? '#047857' : '#b45309', whiteSpace: 'nowrap' }}
+      title={`Engineer's best quiz run${row.quiz_title ? ` — ${row.quiz_title}` : ''} · ${fmtDate(row.at)}`}
+    >
+      quiz {row.score}/{row.total} · {fmtDate(row.at)}
+    </span>
+  );
+}
+
 export function NewHireProgramDrawer({
   person,
   people,
@@ -109,6 +131,7 @@ export function NewHireProgramDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const manifest = useTrainingManifest();
   const enr = state.enrollment;
   const curWeek = nhWeekFor(enr?.start_date);
   // Which week cards are expanded. Starts at the week in progress (or wk 1
@@ -138,9 +161,11 @@ export function NewHireProgramDrawer({
             <div className="t-small t-muted">{NH_PROGRAM_TITLE}</div>
           </div>
           <div className="flex items-center gap-2">
-            <a href={nhDocHref('plan')} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Printable schedule + sign-off sheet">
-              Schedule / sign-off sheet ↗
-            </a>
+            {manifest.hrefFor('plan') && (
+              <a href={manifest.hrefFor('plan')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Printable schedule + sign-off sheet">
+                Schedule / sign-off sheet ↗
+              </a>
+            )}
             <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
           </div>
         </div>
@@ -157,6 +182,7 @@ export function NewHireProgramDrawer({
             <SummaryCard
               person={person} people={people} canEdit={canEdit} nameOf={nameOf}
               enrollment={enr} progress={state.progress} curWeek={curWeek}
+              docTicks={state.docTicks} docs={manifest.docs}
             />
 
             {/* week chips */}
@@ -197,6 +223,8 @@ export function NewHireProgramDrawer({
                 userId={person.user_id}
                 checked={state.checked}
                 checkoffs={state.checkoffs}
+                bestQuizByDoc={state.bestQuizByDoc}
+                hasQuiz={(k) => manifest.byKey.get(k)?.quiz === true}
                 canEdit={canEdit}
                 nameOf={nameOf}
                 open={isOpen(w.n)}
@@ -210,7 +238,8 @@ export function NewHireProgramDrawer({
             <CertCard userId={person.user_id} enrollmentStatus={enr.status} checked={state.checked} checkoffs={state.checkoffs} canEdit={canEdit} nameOf={nameOf} progress={state.progress} />
 
             <StandingCard />
-            <DocsShelf />
+            <HandoutsCard userId={person.user_id} state={state} canEdit={canEdit} nameOf={nameOf} />
+            <ActivityCard state={state} canEdit={canEdit} />
 
             {canEdit && <DangerCard userId={person.user_id} name={person.full_name} />}
           </>
@@ -278,13 +307,19 @@ function EnrollCard({ person, people, canEdit }: { person: NhPerson; people: NhP
 // ── summary ───────────────────────────────────────────────────────────────
 
 function SummaryCard({
-  person, people, canEdit, nameOf, enrollment, progress, curWeek,
+  person, people, canEdit, nameOf, enrollment, progress, curWeek, docTicks, docs,
 }: {
   person: NhPerson; people: NhPerson[]; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
   enrollment: NonNullable<ReturnType<typeof useNewHireUser>['state']['enrollment']>;
   progress: ReturnType<typeof useNewHireUser>['state']['progress'];
   curWeek: number;
+  docTicks: NhUserState['docTicks'];
+  docs: NhDoc[];
 }) {
+  const signable = docs.filter((d) => d.signoff !== false);
+  const quizzable = signable.filter((d) => d.quiz);
+  const docsReviewed = signable.filter((d) => docTicks.get(d.key)?.reviewed).length;
+  const quizzesSigned = quizzable.filter((d) => docTicks.get(d.key)?.quiz).length;
   const upd = useUpdateEnrollment();
   const [editing, setEditing] = useState(false);
   const [start, setStart] = useState(enrollment.start_date ?? '');
@@ -367,6 +402,8 @@ function SummaryCard({
           <span>Reps at target <b className="t-mono">{progress.repsDone}/{progress.repsTotal}</b></span>
           <span>Weeks initialed <b className="t-mono">{progress.weeksSigned}/{NH_WEEKS}</b></span>
           <span>COVE audits <b className="t-mono">{progress.coveSigned}/{NH_WEEKS}</b></span>
+          <span>Handouts reviewed <b className="t-mono">{docsReviewed}/{signable.length}</b></span>
+          <span>Quizzes signed <b className="t-mono">{quizzesSigned}/{quizzable.length}</b></span>
           <span>Certification <b className="t-mono">{progress.certSigned}/3</b></span>
         </div>
       </div>
@@ -377,9 +414,10 @@ function SummaryCard({
 // ── week ──────────────────────────────────────────────────────────────────
 
 function WeekCard({
-  week, userId, checked, checkoffs, canEdit, nameOf, open, onToggleOpen,
+  week, userId, checked, checkoffs, bestQuizByDoc, hasQuiz, canEdit, nameOf, open, onToggleOpen,
 }: {
   week: NhWeek; userId: string; checked: Set<string>; checkoffs: Map<string, NhCheckoff>;
+  bestQuizByDoc: Map<string, NhDocActivity>; hasQuiz: (key: string) => boolean;
   canEdit: boolean; nameOf: (id: string | null | undefined) => string; open: boolean; onToggleOpen: () => void;
 }) {
   const [planOpen, setPlanOpen] = useState(false);
@@ -433,7 +471,11 @@ function WeekCard({
         <div className="mt-2">
           <ul className="space-y-1.5">
             {week.items.map((it) => (
-              <ItemRow key={it.key} item={it} userId={userId} row={checkoffs.get(it.key)} canEdit={canEdit} nameOf={nameOf} onToggle={(on) => toggle(it.key, on)} />
+              <ItemRow
+                key={it.key} item={it} userId={userId} row={checkoffs.get(it.key)} canEdit={canEdit} nameOf={nameOf}
+                onToggle={(on) => toggle(it.key, on)}
+                quizRow={(() => { const q = nhQuizDocForItem(it, hasQuiz); return q ? bestQuizByDoc.get(q) : undefined; })()}
+              />
             ))}
           </ul>
           {err && <p className="t-small mt-2" style={{ color: 'var(--color-danger)' }}>{err}</p>}
@@ -486,9 +528,11 @@ function SignToggle({
 }
 
 function ItemRow({
-  item, userId, row, canEdit, nameOf, onToggle,
+  item, userId, row, canEdit, nameOf, onToggle, quizRow,
 }: {
   item: NhItem; userId: string; row?: NhCheckoff; canEdit: boolean; nameOf: (id: string | null | undefined) => string; onToggle: (on: boolean) => void;
+  /** The engineer's best self-recorded run of the quiz behind this item (mentor still ticks). */
+  quizRow?: NhDocActivity;
 }) {
   const setNote = useSetCheckoffNote();
   const [noteOpen, setNoteOpen] = useState(false);
@@ -515,6 +559,7 @@ function ItemRow({
             {item.gate && <span className="ml-1.5 px-1.5 py-0.5 rounded t-small" style={{ background: 'rgba(220,38,38,0.1)', color: '#b91c1c', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em' }}>GATE</span>}
           </span>
           <DocLinks keys={item.docs} compact />
+          <QuizScoreChip row={quizRow} compact />
         </div>
         {(on || noteOpen) && (
           <div className="t-small t-muted mt-0.5 flex items-center gap-2 flex-wrap">
@@ -689,26 +734,105 @@ function StandingCard() {
   );
 }
 
-function DocsShelf() {
-  const groups: { g: (typeof NH_DOCS)[number]['group']; label: string }[] = [
-    { g: 'program', label: 'Program' }, { g: 'overview', label: 'Discipline overviews' }, { g: 'equipment', label: 'Equipment deep-dives' },
-    { g: 'field', label: 'Field exercises' }, { g: 'reference', label: 'Reference' }, { g: 'mentor', label: 'Mentor only' },
-  ];
+function HandoutsCard({
+  userId, state, canEdit, nameOf,
+}: {
+  userId: string; state: NhUserState; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
+}) {
+  const { docs, groups, href, isLoading, isError, error } = useTrainingManifest();
+  const set = useSetCheckoff();
+  const [err, setErr] = useState<string | null>(null);
+  const toggle = async (item_key: string, on: boolean) => {
+    setErr(null);
+    try { await set.mutateAsync({ user_id: userId, item_key, on }); }
+    catch (ex) { setErr((ex as Error).message); }
+  };
   return (
     <div className="t-card mb-2">
-      <div className="t-text font-medium mb-1.5">Handouts</div>
-      <div className="grid gap-x-4 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-        {groups.map(({ g, label }) => (
-          <div key={g}>
-            <div className="t-small t-muted uppercase tracking-wider mb-0.5">{label}</div>
-            <ul className="space-y-0.5">
-              {NH_DOCS.filter((d) => d.group === g).map((d) => (
-                <li key={d.key}><a href={nhDocHref(d.key)} target="_blank" rel="noreferrer" className="t-small hover:underline" style={{ color: 'var(--color-accent)' }}>↗ {d.label}</a></li>
-              ))}
+      <div className="flex items-baseline justify-between gap-2 mb-1.5 flex-wrap">
+        <span className="t-text font-medium">Handouts — reviewed &amp; quiz sign-off</span>
+        <span className="t-small t-muted">Mentor ticks per handout · score = the engineer's own best run from the training page</span>
+      </div>
+      {isLoading && <p className="t-small t-muted">Loading manifest…</p>}
+      {isError && <p className="t-small" style={{ color: 'var(--color-danger)' }}>Handout manifest missing or invalid: {(error as Error).message}</p>}
+      {groups.map((g) => {
+        const list = docs.filter((d) => d.group === g.key);
+        if (!list.length) return null;
+        return (
+          <div key={g.key} className="mb-2">
+            <div className="t-small t-muted uppercase tracking-wider mb-0.5">{g.label}</div>
+            <ul>
+              {list.map((d) => {
+                const keys = docKeyFor(d.key);
+                const rev = state.checkoffs.get(keys.reviewed), qz = state.checkoffs.get(keys.quiz);
+                const opened = state.openedByDoc.get(d.key);
+                return (
+                  <li key={d.key} className="flex items-center gap-2 flex-wrap py-1 border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
+                    <a href={href(d)} target="_blank" rel="noreferrer" className="t-small hover:underline" style={{ color: 'var(--color-accent)', flex: '1 1 220px', minWidth: 0 }}>
+                      ↗ {d.label}
+                      {d.week && <span className="t-mono t-muted ml-1.5" style={{ fontSize: 10 }}>WK {d.week}</span>}
+                    </a>
+                    <span className="t-small t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>
+                      {opened ? `opened ×${opened.days} · last ${fmtDate(opened.last.at)}` : 'not opened yet'}
+                    </span>
+                    <QuizScoreChip row={state.bestQuizByDoc.get(d.key)} compact />
+                    {d.signoff !== false && (
+                      <span className="inline-flex gap-1.5">
+                        <SignToggle label="Reviewed" on={!!rev} row={rev} nameOf={nameOf} canEdit={canEdit} onToggle={(on) => toggle(keys.reviewed, on)} title="Mentor: overview reviewed with the new hire" />
+                        {d.quiz && (
+                          <SignToggle label="Quiz passed" on={!!qz} row={qz} nameOf={nameOf} canEdit={canEdit} onToggle={(on) => toggle(keys.quiz, on)} title="Mentor: quiz passed (checked against the answer key)" accent="#7c3aed" />
+                        )}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
-        ))}
+        );
+      })}
+      {err && <p className="t-small mt-1" style={{ color: 'var(--color-danger)' }}>{err}</p>}
+    </div>
+  );
+}
+
+function ActivityCard({ state, canEdit }: { state: NhUserState; canEdit: boolean }) {
+  const { byKey } = useTrainingManifest();
+  const del = useDeleteDocActivity();
+  const [open, setOpen] = useState(false);
+  const [showOpened, setShowOpened] = useState(false);
+  const quizzes = state.activity.filter((a) => a.kind === 'quiz');
+  const rows = showOpened ? state.activity : quizzes;
+  return (
+    <div className="t-card mb-2">
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="t-text font-medium hover:underline">
+          {open ? '▾' : '▸'} Engineer activity <span className="t-small t-muted font-normal">· {quizzes.length} quiz run{quizzes.length === 1 ? '' : 's'} · {state.openedByDoc.size} handout{state.openedByDoc.size === 1 ? '' : 's'} opened</span>
+        </button>
+        {open && (
+          <label className="t-small t-muted flex items-center gap-1">
+            <input type="checkbox" checked={showOpened} onChange={(e) => setShowOpened(e.target.checked)} /> include opened events
+          </label>
+        )}
       </div>
+      {open && (rows.length === 0
+        ? <p className="t-small t-muted mt-1.5 italic">Nothing recorded yet — the engineer records these from the training page.</p>
+        : (
+          <table className="w-full t-small mt-1.5 border-collapse">
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
+                  <td className="py-1 pr-2 t-mono t-muted whitespace-nowrap">{fmtDate(a.at)}</td>
+                  <td className="py-1 pr-2">{byKey.get(a.doc_key)?.label ?? a.doc_key}{a.kind === 'quiz' && a.quiz_title && <span className="t-muted"> — {a.quiz_title}</span>}</td>
+                  <td className="py-1 pr-2 whitespace-nowrap">{a.kind === 'quiz' ? <QuizScoreChip row={a} compact /> : <span className="t-muted">opened</span>}</td>
+                  <td className="py-1 text-right whitespace-nowrap">
+                    {canEdit && <button type="button" onClick={() => del.mutate(a.id)} className="hover:underline" style={{ color: 'var(--color-danger)' }} title="Remove this entry">remove</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ))}
     </div>
   );
 }

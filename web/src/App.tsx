@@ -14,6 +14,7 @@ import TvView from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
+import NewHireTraining from './routes/engineer/NewHireTraining';
 import Manual from './routes/manual/Manual';
 import BinneyManager from './routes/binney/Manager';
 import BinneyAdmin from './routes/binney/Admin';
@@ -138,6 +139,10 @@ export default function App() {
             every other site page, but NOT manager-gated: it is documentation,
             so an engineer who follows a link is shown it rather than bounced. */}
         <Route path="/upark/manual" element={<Protected><RequireSite site="upark"><Manual site="upark" /></RequireSite></Protected>} />
+        {/* New-hire training — handouts + quizzes for every UPark person
+            (course material, so not manager-gated; site-fenced like the
+            manual). The static handouts live under /training/… */}
+        <Route path="/upark/training/new-hire" element={<Protected><RequireSite site="upark"><NewHireTraining /></RequireSite></Protected>} />
         <Route path="/binney/manual" element={<Protected><RequireSite site="binney"><Manual site="binney" /></RequireSite></Protected>} />
         <Route path="/manual" element={<Protected><SiteRedirect page="manual" /></Protected>} />
         {/* Legacy bare addresses → the viewer's own home-site page. */}

@@ -102,6 +102,10 @@ export default function EngineerMobile() {
               Profile
             </Link>
           )}
+          {/* New-hire training handouts + quizzes (UPark program). */}
+          <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
+            Training
+          </Link>
           {/* Buildings link removed 2026-09-08 per user — technicians don't
               need the KB index from this surface. */}
           {/* No Admin link on the phone surface (removed 2026-07-29 per user):

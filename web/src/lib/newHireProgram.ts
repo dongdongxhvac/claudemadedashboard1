@@ -1,8 +1,8 @@
 // UPark New-Hire 8-Week Program — Plan B (Level 1), as data.
 //
 // Transcribed from the printed packet (2026-08-19): the interleaved schedule
-// and the mentor's sign-off sheet inside
-//   /training/new-hire/new_hire_8_week_plan.html
+// and the mentor's sign-off sheet (handout key 'plan' in the training
+// manifest, web/public/training/manifest.json).
 // The sign-off sheet is the source of truth for the VERIFIED ITEMS (what the
 // mentor initials), the schedule supplies each week's plan blocks and which
 // handout goes with them. Progress is stored against the stable `key`s below
@@ -17,45 +17,23 @@ export const NH_PROGRAM_KEY = 'upark_l1_plan_b';
 export const NH_PROGRAM_TITLE = 'UPark New-Hire — 8-Week Program (Plan B · Level 1)';
 export const NH_WEEKS = 8;
 
-/** All handouts are served as static files from web/public/training/new-hire. */
-export const NH_DOC_BASE = '/training/new-hire';
+/** Handouts are DATA — web/public/training/manifest.json (served at
+ *  /training/manifest.json, loaded by hooks/useTrainingManifest.ts). Weeks and
+ *  items below refer to handouts by manifest `key`; keys are permanent. */
+export type NhDocKey = string;
 
-export type NhDocKey =
-  | 'plan' | 'site_map' | 'building_check' | 'glossary' | 'terminology'
-  | 'hvac' | 'plumbing' | 'electrical' | 'life_safety' | 'bms' | 'overviews_all'
-  | 'chiller' | 'tower' | 'ahu' | 'boiler'
-  | 'find_on_screen_example' | 'find_on_screen' | 'find_it_tag_it'
-  | 'answer_key' | 'level2' | 'phase_tracker';
+/** new_hire_checkoffs keys for the per-handout MENTOR ticks. */
+export const docKeyFor = (docKey: string) => ({
+  reviewed: `doc.${docKey}.reviewed`,   // "overview reviewed with the new hire"
+  quiz:     `doc.${docKey}.quiz`,       // "quiz passed" (mentor-verified)
+});
+export const DOC_KEY_RE = /^doc\.(.+)\.(reviewed|quiz)$/;
 
-export type NhDoc = { key: NhDocKey; label: string; file: string; group: 'program' | 'reference' | 'overview' | 'equipment' | 'field' | 'mentor' };
-
-export const NH_DOCS: NhDoc[] = [
-  { key: 'plan',            label: '8-Week Schedule + Sign-Off Sheet',      file: 'new_hire_8_week_plan.html',                   group: 'program' },
-  { key: 'phase_tracker',   label: 'Phase tracker (print handout)',         file: 'new_hire_phase_tracker.html',                 group: 'program' },
-  { key: 'site_map',        label: 'UPark Site Map',                        file: 'upark_site_map.html',                         group: 'field' },
-  { key: 'building_check',  label: 'Building Check (access · BMS · remote)',file: 'new_hire_building_check.html',                group: 'field' },
-  { key: 'glossary',        label: 'Equipment Glossary',                    file: 'new_hire_equipment_glossary.html',            group: 'reference' },
-  { key: 'terminology',     label: 'Terminology',                           file: 'new_hire_terminology_spa.html',               group: 'reference' },
-  { key: 'hvac',            label: 'How HVAC Works',                        file: 'overviews/new_hire_hvac_overview.html',       group: 'overview' },
-  { key: 'plumbing',        label: 'How Plumbing Works',                    file: 'overviews/new_hire_plumbing_overview.html',   group: 'overview' },
-  { key: 'electrical',      label: 'How Electrical Works',                  file: 'overviews/new_hire_electrical_overview.html', group: 'overview' },
-  { key: 'life_safety',     label: 'How Life Safety Works',                 file: 'overviews/new_hire_life_safety_overview.html',group: 'overview' },
-  { key: 'bms',             label: 'How the BMS Works',                     file: 'overviews/new_hire_bms_overview.html',        group: 'overview' },
-  { key: 'overviews_all',   label: 'All overviews (tabbed)',                file: 'new_hire_overviews_all.html',                 group: 'overview' },
-  { key: 'chiller',         label: 'Chiller Plant — overview + Find It & Tag It (36)', file: 'equipment/new_hire_chiller_plant.html', group: 'equipment' },
-  { key: 'tower',           label: 'Cooling Tower — overview + tag sheet (18)',        file: 'equipment/new_hire_cooling_tower.html', group: 'equipment' },
-  { key: 'ahu',             label: 'Air Handling Unit — overview + tag sheet (17)',    file: 'equipment/new_hire_ahu.html',           group: 'equipment' },
-  { key: 'boiler',          label: 'Boiler Plant — overview + tag sheet (24)',         file: 'equipment/new_hire_boiler_plant.html',  group: 'equipment' },
-  { key: 'find_on_screen_example', label: 'Find It On Screen — worked example', file: 'new_hire_find_it_on_screen_EXAMPLE.html', group: 'field' },
-  { key: 'find_on_screen',  label: 'Find It On Screen (BMS, six systems)',   file: 'new_hire_find_it_on_screen.html',             group: 'field' },
-  { key: 'find_it_tag_it',  label: 'Portfolio Find It & Tag It (117 items)', file: 'new_hire_find_it_tag_it.html',                group: 'field' },
-  { key: 'answer_key',      label: 'Quiz answer key (mentor copy)',         file: 'new_hire_quiz_answer_key.html',               group: 'mentor' },
-  { key: 'level2',          label: 'Level-2 curriculum (48 modules)',       file: 'training_level2_curriculum.html',             group: 'reference' },
-];
-
-export const NH_DOC_BY_KEY: Record<NhDocKey, NhDoc> = Object.fromEntries(NH_DOCS.map((d) => [d.key, d])) as Record<NhDocKey, NhDoc>;
-export function nhDocHref(key: NhDocKey): string {
-  return `${NH_DOC_BASE}/${NH_DOC_BY_KEY[key].file}`;
+/** The handout whose quiz backs a sign-off item ('w2.hvac_quiz' → 'hvac'):
+ *  the first of the item's docs that the manifest marks `quiz`. */
+export function nhQuizDocForItem(item: { docs?: NhDocKey[] }, hasQuiz: (key: string) => boolean): string | null {
+  for (const k of item.docs ?? []) if (hasQuiz(k)) return k;
+  return null;
 }
 
 /** Category tags borrowed from the phase tracker (Safety / Ops / Orientation /
