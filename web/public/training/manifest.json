@@ -119,7 +119,7 @@
       "label": "Chiller Plant — overview + Find It & Tag It (36)",
       "file": "equipment sp/new_hire_chiller_plant.html",
       "group": "equipment",
-      "week": 2,
+      "week": 5,
       "quiz": true
     },
     {
@@ -143,7 +143,7 @@
       "label": "Boiler Plant — overview + tag sheet (24)",
       "file": "equipment sp/new_hire_boiler_plant.html",
       "group": "equipment",
-      "week": 5,
+      "week": 2,
       "quiz": true
     },
     {

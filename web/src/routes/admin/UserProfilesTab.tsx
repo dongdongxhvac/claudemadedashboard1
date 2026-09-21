@@ -400,7 +400,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                             borderColor: 'var(--color-border)',
                             background: 'var(--color-card)',
                           }}
-                          title={enrolledIds.has(r.user_id) ? 'Open the 8-week new-hire tracker' : 'Enroll in the 8-week new-hire program'}
+                          title={enrolledIds.has(r.user_id) ? 'Open the sign-off sheet' : 'Assign training (8-week new-hire program)'}
                         >
                           Training
                         </button>

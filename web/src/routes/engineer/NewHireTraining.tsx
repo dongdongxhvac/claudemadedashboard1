@@ -1,18 +1,24 @@
-// /upark/training/new-hire — the engineer's own training page.
+// /upark/training/new-hire — the engineer's training page = the printed
+// 8-week schedule, live.
 //
-// Every signed-in UPark person can open it (site-fenced in App.tsx, NOT
-// manager-gated — it is course material). It shows:
-//   • my program status (only when enrolled — week N of 8, verified items,
-//     mentor; read-only, the mentor's drawer is the record)
-//   • the handout library from the manifest (web/public/training/manifest.json),
-//     with my best quiz score + the mentor's Reviewed / Quiz-passed ticks
-//   • a viewer: the handout in an <iframe> (same origin) with Print / New tab
-//   • my quiz history
+// Per user 2026-09-21: "engineer go by 8 week schedule print out and record
+// from admin sign off". So this page IS the schedule handout (week chips,
+// why-boiler-first note, standing dailies, one card per week with its plan
+// sections and handout links, the CHECK OFF row, the Friday line) with the
+// mentor's sign-off record shown against it read-only: each check-off chip
+// is ticked when the mentor verified it in the drawer (Admin › User
+// Profiles → Training), week initials + COVE audit show on the card.
 //
-// Opening a handout records an 'opened' row (once per doc per day); finishing
-// a quiz inside the frame is detected by useQuizWatcher (the handouts' own
-// qDone/qTot/qRight counters) and recorded as a 'quiz' row — no edits to the
-// handouts themselves. Mentor sign-off stays with the mentor.
+// The engineer's own contribution: opening a handout here (recorded once a
+// day) and finishing its quiz — the viewer watches the handout's own quiz
+// counters (useQuizWatcher) and saves the run; the best run shows as a
+// chip beside the quiz item. The mentor still ticks. Handouts open in a
+// full-width viewer that replaces the schedule (they are full-page
+// documents; two panes would squeeze both).
+//
+// Every signed-in UPark person can open it (site-fenced in App.tsx, not
+// manager-gated — it is course material). Not enrolled → the schedule still
+// reads and quizzes still save; there is just no record row to show.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
@@ -20,14 +26,18 @@ import { useMe } from '../../hooks/useMe';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useEngineers } from '../../hooks/useEngineers';
 import { useTrainingManifest, type NhDoc } from '../../hooks/useTrainingManifest';
-import { useNewHireUser, useCanEditNewHire, useRecordDocActivity, type NhDocActivity } from '../../hooks/useNewHire';
+import { useNewHireUser, useCanEditNewHire, useRecordDocActivity, type NhDocActivity, type NhCheckoff } from '../../hooks/useNewHire';
 import { useQuizWatcher } from '../../hooks/useQuizWatcher';
-import { NH_PROGRAM_TITLE, NH_WEEKS, NH_TOTAL_ITEMS, nhWeekFor } from '../../lib/newHireProgram';
+import {
+  NH_EYEBROW, NH_SCHEDULE_TITLE, NH_SCHEDULE_INTRO, NH_WEEKS, NH_WEEKS_DEF, NH_STANDING_DAILY, NH_SEASONAL_NOTE,
+  nhWeekFor, weekKey, coveKey, nhQuizDocForItem, type NhWeek, type NhItem,
+} from '../../lib/newHireProgram';
 
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
 const STATUS_LABEL: Record<string, string> = { active: 'In program', completed: 'Certified', paused: 'Paused', withdrawn: 'Withdrawn' };
+const mono = { fontFamily: 'var(--font-mono)' } as const;
 
 export default function NewHireTraining() {
   const { signOut } = useAuth();
@@ -44,7 +54,6 @@ export default function NewHireTraining() {
   const openDoc = openKey ? manifest.byKey.get(openKey) ?? null : null;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // toast — local state + timer (same pattern as OvertimePanel)
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   const toastTimer = useRef<number | null>(null);
   const showToast = useCallback((text: string, tone: 'ok' | 'warn' = 'ok') => {
@@ -54,15 +63,17 @@ export default function NewHireTraining() {
   }, []);
   useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current); }, []);
 
-  const open = (d: NhDoc) => {
+  const openByKey = (key: string) => {
+    const d = manifest.byKey.get(key);
+    if (!d) return;
     setOpenKey(d.key);
-    if (myId) record.mutate({ kind: 'opened', doc_key: d.key }, { onError: () => { /* activity is best-effort */ } });
+    window.scrollTo({ top: 0 });
+    if (myId) record.mutate({ kind: 'opened', doc_key: d.key }, { onError: () => { /* best-effort */ } });
   };
   const close = () => setOpenKey(null);
 
   const quizDocsSeen = useQuizWatcher(iframeRef, !!openDoc, (r) => {
-    if (!openDoc || !myId) return;
-    if (!openDoc.quiz) return; // page not marked quiz in the manifest → view only
+    if (!openDoc || !myId || !openDoc.quiz) return;
     record.mutate(
       { kind: 'quiz', doc_key: openDoc.key, quiz_title: r.title, score: r.score, total: r.total },
       {
@@ -72,193 +83,190 @@ export default function NewHireTraining() {
     );
   });
 
+  const enr = state.enrollment;
+  const curWeek = nhWeekFor(enr?.start_date);
   const mentorName = useMemo(() => {
-    const id = state.enrollment?.mentor_user_id;
+    const id = enr?.mentor_user_id;
     if (!id) return null;
     return engineers.data?.find((e) => e.user_id === id)?.full_name ?? '—';
-  }, [state.enrollment?.mentor_user_id, engineers.data]);
+  }, [enr?.mentor_user_id, engineers.data]);
+  const hasQuiz = (k: string) => manifest.byKey.get(k)?.quiz === true;
 
-  const groups = manifest.groups.filter((g) => g.key !== 'mentor' || canSeeMentorDocs);
-  const myQuizzes = state.activity.filter((a) => a.kind === 'quiz');
-
-  const headerH = 52;
-  const viewerHeight = `calc(100dvh - ${headerH}px)`;
-
-  const library = (
-    <div className={isMobile ? 'p-4 space-y-4' : 'space-y-4'}>
-      <ProgramCard state={state} loading={nhLoading} mentorName={mentorName} manifestDocs={manifest.docs} />
-
-      <div className="t-card">
-        <div className="t-text font-medium mb-1">Handouts</div>
-        <p className="t-small t-muted mb-2">Open a handout to read it here; quizzes are saved automatically when every question is answered. Your mentor signs off each one in your training record.</p>
-        {manifest.isLoading && <p className="t-small t-muted">Loading…</p>}
-        {manifest.isError && <p className="t-small" style={{ color: 'var(--color-danger)' }}>Handout list missing or invalid: {(manifest.error as Error).message}</p>}
-        {groups.map((g) => {
-          const list = manifest.docs.filter((d) => d.group === g.key);
-          if (!list.length) return null;
-          return (
-            <div key={g.key} className="mb-3">
-              <div className="t-small t-muted uppercase tracking-wider mb-1">{g.label}</div>
-              <ul>
-                {list.map((d) => (
-                  <DocRow key={d.key} doc={d} active={openKey === d.key} best={state.bestQuizByDoc.get(d.key)} ticks={state.docTicks.get(d.key)} href={manifest.href(d)} onOpen={() => open(d)} />
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+  // ── viewer (replaces the schedule) ────────────────────────────────────
+  if (openDoc) {
+    return (
+      <div className="t-bg" style={{ fontFamily: 'var(--font-body)', height: '100dvh', display: 'flex', flexDirection: 'column' }}>
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b flex-wrap" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
+          <button type="button" onClick={close} className="t-small t-accent hover:underline whitespace-nowrap">← Back to schedule</button>
+          <span className="t-text font-medium truncate" style={{ flex: '1 1 auto', minWidth: 0 }}>{openDoc.label}</span>
+          {quizDocsSeen > 0 && !isMobile && <span className="t-small t-muted" style={{ fontSize: 11 }}>quiz on this page · saves itself when every question is answered</span>}
+          <button type="button" onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch { /* blocked */ } }} className="t-small px-2 py-0.5 rounded border" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>Print</button>
+          <a href={manifest.href(openDoc)} target="_blank" rel="noreferrer" className="t-small px-2 py-0.5 rounded border no-underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>New tab ↗</a>
+        </div>
+        <iframe key={openDoc.key} ref={iframeRef} src={manifest.href(openDoc)} title={openDoc.label} style={{ flex: '1 1 auto', width: '100%', border: 0, background: '#fff', minHeight: 0 }} />
+        {toast && <Toast toast={toast} />}
       </div>
+    );
+  }
 
-      <div className="t-card">
-        <div className="t-text font-medium mb-1">My quiz history <span className="t-small t-muted font-normal">· {myQuizzes.length}</span></div>
-        {myQuizzes.length === 0
-          ? <p className="t-small t-muted italic">No quiz finished yet.</p>
-          : (
-            <table className="w-full t-small border-collapse">
-              <tbody>
-                {myQuizzes.slice(0, 40).map((a) => (
-                  <tr key={a.id} className="border-b" style={{ borderColor: 'var(--color-border-soft)' }}>
-                    <td className="py-1 pr-2 t-mono t-muted whitespace-nowrap">{fmtDate(a.at)}</td>
-                    <td className="py-1 pr-2">{manifest.byKey.get(a.doc_key)?.label.split(' — ')[0] ?? a.doc_key}{a.quiz_title && <span className="t-muted"> — {a.quiz_title}</span>}</td>
-                    <td className="py-1 whitespace-nowrap text-right"><ScoreChip row={a} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-      </div>
-    </div>
-  );
-
-  const viewer = openDoc && (
-    <div className="flex flex-col" style={{ height: viewerHeight, minHeight: 0 }}>
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b flex-wrap" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
-        {isMobile && <button type="button" onClick={close} className="t-small t-accent hover:underline">← Handouts</button>}
-        <span className="t-text font-medium truncate" style={{ flex: '1 1 auto', minWidth: 0 }}>{openDoc.label}</span>
-        {quizDocsSeen > 0 && <span className="t-small t-muted" style={{ fontSize: 11 }}>quiz on this page · saves when every question is answered</span>}
-        <button type="button" onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch { /* blocked */ } }} className="t-small px-2 py-0.5 rounded border" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>Print</button>
-        <a href={manifest.href(openDoc)} target="_blank" rel="noreferrer" className="t-small px-2 py-0.5 rounded border no-underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>New tab ↗</a>
-        {!isMobile && <button type="button" onClick={close} className="t-small t-muted hover:underline">Close</button>}
-      </div>
-      <iframe
-        key={openDoc.key}
-        ref={iframeRef}
-        src={manifest.href(openDoc)}
-        title={openDoc.label}
-        style={{ flex: '1 1 auto', width: '100%', border: 0, background: '#fff', minHeight: 0 }}
-      />
-    </div>
-  );
+  // ── the schedule ──────────────────────────────────────────────────────
+  const weekLabel = !enr ? null : curWeek === 0 ? `starts ${fmtDate(enr.start_date)}` : curWeek > NH_WEEKS ? 'past week 8' : `Week ${curWeek} of ${NH_WEEKS}`;
 
   return (
     <div className="min-h-screen t-bg" style={{ fontFamily: 'var(--font-body)' }}>
-      <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', height: headerH }}>
-        <div className="max-w-screen-2xl mx-auto px-4 h-full flex items-center justify-between gap-3">
+      <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
-            <h1 className="t-section-title truncate" style={{ fontSize: isMobile ? '1rem' : undefined }}>New-hire training</h1>
-            {!isMobile && <p className="t-small t-muted truncate">{NH_PROGRAM_TITLE}</p>}
+            <span className="inline-block px-2 py-0.5 rounded" style={{ ...mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', background: '#1a1f2b', color: '#fff' }}>{NH_EYEBROW}</span>
+            <h1 className="t-section-title mt-1" style={{ fontSize: isMobile ? '1.05rem' : undefined }}>{NH_SCHEDULE_TITLE}</h1>
+            {!nhLoading && (enr
+              ? <p className="t-small t-muted">
+                  <span className="px-1.5 py-0.5 rounded-full mr-1.5" style={{ background: 'rgba(59,130,246,0.12)', color: '#1e40af', fontWeight: 600, fontSize: 11 }}>{STATUS_LABEL[enr.status] ?? enr.status}</span>
+                  {weekLabel}{mentorName ? ` · mentor ${mentorName}` : ''}{enr.start_date ? ` · started ${fmtDate(enr.start_date)}` : ''} · ticks are your mentor's sign-offs
+                </p>
+              : <p className="t-small t-muted">Not assigned to the 8-week program yet — the handouts and quizzes are open to everyone; sign-offs appear here once your mentor records them.</p>)}
           </div>
-          <div className="flex items-center gap-3 whitespace-nowrap">
-            <Link to="/upark/engineer" className="t-small t-accent hover:underline">← My day</Link>
-            {!isMobile && <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>}
+          <div className="flex items-center gap-3 whitespace-nowrap t-small">
+            <Link to="/upark/engineer" className="t-accent hover:underline">← My day</Link>
+            {!isMobile && <button onClick={signOut} className="t-accent hover:underline">Sign out</button>}
           </div>
         </div>
       </header>
 
-      {isMobile ? (
-        openDoc ? viewer : library
-      ) : (
-        <div className="flex" style={{ height: viewerHeight }}>
-          <aside className="overflow-y-auto p-4" style={{ width: openDoc ? 380 : '100%', maxWidth: openDoc ? 380 : 960, margin: openDoc ? 0 : '0 auto', flex: '0 0 auto', borderRight: openDoc ? '1px solid var(--color-border)' : undefined }}>
-            {library}
-          </aside>
-          {openDoc && <section style={{ flex: '1 1 auto', minWidth: 0 }}>{viewer}</section>}
-        </div>
-      )}
+      <main className="max-w-5xl mx-auto px-4 py-4 space-y-3">
+        <p className="t-small t-muted">{NH_SCHEDULE_INTRO}</p>
 
-      {toast && (
-        <div
-          role="status"
-          className="fixed left-1/2 t-small px-3 py-2 rounded shadow"
-          style={{ bottom: 20, transform: 'translateX(-50%)', zIndex: 60, background: toast.tone === 'ok' ? '#065f46' : '#92400e', color: '#fff', maxWidth: '90vw' }}
-        >
-          {toast.text}
+        {/* week chips */}
+        <div className="flex gap-1.5 flex-wrap">
+          {NH_WEEKS_DEF.map((w) => {
+            const signed = state.checked.has(weekKey(w.n));
+            const isCur = w.n === curWeek;
+            return (
+              <a key={w.n} href={`#week-${w.n}`} className="no-underline px-2 py-1 rounded" style={{ background: w.accent, color: '#fff', fontSize: 11, lineHeight: 1.2, boxShadow: isCur ? '0 0 0 2px #fff, 0 0 0 4px ' + w.accent : undefined, opacity: signed ? 0.75 : 1, minWidth: isMobile ? 0 : 96 }}>
+                <span style={{ ...mono, fontSize: 9, opacity: 0.85 }}>WK {w.n}{signed ? ' ✓' : ''}</span><br />{w.short}
+              </a>
+            );
+          })}
         </div>
-      )}
+
+        <NoteCard title="Why boiler first" text={NH_SEASONAL_NOTE} accent="#d97706" />
+        <Collapsible title="Standing daily — every week" defaultOpen={false}>
+          <ul className="t-small space-y-1" style={{ paddingLeft: 16, listStyle: 'disc' }}>
+            {NH_STANDING_DAILY.map((s, i) => <li key={i}>{s}</li>)}
+            <li>One glossary/terminology section per day: <DocLink k="glossary" byKey={manifest.byKey} onOpen={openByKey} /> · <DocLink k="terminology" byKey={manifest.byKey} onOpen={openByKey} />. Escalation: senior engineer → lead → manager, never the vendor.</li>
+          </ul>
+        </Collapsible>
+
+        {NH_WEEKS_DEF.map((w) => (
+          <WeekCard key={w.n} week={w} isCur={w.n === curWeek} checkoffs={state.checkoffs} bestQuizByDoc={state.bestQuizByDoc} hasQuiz={hasQuiz} byKey={manifest.byKey} onOpen={openByKey} />
+        ))}
+
+        <div className="t-card">
+          <div className="t-small t-muted uppercase tracking-wider mb-1" style={mono}>Also in the package</div>
+          <div className="flex flex-wrap gap-1.5">
+            {manifest.docs.filter((d) => !DOCS_IN_SCHEDULE.has(d.key) && (d.group !== 'mentor' || canSeeMentorDocs)).map((d) => (
+              <button key={d.key} type="button" onClick={() => openByKey(d.key)} className="t-small px-2 py-0.5 rounded border hover:underline" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>{d.label.split(' — ')[0]}</button>
+            ))}
+          </div>
+          {manifest.isError && <p className="t-small mt-1" style={{ color: 'var(--color-danger)' }}>Handout list missing or invalid: {(manifest.error as Error).message}</p>}
+        </div>
+      </main>
+      {toast && <Toast toast={toast} />}
     </div>
   );
 }
 
-function ScoreChip({ row }: { row: NhDocActivity }) {
-  if (row.score == null || row.total == null) return null;
-  const ok = row.total ? row.score / row.total >= 0.8 : false;
+/** Handout keys the schedule cards already link, so the footer shows only the rest. */
+const DOCS_IN_SCHEDULE = new Set<string>([
+  ...NH_WEEKS_DEF.flatMap((w) => [...w.plan.flatMap((b) => b.docs ?? []), ...w.items.flatMap((i) => i.docs ?? [])]),
+  'glossary', 'terminology',
+]);
+
+function Toast({ toast }: { toast: { text: string; tone: 'ok' | 'warn' } }) {
   return (
-    <span className="t-mono px-1.5 py-0.5 rounded" style={{ fontSize: 11, background: ok ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.14)', color: ok ? '#047857' : '#b45309', whiteSpace: 'nowrap' }}>
-      {row.score}/{row.total}
+    <div role="status" className="fixed left-1/2 t-small px-3 py-2 rounded shadow" style={{ bottom: 20, transform: 'translateX(-50%)', zIndex: 60, background: toast.tone === 'ok' ? '#065f46' : '#92400e', color: '#fff', maxWidth: '90vw' }}>
+      {toast.text}
+    </div>
+  );
+}
+
+function NoteCard({ title, text, accent }: { title: string; text: string; accent: string }) {
+  return (
+    <div className="t-small px-3 py-2 rounded" style={{ background: 'var(--color-card)', borderLeft: `4px solid ${accent}`, border: '1px solid var(--color-border)', borderLeftWidth: 4, borderLeftColor: accent }}>
+      <b>{title}.</b> {text.replace(/^Why boiler first\.\s*/, '')}
+    </div>
+  );
+}
+
+function Collapsible({ title, defaultOpen, children }: { title: string; defaultOpen: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="t-card" style={{ padding: '10px 14px' }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="t-small font-semibold uppercase tracking-wider" style={{ ...mono, color: 'var(--color-text-muted)' }}>{open ? '▾' : '▸'} {title}</button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+/** A handout name rendered like the printout's inline file chips, opening the viewer. */
+function DocLink({ k, byKey, onOpen }: { k: string; byKey: Map<string, NhDoc>; onOpen: (k: string) => void }) {
+  const d = byKey.get(k);
+  if (!d) return <span className="t-muted">{k}</span>;
+  return (
+    <button type="button" onClick={() => onOpen(k)} className="px-1.5 py-0.5 rounded hover:underline" style={{ ...mono, fontSize: 11, background: 'rgba(94,106,210,0.08)', color: 'var(--color-accent)', border: '1px solid rgba(94,106,210,0.25)', verticalAlign: 'baseline' }} title={`Open ${d.label}`}>
+      {d.label.split(' — ')[0]}{d.quiz ? ' · quiz' : ''}
+    </button>
+  );
+}
+
+function WeekCard({ week, isCur, checkoffs, bestQuizByDoc, hasQuiz, byKey, onOpen }: {
+  week: NhWeek; isCur: boolean; checkoffs: Map<string, NhCheckoff>; bestQuizByDoc: Map<string, NhDocActivity>;
+  hasQuiz: (k: string) => boolean; byKey: Map<string, NhDoc>; onOpen: (k: string) => void;
+}) {
+  const wk = checkoffs.get(weekKey(week.n)), cove = checkoffs.get(coveKey(week.n));
+  const done = week.items.filter((i) => checkoffs.has(i.key)).length;
+  return (
+    <section id={`week-${week.n}`} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', boxShadow: isCur ? `0 0 0 2px ${week.accent}55` : undefined, scrollMarginTop: 12 }}>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 flex-wrap" style={{ background: week.accent, color: '#fff' }}>
+        <div className="flex items-baseline gap-2"><span style={{ ...mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>WEEK {week.n}</span><span className="font-semibold" style={{ fontSize: 15 }}>{week.title}</span>{isCur && <span style={{ ...mono, fontSize: 10, opacity: 0.9 }}>· this week</span>}</div>
+        <div className="flex items-center gap-2" style={{ fontSize: 11, ...mono }}>
+          <span style={{ opacity: 0.9 }}>{done}/{week.items.length} verified</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ background: cove ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)' }}>{cove ? '✓' : '☐'} COVE ≥35 h</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ background: wk ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)' }}>{wk ? `✓ initialed ${fmtDate(wk.done_at)}` : '☐ initials'}</span>
+        </div>
+      </div>
+      <div className="px-3 py-2 space-y-2">
+        {week.plan.map((b) => (
+          <div key={b.title} className="t-small" style={{ lineHeight: 1.5 }}>
+            <div className="uppercase tracking-wider" style={{ ...mono, fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 1 }}>{b.title}</div>
+            <span>{b.text}</span>
+            {b.docs?.length ? <span className="inline-flex flex-wrap gap-1 ml-1 align-baseline">{b.docs.map((k) => <DocLink key={k} k={k} byKey={byKey} onOpen={onOpen} />)}</span> : null}
+          </div>
+        ))}
+        <div>
+          <div className="uppercase tracking-wider" style={{ ...mono, fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 4 }}>Check off <span className="normal-case tracking-normal" style={{ fontFamily: 'var(--font-body)' }}>— ticked by your mentor</span></div>
+          <div className="flex flex-wrap gap-1.5">
+            {week.items.map((it) => <CheckChip key={it.key} item={it} row={checkoffs.get(it.key)} quiz={(() => { const q = nhQuizDocForItem(it, hasQuiz); return q ? bestQuizByDoc.get(q) : undefined; })()} />)}
+          </div>
+        </div>
+        <div className="t-small t-muted italic"><b className="not-italic">Friday:</b> {week.friday}</div>
+      </div>
+    </section>
+  );
+}
+
+function CheckChip({ item, row, quiz }: { item: NhItem; row?: NhCheckoff; quiz?: NhDocActivity }) {
+  const on = !!row;
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded" title={item.label + (row ? ` · verified ${fmtDate(row.done_at)}` : '')}
+      style={{ fontSize: 12, border: `1px solid ${on ? 'var(--color-ok)' : 'var(--color-border)'}`, background: on ? 'rgba(16,185,129,0.10)' : 'var(--color-card)', color: on ? '#047857' : 'var(--color-text)' }}>
+      <span style={{ ...mono, fontSize: 12 }}>{on ? '☑' : '☐'}</span>
+      <span>{item.short}</span>
+      {item.gate && <span className="px-1 rounded" style={{ fontSize: 9, fontWeight: 700, background: 'rgba(220,38,38,0.1)', color: '#b91c1c', letterSpacing: '0.04em' }}>GATE</span>}
+      {on && <span className="t-muted" style={{ ...mono, fontSize: 10 }}>{fmtDate(row!.done_at)}</span>}
+      {quiz && quiz.score != null && quiz.total != null && (
+        <span className="px-1 rounded" style={{ ...mono, fontSize: 10, background: (quiz.score / quiz.total) >= 0.8 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.16)', color: (quiz.score / quiz.total) >= 0.8 ? '#047857' : '#b45309' }} title={`Your best quiz run · ${fmtDate(quiz.at)}`}>my {quiz.score}/{quiz.total}</span>
+      )}
     </span>
-  );
-}
-
-function DocRow({ doc, active, best, ticks, href, onOpen }: {
-  doc: NhDoc; active: boolean; best?: NhDocActivity; ticks?: { reviewed: boolean; quiz: boolean }; href: string; onOpen: () => void;
-}) {
-  return (
-    <li className="py-1.5 border-b" style={{ borderColor: 'var(--color-border-soft)', background: active ? 'var(--color-accent-soft)' : undefined, margin: '0 -6px', padding: '6px' , borderRadius: 4 }}>
-      <div className="flex items-start gap-2">
-        <button type="button" onClick={onOpen} className="text-left t-text hover:underline" style={{ flex: '1 1 auto', minWidth: 0, color: active ? 'var(--color-accent)' : undefined, fontWeight: active ? 600 : 400 }}>
-          {doc.label}
-        </button>
-        <a href={href} target="_blank" rel="noreferrer" className="t-small t-muted no-underline hover:underline" title="Open in a new tab">↗</a>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-        {doc.week && <span className="t-mono t-muted" style={{ fontSize: 10 }}>WK {doc.week}</span>}
-        {doc.quiz && <span className="px-1 rounded" style={{ fontSize: 10, background: 'rgba(124,58,237,0.1)', color: '#6d28d9', fontWeight: 600 }}>QUIZ</span>}
-        {best && <span title={`Your best run · ${fmtDate(best.at)}`}><ScoreChip row={best} /></span>}
-        {ticks?.reviewed && <span style={{ fontSize: 10, color: '#047857' }}>✓ Reviewed</span>}
-        {ticks?.quiz && <span style={{ fontSize: 10, color: '#6d28d9' }}>✓ Quiz signed</span>}
-        {doc.note && <span className="t-muted" style={{ fontSize: 10 }}>{doc.note}</span>}
-      </div>
-    </li>
-  );
-}
-
-function ProgramCard({ state, loading, mentorName, manifestDocs }: {
-  state: ReturnType<typeof useNewHireUser>['state']; loading: boolean; mentorName: string | null; manifestDocs: NhDoc[];
-}) {
-  const enr = state.enrollment;
-  if (loading) return null;
-  if (!enr) {
-    return (
-      <p className="t-small t-muted px-1">You're not enrolled in the 8-week program — the handouts and quizzes below are open to everyone.</p>
-    );
-  }
-  const curWeek = nhWeekFor(enr.start_date);
-  const weekLabel = curWeek === 0 ? `starts ${fmtDate(enr.start_date)}` : curWeek > NH_WEEKS ? 'past week 8' : `Week ${curWeek} of ${NH_WEEKS}`;
-  const signable = manifestDocs.filter((d) => d.signoff !== false);
-  const quizzable = signable.filter((d) => d.quiz);
-  const reviewed = signable.filter((d) => state.docTicks.get(d.key)?.reviewed).length;
-  const quizSigned = quizzable.filter((d) => state.docTicks.get(d.key)?.quiz).length;
-  const p = state.progress;
-  return (
-    <div className="t-card">
-      <div className="flex items-baseline justify-between gap-2 flex-wrap">
-        <span className="t-text font-medium">My 8-week program</span>
-        <span className="t-small px-2 py-0.5 rounded-full" style={{ background: 'rgba(59,130,246,0.12)', color: '#1e40af', fontWeight: 600, fontSize: 11 }}>{STATUS_LABEL[enr.status] ?? enr.status}</span>
-      </div>
-      <div className="t-small t-muted mt-1">{weekLabel}{mentorName ? ` · mentor ${mentorName}` : ''}</div>
-      <div className="mt-2 flex items-center gap-3">
-        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-border)' }}>
-          <div style={{ width: `${p.pct}%`, height: '100%', background: p.pct >= 100 ? 'var(--color-ok)' : 'var(--color-accent)' }} />
-        </div>
-        <span className="t-small t-mono">{p.pct}%</span>
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 t-small t-muted">
-        <span>Items verified <b className="t-mono">{p.itemsDone}/{NH_TOTAL_ITEMS}</b></span>
-        <span>Weeks initialed <b className="t-mono">{p.weeksSigned}/{NH_WEEKS}</b></span>
-        <span>Handouts reviewed <b className="t-mono">{reviewed}/{signable.length}</b></span>
-        <span>Quizzes signed <b className="t-mono">{quizSigned}/{quizzable.length}</b></span>
-      </div>
-      <p className="t-small t-muted mt-1.5 italic">Your mentor records verifications; this is a read-only view.</p>
-    </div>
   );
 }

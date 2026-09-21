@@ -16,9 +16,15 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 | The program as data — 8 weeks × verified items, rep tally, evals, cert | `web/src/lib/newHireProgram.ts` (transcribed from the sign-off sheet inside `new_hire_8_week_plan.html`; refers to handouts by manifest key) |
 | Progress tables + RLS | `supabase/migrations/0128_new_hire_program.sql` (enrollment, check-offs, rep logs) + `0131_new_hire_doc_activity.sql` (engineer's own opened / quiz rows) |
 | Data hooks | `web/src/hooks/useNewHire.ts` (progress + activity), `useTrainingManifest.ts` (handout list), `useQuizWatcher.ts` (detects a finished quiz inside the viewer) |
-| UI — tracker drawer, opened from Admin › User Profiles → Training | `web/src/components/NewHireProgramDrawer.tsx` — weekly items, reps, cert, and the **Handouts** card with the mentor's per-handout **Reviewed** / **Quiz passed** ticks (check-off keys `doc.<key>.reviewed` / `doc.<key>.quiz`) |
-| UI — engineer's training page (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` — handout library + in-page viewer, quiz results saved automatically, own history; UPark only |
+| UI — the **sign-off sheet**, live (Admin › User Profiles → Training) | `web/src/components/NewHireProgramDrawer.tsx` — mirrors the printed sheet: header strip (new hire · mentor · manager · start), Week × Verified items with Initials + Date, PM rep tally boxes, COVE audit grid, Level-1 certification; then per-handout Reviewed / Quiz-passed ticks and the engineer's activity. "Assign training" for people with nothing assigned (program picker — only Plan B exists today). |
+| UI — the **8-week schedule**, live (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` — the printed schedule with the mentor's sign-offs shown read-only on each week's CHECK OFF row, handout chips open the in-page viewer, quiz runs save automatically (best run shows beside the quiz item); UPark only |
 | Original build notes for the handouts (conventions, site facts) | `HANDOFF.md` here |
+
+## Decisions (2026-09-21)
+
+- **Engineer view = the schedule printout, live; admin view = the sign-off sheet, live** (per user). No separate library page — the schedule links every handout in the week it belongs to.
+- The Sep-21 schedule puts the **boiler plant in Week 2 and the chiller in Week 5** ("why boiler first"). Item keys `w2.boiler_24_verbals` / `w5.chiller_36_fault_drill` replaced the Aug-19 keys (no progress existed on them).
+- Programs are data on the enrollment (`program_key`). Only Plan B can be assigned today; Licensed HVAC development and the 5 category tracks are listed as coming in the picker.
 
 ## Decisions (2026-08-19)
 

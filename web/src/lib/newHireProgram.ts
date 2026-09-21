@@ -1,8 +1,11 @@
 // UPark New-Hire 8-Week Program — Plan B (Level 1), as data.
 //
-// Transcribed from the printed packet (2026-08-19): the interleaved schedule
-// and the mentor's sign-off sheet (handout key 'plan' in the training
-// manifest, web/public/training/manifest.json).
+// Transcribed from the printed packet — 2026-09-21 edition of the schedule
+// + sign-off sheet (handout key 'plan' in the training manifest,
+// web/public/training/manifest.json). vs the 2026-08-19 edition: boiler
+// plant moves to Week 2 and the chiller to Week 5 ("why boiler first"),
+// the HVAC overview is handed out in Week 1. Those two items got new keys
+// (no progress existed on the old ones).
 // The sign-off sheet is the source of truth for the VERIFIED ITEMS (what the
 // mentor initials), the schedule supplies each week's plan blocks and which
 // handout goes with them. Progress is stored against the stable `key`s below
@@ -15,6 +18,11 @@
 
 export const NH_PROGRAM_KEY = 'upark_l1_plan_b';
 export const NH_PROGRAM_TITLE = 'UPark New-Hire — 8-Week Program (Plan B · Level 1)';
+export const NH_EYEBROW = 'UPark · Training · Level 1 · Plan B';
+export const NH_SCHEDULE_TITLE = 'New-Hire 8-Week Schedule — Learn It, Fill Them Out, and Review';
+export const NH_SCHEDULE_INTRO = 'Each discipline overview lands the same week as its matching equipment. Ops run daily from Week 1 — 7 documented COVE hours every day, all 8 weeks. The building check is spread across the program — physical access first, technical rows as the systems are learned.';
+export const NH_SIGNOFF_TITLE = 'New-Hire 8-Week Schedule — Sign-Off Sheet';
+export const NH_SIGNOFF_INTRO = 'Initial and date each week only when every listed item is verified. Standing dailies (COVE labor hours, PlantLog rounds, access card) are audited weekly, not listed per item.';
 export const NH_WEEKS = 8;
 
 /** Handouts are DATA — web/public/training/manifest.json (served at
@@ -52,6 +60,8 @@ export type NhItem = {
   /** Permanent. Progress is keyed on this. */
   key: string;
   label: string;
+  /** Short chip text for the schedule's "Check off" row (engineer view). */
+  short: string;
   cat: NhCat;
   docs?: NhDocKey[];
   /** A gate: later work depends on it (LOTO eval #2 before any MEP PM). */
@@ -74,35 +84,36 @@ export const NH_WEEKS_DEF: NhWeek[] = [
   {
     n: 1, title: 'Onboarding, Admin & Site', short: 'Onboarding & Site', accent: '#475569',
     plan: [
-      { title: 'Admin / onboarding (Mon–Tue)', text: 'Four different systems, four different jobs — COVE = document labor hours & work · UKG = timesheet/punches · On The Clock = PTO · Workday = assigned trainings. HR onboarding, badge, parking, phone/email/Teams. Added to the team text group, shared calendar, email distributions. Workday trainings complete. First UKG timesheet, mentor-checked. Accounts created + first logins verified: COVE, PlantLog, BMS (view), Workday, UKG, On The Clock. Safety orientation + LOTO / PPE / Meter lab — intro & eval #1; own PPE + LOTO set issued.' },
-      { title: 'Site (Wed–Fri)', text: 'Site map printable day 1, blank tab filled from memory by Friday. Building check — physical access rows only: main entry, loading dock, main mechanical room for all 14 buildings + 3 garages; try every credential in person. PlantLog shadow: 2 days with a non-lead engineer. COVE — learn to document your day, mentor beside: 7 h documented from day 1.', docs: ['site_map', 'building_check'] },
+      { title: 'Admin / onboarding (Mon–Tue)', text: 'Four different systems, four different jobs — COVE = document labor hours & work · UKG = timesheet/punches · On The Clock = PTO · Workday = assigned trainings. HR onboarding, badge issue, parking, phone/email/Teams setup. Added to the team text group, shared calendar, and email distributions — then check all three regularly from day 1 (escorts, emergencies, overtime, alarms land there). Workday trainings: complete every module assigned. UKG — timesheet: first timesheet submitted this week, mentor-checked. Accounts created and first logins verified: COVE, PlantLog, BMS (view), Workday, UKG, On The Clock. Added to On The Clock (PTO) — shows on the engineering PTO calendar, knows how to request time off. Safety orientation + LOTO / PPE / Meter lab — intro & eval #1. Own PPE and LOTO set issued, kept on hand.' },
+      { title: 'Theory session (Tue, 2–3 h)', text: 'HVAC overview printed and handed out — walked through together. Quiz lands in Week 2.', docs: ['hvac'] },
+      { title: 'Site (Wed–Fri)', text: 'Site map — printable day 1, blank tab filled from memory by Friday. Building check — physical access rows only: main entry, loading dock, main mechanical room for all 14 buildings + 3 garages. Try every credential in person. BMS and remote rows stay blank — they fill in later weeks. PlantLog shadow: 2 days with a non-lead engineer, schedule template from manager. COVE — learn to document your day, mentor beside: log labor hours, close a PM and a WO with updates, create one non-schedule PM and one WO. 7 h documented from day 1 — onboarding, Workday training, and classroom hours all go in.', docs: ['site_map', 'building_check'] },
     ],
     items: [
-      { key: 'w1.workday',     label: 'All assigned Workday trainings complete (onboarding, safety, DEI, …)', cat: 'orient' },
-      { key: 'w1.ukg',         label: 'First UKG timesheet submitted and accepted', cat: 'orient' },
-      { key: 'w1.accounts',    label: 'Accounts live and first login verified: COVE · PlantLog · BMS (view) · Workday · UKG · On The Clock', cat: 'orient' },
-      { key: 'w1.otc_pto',     label: 'Added to On The Clock (PTO) — on the engineering PTO calendar, request flow demonstrated', cat: 'orient' },
-      { key: 'w1.channels',    label: 'On team text group, shared calendar, email distributions — checking all three daily', cat: 'ops' },
-      { key: 'w1.cove_solo',   label: 'COVE day documented solo: hours + PM/WO closed + one self-created non-schedule PM + one self-created WO', cat: 'ops' },
-      { key: 'w1.loto_eval_1', label: 'LOTO / PPE / Meter lab — intro & eval #1; own PPE + LOTO set issued', cat: 'safety' },
-      { key: 'w1.site_map',    label: 'Blank site map from memory; every building + garage entered', cat: 'orient', docs: ['site_map'] },
-      { key: 'w1.access_rows', label: 'Building check — physical access rows complete, all buildings', cat: 'orient', docs: ['building_check'] },
+      { key: 'w1.workday',     short: 'Workday trainings done',     label: 'All assigned Workday trainings complete (onboarding, safety, DEI, …)', cat: 'orient' },
+      { key: 'w1.ukg',         short: 'UKG timesheet accepted',     label: 'First UKG timesheet submitted and accepted', cat: 'orient' },
+      { key: 'w1.accounts',    short: 'Accounts ×6 live',           label: 'Accounts live and first login verified: COVE · PlantLog · BMS (view) · Workday · UKG · On The Clock', cat: 'orient' },
+      { key: 'w1.otc_pto',     short: 'In On The Clock (PTO)',      label: 'Added to On The Clock (PTO) — on the engineering PTO calendar, request flow demonstrated', cat: 'orient' },
+      { key: 'w1.channels',    short: 'On group / calendar / email', label: 'On team text group, shared calendar, email distributions — checking all three daily', cat: 'ops' },
+      { key: 'w1.cove_solo',   short: 'COVE day documented solo',   label: 'COVE day documented solo: hours + PM/WO closed + one self-created non-schedule PM + one self-created WO', cat: 'ops' },
+      { key: 'w1.loto_eval_1', short: 'LOTO eval #1',               label: 'LOTO / PPE / Meter lab — intro & eval #1; own PPE + LOTO set issued', cat: 'safety' },
+      { key: 'w1.site_map',    short: 'Site map from memory',       label: 'Blank site map from memory; every building + garage entered', cat: 'orient', docs: ['site_map'] },
+      { key: 'w1.access_rows', short: 'Physical access rows 100%',  label: 'Building check — physical access rows complete, all buildings', cat: 'orient', docs: ['building_check'] },
     ],
     friday: 'Initial Week 1 — access rows, map, Workday, LOTO eval #1. COVE audit: 7 h/day since day 1, ≥35 h.',
   },
   {
-    n: 2, title: 'HVAC ↔ Chiller Plant', short: 'HVAC ↔ Chiller', accent: '#0891b2',
+    n: 2, title: 'HVAC ↔ Boiler Plant', short: 'HVAC ↔ Boiler', accent: '#0891b2',
     plan: [
-      { title: 'Theory', text: 'HVAC overview — all sections + quiz. End-of-week review #1 of all Week-1/2 handouts.', docs: ['hvac', 'answer_key'] },
-      { title: 'Equipment', text: 'Chiller plant — Overview tab, then Find It & Tag It, 36 items in the plant. Every row: access badge respected, purpose stated aloud, IF IT IS WRONG read, proof captured.', docs: ['chiller'] },
+      { title: 'Theory', text: 'HVAC overview — handed out in Week 1; finish all sections this week + quiz. End-of-week review #1 of all Week-1/2 handouts.', docs: ['hvac', 'answer_key'] },
+      { title: 'Equipment', text: 'Boiler plant — Overview + Find It & Tag It, 24 items at 75SS Boiler 1 (Cleaver-Brooks CB-700) and the Patterson-Kelley N-2000. Summer advantage: boilers offline and under PM — open, cool, hands-on with the PM crew. Every row: access badge respected, purpose stated aloud, IF IT IS WRONG read, proof captured. Verbal: P-K return >130°F, lo-hi-lo staging, flow-switch LWCO.', docs: ['boiler'] },
       { title: 'Building check', text: 'BMS on-site rows (vendor/product, workstation location, own login, view/full) for every building entered this week.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'First solo PlantLog circuit. Non-MEP rep 1: water treatment (coupon/chemical round with mentor).' },
     ],
     items: [
-      { key: 'w2.hvac_quiz',     label: 'HVAC quiz passed · review #1 held', cat: 'theory', docs: ['hvac', 'answer_key'] },
-      { key: 'w2.chiller_36',    label: 'Chiller Find It & Tag It 36/36, proof on every row', cat: 'orient', docs: ['chiller'] },
-      { key: 'w2.plantlog_solo', label: 'First solo PlantLog circuit · water treatment rep 1 logged', cat: 'ops' },
-      { key: 'w2.bms_rows',      label: 'Building check BMS rows for buildings visited', cat: 'controls', docs: ['building_check'] },
+      { key: 'w2.hvac_quiz',          short: 'HVAC quiz · review #1',     label: 'HVAC quiz passed · review #1 held', cat: 'theory', docs: ['hvac', 'answer_key'] },
+      { key: 'w2.boiler_24_verbals',  short: 'Boiler 24/24 · verbals ×3', label: 'Boiler Find It & Tag It 24/24, proof on every row · P-K >130°F / lo-hi-lo / flow-switch LWCO verbals', cat: 'orient', docs: ['boiler'] },
+      { key: 'w2.plantlog_solo',      short: 'First solo PlantLog · water treatment rep 1', label: 'First solo PlantLog circuit · water treatment rep 1 logged', cat: 'ops' },
+      { key: 'w2.bms_rows',           short: 'BMS rows started',          label: 'Building check BMS rows for buildings visited', cat: 'controls', docs: ['building_check'] },
     ],
     friday: 'Initial Week 2. COVE audit: 7 h/day, ≥35 h this week.',
   },
@@ -116,9 +127,9 @@ export const NH_WEEKS_DEF: NhWeek[] = [
       { title: 'Ops & PM', text: 'Non-MEP reps: drum-drip and fire pump test (support role).' },
     ],
     items: [
-      { key: 'w3.plumbing_quiz_tower_18', label: 'Plumbing quiz passed · tower sheet 18/18', cat: 'theory', docs: ['plumbing', 'tower'] },
-      { key: 'w3.loto_eval_2',            label: 'LOTO eval #2 passed (gate for MEP PMs)', cat: 'safety', gate: true },
-      { key: 'w3.drumdrip_firepump_reps', label: 'Drum-drip + fire pump test reps logged', cat: 'pm' },
+      { key: 'w3.plumbing_quiz_tower_18', short: 'Plumbing quiz · tower 18/18', label: 'Plumbing quiz passed · tower sheet 18/18', cat: 'theory', docs: ['plumbing', 'tower'] },
+      { key: 'w3.loto_eval_2',            short: 'LOTO eval #2 — MEP gate', label: 'LOTO eval #2 passed (gate for MEP PMs)', cat: 'safety', gate: true },
+      { key: 'w3.drumdrip_firepump_reps', short: 'Drum-drip + fire pump reps', label: 'Drum-drip + fire pump test reps logged', cat: 'pm' },
     ],
     friday: 'Initial Week 3. COVE audit: 7 h/day, ≥35 h this week.',
   },
@@ -131,25 +142,25 @@ export const NH_WEEKS_DEF: NhWeek[] = [
       { title: 'Ops & PM', text: 'First MEP rep (LOTO gate passed): exhaust fan PM. SCHWP / CWP full names, locations, systems — quizzed on rounds.' },
     ],
     items: [
-      { key: 'w4.electrical_quiz_review_2', label: 'Electrical quiz passed · review #2 held (HVAC/Plumbing/Electrical)', cat: 'theory', docs: ['electrical', 'answer_key'] },
-      { key: 'w4.ahu_17',                   label: 'AHU sheet 17/17 on a running unit', cat: 'orient', docs: ['ahu'] },
-      { key: 'w4.exhaust_fan_first_mep',    label: 'Exhaust fan PM rep 1 (first MEP PM) · SCHWP/CWP names + locations verbal', cat: 'pm' },
+      { key: 'w4.electrical_quiz_review_2', short: 'Electrical quiz · review #2', label: 'Electrical quiz passed · review #2 held (HVAC/Plumbing/Electrical)', cat: 'theory', docs: ['electrical', 'answer_key'] },
+      { key: 'w4.ahu_17',                   short: 'AHU 17/17', label: 'AHU sheet 17/17 on a running unit', cat: 'orient', docs: ['ahu'] },
+      { key: 'w4.exhaust_fan_first_mep',    short: 'Exhaust fan PM — first MEP · SCHWP/CWP verbal', label: 'Exhaust fan PM rep 1 (first MEP PM) · SCHWP/CWP names + locations verbal', cat: 'pm' },
     ],
     friday: 'Initial Week 4. COVE audit: 7 h/day, ≥35 h this week.',
   },
   {
-    n: 5, title: 'Life Safety ↔ Boiler Plant', short: 'Life Safety ↔ Boiler', accent: '#dc2626',
+    n: 5, title: 'Life Safety ↔ Chiller Plant', short: 'Life Safety ↔ Chiller', accent: '#dc2626',
     plan: [
       { title: 'Theory', text: 'Life Safety overview — all sections + quiz. Scenario sort: act vs. escalate, three cases.', docs: ['life_safety'] },
-      { title: 'Equipment', text: 'Boiler plant — Overview + Find It & Tag It, 24 items at 75SS Boiler 1 (Cleaver-Brooks CB-700) and the Patterson-Kelley N-2000. Offline in summer: tag cold and note it. Verbal: P-K return >130°F, lo-hi-lo staging, flow-switch LWCO.', docs: ['boiler'] },
+      { title: 'Equipment', text: 'Chiller plant — Overview tab, then Find It & Tag It, 36 items on the running plant. Fault-index drill: mentor names symptoms, new hire points to tags and states consequences.', docs: ['chiller'] },
       { title: 'Building check', text: 'BMS rows finish — all buildings covered by end of week.', docs: ['building_check'] },
       { title: 'Ops & PM', text: 'Non-MEP rep: generator test (support). MEP rep: UH/CUH PM.' },
     ],
     items: [
-      { key: 'w5.ls_quiz_scenarios',  label: 'Life Safety quiz passed · scenario sort 3/3', cat: 'theory', docs: ['life_safety'] },
-      { key: 'w5.boiler_24_verbals',  label: 'Boiler sheet 24/24 · P-K >130°F / lo-hi-lo / flow-switch LWCO verbals', cat: 'orient', docs: ['boiler'] },
-      { key: 'w5.generator_uhcuh_reps', label: 'Generator test + UH/CUH PM reps logged', cat: 'pm' },
-      { key: 'w5.bms_rows_complete',  label: 'Building check BMS rows complete, all buildings', cat: 'controls', docs: ['building_check'] },
+      { key: 'w5.ls_quiz_scenarios',      short: 'Life Safety quiz · scenarios 3/3', label: 'Life Safety quiz passed · scenario sort 3/3', cat: 'theory', docs: ['life_safety'] },
+      { key: 'w5.chiller_36_fault_drill', short: 'Chiller 36/36 · fault drill',      label: 'Chiller sheet 36/36 · fault drill passed', cat: 'orient', docs: ['chiller'] },
+      { key: 'w5.generator_uhcuh_reps',   short: 'Generator + UH/CUH reps',          label: 'Generator test + UH/CUH PM reps logged', cat: 'pm' },
+      { key: 'w5.bms_rows_complete',      short: 'BMS rows complete',                label: 'Building check BMS rows complete, all buildings', cat: 'controls', docs: ['building_check'] },
     ],
     friday: 'Initial Week 5. COVE audit: 7 h/day, ≥35 h this week.',
   },
@@ -162,9 +173,9 @@ export const NH_WEEKS_DEF: NhWeek[] = [
       { title: 'Ops & PM', text: 'MEP rep: minor pump/motor PM (check PM forecast with manager). Non-MEP rep: roof PM.' },
     ],
     items: [
-      { key: 'w6.bms_quiz_six_finds',   label: 'BMS quiz passed · six on-screen finds unaided', cat: 'controls', docs: ['bms', 'find_on_screen'] },
-      { key: 'w6.building_check_100',   label: 'Building check 100% — remote-access rows proven off-site', cat: 'controls', docs: ['building_check'] },
-      { key: 'w6.pump_motor_roof_reps', label: 'Pump/motor PM + roof PM reps logged', cat: 'pm' },
+      { key: 'w6.bms_quiz_six_finds',   short: 'BMS quiz · six on-screen finds', label: 'BMS quiz passed · six on-screen finds unaided', cat: 'controls', docs: ['bms', 'find_on_screen'] },
+      { key: 'w6.building_check_100',   short: 'Building check 100%', label: 'Building check 100% — remote-access rows proven off-site', cat: 'controls', docs: ['building_check'] },
+      { key: 'w6.pump_motor_roof_reps', short: 'Pump/motor + roof reps', label: 'Pump/motor PM + roof PM reps logged', cat: 'pm' },
     ],
     friday: 'Initial Week 6. COVE audit: 7 h/day, ≥35 h this week.',
   },
@@ -173,12 +184,12 @@ export const NH_WEEKS_DEF: NhWeek[] = [
     plan: [
       { title: 'Field capstone', text: 'Portfolio-wide Find It & Tag It — 117 items across 8 systems, no location prompting. Target ≥60 by Friday.', docs: ['find_it_tag_it'] },
       { title: 'Reps', text: 'Second reps for every PM still under target (2×): water treatment, drum-drip, fire pump, generator, roof, exhaust fan, UH/CUH, pump/motor as the calendar allows. Vendor escorts closed out.' },
-      { title: 'Re-tag', text: 'Weak areas from Weeks 2–5 tag sheets re-walked.', docs: ['chiller', 'tower', 'ahu', 'boiler'] },
+      { title: 'Re-tag', text: 'Weak areas from Weeks 2–5 tag sheets re-walked.', docs: ['boiler', 'tower', 'ahu', 'chiller'] },
     ],
     items: [
-      { key: 'w7.capstone_60',  label: 'Portfolio capstone ≥60/117', cat: 'orient', docs: ['find_it_tag_it'] },
-      { key: 'w7.second_reps_escorts', label: 'Second reps under way; vendor escorts ×2 closed', cat: 'pm' },
-      { key: 'w7.retag',        label: 'Weak-area re-tags done', cat: 'orient' },
+      { key: 'w7.capstone_60',  short: 'Capstone ≥60/117', label: 'Portfolio capstone ≥60/117', cat: 'orient', docs: ['find_it_tag_it'] },
+      { key: 'w7.second_reps_escorts', short: 'Second reps started · escorts ×2 closed', label: 'Second reps under way; vendor escorts ×2 closed', cat: 'pm' },
+      { key: 'w7.retag',        short: 'Weak areas re-tagged', label: 'Weak-area re-tags done', cat: 'orient' },
     ],
     friday: 'Initial Week 7. COVE audit: 7 h/day, ≥35 h this week.',
   },
@@ -189,10 +200,10 @@ export const NH_WEEKS_DEF: NhWeek[] = [
       { title: 'Final walk-through (Fri)', text: 'Mentor picks three faults from the capstone fault index. Walk to it, identify tags, state IF IT IS WRONG, name escalation. Pass = 3/3, no coaching.', docs: ['find_it_tag_it'] },
     ],
     items: [
-      { key: 'w8.capstone_117_quizzes', label: 'Capstone 117/117 · all quizzes passed after re-test', cat: 'orient', docs: ['find_it_tag_it', 'answer_key'] },
-      { key: 'w8.reps_2of2_cove',       label: 'All PM reps at 2/2 · COVE 7 h/day all 8 weeks, ≥35 h every week', cat: 'pm' },
-      { key: 'w8.walkthrough_3of3',     label: 'Final walk-through 3/3 faults, no coaching', cat: 'orient' },
-      { key: 'w8.level2_picks',         label: 'First three Level-2 modules selected', cat: 'theory', docs: ['level2'] },
+      { key: 'w8.capstone_117_quizzes', short: 'Capstone 117/117 · all quizzes passed', label: 'Capstone 117/117 · all quizzes passed after re-test', cat: 'orient', docs: ['find_it_tag_it', 'answer_key'] },
+      { key: 'w8.reps_2of2_cove',       short: 'All reps 2/2 · COVE all 8 weeks', label: 'All PM reps at 2/2 · COVE 7 h/day all 8 weeks, ≥35 h every week', cat: 'pm' },
+      { key: 'w8.walkthrough_3of3',     short: 'Walk-through 3/3', label: 'Final walk-through 3/3 faults, no coaching', cat: 'orient' },
+      { key: 'w8.level2_picks',         short: 'Level-2 picks made', label: 'First three Level-2 modules selected', cat: 'theory', docs: ['level2'] },
     ],
     friday: 'Sign-off: new hire, mentor, manager sign the certification block. File tag sheets, building check, site map, and the phase-tracker print handout with the record.',
   },
@@ -228,8 +239,9 @@ export const NH_CERT_TEXT =
   'daily COVE labor-hour documentation sustained across all 8 weeks, and correct escalation judgment for the UPark portfolio.';
 
 export const NH_STANDING_DAILY = [
-  'Engagement: check email, calendar and the team text group through the day — escorts, emergencies, overtime and alarms all move there.',
-  'COVE — the hours rule: 7 labor hours documented every day, training and classroom time included. Every week closes at ≥35 h in correct NPM / PM / WO format. Mentor audits every Friday.',
+  'Engagement: check your email, calendar, and the team text group regularly through the day — vendor escorts, emergencies, the overtime schedule, and alarms all move through those channels; the engineer who sees them first is the one who helps.',
+  'COVE — what a documented day contains: labor hours · assigned PMs and WOs closed with updates · non-schedule PMs you create yourself for admin time, vendor escorts, and team PM/CM overflow · WOs you create yourself for anything found. If it happened and it isn\'t in COVE, it didn\'t happen.',
+  'COVE — the hours rule: 7 labor hours documented in COVE every single day, training and classroom time included — learning is labor and it gets documented like any other work. Every one of the 8 weeks closes at ≥35 h in correct NPM / PM / WO format. Mentor audits every Friday.',
   'PlantLog: rounds daily — shadow through Week 1, own circuit from Week 2.',
   'Building access card: record access used every day until the card is full.',
   'Vendor escort: ride two escorts whenever vendors are on site, any week.',
@@ -237,7 +249,7 @@ export const NH_STANDING_DAILY = [
 ];
 
 export const NH_SEASONAL_NOTE =
-  'Seasonal swap: default assumes a cooling-season start. For heating-season starts (Nov–Mar), swap the equipment halves of Week 2 ↔ Week 5 (boiler first, chiller later). Overviews stay put.';
+  'Why boiler first. Default assumes a summer start: boilers are offline — least interruption to the plant — and it’s exactly when most heating-plant PM happens, so the new hire learns on equipment that is open, cool, and being serviced. For heating-season starts (Nov–Mar), swap the equipment halves of Week 2 ↔ Week 5 (chiller first). Overviews stay put.';
 
 // ── key helpers ───────────────────────────────────────────────────────────
 export const weekKey = (n: number) => `week.${n}`;   // mentor's weekly initials
