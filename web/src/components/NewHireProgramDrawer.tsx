@@ -25,7 +25,7 @@ import {
   useSetCheckoff, useSetCheckoffNote, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
   type NhStatus, type NhCheckoff, type NhDocActivity, type NhUserState,
 } from '../hooks/useNewHire';
-import { useTrainingDocs } from '../hooks/useTrainingDocs';
+import { useTrainingDocs, NH_PRINT_STATION_URL } from '../hooks/useTrainingDocs';
 import { useSignoffSheet } from '../hooks/useSignoffSheet';
 import { LiveSignoffSheet, type SheetActions } from './LiveDoc';
 import { useMe } from '../hooks/useMe';
@@ -138,8 +138,10 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
             <h3 className="t-section-title" style={{ marginBottom: 2 }}>{person.full_name}</h3>
             <div className="t-small t-muted">{NH_PROGRAM_TITLE}</div>
           </div>
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            {docs.hrefFor('signoff_sheet') && <a href={docs.hrefFor('signoff_sheet')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Blank printable sheet">Print blank sheet ↗</a>}
+          <div className="flex items-center gap-2 whitespace-nowrap flex-wrap justify-end">
+            {docs.hrefFor('plan') && <a href={docs.hrefFor('plan')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="The 8-Week Schedule document">8-Week Schedule ↗</a>}
+            <a href={encodeURI(NH_PRINT_STATION_URL)} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="The Print Station — preview and print any of the handouts">Print station ↗</a>
+            {docs.hrefFor('signoff_sheet') && <a href={docs.hrefFor('signoff_sheet')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Blank printable sheet">Blank sheet ↗</a>}
             <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
           </div>
         </div>
@@ -175,7 +177,7 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
 }
 
 function Secondary({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   return (
     <div className="mb-2">
       <button type="button" onClick={() => setOpen((o) => !o)} className="t-small hover:underline" style={{ color: 'var(--color-accent)' }}>{open ? '▾' : '▸'} {title}{hint && <span className="t-muted"> · {hint}</span>}</button>

@@ -19,7 +19,7 @@ import { useAuth } from '../../lib/auth';
 import { useMe } from '../../hooks/useMe';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useEngineers } from '../../hooks/useEngineers';
-import { useTrainingDocs } from '../../hooks/useTrainingDocs';
+import { useTrainingDocs, NH_PRINT_STATION_URL } from '../../hooks/useTrainingDocs';
 import { useSignoffSheet } from '../../hooks/useSignoffSheet';
 import { useNewHireUser, useCanEditNewHire, useRecordDocActivity } from '../../hooks/useNewHire';
 import { useQuizWatcher } from '../../hooks/useQuizWatcher';
@@ -160,6 +160,7 @@ export default function NewHireTraining() {
 
         {tab === 'handouts' && (
           <div className="t-card m-4 md:m-0">
+            <p className="t-small t-muted mb-3">Click a handout to read it here. <a href={encodeURI(NH_PRINT_STATION_URL)} target="_blank" rel="noreferrer" className="t-accent hover:underline">Open the Print Station ↗</a> to preview and print any of them.</p>
             {docs.groups.filter((g) => g.key !== 'mentor_only' || canSeeMentorDocs).map((g) => (
               <div key={g.key} className="mb-3">
                 <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-mono)' }}>{g.label}</div>
