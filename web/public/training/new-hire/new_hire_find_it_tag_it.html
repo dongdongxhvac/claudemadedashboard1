@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find It &amp; Tag It — Equipment Identification Exercise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--cyan),var(--amber),var(--blue))}
+  .eyebrow{font-family:var(--mono);font-size:12.3px;letter-spacing:.26em;text-transform:uppercase;color:var(--cyan);margin:4px 0 9px}
+  h1{font-size:30.2px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:19px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:18.5px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:13.4px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:22.4px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:18.5px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  /* flow diagram — three simple tracks */
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:11.2px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:92px;flex:0 0 auto;padding-right:8px}
+  .t-cool .track-tag{color:var(--cyan)} .t-heat .track-tag{color:var(--amber)} .t-air .track-tag{color:var(--blue)}
+  .node{font-size:14.6px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:54px;padding:0 2px}
+  .arr .lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.1;text-align:center;margin-bottom:1px}
+  .arr .line2{color:var(--line-2);font-size:16.8px;line-height:1}
+  .t-cool .arr .line2{color:var(--cyan)} .t-heat .arr .line2{color:var(--amber)} .t-air .arr .line2{color:var(--blue)}
+  .t-loop .track-tag{color:var(--green)} .t-loop .arr .line2{color:var(--green)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:14px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  /* either/or + parallel coil stacks inside a track */
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:14px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:9px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:9px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .node.term{border-color:var(--blue);color:var(--blue)}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:10px;
+    background:rgba(14,143,166,.05);padding:13px 16px;font-size:16.8px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:10.6px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);display:block;margin-bottom:4px;font-weight:600}
+  /* terminal mini-cards in downstream */
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:16.2px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:10.1px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.ex{color:var(--violet);background:rgba(106,79,208,.1)}
+  .coil.hw{color:var(--amber);background:rgba(176,116,8,.1)} .coil.chw{color:var(--cyan);background:rgba(14,143,166,.1)}
+  .coil.rej{color:var(--cyan);background:rgba(14,143,166,.1)} .coil.add{color:var(--amber);background:rgba(176,116,8,.1)} .coil.circ{color:var(--blue);background:rgba(47,109,204,.1)} .coil.hold{color:var(--violet);background:rgba(106,79,208,.1)} .coil.prot{color:var(--green);background:rgba(31,154,85,.1)} .coil.iso{color:var(--ink-dim);background:rgba(77,91,114,.12)}
+  .term-card p{margin:0;font-size:14px;color:var(--ink-dim);line-height:1.5}
+
+  /* equipment cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:10.6px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:19.6px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:16.8px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:16.8px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:15.7px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:10.1px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:17.9px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:15.7px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:12.3px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:11.8px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+  .legend .box{width:12px;height:9px;border-radius:2px;border:1.6px solid;background:#fff}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:11.2px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--cyan)} .d2 .tag{color:var(--green)}
+  .d-head h2{font-size:19px;margin:0;font-weight:600}
+  .d-sub{font-size:14.6px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  /* svg element styles */
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:14px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:9px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:9.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .roofline{stroke:var(--line-2);stroke-width:1;stroke-dasharray:4 4}
+  .rooflab{font-family:var(--mono);font-size:9px;fill:var(--ink-faint);letter-spacing:.1em}
+  .loopbar{fill:rgba(31,154,85,.09);stroke:var(--green);stroke-width:1.7}
+  .loopt{font-family:var(--mono);font-size:11.2px;fill:var(--green);font-weight:600;text-anchor:middle;letter-spacing:.14em}
+
+
+  .coil.hi{color:var(--green);background:rgba(31,154,85,.1)}
+  .coil.lo{color:var(--amber);background:rgba(176,116,8,.1)}
+  .coil.stm{color:var(--violet);background:rgba(106,79,208,.1)}
+
+  .adv-badge{display:inline-block;font-family:var(--mono);font-size:10.6px;font-weight:700;letter-spacing:.14em;color:var(--violet);background:rgba(106,79,208,.1);border:1px solid rgba(106,79,208,.3);border-radius:5px;padding:2px 8px;margin-bottom:10px}
+  .fx{font-family:var(--mono);font-size:14.6px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:8px 10px;margin:6px 0;text-align:center}
+  .ptab{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  .ptab th{font-family:var(--mono);font-size:10.6px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line-2)}
+  .ptab td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  .ptab td b{color:var(--ink)}
+  .neg{color:var(--red);font-weight:700;font-family:var(--mono)}
+  .pos{color:var(--blue);font-weight:700;font-family:var(--mono)}
+
+  @media print{.ptab{font-size:10.6px} .ptab td,.ptab th{padding:3px 5px} .fx{font-size:11.8px;padding:5px 7px} .ptab,.fx{break-inside:avoid}}
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13.4px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:13.4px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:11.2px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:15.7px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:14.6px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:11.2px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:14px;color:var(--ink-dim)}
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:14px} .q-opts{gap:4px}
+    .q-opts button{font-size:12.3px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:12.3px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:13.4px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:14.6px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:12.3px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    /* --- true landscape for the system diagrams -----------------------------
+       Named @page rules only work in Chrome/Edge, so instead each diagram is
+       rotated 90deg onto its own portrait sheet. Result is a genuine landscape
+       drawing, in every browser and in wkhtmltopdf.
+       A4 minus 5mm margins = 200mm wide x 287mm tall of usable space.
+       Rotated, the drawing gets 287mm across and 200mm down.            */
+    .rotpage{margin:0}
+    @media print{
+      /* Each system diagram gets its own sheet, rotated 90deg — a true landscape
+         drawing on a portrait sheet, so it works in every browser and in wkhtmltopdf.
+         Usable page area with the 5mm/11mm margins is 200 x 281mm. The sheet is kept
+         well inside that (196 x 270mm) so no stray margin, line-height, or rounding
+         can push it over and trigger a clipped page + a blank one. */
+      .rotpage{
+        position:relative;
+        width:196mm; height:270mm;
+        overflow:hidden;
+        break-before:page; break-inside:avoid;
+        margin:0; padding:0; line-height:0;
+        border:0; box-shadow:none;
+      }
+      .rotpage > .diagram{
+        position:absolute; top:0; left:0;
+        width:270mm; height:196mm;
+        margin:0 !important; padding:5mm;
+        border:0; box-shadow:none; border-radius:0; background:#fff;
+        line-height:1.35;
+        transform-origin:0 0;
+        transform:rotate(90deg) translate(0,-196mm);
+        break-inside:avoid; overflow:hidden;
+      }
+      .rotpage .d-head{margin:0 0 1.5mm}
+      .rotpage .d-head h2{font-size:14px}
+      .rotpage .d-sub{font-size:10.6px;margin:0 0 2.5mm}
+      /* height fixed; width follows the viewBox ratio → fills the sheet, no distortion.
+         148mm is the largest height at which the widest drawing (ratio 1.73) still
+         fits the 260mm of rotated width available. */
+      .rotpage svg{height:148mm;width:auto;max-width:258mm;display:block;margin:0 auto}
+      section.land{margin:0;padding:0}
+    }
+
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:16.2px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:23.5px;line-height:1.15;color:#000} h1 .sub{font-size:15.7px;margin-top:2px}
+    .eyebrow{font-size:10.6px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:14.6px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:18.5px;color:#000} .s-head .n{font-size:11.2px}
+    p.lead{font-size:14.6px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:10.1px;width:100px;line-height:1.4}
+    .node{font-size:12.3px;padding:5px 8px;border-radius:6px;border-color:#5b6674;color:#000}
+    .arr{min-width:44px;padding:0 2px} .arr .lbl{font-size:9px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:19px}
+    .stack{gap:2px} .stack .opt{font-size:11.2px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7.5px;color:#3e4a5a} .stack .conj{font-size:7.5px}
+    .flow-note{font-size:12.9px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:14px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:10.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .card.wide{grid-column:1 / -1;column-count:2;column-gap:20px;column-fill:balance}
+    .card.wide .role,.card.wide h3,.card.wide .one{column-span:all}
+    .card.wide p{break-inside:auto;orphans:2;widows:2}
+    .card.wide .why{margin-top:6px}
+    .card .role{font-size:9.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:15.7px;margin:0 0 3px;color:#000} .card .one{font-size:14px;margin:0 0 5px;color:#000}
+    .card p{font-size:13.7px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:12.9px;padding-top:5px;margin-top:5px} .card .why em{font-size:8.1px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:13.4px;color:#000} .term-card p{font-size:11.5px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:8.3px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:15.1px;margin:0 0 5px;color:#000} .downstream p{font-size:12.7px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:10.6px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:avoid;page-break-inside:avoid}
+    .downstream,.diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:10.6px;color:#242e3c;margin-top:8px} .d-head h2{font-size:15.1px} .d-sub{font-size:11.2px} }
+
+  table.ptab{width:100%;border-collapse:collapse;margin:12px 0 4px;font-size:16.2px}
+  table.ptab th{font-family:var(--mono);font-size:10.6px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+    text-align:left;font-weight:700;border-bottom:1px solid var(--line-2);padding:0 10px 7px 0}
+  table.ptab td{border-bottom:1px solid var(--line);padding:8px 10px 8px 0;vertical-align:top;color:var(--ink-dim)}
+  table.ptab td:first-child{color:var(--ink);font-weight:600}
+  table.ptab tr.flag td{background:rgba(176,116,8,.06)}
+  @media print{table.ptab{font-size:12.9px;break-inside:avoid} table.ptab td,table.ptab th{padding:4px 8px 4px 0}}
+
+  .cnt{font-family:var(--mono);font-size:11.2px;color:var(--ink-faint);white-space:nowrap;margin-left:8px}
+  table.tabtab{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:14px}
+  table.tabtab th{font-family:var(--mono);font-size:10.1px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+    text-align:left;font-weight:700;border-bottom:1.5px solid var(--line-2);padding:0 8px 6px 0;vertical-align:bottom}
+  table.tabtab th .th2{display:block;font-size:9px;letter-spacing:.04em;text-transform:none;color:var(--ink-faint);opacity:.75;font-weight:400}
+  table.tabtab td{border-bottom:1px solid var(--line);padding:9px 8px 9px 0;vertical-align:top;color:var(--ink-dim)}
+  table.tabtab td.tag{font-family:var(--mono);font-size:12.3px;font-weight:700;white-space:nowrap;color:var(--accent)}
+  table.tabtab td.comp{color:var(--ink)}
+  table.tabtab td.comp b{display:block;margin-top:3px}
+  table.tabtab td.comp .hint{display:block;font-size:11.8px;color:var(--ink-faint);font-weight:400;margin-top:2px;line-height:1.35}
+  table.tabtab td.cap{color:var(--ink-dim);font-size:12.9px;line-height:1.4}
+  table.tabtab td.cap .capl{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:3px}
+  table.tabtab td.cap i{display:block;border-bottom:1px solid var(--line-2);margin-top:16px;height:16px;
+    background:repeating-linear-gradient(transparent,transparent 15px,var(--line) 15px,var(--line) 16px)}
+  table.tabtab td.fill,table.tabtab td.sign{border-bottom:1px solid var(--line-2);background:repeating-linear-gradient(transparent,transparent 26px,var(--line) 26px,var(--line) 27px)}
+  .acc,.grp{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;
+    border-radius:4px;padding:2px 6px;margin:0 5px 0 0;vertical-align:middle;white-space:nowrap}
+  .acc.a{background:rgba(31,154,85,.14);color:#166c3d;border:1px solid rgba(31,154,85,.5)}
+  .acc.p{background:rgba(176,116,8,.14);color:#7a4f05;border:1px solid rgba(176,116,8,.5)}
+  .acc.r{background:rgba(210,59,53,.12);color:#9c231e;border:1px solid rgba(210,59,53,.45)}
+  .acc.v{background:rgba(106,79,208,.13);color:#4a34a0;border:1px solid rgba(106,79,208,.5)}
+  .grp{background:transparent;color:var(--ink-faint);border:1px solid var(--line-2);letter-spacing:.06em}
+  .g-protect{color:#9c231e;border-color:rgba(210,59,53,.45)}
+  .g-prove{color:#0b6f81;border-color:rgba(14,143,166,.5)}
+  .g-isolate{color:#7a4f05;border-color:rgba(176,116,8,.5)}
+  .g-control{color:#4a34a0;border-color:rgba(106,79,208,.5)}
+  .g-move{color:#1f4a8f;border-color:rgba(47,109,204,.5)}
+  .g-carry{color:#4d5b72;border-color:var(--line-2)}
+  .filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:14px 0 4px;padding:12px 14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  .flab{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-right:4px}
+  .fbtn{font-family:var(--mono);font-size:11.2px;font-weight:700;color:var(--ink-dim);background:var(--panel-2);
+    border:1px solid var(--line-2);border-radius:999px;padding:5px 12px;cursor:pointer}
+  .fbtn.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .fnote{font-family:var(--mono);font-size:11.2px;color:var(--ink-faint);margin:6px 0 0}
+  .signoff{display:flex;gap:18px;margin:14px 0 6px;flex-wrap:wrap}
+  .sbox{flex:1;min-width:150px}
+  .sbox span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:16px}
+  .sbox i{display:block;border-bottom:1.5px solid var(--line-2)}
+  .rulebox{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:16px 0}
+  .rulebox h4{font-family:var(--disp);font-size:15.7px;margin:0 0 8px;color:var(--ink)}
+  .rulebox ol{margin:0;padding-left:20px}
+  .rulebox li{margin-bottom:7px;font-size:15.7px;color:var(--ink-dim);line-height:1.5}
+  .keytab{width:100%;border-collapse:collapse;margin:10px 0;font-size:15.1px}
+  .keytab td{border-bottom:1px solid var(--line);padding:8px 10px 8px 0;vertical-align:top;color:var(--ink-dim)}
+  .keytab td:first-child{width:130px;white-space:nowrap}
+  table.faults{width:100%;border-collapse:collapse;margin:12px 0;font-size:15.1px}
+  table.faults th{font-family:var(--mono);font-size:10.1px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+    text-align:left;font-weight:700;border-bottom:1.5px solid var(--line-2);padding:0 10px 6px 0}
+  table.faults td{border-bottom:1px solid var(--line);padding:10px 10px 10px 0;vertical-align:top;color:var(--ink-dim)}
+  table.faults td.sym{width:46%;color:var(--ink)}
+  table.faults td.sym .hint{display:block;font-size:12.9px;color:var(--ink-faint);font-weight:400;margin-top:3px;line-height:1.4}
+  .ft{display:inline-block;font-family:var(--mono);font-size:11.8px;font-weight:700;color:var(--ink-dim);
+    background:var(--panel-2);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;margin:0 4px 4px 0}
+  @media print{
+    table.tabtab{font-size:12.3px} table.tabtab td{padding:7px 6px 7px 0}
+    table.tabtab td.comp .hint{font-size:10.1px} table.tabtab td.cap{font-size:10.6px}
+    table.tabtab thead{display:table-header-group}
+    table.tabtab tr{break-inside:avoid}
+    .acc,.grp{font-size:7.5px;padding:1px 4px}
+    section{break-before:auto} .rulebox{break-inside:auto} .rulebox h4{break-after:avoid} .rulebox li{break-inside:avoid;orphans:2;widows:2} .rulebox p{orphans:2;widows:2} .keytab{break-inside:avoid} .s-head{break-after:avoid} .signoff{break-inside:avoid} table.tabtab thead{display:table-header-group} table.tabtab tr{break-inside:avoid} table.faults thead{display:table-header-group} table.faults tr{break-inside:avoid} .q-card{break-inside:avoid}
+    .rulebox li,.keytab{font-size:12.9px}
+    table.faults{font-size:12.9px} .signoff{break-inside:avoid}
+    .filters,.fnote{display:none}
+    tr[hidden]{display:table-row !important}
+  }
+
+  table.tabtab td.comp .fail{display:block;font-size:11.8px;color:#9c231e;font-weight:400;margin-top:5px;line-height:1.4;
+    border-left:2px solid rgba(210,59,53,.35);padding-left:7px}
+  table.tabtab td.comp .fail b{display:inline;margin:0;color:#9c231e}
+  table.tabtab td.comp .fail::before{content:"IF IT IS WRONG  ";font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:#b8615c;font-weight:700}
+  @media print{ table.tabtab td.comp .fail{font-size:10.1px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">print it, clip it to a board, and walk the building</span></div>
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Field Exercise</div>
+    <h1>Find It &amp; Tag It<span class="sub">Equipment identification walk — 117 items</span></h1>
+    <p class="intro">You have read about this equipment. <b>Now go and find it.</b><br><br>
+    Working one system at a time, locate every item listed, record it, and write down where it is and <b>one fact you can only get by standing in front of it</b>. When a section is complete, walk it with your supervisor — they check your work, ask you what things do, and sign it off.<br><br>
+    <b>Not everything here can have a tag hung on it</b> — a compressor sits inside a machine, a drive sits inside a cabinet, a coil sits inside an AHU. Every row tells you how to record that one. <b>It is not a test you can fail</b> — it is a record of what you have been shown.</p>
+  </header>
+
+  <section>
+    <div class="s-head"><span class="n">00</span><h2>How this works — read before you start</h2><span class="line"></span></div>
+
+    <div class="rulebox" style="border-left:4px solid var(--red)">
+      <h4 style="color:var(--red)">Safety first — this is a LOOK exercise, not a TOUCH exercise</h4>
+      <ol>
+        <li><b>Open nothing.</b> No electrical panels, no ATS doors, no switchgear, no gas trains, no boiler doors, no drive cabinets.</li>
+        <li><b>Operate nothing.</b> Do not push buttons, <b>turn valves</b>, flip switches, or press a single reset. Finding a valve is the exercise; turning it is not.</li>
+        <li><b>Go escorted</b> anywhere your supervisor says escorted — roofs, high-voltage rooms, confined spaces, lab areas, anywhere needing a permit.</li>
+        <li><b>Wear what the area requires</b> and follow every posted sign.</li>
+        <li><b>If you cannot find something, leave it blank and ask.</b> A blank line is a good question. A guess written down becomes a wrong answer somebody trusts later.</li>
+        <li><b>Stop and report</b> immediately for a gas smell, a CO alarm, water where it should not be, a machine that sounds wrong, or anything that scares you. Do not finish the section first.</li>
+      </ol>
+    </div>
+
+    <div class="rulebox" style="border-left:4px solid var(--cyan)">
+      <h4 style="color:var(--cyan)">If it cannot be tagged, how does anyone know you found it?</h4>
+      <p style="margin:0 0 10px;font-size:15.7px;color:var(--ink-dim);line-height:1.5">This is the fair question, and the sheet answers it three ways. A photograph on its own is <b>not</b> proof — one drive cabinet looks like another, and a description can be copied off a training page.</p>
+      <table class="keytab"><tbody>
+        <tr><td><span class="acc a">TAG IT</span></td><td>Accessible and safe to mark. <b>Hang the numbered tag on it.</b> The tag is the proof.</td></tr>
+        <tr><td><span class="acc p">TAG THE ACCESS</span></td><td>The device itself is inside something — a compressor, a fan, a coil, a duct sensor. <b>Tag the panel, door, housing or duct you would open to reach it</b>, with the same number and the word <i>inside</i>. Now there is a physical marker at the closest point a person can legitimately stand.</td></tr>
+        <tr><td><span class="acc r">READ ONLY</span></td><td><b>The door stays closed.</b> Switchgear, ATS, drive cabinets, control panels. Nothing gets a tag — <b>the label you copy down is the proof</b>, and reading a label without opening a door is the skill being taught.</td></tr>
+        <tr><td><span class="acc v">VERIFY</span></td><td>Not a component — a condition to confirm and report on.</td></tr>
+      </tbody></table>
+      <p style="margin:14px 0 8px;font-size:15.7px;color:var(--ink-dim);line-height:1.5"><b>Then the column that actually settles it — &#8220;Proof you were there.&#8221;</b> Every row names something you can only get by standing in front of the equipment: a serial number, a label date, a meter reading, a section count, a point name, the position a switch is in right now. <b>Copy it off the metal, not off this sheet.</b> A serial number and a label date belong to one piece of equipment and nothing else.</p>
+      <p style="margin:0 0 8px;font-size:15.7px;color:var(--ink-dim);line-height:1.5"><b>Photographs help, but frame them as locators:</b> the device <b>and a fixed reference in the same shot</b> — an equipment nameplate, a room number, or the nearest tag. A close-up of a gauge proves nothing. That same gauge with tag B-19 in the corner proves position.</p>
+      <p class="flow-note" style="margin-top:10px"><b>And the one that really settles it:</b> your supervisor walks the section and says <b>&#8220;show me C-03.&#8221;</b> No paperwork survives that. Everything above is what makes the walk quick — <b>the walk is the verification.</b></p>
+    </div>
+
+    <div class="rulebox" style="border-left:4px solid var(--violet)">
+      <h4 style="color:var(--violet)">The second badge — what it is for</h4>
+      <p style="margin:0 0 10px;font-size:15.7px;color:var(--ink-dim);line-height:1.5">This is the one that turns a list into understanding. Sort your thinking by it and equipment stops being a hundred separate objects.</p>
+      <table class="keytab"><tbody>
+        <tr><td><span class="grp g-move">Move</span></td><td>Makes something happen — pumps, fans, compressors, burners.</td></tr>
+        <tr><td><span class="grp g-carry">Carry</span></td><td>Holds or transfers — pipe, duct, coils, barrels, tanks, flue.</td></tr>
+        <tr><td><span class="grp g-control">Control</span></td><td>Decides — panels, controllers, drives, control valves.</td></tr>
+        <tr><td><span class="grp g-prove">Prove</span></td><td><b>Tells you it really happened</b> — flow switches, current switches, end switches, flame scanners. Command is not proof.</td></tr>
+        <tr><td><span class="grp g-protect">Protect</span></td><td><b>Acts whether or not anyone agrees</b> — cutouts, limits, relief valves, freezestats. Mostly hardwired, mostly manual reset.</td></tr>
+        <tr><td><span class="grp g-isolate">Isolate</span></td><td>Hand valves and shutoffs. <b>Record the normal position of every one.</b></td></tr>
+      </tbody></table>
+      <p style="margin:14px 0 8px;font-size:15.7px;color:var(--ink-dim);line-height:1.5"><b>Every row also carries a red line: what goes wrong when that item is wrong.</b> Read it as you go. It is the difference between knowing where the condenser-water isolation valve is, and knowing that <b>left shut it means no CW flow and the chiller will not start.</b> The second sentence is the one you use on a call.</p>
+      <p class="flow-note" style="margin-top:10px"><b>A good way to walk it:</b> do one group at a time across a system rather than working top to bottom. Tag every <b>Protect</b> item on the boiler in one pass and you will understand that boiler better than tagging all twenty-four in list order.</p>
+    </div>
+
+    <div class="rulebox" style="border-left:4px solid var(--red)">
+      <h4 style="color:var(--red)">One phrase worth understanding before you walk a boiler room</h4>
+      <p style="margin:0 0 10px;font-size:15.7px;color:var(--ink-dim);line-height:1.5">Several rows say a room can <b>&#8220;go negative.&#8221;</b> It means the air pressure in that room has dropped <b>below the pressure outside it</b> — because exhaust fans, an air handler, a compressor, or an air unit that is switched off are pulling more air out than is coming in.</p>
+      <p style="margin:0 0 10px;font-size:15.7px;color:var(--ink-dim);line-height:1.5">A flue works on <b>draft</b>: hot gas rising, carrying combustion products up and out. If the room goes negative, <b>the room is pulling harder than the flue is lifting</b> — so the flue becomes the easiest place for the room to draw air from, and flue gas comes back down into the room. That is called <b>spillage</b>, and the <b>barometric damper</b> is usually where it happens, because it is a deliberate opening in the flue.</p>
+      <p style="margin:0 0 10px;font-size:15.7px;color:var(--ink-dim);line-height:1.5">At the same time, a burner short of combustion air burns rich and <b>starts making carbon monoxide of its own.</b> So you get flue gas entering the room, and that flue gas is unusually high in CO.</p>
+      <p class="flow-note" style="margin:0"><b>None of it announces itself.</b> Carbon monoxide has no smell, no colour and no warning. The fire keeps burning and the panel looks perfect. <b>That is why the combustion-air interlock holds the boilers off rather than simply raising an alarm</b> — and why nobody ever jumpers an air-unit proof to get heat back on a cold night.</p>
+    </div>
+
+    <div class="rulebox" style="border-left:4px solid var(--amber)">
+      <h4 style="color:var(--amber)">About the valves</h4>
+      <ol>
+        <li><b>Record the normal position</b> of every manual valve — open, closed, throttled. That record is worth more than the tag: if nobody knows what normal looks like, nobody can spot wrong.</li>
+        <li><b>Some valves must never be closed.</b> A relief discharge is never valved. Nothing may isolate a low-water cutoff. Sprinkler control valves are supervised open. <b>If you find a valve that should not exist, that is a real finding — report it.</b></li>
+        <li><b>An idle machine is not an isolated machine.</b> A leaking or open isolation valve on an off chiller or an idle tower cell keeps passing water — wasted pumping and blended temperatures, with nothing alarming.</li>
+        <li><b>Auto valves have position feedback for a reason.</b> An actuator can stroke while the disc stays put. That is why a sequence waits on an <b>end switch</b>, not on a command.</li>
+        <li><b>Never close a valve you do not understand</b> — and on this exercise, never close one at all.</li>
+      </ol>
+    </div>
+
+    <div class="rulebox">
+      <h4>For the supervisor signing this off</h4>
+      <ol>
+        <li>Walk the section and <b>say &#8220;show me&#8221; for three items you pick</b> — including at least one <span class="acc p">TAG THE ACCESS</span> row, because those are the ones paperwork cannot prove.</li>
+        <li><b>Check the proof column against the equipment.</b> A serial number, a label date or a meter reading either matches the metal or it does not.</li>
+        <li>On valve rows ask <b>&#8220;what would happen if this one were shut?&#8221;</b></li>
+        <li>On <b>Prove</b> rows ask <b>&#8220;what does the BMS show if this device fails but the equipment is fine?&#8221;</b></li>
+        <li>Sign only when you would be <b>comfortable with them describing that equipment on a phone call</b> to you at 2am.</li>
+      </ol>
+    </div>
+  </section>
+
+  <div class="filters">
+    <span class="flab">show</span>
+    <button class="fbtn on" data-f="all">All</button>
+    <button class="fbtn" data-f="g:protect">Protect</button>
+    <button class="fbtn" data-f="g:prove">Prove</button>
+    <button class="fbtn" data-f="g:isolate">Isolate</button>
+    <button class="fbtn" data-f="g:control">Control</button>
+    <button class="fbtn" data-f="g:move">Move</button>
+    <button class="fbtn" data-f="g:carry">Carry</button>
+    <span class="flab" style="margin-left:10px">record</span>
+    <button class="fbtn" data-f="a:tag">Tag it</button>
+    <button class="fbtn" data-f="a:point">Tag the access</button>
+    <button class="fbtn" data-f="a:read">Read only</button>
+  </div>
+  <p class="fnote" id="fnote">Screen only — printing always gives you the full sheet.</p>
+
+  <section id="sec-B" style="--accent:var(--amber)">
+    <div class="s-head"><span class="n">01</span><h2>Boiler plant</h2><span class="line"></span><span class="cnt">24 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="point" data-g="move">
+          <td class="tag">B-01</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Burner &amp; blower</b><span class="hint">The fan and burner head</span><span class="fail">Dirty or damaged burner → yellow flame, rumble on light-off, CO</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Burner nameplate or the boiler serial. Say which end of the machine it is on<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">B-02</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — main gas cock</b><span class="hint">The hand valve that shuts gas to this boiler</span><span class="fail">Left closed → purges, tries, locks out on flame failure every time</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Valve size and handle type, and how many turns from the boiler<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">B-03</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b><b>AUTO</b> — main gas safety shutoff valves</b><span class="hint">Two automatic valves in series</span><span class="fail">One leaking by → gas into a hot chamber with nothing showing on the panel</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Count them and read the valve body label<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="control">
+          <td class="tag">B-04</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-control">Control</span><b>Main gas regulator</b><span class="hint">Sets the pressure the burner sees</span><span class="fail">Drifted → over- or under-firing, wrong manifold pressure</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Regulator make and the spring range on its tag<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">B-05</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — pilot gas cock &amp; pilot solenoid</b><span class="hint">The pilot's own branch, ahead of the main valves</span><span class="fail">Pilot cock closed → no pilot, lockout — with a perfectly healthy main train</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where the pilot line branches from the main line<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">B-06</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Flame safeguard / burner control panel</b><span class="hint">Runs the ignition sequence</span><span class="fail">In lockout → the boiler ignores the BMS entirely until somebody resets it by hand</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Flame safeguard model number off the panel face<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">B-07</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>Flame scanner (UV) or flame rod</b><span class="hint">Proves there is really a flame</span><span class="fail">Dirty lens → reads a good flame as failure. One of the most common nuisance lockouts</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Scanner type and what it is sighted at<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">B-08</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>Air proving switch</b><span class="hint">Proves the blower is moving air</span><span class="fail">Tubing plugged → air never proves, sequence stalls before ignition</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where its sensing tubing goes<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-09</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Combustion air source</b><span class="hint">Louver, duct, or the HV/MAU feeding the room</span><span class="fail">Blocked louver, or the HV/MAU off → the boilers are held off. <b>And worse:</b> exhaust fans can then pull the boiler room below the pressure outside it, and flue gas comes back <i>down</i> the flue into the room instead of going up it — usually at the barometric damper. <b>That is carbon monoxide, and you cannot smell it</b></span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Louver, duct or air unit — and the unit tag if it is an HV/MAU<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">B-10</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b><b>AUTO</b> — combustion air damper + end switch</b><span class="hint">Proven open before the burner may fire</span><span class="fail">End switch not made → no start, even if the damper looks open</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Actuator make and where the end switch sits<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-11</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Flue / breeching &amp; barometric damper</b><span class="hint">Where products of combustion leave</span><span class="fail">Blocked flue, or a barometric damper facing the wrong way → flue gas spills into the room rather than up the stack. <b>Silent, invisible, and a carbon monoxide event</b></span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Flue diameter and where it goes through the wall or roof<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">B-12</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Low-water cutoff / water flow proving switch</b><span class="hint">At or above the top, or in the outlet</span><span class="fail">No flow proven → the burner will not fire. A trip means pump, valve or strainer — not the switch</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Device type — flow switch or probe — and its exact position on the pipe<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="check" data-g="protect">
+          <td class="tag">B-13</td>
+          <td class="comp"><span class="acc v">VERIFY</span><span class="grp g-protect">Protect</span><b><b>CHECK:</b> no valve can isolate that switch</b><span class="hint">Walk the pipe both ways. If you find one, report it</span><span class="fail">A valve here can defeat the low-water cutoff completely. That is why it must not exist</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Walk the pipe both ways. Write NONE FOUND, or the valve you found<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">B-14</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>High-limit aquastat</b><span class="hint">Separate from the operating control. Manual reset</span><span class="fail">Tripped → boiler off until hand reset, and it means the operating control failed first</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its setpoint and where the reset button is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">B-15</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Safety relief valve &amp; its discharge pipe</b><span class="hint">Trace where it terminates. <b>Never valved</b></span><span class="fail">Weeping → waterlogged expansion tank or pressure too high. Valved or plugged → catastrophic</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>The valve's set pressure off its tag, and where the pipe terminates<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-16</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Boiler supply &amp; return connections</b><span class="hint">Which is which, and which way water flows</span><span class="fail">Piped or read backwards → you misdiagnose everything downstream of it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pipe size, and which connection is supply<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">B-17</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — boiler supply &amp; return isolation valves</b><span class="hint">How this boiler comes off line. Note normal position</span><span class="fail">Left shut after service → no flow, and the boiler will not fire</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Handle type, and the NORMAL POSITION of each<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">B-18</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — boiler drain valve</b><span class="hint">Usually near the return connection</span><span class="fail">Left cracked open → constant make-up, feeding oxygen and minerals into the loop</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it drains to<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">B-19</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Boiler pump and/or system pump</b><span class="hint">Identify which pump does which job</span><span class="fail">Off or failed → no flow proof, no fire, and the building goes cold</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pump nameplate: make, HP, and what it is tagged as<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">B-20</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — pump suction &amp; discharge isolation, and the check valve</b><span class="hint">Which way the check valve lets water go</span><span class="fail">Shut → the pump deadheads. Check valve backwards → flow fights itself</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Normal position of each, and which way the check valve faces<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-21</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Expansion tank &amp; its isolation valve</b><span class="hint">Absorbs the swelling as water heats</span><span class="fail">Waterlogged → pressure swings and the relief valve starts weeping</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Tank type and its charge pressure if tagged<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-22</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Air separator</b><span class="fail">Air left in the loop → noisy pipes, poor heat transfer, pumps losing prime</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where its air vent discharges<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">B-23</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Make-up assembly, meter &amp; <b>MANUAL</b> isolation</b><span class="hint">The leak detector nobody looks at</span><span class="fail">Reading climbing → a leak somewhere, quietly diluting the inhibitor</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>The meter reading today, with the date<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">B-24</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>All manual reset buttons</b><span class="hint">Point at every single one</span><span class="fail">Reset repeatedly without finding the cause → the fault is still there, and now armed again</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>List every one you found and what device it belongs to<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-C" style="--accent:var(--cyan)">
+    <div class="s-head"><span class="n">02</span><h2>Chiller plant</h2><span class="line"></span><span class="cnt">18 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">C-01</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Evaporator barrel</b><span class="hint">The chilled-water side</span><span class="fail">Fouled tubes → approach climbs. Frozen → split tubes and a very long outage</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which end of the machine, and the pipe size in and out<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">C-02</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Condenser barrel</b><span class="hint">The condenser-water side</span><span class="fail">Fouled → head pressure climbs, efficiency falls, surge risk rises</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which end, and where it connects to the tower loop<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">C-03</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Compressor</b><span class="hint">Inside the machine — identify it, do not tag it</span><span class="fail">Surge or bearing wear → the expensive failure. Oil and approach warn you first</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Compressor type and the nameplate serial<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">C-04</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>Oil system: pump, heater, cooler</b><span class="hint">Where oil pressure and temperature read out</span><span class="fail">Oil heater off overnight → refuses to start. Low oil pressure → shuts down to save the bearings</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where oil pressure and oil temperature read out<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">C-05</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Starter / VFD</b><span class="hint">Inside a cabinet — read the label, keep the door shut</span><span class="fail">Faulted → no start, and the fault code is at the drive, not on the BMS</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Drive or starter make and model off the cabinet label<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">C-06</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Chiller HMI / control panel</b><span class="hint">Local or Remote, state, alarms</span><span class="fail">Left in Local → ignores the BMS enable. The plant calls for cooling and nothing happens</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>What the screen says right now: Local or Remote, and its state<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">C-07</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b><b>AUTO</b> — CHW isolation valve + end switch</b><span class="hint">Strokes slowly; the sequence waits on it</span><span class="fail">End switch not made → start blocked. Leaking through when idle → bypass and low delta-T</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Actuator make, and where the end switch is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">C-08</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b><b>AUTO</b> — CW isolation valve + end switch</b><span class="fail">End switch not made → start blocked. Leaking when idle → warm water blended into the loop</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Actuator make, and where the end switch is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">C-09</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — evaporator inlet &amp; outlet isolation valves</b><span class="fail">Left shut → no chilled-water flow → the chiller will not start, and the barrel could freeze</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Valve type and NORMAL POSITION of each<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">C-10</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — condenser inlet &amp; outlet isolation valves</b><span class="fail">Left shut → <b>no condenser-water flow → the chiller will not start.</b> It would have nowhere to send its heat</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Valve type and NORMAL POSITION of each<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">C-11</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — barrel drain &amp; vent valves</b><span class="fail">Left cracked → slow water loss and air drawn into the loop</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where each drains to<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">C-12</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b>CHW flow switch</b><span class="hint">Proves chilled-water flow</span><span class="fail">Not proven → no start. This is what protects the evaporator from freezing</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its position on the pipe relative to the barrel<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">C-13</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b>CW flow switch</b><span class="hint">Proves condenser-water flow</span><span class="fail">Not proven → no start. This is the chiller's proof it has somewhere to reject heat</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its position on the pipe relative to the barrel<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">C-14</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Chilled-water pump (CHWP)</b><span class="hint">And which chiller it serves</span><span class="fail">Off, or status never made → no flow proof, no chiller</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pump tag, make and HP<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">C-15</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Condenser-water pump (CWP)</b><span class="hint">And which chiller it serves</span><span class="fail">Off → no condenser-water flow, no start, and the tower does nothing</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pump tag, make and HP<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">C-16</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — pump isolation &amp; check / triple-duty valve</b><span class="hint">On both pumps</span><span class="fail">Shut → the pump deadheads. Check valve backwards → reverse flow that a flow switch may still read as good</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Normal position, and which way the check valve faces<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">C-17</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>Refrigerant service valves</b><span class="hint"><b>Identify only.</b> Vendor scope — never operate</span><span class="fail">Operated by anyone unqualified → refrigerant release and a machine down for weeks</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>How many, and where they are. DO NOT OPERATE<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">C-18</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Refrigerant relief device &amp; vent</b><span class="hint">Trace where it discharges</span><span class="fail">Blocked, or discharging into an occupied space → a life-safety event</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where the vent line terminates<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-T" style="--accent:var(--cyan)">
+    <div class="s-head"><span class="n">03</span><h2>Cooling tower</h2><span class="line"></span><span class="cnt">18 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">T-01</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>Fill media</b><span class="hint">Inside the tower — identify from a safe position</span><span class="fail">Fouled or collapsed → poor heat rejection, condenser temperature climbs</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Cell number, and fill type if visible<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">T-02</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>Hot deck / distribution basin</b><span class="hint">Where warm return water arrives</span><span class="fail">Uneven flow → dry spots in the fill and lost capacity</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which cell, and how water arrives at it<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">T-03</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>Spray nozzles</b><span class="hint">Check the pattern from a safe position</span><span class="fail">Clogged or missing → dry spots in the fill, poor heat transfer</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Cell number, and whether the pattern looks even<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">T-04</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>Drift eliminators</b><span class="fail">Damaged → water carryover, chemical loss, and icing in winter</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Cell number and their condition<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">T-05</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Fan and VFD or two-speed motor</b><span class="hint">Fan is inside the stack — do not tag</span><span class="fail">Off or faulted → condenser-water temperature climbs and chiller head pressure rises with it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan tag, motor HP, and the drive location<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">T-06</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Gearbox / drive shaft</b><span class="fail">Low oil or bearing wear → vibration, and eventually a trip</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Gearbox make and the oil level sight glass location<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">T-07</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Vibration switch</b><span class="hint">Hardwired cutout on the fan/gearbox</span><span class="fail">Trips → the fan stopped for a real reason. Bypassed → a failing fan runs to destruction</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where the switch is mounted and where its reset is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">T-08</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Cold-water basin &amp; sump</b><span class="fail">Low level → pump cavitation. Overflow → water and chemical straight to drain</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Basin depth marks or level device<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">T-09</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>Sump heater</b><span class="hint">Freeze protection with the tower idle</span><span class="fail">Failed before first freeze → frozen basin</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its kW or amp rating and its thermostat location<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">T-10</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Heat trace on make-up and basin piping</b><span class="fail">Off → frozen make-up line and no level control</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which pipe runs are traced, and where the controller is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="control">
+          <td class="tag">T-11</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-control">Control</span><b><b>AUTO</b> — tower bypass valve</b><span class="hint">First stage of condenser-water temperature control</span><span class="fail"><b>Stuck closed → condenser water too cold → the chiller loses lift and surges or trips on oil pressure.</b> Stuck open → water too warm to hold setpoint</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Actuator make and which way it fails<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">T-12</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — per-cell supply isolation valve</b><span class="hint">How a cell is idled</span><span class="fail">Shut on a working cell → that cell does nothing while you wonder why capacity is down</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Cell number and NORMAL POSITION<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">T-13</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — per-cell return / basin isolation valve</b><span class="hint"><b>Left open on an idle cell, it steals flow from the working cells</b></span><span class="fail">Left open on an idle cell → it steals flow from the working cells, and the basin overflows</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Cell number and NORMAL POSITION<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">T-14</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — equalizer line valves between cells</b><span class="hint">Normally open so cells share level</span><span class="fail">Shut → cells stop sharing level; one overflows while another starves</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>How many cells are tied, and NORMAL POSITION<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">T-15</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — basin drain valve</b><span class="fail">Left open → the basin empties and the pumps lose suction</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it drains to<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">T-16</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Make-up: float or probes, <b>AUTO</b> valve, <b>MANUAL</b> isolation</b><span class="fail">Failed valve or probe → the basin drops, or overflows continuously</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Device type and the make-up meter reading today<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="control">
+          <td class="tag">T-17</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-control">Control</span><b><b>AUTO</b> — blowdown / bleed valve</b><span class="hint">Water treatment drives this on conductivity</span><span class="fail">Stuck open → water and chemical wasted. Stuck shut → cycles climb and the tower scales</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where the conductivity controller is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">T-18</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b><b>MANUAL</b> — blowdown isolation &amp; basin strainer</b><span class="fail">Plugged strainer → flow starved, and the nozzles suffer first</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Normal position, and when the strainer was last cleaned<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-A" style="--accent:var(--cyan)">
+    <div class="s-head"><span class="n">04</span><h2>Air handling unit</h2><span class="line"></span><span class="cnt">17 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">A-01</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b>OA louver, OA damper + end switch</b><span class="hint">Louver in the wall, damper inside the unit</span><span class="fail">Fan started against a shut damper → <b>burst supply duct.</b> End switch not made → no start at all</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Louver location outside, damper actuator make, end switch position<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">A-02</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>Filter bank and filter DP gauge / switch</b><span class="fail">Loaded filters → the box is starved while the fan reads &#8216;running&#8217; and sits pinned at 100%</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Filter size and quantity, and the DP reading today<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">A-03</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>CHW coil, <b>AUTO</b> control valve, <b>MANUAL</b> isolation valves</b><span class="hint">Coil is inside the unit — tag the valves, not the coil</span><span class="fail">Control valve leaking by → simultaneous heating and cooling. Isolation shut → no cooling at all</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which section number counting from the OA end, and the valve tags either side<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">A-04</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>HHW / preheat coil, <b>AUTO</b> valve, <b>MANUAL</b> isolation</b><span class="fail">Isolation shut → no heat, and in cold weather a real freeze risk on the coil</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which section number, and the valve tags either side<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">A-05</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Supply fan and its VFD</b><span class="hint">Fan inside the unit; drive in a cabinet</span><span class="fail">Pinned at 100% speed → saturated. Filters, dampers, or a sensor reading nothing</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan type, motor HP, and the drive cabinet tag<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">A-06</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>Fan status proof: current switch or DP switch</b><span class="hint">Independent proof the fan runs</span><span class="fail">Fails while the fan runs → false alarm. Echoes the command instead → never reveals a real failure</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Device type, and where it is mounted<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">A-07</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>Return or relief fan</b><span class="fail">Not started → the return path is blocked → <b>low-static trip, or an imploded return duct</b></span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan tag and motor HP<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">A-08</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>Freezestat and its capillary</b><span class="hint">Check it is woven across the coil face</span><span class="fail">Trips → a genuine cold spot on the coil. Capillary bundled in one corner → most of the coil unprotected</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where the capillary runs, and where the reset button is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">A-09</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>High-static cutout</b><span class="hint">Supply duct</span><span class="fail">Trips → something closed downstream: a fire damper, every VAV driving shut, or a blank left in the duct</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it senses, and where its reset is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="protect">
+          <td class="tag">A-10</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-protect">Protect</span><b>Low-static cutout</b><span class="hint">Return or exhaust duct</span><span class="fail">Trips → the return path is blocked: relief damper, return fan, or a plugged return</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it senses, and where its reset is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">A-11</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Access-door safety switch</b><span class="hint">Hardwired permissive</span><span class="fail">Jumpered → the unit runs with a door open, and possibly with someone inside it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which door, and confirm it drops the fan when opened — ask before testing<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">A-12</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Duct smoke detector</b><span class="fail">Left in test → the AHU is disabled and nobody knows why</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Supply or return duct, and where it annunciates<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="carry">
+          <td class="tag">A-13</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-carry">Carry</span><b>ERM coils — OA side and exhaust side</b><span class="hint">Two coils, one glycol loop</span><span class="fail">Frosted or fouled → recovery lost and the coils work harder all winter</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which section the OA coil is in, and where the exhaust coil sits<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">A-14</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>ERM glycol pump, tank, <b>AUTO</b> 3-way frost valve</b><span class="fail">Pump off → no recovery, money out the roof. Degraded glycol → corrosion through the loop</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pump tag, glycol type, and the last freeze-point reading if posted<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">A-15</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Lab exhaust fan (LEF) and standby</b><span class="fail">Fails without the standby starting → <b>containment lost.</b> This is a life-safety fan</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan tag, and whether it is on emergency power<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">A-16</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>General exhaust fan (GEF)</b><span class="fail">Off → restrooms and MDF rooms unventilated, and building pressure shifts</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan tag and what it serves<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="control">
+          <td class="tag">A-17</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-control">Control</span><b>A VAV box and a fan-powered terminal</b><span class="hint">Above ceiling — identify, do not tag</span><span class="fail">Airflow tubing plugged → the box controls to a lie. Reheat valve leaking → it heats while calling for cooling</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Box tag, the room it serves, and its point name on the graphic<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-M" style="--accent:var(--violet)">
+    <div class="s-head"><span class="n">05</span><h2>BMS &amp; controls</h2><span class="line"></span><span class="cnt">7 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="read" data-g="control">
+          <td class="tag">M-01</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Front end workstation</b><span class="hint">Where you log in</span><span class="fail">Down → you lose <b>visibility</b>, not control. The controllers keep controlling</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Vendor and product name on the login screen<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">M-02</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Supervisory / network controller</b><span class="fail">Down → schedules, resets, trends and alarms stop. Field loops keep running</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Controller model and which buildings or systems it holds<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">M-03</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>A field controller panel</b><span class="hint">For one piece of equipment</span><span class="fail">Down → that equipment falls back to a default, or stops</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Panel tag, controller model, and what equipment it runs<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">M-04</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>A sensor — name what it measures</b><span class="hint">In a duct or pipe well</span><span class="fail">Drifted → a confident, plausible, wrong number that the loop obediently controls to</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its POINT NAME as it reads on the graphic, and what it measures<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="move">
+          <td class="tag">M-05</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-move">Move</span><b>An actuator — name what it moves</b><span class="fail">Linkage loose → it strokes while the blade or stem stays put</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>What it moves, and its point name<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="point" data-g="prove">
+          <td class="tag">M-06</td>
+          <td class="comp"><span class="acc p">TAG THE ACCESS</span><span class="grp g-prove">Prove</span><b>A current switch or status contact</b><span class="hint">Proof, not command</span><span class="fail">Fails → command ON with status OFF. Wired as an echo → it never disagrees and never helps</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>What it proves, and its point name<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="carry">
+          <td class="tag">M-07</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-carry">Carry</span><b>Field bus cabling / a network switch</b><span class="fail">Trunk fault → a whole branch of the graphic goes stale at once. That is a bus, not a device</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Protocol and where the trunk runs<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-E" style="--accent:var(--amber)">
+    <div class="s-head"><span class="n">06</span><h2>Electrical</h2><span class="line"></span><span class="cnt">12 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="read" data-g="carry">
+          <td class="tag">E-01</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-carry">Carry</span><b>Utility service &amp; transformer</b><span class="hint">From the outside only</span><span class="fail">Loss → outage. The generator and ATSs are what happen next</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Transformer kVA and voltages off the nameplate, from outside the fence<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">E-02</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Main switchgear</b><span class="hint">Doors closed — read the labels</span><span class="fail">A main trip takes the building. Never operated by an entry-level tech, full stop</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Switchboard designation and main breaker size off the label<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">E-03</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>A distribution panel and its schedule</b><span class="fail">Breaker trip → trace it with the schedule. Reset once, and never hold one in</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Panel designation, voltage, and what it feeds per the schedule<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="carry">
+          <td class="tag">E-04</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-carry">Carry</span><b>A step-down transformer</b><span class="fail">Overheated or failed → everything downstream is dead</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>kVA and voltages off the nameplate<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">E-05</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>MCC (Motor Control Center)</b><span class="fail">A bucket trip stops that pump or fan — sometimes with no BMS alarm at all</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>MCC designation and what motors it feeds<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">E-06</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>A VFD (Variable Frequency Drive)</b><span class="hint">Inside a cabinet — never open it</span><span class="fail">Faulted → the motor is stopped, and the fault code is at the drive</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Drive model and the motor it feeds, off the cabinet label<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="move">
+          <td class="tag">E-07</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-move">Move</span><b>Generator and its controller</b><span class="fail">Fails to start → no emergency power. Cool-down cut short → it fails later, on the night you need it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Generator kW, fuel type, and what the controller reads right now<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">E-08</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>ATS — and its position indicator</b><span class="hint">Read from the front, door closed</span><span class="fail">Fails to transfer, or sits in <b>Not-In-Auto</b> → emergency power never arrives</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>ATS designation, what it feeds, and its position RIGHT NOW<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="carry">
+          <td class="tag">E-09</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-carry">Carry</span><b>Emergency bus / emergency panels</b><span class="fail">Breaker open or overloaded → life-safety loads lost during an outage</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which panels are on it<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="protect">
+          <td class="tag">E-10</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-protect">Protect</span><b>UPS (Uninterruptible Power Supply)</b><span class="fail">Batteries at end of life → the blink gets through to the BMS and the instruments</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>UPS kVA and what it supports<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="protect">
+          <td class="tag">E-11</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-protect">Protect</span><b>An EPO button — know it and never press it</b><span class="fail">Pressed → everything down, immediately and deliberately. Know it so you never touch it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it is and what it kills. DO NOT PRESS<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="protect">
+          <td class="tag">E-12</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-protect">Protect</span><b>Arc-flash labels — read one out loud</b><span class="fail">Missing or out of date → work on that gear stops until it is corrected</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Incident energy, PPE category, and the LABEL DATE<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-L" style="--accent:var(--red)">
+    <div class="s-head"><span class="n">07</span><h2>Life safety</h2><span class="line"></span><span class="cnt">11 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="read" data-g="control">
+          <td class="tag">L-01</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>FACP (Fire Alarm Control Panel)</b><span class="fail">In trouble → a device or circuit is impaired. Report it; never silence and forget</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Panel make, and what it shows right now: normal, trouble or alarm<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">L-02</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>A pull station and a notification device</b><span class="fail">Impaired → occupants are not warned</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Location of each and what device type<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">L-03</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>A duct smoke detector</b><span class="fail">Trips → the AHU shuts down. Left in test → the AHU is disabled silently</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which AHU it serves, and where it annunciates<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">L-04</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b>Sprinkler riser and its control valve</b><span class="hint"><b>Supervised open</b> — note how that is monitored</span><span class="fail">Closed → <b>no water to that system.</b> That is exactly why it is supervised open</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Riser number, valve type, and how it is supervised<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">L-05</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Fire pump and jockey pump</b><span class="fail">Fails to start → no pressure when it is needed. Jockey short-cycling → a leak somewhere</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Pump rating, driver type, and the jockey setpoint if posted<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="prove">
+          <td class="tag">L-06</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-prove">Prove</span><b>A floor control valve and flow switch</b><span class="fail">Closed → that floor is unprotected</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Floor served, and the valve position<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">L-07</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>A smoke or fire damper access panel</b><span class="fail">Stuck closed → AHU high-static trip. Stuck open → smoke travels where it should not</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which damper and what wall it is in<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">L-08</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Stair pressurization fan</b><span class="fail">Fails → the stairs become untenable in a fire</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Fan tag and which stair it serves<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="control">
+          <td class="tag">L-09</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-control">Control</span><b>Elevator recall — where the signal comes from</b><span class="fail">Fails → cars do not return, and people ride into a fire floor</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Which detector initiates it, and the recall floor<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">L-10</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>Eyewash / emergency shower</b><span class="fail">Blocked or no flow → useless at the one moment it matters</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Location and the last inspection tag date<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="read" data-g="protect">
+          <td class="tag">L-11</td>
+          <td class="comp"><span class="acc r">READ ONLY</span><span class="grp g-protect">Protect</span><b>Gas detection panel, if fitted</b><span class="fail">In alarm → evacuate and call. Never investigate a gas alarm alone</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>What gas it detects and where it annunciates<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+  <section id="sec-P" style="--accent:var(--blue)">
+    <div class="s-head"><span class="n">08</span><h2>Plumbing</h2><span class="line"></span><span class="cnt">10 items</span></div>
+    <table class="tabtab">
+      <thead><tr>
+        <th style="width:6%">Tag</th><th style="width:34%">Component &amp; what goes wrong</th>
+        <th style="width:19%">Where is it? <span class="th2">building · room · level</span></th>
+        <th style="width:29%">Proof you were there <span class="th2">copy it off the metal</span></th>
+        <th style="width:12%">Verified</th>
+      </tr></thead>
+      <tbody>
+        <tr data-a="tag" data-g="isolate">
+          <td class="tag">P-01</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-isolate">Isolate</span><b>Domestic service, meter &amp; <b>MANUAL</b> main shutoff</b><span class="fail">Location unknown → nobody can stop a flood quickly</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Meter reading today, and where the main shutoff is<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="protect">
+          <td class="tag">P-02</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-protect">Protect</span><b>RPZ backflow preventer</b><span class="hint">And where it discharges</span><span class="fail">Discharging → either it is doing its job or it has failed. Either way, report it</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Size, make, and the last test tag date<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="control">
+          <td class="tag">P-03</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-control">Control</span><b>PRV station</b><span class="fail">Failed open → high pressure downstream and relief valves lifting</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Inlet and outlet pressures off the gauges<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">P-04</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>Booster pump set</b><span class="fail">Off → no water pressure on the upper floors</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>How many pumps and their setpoint if posted<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">P-05</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Water heater and recirculation pump</b><span class="fail">Recirculation off → long waits at the tap, and stagnant legs where Legionella grows</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Heater type, capacity, and the setpoint<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="control">
+          <td class="tag">P-06</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-control">Control</span><b>Mixing valve</b><span class="fail">Drifted → a scald risk, or a cold supply nobody can use</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Its outlet setpoint<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="move">
+          <td class="tag">P-07</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-move">Move</span><b>A sump or ejector pit and its pumps</b><span class="fail">Failed → the pit floods and water enters the space</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>How many pumps, and what area drains to it<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">P-08</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Oil / water separator</b><span class="fail">Full or bypassed → oil to the sewer, which is a reportable event</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it is and what discharges to it<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">P-09</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>Neutralization tank</b><span class="hint">Where lab drains go</span><span class="fail">Media exhausted → acid to drain, which is also reportable</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Where it is and the pH reading if monitored<i></i></td>
+          <td class="sign"></td>
+        </tr>
+        <tr data-a="tag" data-g="carry">
+          <td class="tag">P-10</td>
+          <td class="comp"><span class="acc a">TAG IT</span><span class="grp g-carry">Carry</span><b>RO / DI skid</b><span class="fail">Down → lab process water is lost, and that is a tenant-facing outage</span></td>
+          <td class="fill"></td>
+          <td class="cap"><span class="capl">write down</span>Skid make and what it feeds<i></i></td>
+          <td class="sign"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signoff"><div class="sbox"><span>Trainee</span><i></i></div><div class="sbox"><span>Reviewed by</span><i></i></div><div class="sbox"><span>Date</span><i></i></div></div>
+  </section>
+
+  <section id="sec-F" style="--accent:var(--red)">
+    <div class="s-head"><span class="n">99</span><h2>Fault index — when something goes wrong, which tags matter</h2><span class="line"></span></div>
+    <p class="lead">This is the pay-off. Once the tags are up, <b>a symptom points at a short list of things to go and look at</b> — instead of a whole building.</p>
+    <p class="flow-note">Work down each list in order; it is roughly the order of likelihood. <b>None of this replaces reading the BMS and the machine's own screen first</b> — it tells you where to walk once you have.</p>
+    <table class="faults">
+      <thead><tr><th>Symptom</th><th>Go and look at</th></tr></thead>
+      <tbody>
+        <tr><td class="sym"><b>Boiler will not fire at all</b><span class="hint">Start at the BMS, then the burner control panel — most of these are permissives, not faults</span></td><td class="tags"><span class="ft">B-02</span> <span class="ft">B-05</span> <span class="ft">B-06</span> <span class="ft">B-08</span> <span class="ft">B-09</span> <span class="ft">B-10</span> <span class="ft">B-12</span> <span class="ft">B-14</span> <span class="ft">B-17</span> <span class="ft">B-19</span></td></tr>
+        <tr><td class="sym"><b>Boiler lights, runs about ten seconds, locks out</b><span class="hint">The main flame never stood on its own when the pilot dropped out</span></td><td class="tags"><span class="ft">B-03</span> <span class="ft">B-06</span> <span class="ft">B-07</span></td></tr>
+        <tr><td class="sym"><b>Boiler is fine but the building is cold</b><span class="hint">The heat is being made and not delivered — look at flow, not fire</span></td><td class="tags"><span class="ft">B-17</span> <span class="ft">B-19</span> <span class="ft">B-20</span> <span class="ft">B-23</span> <span class="ft">A-04</span></td></tr>
+        <tr><td class="sym"><b>Chiller will not start</b><span class="hint">A chain of permissives. It is waiting for something and it will name it</span></td><td class="tags"><span class="ft">C-05</span> <span class="ft">C-06</span> <span class="ft">C-07</span> <span class="ft">C-08</span> <span class="ft">C-12</span> <span class="ft">C-13</span> <span class="ft">C-14</span> <span class="ft">C-15</span></td></tr>
+        <tr><td class="sym"><b>Chiller runs but the building is warm</b><span class="hint">Heat is being moved but something is bypassing or blending</span></td><td class="tags"><span class="ft">C-01</span> <span class="ft">C-09</span> <span class="ft">C-16</span> <span class="ft">T-12</span> <span class="ft">T-13</span></td></tr>
+        <tr><td class="sym"><b>Chiller trips on oil pressure, or surges</b><span class="hint">Usually lift — condenser water too cold, or oil not protected</span></td><td class="tags"><span class="ft">C-04</span> <span class="ft">T-11</span></td></tr>
+        <tr><td class="sym"><b>Cooling tower basin freezing</b><span class="hint">Freeze protection, and whether the bypass is doing its job</span></td><td class="tags"><span class="ft">T-09</span> <span class="ft">T-10</span> <span class="ft">T-11</span></td></tr>
+        <tr><td class="sym"><b>AHU fan will not start</b><span class="hint">Nearly always a permissive or a hardwired safety, not the fan</span></td><td class="tags"><span class="ft">A-01</span> <span class="ft">A-06</span> <span class="ft">A-08</span> <span class="ft">A-09</span> <span class="ft">A-10</span> <span class="ft">A-11</span> <span class="ft">A-12</span></td></tr>
+        <tr><td class="sym"><b>A coil froze</b><span class="hint">Cold air on a coil with no heat and no flow</span></td><td class="tags"><span class="ft">A-01</span> <span class="ft">A-08</span> <span class="ft">A-04</span></td></tr>
+        <tr><td class="sym"><b>One room too hot or too cold</b><span class="hint">The plant is usually fine. Start at the terminal unit and its sensor</span></td><td class="tags"><span class="ft">A-17</span> <span class="ft">M-04</span> <span class="ft">M-05</span></td></tr>
+        <tr><td class="sym"><b>A whole graphic went stale at once</b><span class="hint">One device is a device. A whole branch is a network</span></td><td class="tags"><span class="ft">M-02</span> <span class="ft">M-03</span> <span class="ft">M-07</span></td></tr>
+        <tr><td class="sym"><b>Power outage — what should have happened</b><span class="hint">Know this before it happens, not during</span></td><td class="tags"><span class="ft">E-07</span> <span class="ft">E-08</span> <span class="ft">E-09</span> <span class="ft">E-10</span></td></tr>
+        <tr><td class="sym"><b>Water where it should not be</b><span class="hint">Find the source, then the isolation</span></td><td class="tags"><span class="ft">B-17</span> <span class="ft">B-20</span> <span class="ft">B-23</span> <span class="ft">C-09</span> <span class="ft">C-10</span> <span class="ft">P-01</span></td></tr>
+      </tbody>
+    </table>
+    <p class="flow-note" style="margin-top:14px"><b>Add your own rows.</b> Every time you work a real call, write the symptom and the tags that turned out to matter. <b>In a year this becomes the most useful page you own</b> — because it is yours, and it is about this building.</p>
+  </section>
+
+  <section>
+    <div class="s-head"><span class="n">100</span><h2>When every section is signed</h2><span class="line"></span></div>
+    <p class="lead">Hand the completed sheet to your manager. <b>Keep a copy.</b></p>
+    <p class="flow-note">Then do the thing that makes it stick: <b>pick any three items and trace what connects them.</b> Follow water from a boiler through its isolation valves to a coil and back. Follow the wire from a current switch to a controller to a graphic. Follow air from a louver to a burner. The tags teach you <i>where things are</i> — tracing between them teaches you <b>how the building actually works</b>.</p>
+    <div class="signoff" style="margin-top:20px">
+      <div class="sbox"><span>All sections complete — trainee</span><i></i></div>
+      <div class="sbox"><span>Manager</span><i></i></div>
+      <div class="sbox"><span>Date</span><i></i></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var btns=[].slice.call(document.querySelectorAll('.fbtn'));
+  var note=document.getElementById('fnote');
+  var rows=[].slice.call(document.querySelectorAll('table.tabtab tbody tr'));
+  btns.forEach(function(b){
+    b.onclick=function(){
+      var f=b.getAttribute('data-f');
+      btns.forEach(function(x){ x.classList.toggle('on', x===b); });
+      var shown=0;
+      rows.forEach(function(r){
+        var ok=(f==='all')||(f.indexOf('g:')===0&&r.getAttribute('data-g')===f.slice(2))||(f.indexOf('a:')===0&&r.getAttribute('data-a')===f.slice(2));
+        r.hidden=!ok; if(ok) shown++;
+      });
+      [].forEach.call(document.querySelectorAll('section[id^="sec-"]'),function(s){
+        if(s.id==='sec-F') return;
+        var all=s.querySelectorAll('table.tabtab tbody tr'), vis=0;
+        [].forEach.call(all,function(r){ if(!r.hidden) vis++; });
+        s.hidden = all.length>0 && vis===0;
+      });
+      note.textContent=(f==='all')?'Screen only — printing always gives you the full sheet.'
+        :shown+' of 117 items shown. Screen only — printing always gives you the full sheet.';
+    };
+  });
+})();
+</script>
+</body>
+</html>
