@@ -13,13 +13,24 @@ import { WaterBillingTab } from './WaterBillingTab';
 import { MroBillingTab } from './MroBillingTab';
 import { UkgReconcileTab } from './UkgReconcileTab';
 
-type Tab = 'users' | 'oncall' | 'oncall_experiment' | 'buildings' | 'rounds' | 'weekly' | 'water' | 'mro' | 'ukg';
+type Tab = 'users' | 'ukg' | 'oncall' | 'buildings' | 'rounds' | 'more';
+// Low-traffic tools tucked under one right-aligned "More" tab (user
+// 2026-09-22) so the day-to-day tabs stay front and centre. The sub-tab
+// row only renders while "More" is selected.
+type MoreTab = 'weekly' | 'water' | 'mro' | 'oncall_experiment';
+const MORE_TABS: { key: MoreTab; label: React.ReactNode }[] = [
+  { key: 'weekly',            label: 'Weekly Update' },
+  { key: 'water',             label: 'Water Billing' },
+  { key: 'mro',               label: 'MRO Billing' },
+  { key: 'oncall_experiment', label: <>Temp Coverage <span className="t-small ml-1 px-1 rounded" style={{ background: 'rgba(168,85,247,0.18)', color: '#7e22ce', fontSize: 9, fontWeight: 600, letterSpacing: '0.5px' }}>EXP</span></> },
+];
 
 export default function Admin() {
   const { session, signOut } = useAuth();
   const me = useMe();
   const siteAccess = useMySiteAccess();
   const [tab, setTab] = useState<Tab>('users');
+  const [moreTab, setMoreTab] = useState<MoreTab>('weekly');
 
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -89,29 +100,38 @@ export default function Admin() {
               <TabButton active={tab === 'rounds'} onClick={() => setTab('rounds')}>
                 Rounds
               </TabButton>
-              <TabButton active={tab === 'weekly'} onClick={() => setTab('weekly')}>
-                Weekly Update
-              </TabButton>
-              <TabButton active={tab === 'water'} onClick={() => setTab('water')}>
-                Water Billing
-              </TabButton>
-              <TabButton active={tab === 'mro'} onClick={() => setTab('mro')}>
-                MRO Billing
-              </TabButton>
-              <TabButton active={tab === 'oncall_experiment'} onClick={() => setTab('oncall_experiment')}>
-                Temp Coverage <span className="t-small ml-1 px-1 rounded" style={{ background: 'rgba(168,85,247,0.18)', color: '#7e22ce', fontSize: 9, fontWeight: 600, letterSpacing: '0.5px' }}>EXP</span>
-              </TabButton>
-              <TabButton disabled title="Coming in Phase 5">SOPs</TabButton>
+              <div className="ml-auto">
+                <TabButton
+                  active={tab === 'more'}
+                  onClick={() => setTab('more')}
+                  title="Weekly Update · Water Billing · MRO Billing · Temp Coverage · SOPs"
+                >
+                  More ▾
+                </TabButton>
+              </div>
             </div>
-            {tab === 'users'             && <UserProfilesTab manageScope={manageScope} />}
-            {tab === 'oncall'            && <OncallTab />}
-            {tab === 'oncall_experiment' && <OncallExperimentTab />}
-            {tab === 'buildings'         && <BuildingsTab />}
-            {tab === 'rounds'            && <RoundsTab />}
-            {tab === 'weekly'            && <WeeklyUpdateTab />}
-            {tab === 'water'             && <WaterBillingTab />}
-            {tab === 'mro'               && <MroBillingTab />}
-            {tab === 'ukg'               && <UkgReconcileTab site="upark" />}
+            {tab === 'more' && (
+              <div
+                className="flex items-center gap-1 -mt-2 pb-1 border-b"
+                style={{ borderColor: 'var(--color-border-soft, var(--color-border))', justifyContent: 'flex-end' }}
+              >
+                {MORE_TABS.map((t) => (
+                  <TabButton key={t.key} active={moreTab === t.key} onClick={() => setMoreTab(t.key)} small>
+                    {t.label}
+                  </TabButton>
+                ))}
+                <TabButton disabled title="Coming in Phase 5" small>SOPs</TabButton>
+              </div>
+            )}
+            {tab === 'users'     && <UserProfilesTab manageScope={manageScope} />}
+            {tab === 'ukg'       && <UkgReconcileTab site="upark" />}
+            {tab === 'oncall'    && <OncallTab />}
+            {tab === 'buildings' && <BuildingsTab />}
+            {tab === 'rounds'    && <RoundsTab />}
+            {tab === 'more' && moreTab === 'weekly'            && <WeeklyUpdateTab />}
+            {tab === 'more' && moreTab === 'water'             && <WaterBillingTab />}
+            {tab === 'more' && moreTab === 'mro'               && <MroBillingTab />}
+            {tab === 'more' && moreTab === 'oncall_experiment' && <OncallExperimentTab />}
           </div>
         )}
       </main>
@@ -125,19 +145,22 @@ function TabButton({
   disabled,
   title,
   onClick,
+  small,
 }: {
   children: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
   title?: string;
   onClick?: () => void;
+  /** Compact variant for the "More" sub-tab row. */
+  small?: boolean;
 }) {
   return (
     <button
       disabled={disabled}
       title={title}
       onClick={onClick}
-      className="px-3 py-2 t-text disabled:opacity-40 disabled:cursor-not-allowed"
+      className={`${small ? 'px-2 py-1 t-small' : 'px-3 py-2 t-text'} disabled:opacity-40 disabled:cursor-not-allowed`}
       style={{
         borderBottom: active ? '2px solid var(--color-accent)' : '2px solid transparent',
         color: active ? 'var(--color-accent)' : 'var(--color-text-muted)',
