@@ -6,7 +6,10 @@
 // visible_to_self=true; otherwise RLS returns no row → friendly 403 message.
 import { Link, useParams } from 'react-router-dom';
 import { useEngineerProfile, type CompletionEntry } from '../../hooks/useEngineerProfile';
-import { useMe } from '../../hooks/useMe';
+import { useMe, manageScopeFor } from '../../hooks/useMe';
+import { useCareerTimeline } from '../../hooks/useCareerTimeline';
+import { CareerTimeline } from '../../components/profile/CareerTimeline';
+import { CertificationsCard } from '../../components/profile/CertificationsCard';
 import { useMySiteAccess, useHomeSiteCodeOf } from '../../hooks/useSiteScope';
 import { DISCIPLINES, type Discipline } from '../../hooks/useEngineers';
 
@@ -46,6 +49,8 @@ export default function EngineerProfile() {
   // Site fence: profiles are viewable by same-site staff (or admin/director).
   const access = useMySiteAccess();
   const targetSite = useHomeSiteCodeOf(id);
+  // Career timeline + milestones (RLS-scoped; empty for viewers the DB hides rows from).
+  const career = useCareerTimeline(id);
 
   if (q.isLoading || me.isLoading) return <Wrap><p>Loading...</p></Wrap>;
   if (q.isError) return <Wrap><p style={{ color: '#fecaca' }}>Error: {(q.error as Error).message}</p></Wrap>;
@@ -109,6 +114,9 @@ export default function EngineerProfile() {
   }
   const tier = tierFor(p.level);
   const prog = xpProgress(p.xp, p.level);
+  // Career tracker gates (the DB is the real gate — a 0-row write surfaces inline).
+  const managerIsh = manageScopeFor(me.data) !== 'none';
+  const canEditCareer = managerIsh || me.data?.is_lead === true;
   const initials = p.full_name.split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
   return (
@@ -246,6 +254,19 @@ export default function EngineerProfile() {
             </div>
           )}
         </section>
+
+        {/* ---- Milestones & certifications + career timeline (2026-09-22) -- */}
+        <CertificationsCard userId={p.user_id} milestones={career.milestones} canEdit={canEditCareer} glow={tier.glow} />
+        <CareerTimeline
+          userId={p.user_id}
+          events={career.events}
+          isLoading={career.isLoading}
+          error={career.isError ? (career.error as Error) : null}
+          canEdit={canEditCareer}
+          canManagerRows={managerIsh}
+          showPrivate={managerIsh || isSelf}
+          glow={tier.glow}
+        />
 
         {/* ---- Completion history ---------------------------------------- */}
         <section className="mb-8">

@@ -15,6 +15,8 @@ import { useNewHireAll, nhUserState, programsOf } from '../../hooks/useNewHire';
 import { NH_WEEKS, nhWeekFor } from '../../lib/newHireProgram';
 import { useSignoffSheet } from '../../hooks/useSignoffSheet';
 import { PROGRAMS, programFor } from '../../lib/programs';
+import { useCertificationsAll } from '../../hooks/useCertifications';
+import { certExpiryState, daysUntil } from '../../lib/careerTimeline';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'newhire' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -130,6 +132,8 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   const { sheet: sheet1 } = useSignoffSheet(PROGRAMS[1]);
   const sheetFor = (programKey: string) => programKey === PROGRAMS[0].key ? sheet0 : programKey === PROGRAMS[1].key ? sheet1 : null;
   const enrolledIds = useMemo(() => new Set(nhQ.data?.byUser.keys() ?? []), [nhQ.data]);
+  // Licenses / certifications (0133): one line under the name when one is expired or expires within 90 days.
+  const certsQ = useCertificationsAll();
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
   const canManageUsers  = manageScope === 'all';                 // full roster powers
@@ -333,6 +337,21 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                           </button>
                         );
                       })}
+                      {(() => {
+                        const today = new Date();
+                        const worst = (certsQ.data?.get(r.user_id) ?? [])
+                          .filter((c) => c.expires_on && certExpiryState(c.expires_on, today) !== 'ok')
+                          .sort((a, b) => a.expires_on!.localeCompare(b.expires_on!))[0];
+                        if (!worst) return null;
+                        const d = daysUntil(worst.expires_on!, today);
+                        const expired = d < 0;
+                        return (
+                          <div className="t-small" style={{ color: expired ? 'var(--color-danger)' : '#b45309', fontSize: 10, fontWeight: 600 }}
+                            title={`${worst.name}${worst.issuer ? ` · ${worst.issuer}` : ''}${worst.number ? ` · #${worst.number}` : ''} — open the profile to update it`}>
+                            {expired ? `⚠ ${worst.name} expired ${new Date(worst.expires_on! + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : `⏳ ${worst.name} expires in ${d} d`}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 px-2">
                       <RoleBadge role={r.role} />
