@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How HVAC Works — Life-Science Building (New Hire)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;--panel:#ffffff;--panel-2:#eef2f8;--line:#e2e8f0;--line-2:#cbd5e1;
+    --ink:#1b2433;--ink-dim:#4d5b72;--ink-faint:#8a97ab;
+    --cyan:#0e8fa6;--amber:#b07408;--violet:#6a4fd0;--green:#1f9a55;--red:#d23b35;--blue:#2f6dcc;
+    --mono:'IBM Plex Mono',monospace;--disp:'Space Grotesk',sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;
+    min-height:100vh;padding:14px 10px 56px;line-height:1.55}
+  .wrap{max-width:1120px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:24px 28px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--cyan),var(--amber),var(--blue))}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--cyan);margin:4px 0 9px}
+  h1{font-size:27px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.12}
+  h1 .sub{color:var(--ink-dim);font-weight:500;display:block;font-size:17px;margin-top:4px}
+  .intro{margin:16px 0 0;font-size:15px;color:var(--ink-dim)}
+  .intro b{color:var(--ink)}
+
+  section{margin-top:36px}
+  .s-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .s-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .s-head .line{flex:1;height:1px;background:var(--line)}
+  p.lead{font-size:15px;color:var(--ink-dim);margin:0 0 4px}
+  p.lead b{color:var(--ink)}
+
+  /* flow diagram — three simple tracks */
+  .flow{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:20px 22px}
+  .track{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:12px 0}
+  .track + .track{border-top:1px dashed var(--line)}
+  .track-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    width:92px;flex:0 0 auto;padding-right:8px}
+  .t-cool .track-tag{color:var(--cyan)} .t-heat .track-tag{color:var(--amber)} .t-air .track-tag{color:var(--blue)}
+  .node{font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 12px;white-space:nowrap}
+  .node.hub{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .node.soft{font-weight:500;color:var(--ink-dim);background:transparent;border-style:dashed}
+  .arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:54px;padding:0 2px}
+  .arr .lbl{font-family:var(--mono);font-size:8.5px;color:var(--ink-faint);letter-spacing:.02em;line-height:1.1;text-align:center;margin-bottom:1px}
+  .arr .line2{color:var(--line-2);font-size:15px;line-height:1}
+  .t-cool .arr .line2{color:var(--cyan)} .t-heat .arr .line2{color:var(--amber)} .t-air .arr .line2{color:var(--blue)}
+  .t-loop .track-tag{color:var(--green)} .t-loop .arr .line2{color:var(--green)}
+  .flow-note{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .flow-note b{color:var(--ink-dim)}
+  /* either/or + parallel coil stacks inside a track */
+  .stack{display:inline-flex;flex-direction:column;align-items:stretch;gap:2px;vertical-align:middle}
+  .stack .opt{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:8px;padding:5px 10px;white-space:nowrap;text-align:center;line-height:1.2}
+  .stack .opt small{display:block;font-family:var(--mono);font-weight:500;font-size:8px;color:var(--ink-faint);letter-spacing:.04em;margin-top:1px}
+  .stack .conj{font-family:var(--mono);font-size:8px;color:var(--ink-faint);text-align:center;letter-spacing:.12em;text-transform:uppercase}
+  .node.term{border-color:var(--blue);color:var(--blue)}
+  .callout{margin-top:13px;border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:10px;
+    background:rgba(14,143,166,.05);padding:13px 16px;font-size:13.5px;color:var(--ink-dim)}
+  .callout b{color:var(--ink)}
+  .callout .ttl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);display:block;margin-bottom:4px;font-weight:600}
+  /* terminal mini-cards in downstream */
+  .terms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 4px}
+  @media(max-width:680px){.terms{grid-template-columns:1fr}}
+  .term-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 14px}
+  .term-card h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .term-card .coil{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:7px;display:inline-block;padding:2px 7px;border-radius:5px}
+  .coil.ex{color:var(--violet);background:rgba(106,79,208,.1)}
+  .coil.hw{color:var(--amber);background:rgba(176,116,8,.1)} .coil.chw{color:var(--cyan);background:rgba(14,143,166,.1)}
+  .coil.rej{color:var(--cyan);background:rgba(14,143,166,.1)} .coil.add{color:var(--amber);background:rgba(176,116,8,.1)} .coil.circ{color:var(--blue);background:rgba(47,109,204,.1)} .coil.hold{color:var(--violet);background:rgba(106,79,208,.1)} .coil.prot{color:var(--green);background:rgba(31,154,85,.1)} .coil.iso{color:var(--ink-dim);background:rgba(77,91,114,.12)}
+  .term-card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+
+  /* equipment cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.cards{grid-template-columns:1fr} .track-tag{width:100%;padding-bottom:4px}}
+  .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);padding:17px 18px}
+  .card .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .card .role .dot{width:8px;height:8px;border-radius:2px}
+  .card h3{font-size:16.5px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  .card .one{font-size:14px;color:var(--ink);font-weight:600;margin:0 0 8px}
+  .card p{font-size:13.5px;color:var(--ink-dim);margin:0 0 7px;line-height:1.5}
+  .card p:last-child{margin-bottom:0}
+  .card p b{color:var(--ink)}
+  .card .why{border-top:1px dashed var(--line);padding-top:8px;margin-top:9px;font-size:13px}
+  .card .why em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:2px}
+
+  .downstream{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:12px;
+    background:rgba(106,79,208,.04);padding:18px 20px}
+  .downstream h3{margin:0 0 8px;font-size:16px;font-weight:600}
+  .downstream p{margin:0 0 8px;font-size:14px;color:var(--ink-dim)} .downstream p:last-child{margin-bottom:0}
+  .downstream b{color:var(--ink)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.8}
+  footer b{color:var(--ink-dim)}
+
+
+  /* ---- embedded system diagrams ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+  .legend .box{width:12px;height:9px;border-radius:2px;border:1.6px solid;background:#fff}
+
+  .diagram{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);padding:16px 18px 18px;margin-top:22px}
+  .d-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .d-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .d1 .tag{color:var(--cyan)} .d2 .tag{color:var(--green)}
+  .d-head h2{font-size:17px;margin:0;font-weight:600}
+  .d-sub{font-size:13px;color:var(--ink-dim);margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+
+  /* svg element styles */
+  .eq{fill:#fff;stroke-width:1.7}
+  .c-cyan{stroke:var(--cyan)} .c-amber{stroke:var(--amber)} .c-blue{stroke:var(--blue)} .c-green{stroke:var(--green)} .c-red{stroke:var(--red)} .c-violet{stroke:var(--violet)} .c-ink{stroke:var(--ink-dim)}
+  .eqt{font-family:var(--disp);fill:var(--ink);font-weight:600;text-anchor:middle;font-size:12.5px}
+  .eqs{font-family:var(--mono);fill:var(--ink-faint);text-anchor:middle;font-size:8px}
+  .pipe{fill:none;stroke-width:2.6}
+  .p-cyan{stroke:var(--cyan)} .p-amber{stroke:var(--amber)} .p-blue{stroke:var(--blue)} .p-green{stroke:var(--green)} .p-red{stroke:var(--red)} .p-violet{stroke:var(--violet)} .p-ink{stroke:var(--ink-dim)}
+  .dash{stroke-dasharray:5 4}
+  .pl{font-family:var(--mono);font-size:8.5px;fill:var(--ink-dim)}
+  .pl-c{fill:var(--cyan)} .pl-a{fill:var(--amber)} .pl-b{fill:var(--blue)} .pl-g{fill:var(--green)} .pl-r{fill:var(--red)} .pl-v{fill:var(--violet)}
+  .roofline{stroke:var(--line-2);stroke-width:1;stroke-dasharray:4 4}
+  .rooflab{font-family:var(--mono);font-size:8px;fill:var(--ink-faint);letter-spacing:.1em}
+  .loopbar{fill:rgba(31,154,85,.09);stroke:var(--green);stroke-width:1.7}
+  .loopt{font-family:var(--mono);font-size:10px;fill:var(--green);font-weight:600;text-anchor:middle;letter-spacing:.14em}
+
+
+  .coil.hi{color:var(--green);background:rgba(31,154,85,.1)}
+  .coil.lo{color:var(--amber);background:rgba(176,116,8,.1)}
+  .coil.stm{color:var(--violet);background:rgba(106,79,208,.1)}
+
+  .adv-badge{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.14em;color:var(--violet);background:rgba(106,79,208,.1);border:1px solid rgba(106,79,208,.3);border-radius:5px;padding:2px 8px;margin-bottom:10px}
+  .fx{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:8px 10px;margin:6px 0;text-align:center}
+  .ptab{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.5px}
+  .ptab th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line-2)}
+  .ptab td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  .ptab td b{color:var(--ink)}
+  .neg{color:var(--red);font-weight:700;font-family:var(--mono)}
+  .pos{color:var(--blue);font-weight:700;font-family:var(--mono)}
+
+  @media print{.ptab{font-size:9.5px} .ptab td,.ptab th{padding:3px 5px} .fx{font-size:10.5px;padding:5px 7px} .ptab,.fx{break-inside:avoid}}
+
+  /* ---- quiz ---- */
+  .q-score{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin:4px 0 14px}
+  .q-score button{margin-left:auto;font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer}
+  .q-score button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .q-top{display:flex;gap:10px;align-items:baseline;margin-bottom:9px}
+  .q-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.08em}
+  .q-text{font-size:14px;font-weight:600;color:var(--ink)}
+  .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  @media(max-width:680px){.q-opts{grid-template-columns:1fr}}
+  .q-opts button{display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:var(--disp);font-size:13px;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:8px 11px;cursor:pointer;line-height:1.35}
+  .q-opts button em{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px;flex:0 0 auto}
+  .q-opts button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .q-opts button.lock{cursor:default;pointer-events:none}
+  .q-opts button.ok{border-color:var(--green);background:rgba(31,154,85,.08);color:var(--ink)}
+  .q-opts button.ok em{border-color:var(--green);color:var(--green)}
+  .q-opts button.bad{border-color:var(--red);background:rgba(210,59,53,.07)}
+  .q-opts button.bad em{border-color:var(--red);color:var(--red)}
+  .q-exp{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.5px;color:var(--ink-dim)}
+  @media print{
+    .q-score{display:none}
+    .q-card{break-inside:avoid;border-color:#8a94a4;box-shadow:none;padding:8px 11px;margin-bottom:6px}
+    .q-text{font-size:11px} .q-opts{gap:4px}
+    .q-opts button{font-size:9.5px;padding:4px 7px;border-color:#8a94a4;background:#fff;color:#242e3c}
+    .q-opts button em{border-color:#8a94a4;color:#3e4a5a}
+    .q-exp{display:none}
+  }
+
+
+  .q-openhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:24px 0 10px}
+  .q-show{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 12px;cursor:pointer;margin-top:4px}
+  .q-show:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .q-lines{display:none}
+  @media print{
+    .q-show{display:none}
+    .q-openhead{color:#242e3c;margin:12px 0 6px}
+    .q-lines{display:block;margin-top:6px}
+    .q-lines i{display:block;height:15px;border-bottom:1px solid #8a94a4}
+  }
+
+  /* ---- print toolbar (screen) ---- */
+  .print-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .print-toolbar button{font-family:var(--disp);font-size:13px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .print-toolbar button:hover{background:#000}
+  .print-toolbar .tip{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+
+  /* ---- compact print handout ---- */
+  @media print{
+    /* --- true landscape for the system diagrams -----------------------------
+       Named @page rules only work in Chrome/Edge, so instead each diagram is
+       rotated 90deg onto its own portrait sheet. Result is a genuine landscape
+       drawing, in every browser and in wkhtmltopdf.
+       A4 minus 5mm margins = 200mm wide x 287mm tall of usable space.
+       Rotated, the drawing gets 287mm across and 200mm down.            */
+    .rotpage{margin:0}
+    @media print{
+      /* Each system diagram gets its own sheet, rotated 90deg — a true landscape
+         drawing on a portrait sheet, so it works in every browser and in wkhtmltopdf.
+         Usable page area with the 5mm/11mm margins is 200 x 281mm. The sheet is kept
+         well inside that (196 x 270mm) so no stray margin, line-height, or rounding
+         can push it over and trigger a clipped page + a blank one. */
+      .rotpage{
+        position:relative;
+        width:196mm; height:270mm;
+        overflow:hidden;
+        break-before:page; break-inside:avoid;
+        margin:0; padding:0; line-height:0;
+        border:0; box-shadow:none;
+      }
+      .rotpage > .diagram{
+        position:absolute; top:0; left:0;
+        width:270mm; height:196mm;
+        margin:0 !important; padding:5mm;
+        border:0; box-shadow:none; border-radius:0; background:#fff;
+        line-height:1.35;
+        transform-origin:0 0;
+        transform:rotate(90deg) translate(0,-196mm);
+        break-inside:avoid; overflow:hidden;
+      }
+      .rotpage .d-head{margin:0 0 1.5mm}
+      .rotpage .d-head h2{font-size:12.5px}
+      .rotpage .d-sub{font-size:9.5px;margin:0 0 2.5mm}
+      /* height fixed; width follows the viewBox ratio → fills the sheet, no distortion.
+         148mm is the largest height at which the widest drawing (ratio 1.73) still
+         fits the 260mm of rotated width available. */
+      .rotpage svg{height:148mm;width:auto;max-width:258mm;display:block;margin:0 auto}
+      section.land{margin:0;padding:0}
+    }
+
+    @page{
+      size:A4 portrait;
+      /* minimum practical margins; bottom is a little deeper to hold the page number */
+      margin:5mm 5mm 11mm 5mm;
+      /* honored by PDF engines (wkhtmltopdf, WeasyPrint, Prince). Browsers ignore
+         margin boxes — in a browser, tick "Headers and footers" in the print dialog. */
+      @bottom-right{
+        content:counter(page) " / " counter(pages);
+        font-family:'IBM Plex Mono',monospace; font-size:8pt; color:#4a5566;
+      }
+    }
+    @page:first{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{
+      --ink:#0c1118;--ink-dim:#242e3c;--ink-faint:#3e4a5a;
+      --line:#8a94a4;--line-2:#5b6674;--panel-2:#eef1f6;
+      --cyan:#095f70;--amber:#7d5205;--violet:#4a2fb0;--green:#136f3d;--red:#a8241f;--blue:#1d4f9e;
+    }
+    body{background:#fff;padding:0;font-size:13px;line-height:1.42;color:#000}
+    .wrap{max-width:none}
+    .print-toolbar{display:none!important}
+    header{padding:10px 13px;border-radius:7px;box-shadow:none;background:#f2f5f9;border-color:#8a94a4}
+    h1{font-size:21px;line-height:1.15;color:#000} h1 .sub{font-size:14px;margin-top:2px}
+    .eyebrow{font-size:9.5px;letter-spacing:.2em;margin:0 0 5px}
+    .intro{font-size:11.5px;margin:8px 0 0;line-height:1.45}
+    section{margin-top:12px}
+    .s-head{margin-bottom:7px;gap:9px} .s-head h2{font-size:15.5px;color:#000} .s-head .n{font-size:10px}
+    p.lead{font-size:11.5px;line-height:1.45}
+    .flow{padding:8px 10px;box-shadow:none;border-color:#8a94a4}
+    .track{padding:7px 0;gap:4px}
+    .track-tag{font-size:9px;width:100px;line-height:1.4}
+    .node{font-size:11px;padding:5px 8px;border-radius:6px;border-color:#5b6674;color:#000}
+    .arr{min-width:44px;padding:0 2px} .arr .lbl{font-size:8px;margin-bottom:1px;color:#3e4a5a} .arr .line2{font-size:17px}
+    .stack{gap:2px} .stack .opt{font-size:10px;padding:3px 7px;border-radius:6px;border-color:#5b6674;color:#000} .stack .opt small{font-size:7px;color:#3e4a5a} .stack .conj{font-size:7px}
+    .flow-note{font-size:10px;margin-top:8px;line-height:1.5;color:#242e3c}
+    .flow-note b{color:#000}
+    .callout{padding:8px 12px;font-size:11px;margin-top:8px;border-radius:8px;line-height:1.45;border-color:#8a94a4;color:#1a2330}
+    .callout .ttl{font-size:8.8px;margin-bottom:3px}
+    .cards{gap:8px}
+    .card{padding:9px 11px;box-shadow:none;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .card.wide{grid-column:1 / -1;column-count:2;column-gap:20px;column-fill:balance}
+    .card.wide .role,.card.wide h3,.card.wide .one{column-span:all}
+    .card.wide p{break-inside:auto;orphans:2;widows:2}
+    .card.wide .why{margin-top:6px}
+    .card .role{font-size:8.3px;margin-bottom:5px} .card .role .dot{width:7px;height:7px}
+    .card h3{font-size:13px;margin:0 0 3px;color:#000} .card .one{font-size:11.5px;margin:0 0 5px;color:#000}
+    .card p{font-size:10.8px;margin:0 0 5px;line-height:1.45;color:#242e3c}
+    .card p b{color:#000}
+    .card .why{font-size:10.3px;padding-top:5px;margin-top:5px} .card .why em{font-size:7.6px}
+    .terms{gap:7px;margin:9px 0 3px}
+    .term-card{padding:9px 11px;border-radius:8px;break-inside:avoid;border-color:#8a94a4}
+    .term-card h4{font-size:12px;color:#000} .term-card p{font-size:10.3px;line-height:1.45;color:#242e3c} .term-card .coil{font-size:7.8px;margin-bottom:5px;padding:2px 6px}
+    .downstream{padding:9px 12px;border-radius:8px;border-color:#8a94a4}
+    .downstream h3{font-size:13.5px;margin:0 0 5px;color:#000} .downstream p{font-size:11.3px;margin:0 0 6px;line-height:1.45;color:#242e3c}
+    .downstream b{color:#000}
+    footer{font-size:9.5px;margin-top:12px;padding-top:7px;line-height:1.55;color:#3e4a5a;border-color:#8a94a4}
+    footer b{color:#1a2330}
+    .flow,.callout,.term-card{break-inside:avoid}
+    .pgroup{break-inside:avoid;page-break-inside:avoid}
+    .downstream,.diagram{break-inside:avoid;page-break-inside:avoid}
+    section{margin-top:10px}
+  }
+  @media print{ .diagram{break-inside:avoid;padding:8px 10px;box-shadow:none;border-color:#8a94a4;margin-top:10px} .legend{font-size:9.5px;color:#242e3c;margin-top:8px} .d-head h2{font-size:13.5px} .d-sub{font-size:10px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="print-toolbar"><button onclick="window.print()">Print / Save as PDF</button><span class="tip">prints as a compact handout — few pages, tight layout</span></div>
+
+
+  <header>
+    <div class="eyebrow">CW Services · BioMed Realty — University Park · New-Hire Basics</div>
+    <h1>How HVAC Works in a Life-Science Building<span class="sub">The base-building plant, in plain terms</span></h1>
+    <p class="intro">A life-science building has to do something a normal office doesn't: bring in <b>huge amounts of fresh outside air and throw it right back out</b>, because lab air can't be recirculated. The <b>base building</b> is the central plant that makes this possible — it makes cold water, makes hot water, and moves big volumes of air in and out. Everything the plant does ends up at the <b>AHU</b>, which conditions the air and sends it to the spaces. We run that plant; tenants fine-tune the last few degrees in their own rooms.</p>
+  </header>
+
+  <!-- FLOW -->
+
+  <!-- WHAT IS HVAC -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">01</span><h2>Start here — what is HVAC?</h2><span class="line"></span></div>
+    <p class="lead">Before any of the equipment names, the whole trade fits in one sentence: <b>HVAC keeps the air in a building at the right temperature, the right humidity, clean, and always moving.</b></p>
+    </div>
+
+    <div class="terms">
+      <div class="term-card">
+        <h4>H — Heating</h4><span class="coil lo">warm it up</span>
+        <p>Making the air <b>warmer</b> when it&#8217;s cold. In this building, a <b>boiler</b> heats water, and that hot water heats the air.</p>
+      </div>
+      <div class="term-card">
+        <h4>V — Ventilation</h4><span class="coil hi">keep it fresh</span>
+        <p>Bringing in <b>fresh outside air</b> and pushing stale air out. This is the big one in a lab — the air only goes through <b>once</b>.</p>
+      </div>
+      <div class="term-card">
+        <h4>AC — Air Conditioning</h4><span class="coil stm">cool it &amp; dry it</span>
+        <p>Making the air <b>cooler and less humid</b>. A <b>chiller</b> makes cold water, and that cold water cools the air.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="ttl">💡 The one idea that makes everything else make sense</span>
+      <b>Only two things travel around this building: air and water.</b><br><br>
+      <b>Air</b> is what people actually breathe. It flows through ducts to every room.<br>
+      <b>Water</b> never touches the air. It runs in pipes and its only job is to <b>carry heat</b> from one place to another — <b>chilled water absorbs</b> heat from the air blowing across its coil and carries it away; <b>hot water releases</b> its heat into the air the same way.<br><br>
+      Everything you&#8217;ll learn is either <b>a machine that moves air</b> (fans, AHU), <b>a machine that moves water</b> (pumps), or <b>a machine that changes the temperature of one using the other</b> (a <b>coil</b> — where air blows across a pipe full of water).
+    </div>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05)">
+      <span class="ttl" style="color:var(--cyan)">❄ &#8220;Cooling&#8221; doesn&#8217;t make cold — it moves heat</span>
+      There is no such thing as making cold. <b>Heat always flows from hotter to colder</b>, and cooling just means <b>taking heat out of a place and dumping it somewhere else</b>.<br><br>
+      A room gets cool because <b>cold supply air absorbs its heat</b>. That heat then leaves one of two ways: it rides the <b>exhaust air</b> straight out of the building (what happens in a lab), or it is handed to <b>chilled water</b> at a coil → carried to the <b>chiller</b> → pushed out to the <b>cooling tower</b> → released to the sky. Either way, the building&#8217;s heat doesn&#8217;t vanish. <b>It leaves.</b> Once that clicks, the whole plant is just a relay race for heat.
+    </div>
+
+    
+
+    <div class="pgroup">
+    <p class="lead" style="margin-top:20px"><b>The words you&#8217;ll hear this week</b></p>
+    <p class="flow-note" style="margin-top:2px">You don&#8217;t need to memorize these — they all get explained below. This is just so nothing sounds foreign on your first walk-through.</p>
+    <table class="ptab">
+      <thead><tr><th>You&#8217;ll hear</th><th>It stands for</th><th>In plain words</th></tr></thead>
+      <tbody>
+        <tr><td><b>AHU</b></td><td>Air Handling Unit</td><td>The big box that blows the air and holds the coils.</td></tr>
+        <tr><td><b>Chiller</b></td><td>—</td><td>The machine that makes cold water.</td></tr>
+        <tr><td><b>Boiler</b></td><td>—</td><td>The machine that makes hot water.</td></tr>
+        <tr><td><b>Cooling tower</b></td><td>—</td><td>The rooftop unit that throws the building&#8217;s heat away.</td></tr>
+        <tr><td><b>Coil</b></td><td>—</td><td>Where air blows across water pipes and changes temperature.</td></tr>
+        <tr><td><b>VAV / FPT</b></td><td>Variable Air Volume / Fan Powered Terminal</td><td>The little box in the ceiling that trims one room&#8217;s temperature. An FPT also has a fan and pulls in return air.</td></tr>
+        <tr><td><b>ERM</b></td><td>Energy Recovery Module</td><td>Borrows energy from the air going out to pre-treat the air coming in — preheats in winter, pre-cools in summer.</td></tr>
+        <tr><td><b>LEF</b></td><td>Lab Exhaust Fan</td><td>Throws lab air high above the roof.</td></tr>
+        <tr><td><b>GEF</b></td><td>General Exhaust Fan</td><td>Pulls air out of restrooms, electrical and mechanical rooms.</td></tr>
+        <tr><td><b>UH / CUH</b></td><td>Unit Heater / Cabinet Unit Heater</td><td>A small local heater for docks, stairs, and mechanical rooms — often there to stop pipes freezing.</td></tr>
+        <tr><td><b>OA</b></td><td>Outside Air</td><td>Fresh air from outdoors.</td></tr>
+        <tr><td><b>CFM</b></td><td>Cubic Feet per Minute</td><td>How much air is moving.</td></tr>
+        <tr><td><b>CRAC / CRAH</b></td><td>Computer Room Air Conditioner / Air Handler</td><td>A unit that recirculates a server room&#8217;s air across its own coil, around the clock.</td></tr>
+        <tr><td><b>ACH</b></td><td>Air Changes per Hour</td><td>How many times an hour a room&#8217;s whole volume of air gets replaced.</td></tr>
+        <tr><td><b>WSHP</b></td><td>Water-Source Heat Pump</td><td>A small unit in a room that heats or cools using a shared water loop.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--green);background:rgba(31,154,85,.05)">
+      <span class="ttl" style="color:var(--green)">✅ If you remember nothing else today</span>
+      <b>Water moves heat around the building. Air delivers comfort to people. A coil is where they meet.</b> Everything from here is just detail.
+    </div>
+  </section>
+
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">02</span><h2>How it fits together</h2><span class="line"></span></div>
+    <p class="lead">Three things flow through the building. The <b>water sides are closed loops</b> — pumps push the same water around and around, out to the coils and back — while the <b>air passes through once</b> (100% outside air, never recirculated). The <b>AHU</b> sits in all three, because it's where the water side and the air side meet.</p>
+    <div class="flow" style="margin-top:14px">
+
+      <div class="track t-cool">
+        <span class="track-tag">Cooling loops</span>
+        <span class="node">Cooling Tower</span>
+        <span class="arr"><span class="lbl">condenser<br>loop</span><span class="line2">⇄</span></span>
+        <span class="node">CW Pump</span>
+        <span class="arr"><span class="lbl"></span><span class="line2">⇄</span></span>
+        <span class="stack">
+          <span class="opt">Chiller<small>mild → hot out</small></span>
+          <span class="conj">or</span>
+          <span class="opt">Free-Cooling HX<small>cold out</small></span>
+        </span>
+        <span class="arr"><span class="lbl">supply</span><span class="line2">→</span></span>
+        <span class="node">CHW Pump</span>
+        <span class="arr"><span class="lbl">chilled<br>water</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">AHU coil</span>
+          <span class="conj">&amp;</span>
+          <span class="opt">CRAC coil</span>
+        </span>
+        <span class="arr"><span class="lbl">return</span><span class="line2">⟲</span></span>
+        <span class="node soft">back to chiller</span>
+      </div>
+
+      <div class="track t-heat">
+        <span class="track-tag">Heating loop</span>
+        <span class="node">Boiler</span>
+        <span class="arr"><span class="lbl">supply</span><span class="line2">→</span></span>
+        <span class="node">HW Pump</span>
+        <span class="arr"><span class="lbl">hot<br>water</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">AHU coil</span>
+          <span class="conj">&amp;</span>
+          <span class="opt">VAV / FPT reheat</span>
+        </span>
+        <span class="arr"><span class="lbl">return</span><span class="line2">⟲</span></span>
+        <span class="node soft">back to boiler</span>
+      </div>
+
+      <div class="track t-air">
+        <span class="track-tag">Air</span>
+        <span class="node soft">Outside Air</span>
+        <span class="arr"><span class="lbl">fresh</span><span class="line2">→</span></span>
+        <span class="node">ERM</span>
+        <span class="arr"><span class="lbl">tempered</span><span class="line2">→</span></span>
+        <span class="node hub">AHU</span>
+        <span class="arr"><span class="lbl">supply</span><span class="line2">→</span></span>
+        <span class="node term">VAV · FPT · CRAC</span>
+        <span class="arr"><span class="lbl">to rooms</span><span class="line2">→</span></span>
+        <span class="node">Tenant spaces</span>
+        <span class="arr"><span class="lbl">exhaust</span><span class="line2">→</span></span>
+        <span class="node">ERM</span>
+        <span class="arr"><span class="lbl">to roof</span><span class="line2">→</span></span>
+        <span class="node">LEF</span>
+        <span class="arr"><span class="lbl">plume</span><span class="line2">↑</span></span>
+        <span class="node soft">Atmosphere</span>
+      </div>
+
+      <div class="track t-air">
+        <span class="track-tag">General exhaust</span>
+        <span class="node soft">Support spaces</span>
+        <span class="arr"><span class="lbl">pull air<br>out</span><span class="line2">→</span></span>
+        <span class="stack">
+          <span class="opt">Restrooms · janitor<small>odor</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Electrical · MDF · elevator<small>heat</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Mechanical · storage<small>heat · fumes</small></span>
+        </span>
+        <span class="arr"><span class="lbl">direct to<br>roof</span><span class="line2">→</span></span>
+        <span class="node">GEF</span>
+        <span class="arr"><span class="lbl">no ERM<br>no LEF</span><span class="line2">↑</span></span>
+        <span class="node soft">Atmosphere</span>
+      </div>
+
+    </div>
+    </div>
+    <p class="flow-note"><b>The short version:</b> two water loops and one air path. The <b>condenser-water pump</b> circulates water between the tower and the chiller (or, when it's cold out, a heat exchanger skips the chiller). The <b>chilled-water pump</b> pushes chilled water out to the AHU and CRAC coils — where it picks up heat — and back to the chiller to be re-cooled. The <b>hot-water pump</b> does the same on the heating side: boiler → coils → back to the boiler. The pumps are what make the loops go; no pump, no flow, no cooling or heat. Meanwhile the AHU pulls in fresh outside air, the ERM pre-conditions it (preheating it in winter, pre-cooling it in summer), the AHU sets its temperature and blows it to the terminal units in each space — and the LEF pulls the used lab air back out and high above the roof. Separately, <b>general exhaust fans (GEFs)</b> pull air straight out of the support spaces — restrooms, electrical and MDF rooms, elevator machine rooms, mechanical spaces — and dump it at the roof. That air never goes through the ERM or the LEF.</p>
+
+    <div class="callout">
+      <span class="ttl">❄ Free cooling — the energy win</span>
+      When it's cold outside, the cooling tower can make condenser water cold enough to chill the building <b>through a heat exchanger</b>, so the chiller's compressors can rest. Same cold water, a fraction of the energy. That's why you'll see a separate <b>free-cooling (condenser-water) pump</b> and a <b>free-cooling HX</b> alongside the chiller — the plant switches to this mode automatically when the weather allows.
+    </div>
+
+    <p class="lead" style="margin-top:24px"><b>Heating water setpoints — three kinds of plant</b></p>
+    <p class="flow-note" style="margin-top:2px;margin-bottom:2px">There is no single &#8220;correct&#8221; hot-water temperature — it depends on <b>what makes the heat</b>. The <b>return</b> temperature matters as much as the supply.</p>
+    <div class="terms">
+      <div class="term-card">
+        <h4>Condensing boiler</h4><span class="coil hi">high efficiency · 90–98%</span>
+        <p><b>Supply ~120–140°F</b>, and the <b>return must stay below ~130°F</b> — that&#8217;s what lets flue gas condense and release its latent heat. Runs <b>cooler on purpose</b>; with outdoor reset it may sit near 120°F in mild weather.</p>
+      </div>
+      <div class="term-card">
+        <h4>Non-condensing boiler</h4><span class="coil lo">conventional · 80–85%</span>
+        <p><b>Supply ~160–180°F</b>, and the <b>return must stay above ~140°F</b> — the opposite rule. Cold return condenses flue gas inside a boiler not built for it, corroding the heat exchanger and thermally shocking it.</p>
+      </div>
+      <div class="term-card">
+        <h4>Steam-to-water HX</h4><span class="coil stm">converter · campus/district steam</span>
+        <p>No boiler here — <b>campus or district steam</b> heats the loop through a <b>heat exchanger (converter)</b>. A steam control valve modulates to hold <b>supply ~140–180°F</b>; the trap and condensate return are what you watch.</p>
+      </div>
+    </div>
+    <p class="flow-note" style="margin-top:8px"><b>Outdoor reset</b> slides the supply setpoint with the weather in any of the three — 180°F on the coldest day, far lower in mild weather. So a loop reading 130°F in April is not necessarily a problem; know which plant you have before you judge the number.</p>
+
+    <div class="pgroup">
+    <p class="lead" style="margin-top:24px"><b>A few more ideas that explain a lot</b></p>
+    <div class="terms">
+      <div class="term-card">
+        <h4>Air in = air out</h4><span class="coil hi">pressure</span>
+        <p>Whatever the fans blow in has to leave. We push in <b>a little more than we pull out</b>, so the building stays <b>slightly positive</b> and the extra leaks out through doors and cracks.</p>
+        <p style="margin-top:6px">Why bother? If the building went <b>negative</b>, outside air would get sucked in through every crack — <b>cold drafts in winter, sticky humidity in summer</b>, all of it unfiltered.</p>
+      </div>
+      <div class="term-card">
+        <h4>Clean air flows to dirty</h4><span class="coil stm">direction</span>
+        <p>Inside, each room is set up so air moves the safe way: a <b>lab</b> pulls out more than it gets, so it&#8217;s <b>negative</b> and fumes stay in. A <b>corridor</b> gets more than it loses, so it&#8217;s <b>positive</b> and pushes clean air <i>toward</i> the labs and restrooms — never the other way.</p>
+      </div>
+      <div class="term-card">
+        <h4>Every CFM costs money</h4><span class="coil lo">energy</span>
+        <p>All that fresh air has to be heated or cooled from whatever the weather is. <b>Double the airflow, double the energy.</b> That&#8217;s why the <b>ERM</b> exists — and why we don&#8217;t move more air than we need.</p>
+      </div>
+
+      <div class="term-card">
+        <h4>Air changes per hour (ACH)</h4><span class="coil stm">how much fresh air</span>
+        <p>How many times an hour a room&#8217;s <b>entire volume of air is replaced</b>. At <b>6 ACH</b>, all the air in the room is swapped out six times every hour — once every ten minutes.</p>
+        <p style="margin-top:6px">An office runs about <b>4–6 ACH</b>. A lab typically runs <b>6–12</b>, because the point there isn&#8217;t comfort — it&#8217;s <b>diluting and removing whatever is in the air</b>.</p>
+      </div>
+    </div>
+    <p class="flow-note" style="margin-top:8px">That&#8217;s the plain version. If you want the numbers, the offsets, and the field symptoms behind them, they&#8217;re waiting in <b>Section 09 — Going deeper</b> at the end of this page.</p>
+    </div>
+
+  </section>
+
+  <!-- EQUIPMENT -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">03</span><h2>The nine pieces of the base-building plant</h2><span class="line"></span></div>
+    <div class="cards">
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Cooling</div>
+        <h3>Chiller</h3>
+        <p class="one">Makes the building's cold.</p>
+        <p>Uses a refrigeration cycle to chill water down to about <b>44°F</b> and pumps it out to the AHU cooling coils.</p>
+        <p class="why"><em>Why it matters</em>No chiller, no cooling — anywhere in the building.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Heating</div>
+        <h3>Boiler</h3>
+        <p class="one">Makes the building's heat.</p>
+        <p>Burns gas to heat water — <b>~120–140°F if condensing, ~160–180°F if not</b> — pumped to the AHU heating coils and reheat coils. Some buildings have no boiler at all and make hot water from <b>campus steam through a heat exchanger</b>.</p>
+        <p class="why"><em>Why it matters</em>Heat in winter, and the humidity labs need.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Cooling</div>
+        <h3>Cooling Tower</h3>
+        <p class="one">Throws the building's heat away outside.</p>
+        <p>Warm "condenser water" from the chiller is cooled by <b>evaporation on the roof</b>, then sent back to the chiller to do it again.</p>
+        <p class="why"><em>Why it matters</em>It's how the heat the chiller pulls out of the building actually leaves the building.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--cyan)"></span>Cooling · economizer</div>
+        <h3>Free-Cooling HX &amp; Pump</h3>
+        <p class="one">Cools the building without the chiller.</p>
+        <p>When it's cold outside, the tower makes condenser water cold enough on its own. The <b>free-cooling pump</b> sends it through a <b>plate heat exchanger</b> that chills the chilled-water loop directly — <b>compressors off</b>.</p>
+        <p class="why"><em>Why it matters</em>Huge energy savings all winter — and it's why a free-cooling pump and HX sit next to the chiller on your equipment list.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--blue)"></span>Air · the hub</div>
+        <h3>AHU — Air Handling Unit</h3>
+        <p class="one">Conditions and delivers the air.</p>
+        <p>Pulls in air, filters it, runs it across the <b>chilled-water and hot-water coils</b> to set the temperature, and a big fan pushes it to the spaces. In labs it usually runs <b>100% outside air</b>.</p>
+        <p>It carries <b>hardwired safeties</b> that stop the fan without asking the BMS: a <b>freezestat</b>, a <b>high-static cutout</b>, and a <b>low-static cutout</b>.</p>
+        <p class="why"><em>Why it matters</em>It's where the water side meets the air side — and the unit you'll watch most.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--red)"></span>Air · life-safety</div>
+        <h3>LEF — Lab Exhaust Fan</h3>
+        <p class="one">Safely removes lab air.</p>
+        <p>Roof-mounted fans pull contaminated air from fume hoods and labs and discharge it <b>high above the building</b> so it disperses. Usually a backup fan is ready to take over.</p>
+        <p class="why"><em>Why it matters</em>Life-safety — it keeps hazardous air moving out and labs at the right pressure.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Air · support spaces</div>
+        <h3>GEF — General Exhaust Fan</h3>
+        <p class="one">Clears the rooms nobody thinks about.</p>
+        <p>Pulls air out of <b>restrooms, janitor closets, electrical and MDF rooms, elevator machine rooms, mechanical spaces, and storage</b> — removing <b>odor</b> from some and <b>heat</b> from others. It discharges straight to the roof: <b>no ERM, no LEF</b>, because this air is neither hazardous nor worth recovering heat from.</p>
+        <p class="why"><em>Why it matters</em>A dead GEF is a hot electrical or MDF room — equipment throttles or trips — and smelly restrooms. Unglamorous, and a common call.</p>
+      </div>
+
+      <div class="card">
+        <div class="role"><span class="dot" style="background:var(--amber)"></span>Heat · local</div>
+        <h3>UH — Unit Heater</h3>
+        <p class="one">Heats a space the ductwork doesn&#8217;t reach.</p>
+        <p>A small standalone heater with its own fan, mounted high on a wall or ceiling — usually fed by the <b>hot-water loop</b> (sometimes electric or gas). You&#8217;ll find them in <b>loading docks, vestibules, stairwells, garages, electrical and mechanical rooms, and penthouses</b>. A cabinet-style version (<b>CUH</b>) sits at floor level in entries and lobbies.</p>
+        <p class="why"><em>Why it matters</em>Their real job is often <b>freeze protection</b> — keeping sprinkler pipes, standpipes, and water lines above freezing in unconditioned spaces. A failed UH in January is a burst-pipe call waiting to happen, so they&#8217;re a cold-weather round item.</p>
+      </div>
+
+      <div class="card wide">
+        <div class="role"><span class="dot" style="background:var(--green)"></span>Air · efficiency</div>
+        <h3>ERM — Energy Recovery Module</h3>
+        <p class="one">Recovers energy from the air leaving — all year.</p>
+        <p>Sits between the <b>exhaust going out</b> and the <b>fresh air coming in</b>. Here it&#8217;s a <b>glycol run-around</b>: a coil in the exhaust stream and a coil in the OA stream, tied by a <b>pumped glycol loop</b> that carries energy across — the two airstreams never touch.</p>
+        <p><b>It runs all year, and the direction flips:</b><br>• <b>Winter</b> — the exhaust (~72°F) is warmer than the OA (~10°F), so the glycol <b>picks up heat from the exhaust and preheats</b> the incoming air.<br>• <b>Summer</b> — the exhaust (~75°F) is <i>cooler</i> than the OA (~90°F), so the same loop runs backwards and <b>pre-cools</b> the incoming air.</p>
+        <p class="why"><em>Why it matters</em>Conditioning 100% outside air is expensive in <b>both</b> seasons — the ERM cuts that load way down either way. It idles only in mild weather, when inside and outside air are about the same temperature and there is nothing to recover.</p>
+      </div>
+
+    </div>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:20px">
+      <span class="ttl" style="color:var(--cyan)">A chiller can&#8217;t just be switched on — what has to be true first</span>
+      A chiller is the most interlocked machine in the plant. Before it will start, a chain of <b>permissives</b> all have to be satisfied — and if any one is missing, the chiller simply will not run and the BMS will tell you which one. Read them in order:<br><br>
+      <b>1. The BMS enables it.</b> The plant sequence has to be calling for cooling and the chiller enabled. Nothing starts until the BMS says so.<br>
+      <b>2. The chiller&#8217;s own screen tells you where it actually is.</b> Every chiller has a local <b>HMI</b> — the display on the panel — and it is the machine&#8217;s own account of itself, not the BMS&#8217;s version. Read it: is the chiller in <b>Local or Remote</b>? Remote means it will listen to the BMS; in Local it will ignore the enable entirely. What <b>state</b> does it report — Off, Ready, Start Inhibit, Run, Pre-lube, Pull-down, Unloading, Shutting Down? Is there an <b>active alarm or a lockout</b> waiting to be reset at the panel? And which permissive is it still waiting on? <b>The chiller will name the missing one for you.</b> Time spent at that screen saves an hour of guessing.<br>
+      <b>3. Condenser water flow is proven.</b> The <b>cooling-tower</b> water that carries heat away — pumped by the <b>condenser-water pump</b> from the tower basin — has to be moving, proven by a flow switch. No CW flow, no start: the chiller would have nowhere to send its heat.<br>
+      <b>4. Chilled water flow is proven.</b> The <b>building</b> water the chiller actually cools — pumped by the <b>chilled-water pump</b> around the loop to the AHU coils and back — has to be moving too, proven by its own flow switch. No CHW flow and the water in the barrel would freeze solid.<br>
+      <b>5. Oil temperature is up.</b> The compressor&#8217;s oil has to be warm enough before it will start — a heater keeps it warm while the machine is idle. Start it cold and the oil is too thick to protect the bearings. <b>This is why a chiller left with its oil heater off overnight will refuse to start in the morning.</b><br>
+      <b>6. No safety is tripped.</b> Low refrigerant temperature, high condenser pressure, low oil pressure, motor overload — any one holds the start.<br><br>
+      <b>The pattern:</b> a chiller needs somewhere to send heat (CW flow), something to cool (CHW flow), and a protected compressor (warm oil) before it will run. Miss any one and it stays off — on purpose.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--cyan);background:rgba(14,143,166,.05);margin-top:12px">
+      <span class="ttl" style="color:var(--cyan)">While it runs — read it at the chiller&#8217;s own screen</span>
+      The <b>HMI</b> carries readings the BMS graphic often never shows: refrigerant pressures and temperatures, oil pressure and temperature, %RLA, and the approach temperatures. Two of them are worth watching every round.<br><br>
+      <b>Oil temperature and oil pressure.</b> The compressor lives or dies on its oil. Watch that oil temperature holds in range and oil pressure stays up while it runs — a falling oil pressure is the machine telling you to look now, not later.<br><br>
+      <b>Approach temperature.</b> This is the tell-tale for a fouling chiller. <b>Approach</b> is the gap between the water leaving a barrel and the refrigerant temperature in it — how well heat is actually crossing the tubes. As the tubes foul with scale or mud, that gap <b>widens</b>. A slowly climbing approach, at the same load, is an early warning that the condenser or evaporator tubes need cleaning — visible on the trend long before the chiller starts struggling to hold setpoint.
+    </div>
+  </section>
+
+  <!-- DOWNSTREAM -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">04</span><h2>A peek downstream — the tenant side</h2><span class="line"></span></div>
+    <div class="downstream">
+      <h3>Where the base building hands off</h3>
+      <p>The supply air we make travels through ductwork to <b>terminal units</b> in each space. These are small boxes that trim the air to each zone's setpoint — and here's the key link back to the plant: their coils run on the <b>same hot and chilled water</b> the AHU uses. They're just smaller coils, closer to the room.</p>
+
+      <div class="terms">
+        <div class="term-card">
+          <h4>VAV box — Variable Air Volume</h4>
+          <span class="coil hw">reheat coil only</span>
+          <p>Varies <b>how much</b> supply air a zone gets. Inside is a <b>damper</b> driven by an actuator, and an <b>airflow sensor</b> so the controller knows the actual CFM — not just the damper position.</p>
+          <p style="margin-top:6px"><b>A VAV box has no cooling coil — it cools by letting in more cold air.</b> The room&#8217;s heat leaves <i>with</i> that air: out the exhaust in a lab, back to the AHU in an office.</p>
+          <p style="margin-top:6px"><b>Cooling:</b> the room warms up, the damper opens, more 55°F air arrives.<br><b>Heating:</b> the damper closes to its <b>minimum airflow</b> (needed for ventilation) and the <b>reheat coil</b> warms that air with the boiler&#8217;s hot water.</p>
+          <p style="margin-top:6px">Some are <b>cooling-only</b>, with no coil at all. The minimum is why the <b>reheat penalty</b> exists — you cooled that air, now you&#8217;re heating it back up.</p>
+        </div>
+        <div class="term-card">
+          <h4>FPT — Fan Powered Terminal</h4>
+          <span class="coil hw">reheat coil</span> <span class="coil chw">+ CHW coil (4-pipe)</span>
+          <p>Like a VAV box, but with its <b>own small fan</b>. That fan pulls in <b>return air</b> — through a <b>return duct</b> or an induction opening into the ceiling plenum — and <b>blends it with the cool primary supply air</b> from the AHU before delivering it to the zone.</p>
+          <p style="margin-top:6px">The coil isn&#8217;t always heating-only. A <b>two-pipe</b> unit has one coil (usually hot water); a <b>four-pipe</b> unit has <b>both a hot-water and a chilled-water coil</b>, so the same box can heat or cool the zone. Some are electric-coil instead.</p>
+          <p style="margin-top:6px">Common at the <b>perimeter</b>, where rooms swing from cold mornings to sunny afternoons and the box has to do both.</p>
+        </div>
+        <div class="term-card">
+          <h4>CRAC / CRAH</h4>
+          <span class="coil chw">recirculates room air · CHW coil</span>
+          <p><b>CRAC = Computer Room Air Conditioner. CRAH = Computer Room Air Handler.</b> Both cool <b>equipment and server rooms</b> around the clock, independent of people-comfort cooling. Equipment doesn&#8217;t go home at 6pm — and it doesn&#8217;t tolerate a warm weekend.</p>
+          <p style="margin-top:6px">The difference is where the cold comes from: a <b>CRAH</b> uses a <b>chilled-water coil</b> fed by the plant (ours). A true <b>CRAC</b> has its own <b>refrigerant compressor</b> (DX) built in. Everyone says &#8220;CRAC&#8221; for both — but they <b>recirculate the room&#8217;s own air</b> across a coil, which is what makes them different from the AHU.</p>
+          <p style="margin-top:6px">They control <b>humidity</b> as well as temperature, are usually installed <b>N+1</b> (a spare that can carry the load), and their alarms matter: a room full of servers heats up in minutes.</p>
+        </div>
+
+        <div class="term-card">
+          <h4>Exhaust valve / terminal</h4>
+          <span class="coil ex">air out</span>
+          <p>The mirror image of a VAV box, on the way <b>out</b>. A damper or <b>venturi valve</b> meters exactly how much air leaves a room — that&#8217;s what makes a lab <b>negative</b>.</p>
+          <p style="margin-top:6px">In a lab it&#8217;s paired with the supply box as a <b>tracking pair</b>: open a <b>fume hood</b> sash, the hood pulls more air, the exhaust valve opens, and the supply valve follows to hold the offset. Room stays negative at any airflow.</p>
+          <p style="margin-top:6px">Lab air goes out the <b>LEF</b>. Restrooms and support rooms have plain <b>exhaust grilles</b> pulled by the <b>GEF</b> — no valve, no tracking, straight to the roof.</p>
+        </div>
+      </div>
+
+      <p>So the split is simple: <b>our job is the plant</b> — keep feeding clean air and water at the right temperature, pressure, and volume, and pull the used air back out. <b>The terminals do the last few degrees</b> in each room, and the tenant sets their thermostat. That's where the base building ends and the tenant begins.</p>
+    </div>
+    </div>
+  </section>
+
+  <!-- OFFICE VS LAB -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">05</span><h2>Office vs. lab — one building, two different worlds</h2><span class="line"></span></div>
+    <p class="lead">Almost every building here is <b>part lab, part office</b>. They share the same chillers, boilers, and pumps — but the <b>air</b> is handled completely differently, and mixing the two up is the most common new-hire mistake.</p>
+    </div>
+
+    <div class="terms">
+      <div class="term-card">
+        <h4>Office air — recirculated</h4><span class="coil hi">the normal way</span>
+        <p>Most of the air an office breathes is the <b>same air, used again</b>. It returns to the AHU through the ceiling plenum or return ducts, gets <b>mixed with a modest amount of fresh outside air</b> (often 10–20%), is filtered and re-conditioned, and goes back out.</p>
+        <p style="margin-top:6px">Cheap, because you only condition the fresh portion. Comfort-driven — the thermostat is in charge.</p>
+      </div>
+      <div class="term-card">
+        <h4>Lab air — once through</h4><span class="coil lo">the expensive way</span>
+        <p><b>100% outside air, every time.</b> Nothing is recirculated, because lab air may carry fumes. It&#8217;s conditioned once, used once, and exhausted through the LEF.</p>
+        <p style="margin-top:6px">Expensive, and <b>safety-driven</b> — the hoods and exhaust decide the airflow, not the thermostat.</p>
+      </div>
+    </div>
+
+    <table class="ptab">
+      <thead><tr><th></th><th>Office area</th><th>Lab area</th></tr></thead>
+      <tbody>
+        <tr><td><b>Air source</b></td><td>Mostly <b>return air</b> + some outside air</td><td><b>100% outside air</b></td></tr>
+        <tr><td><b>Recirculated?</b></td><td>Yes — that&#8217;s the point</td><td><b>Never</b></td></tr>
+        <tr><td><b>What drives airflow</b></td><td>The <b>thermostat</b> (comfort)</td><td>The <b>exhaust</b> — hoods and ACH (safety)</td></tr>
+        <tr><td><b>Air changes / hour</b></td><td>Roughly 4–6</td><td>Roughly 6–12, more in some spaces</td></tr>
+        <tr><td><b>Room pressure</b></td><td><span class="pos">Positive</span> to the labs</td><td><span class="neg">Negative</span> to the corridor</td></tr>
+        <tr><td><b>Exhaust path</b></td><td>Return duct back to the AHU; restrooms via <b>GEF</b></td><td>Out the <b>LEF</b>, high above the roof</td></tr>
+        <tr><td><b>Free cooling trick</b></td><td><b>Economizer</b> — when it&#8217;s mild, open the OA dampers wide and cool with fresh air instead of the chiller</td><td>No economizer needed — it&#8217;s <i>already</i> 100% OA. The <b>ERM</b> is the savings instead</td></tr>
+        <tr><td><b>Terminal units</b></td><td>VAV boxes with reheat; <b>FPTs</b> on the perimeter — fan plus return air, two-pipe or four-pipe</td><td>VAV supply <b>and</b> exhaust valves as <b>tracking pairs</b></td></tr>
+        <tr><td><b>Energy per sq ft</b></td><td>Baseline</td><td>Often <b>3–5×</b> the office</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <span class="ttl">🔀 How they live together</span>
+      In a combined building the plant is <b>shared</b> — one chiller plant, one boiler plant, one set of pumps feeding coils on both sides. What&#8217;s <b>separate</b> is the air:<br><br>
+      • A <b>lab AHU</b> runs 100% outside air, with the ERM upstream and the LEF pulling the exhaust out.<br>
+      • An <b>office AHU</b> has a <b>return air duct and a mixing box</b> — return air plus outside air blended before the coils — and an <b>economizer</b> that can swing to more outside air when the weather is mild.<br><br>
+      Some buildings put offices on their own AHU entirely; others feed office zones from the lab system (simple, but you pay lab-grade energy to cool a desk). Know which one you&#8217;re standing in before you troubleshoot.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05)">
+      <span class="ttl" style="color:var(--red)">⚠ The rule that never bends</span>
+      <b>Lab air never gets recirculated into office space.</b> Not through a duct, not through a shared return plenum, not through a propped-open door. The office is kept <b>positive</b> to the lab, so air always flows <b>office → lab → exhaust</b>, never backwards. If you ever find a return path from a lab, that&#8217;s a stop-work finding, not a work order.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--green);background:rgba(31,154,85,.05)">
+      <span class="ttl" style="color:var(--green)">🧰 What this changes for you on rounds</span>
+      <b>Office complaint (&#8220;it&#8217;s too warm&#8221;)</b> — usually a VAV box, a damper, a reheat valve, or a thermostat. Comfort problem.<br>
+      <b>Lab complaint (&#8220;the hood is alarming,&#8221; &#8220;the door whistles&#8221;)</b> — usually airflow and pressure: exhaust valve, supply tracking, a propped door, a sash left open. <b>Safety problem</b> — treat it with more urgency.
+    </div>
+  </section>
+
+
+  <!-- WSHP -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">06</span><h2>Another setup — water-source heat pumps</h2><span class="line"></span></div>
+    <p class="lead">Not every building pipes chilled and hot water from a central plant to big AHU coils. A common alternative is a <b>water-source heat pump (WSHP)</b> system: instead of one plant conditioning all the air, <b>many small heat pumps</b> around the building each heat or cool their own zone — all sharing one common water loop. The heat pumps handle <b>temperature</b>; separate units bring in the <b>fresh air</b>, and exhaust takes it back out.</p>
+    <div class="flow" style="margin-top:14px">
+      <div class="track t-loop">
+        <span class="track-tag">Water loop</span>
+        <span class="stack">
+          <span class="opt">Fluid Cooler<small>or tower + HX</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Boiler<small>adds if short</small></span>
+          <span class="conj">+</span>
+          <span class="opt">Loop Pumps<small>circulate</small></span>
+        </span>
+        <span class="arr"><span class="lbl">trim loop<br>~60–90°F</span><span class="line2">⇄</span></span>
+        <span class="node hub">Common Water Loop</span>
+        <span class="arr"><span class="lbl">tap</span><span class="line2">⇄</span></span>
+        <span class="node">WSHP units</span>
+        <span class="arr"><span class="lbl">heat / cool</span><span class="line2">→</span></span>
+        <span class="node soft">Zones</span>
+      </div>
+
+      <div class="track t-air">
+        <span class="track-tag">Ventilation</span>
+        <span class="node soft">Outside Air</span>
+        <span class="arr"><span class="lbl">temper</span><span class="line2">→</span></span>
+        <span class="node">HV / MAU</span>
+        <span class="arr"><span class="lbl">fresh air</span><span class="line2">→</span></span>
+        <span class="node">Zones</span>
+        <span class="arr"><span class="lbl">stale out</span><span class="line2">→</span></span>
+        <span class="node">General + Lab Exhaust</span>
+        <span class="arr"><span class="lbl">out</span><span class="line2">→</span></span>
+        <span class="node soft">Atmosphere</span>
+      </div>
+    </div>
+    </div>
+    <p class="flow-note"><b>The short version:</b> two things run in parallel. The <b>loop</b> moves heat — cooling zones push heat into it, heating zones pull heat out, and the fluid cooler and boiler only trim the loop temperature. Meanwhile the <b>ventilation side</b> handles fresh air: an <b>HV or MAU (make-up air unit)</b> brings in and tempers outside air — because the heat pumps only recirculate zone air — and <b>exhaust</b> (general, plus lab exhaust) pulls the stale air back out. The MAU literally "makes up" the air the exhaust removes, which also sets the building's pressure.</p>
+
+    <p class="lead" style="margin-top:22px"><b>What's on the common water loop</b></p>
+    <div class="terms" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="term-card"><h4>Loop pumps</h4><span class="coil circ">circulate</span><p>Keep the loop water moving past every heat pump, around the clock.</p></div>
+      <div class="term-card"><h4>Fluid cooler / tower</h4><span class="coil rej">reject</span><p>Sheds the loop's excess heat outdoors when the building is net-cooling. A closed-circuit "fluid cooler" keeps the loop water clean.</p></div>
+      <div class="term-card"><h4>Heat exchanger</h4><span class="coil iso">isolate</span><p>Only if heat is rejected through an <b>open</b> cooling tower, or the loop ties into a central plant: a plate HX keeps the clean closed loop separate from the open / other water so the heat pumps don't foul. A closed fluid cooler avoids it.</p></div>
+      <div class="term-card"><h4>Boiler / heat source</h4><span class="coil add">add</span><p>Adds heat to the loop when the building is net-heating and moving heat around isn't enough.</p></div>
+      <div class="term-card"><h4>Expansion tank &amp; make-up</h4><span class="coil hold">hold</span><p>Absorbs thermal expansion and tops the loop up so it stays full and pressurized.</p></div>
+      <div class="term-card"><h4>Water treatment</h4><span class="coil prot">protect</span><p>Keeps the loop water clean so the heat pumps and piping don't scale or foul.</p></div>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--green);background:rgba(31,154,85,.05)">
+      <span class="ttl" style="color:var(--green)">♻ Where it fits in a lab building</span>
+      You'll often see <b>both</b> setups in one life-science building: central AHUs handle the big <b>100% outside-air</b> loads the labs need, while <b>WSHPs handle office and support areas</b> — with an <b>HV / MAU (or DOAS)</b> supplying their ventilation air and <b>exhaust</b> balancing it. The payoff is <b>heat recovery</b>: heat pulled out of a warm zone warms a cold one through the loop, instead of being thrown away and re-made.
+    </div>
+  </section>
+
+  <!-- SYSTEM DIAGRAMS -->
+  <section class="land">
+    <div class="pgroup">
+    <div class="s-head"><span class="n">07</span><h2>System diagrams</h2><span class="line"></span></div>
+    <p class="lead">The same story, drawn: boxes are equipment, colored lines are the flows. Trace them line by line.</p>
+    <div class="legend">
+      <span><i style="background:var(--cyan)"></i>chilled / condenser water</span>
+      <span><i style="background:var(--amber)"></i>hot water</span>
+      <span><i style="background:var(--green)"></i>common water loop</span>
+      <span><i style="background:var(--violet)"></i>heat pump</span>
+      <span><i style="background:var(--blue)"></i>air (supply / OA)</span>
+      <span><i style="background:var(--red)"></i>exhaust</span>
+      <span><i style="background:var(--ink-faint);opacity:.6"></i>dashed = optional</span>
+    </div>
+
+    </div>
+
+    <div class="rotpage"><div class="diagram d1">
+    <div class="d-head"><span class="tag">Setup 1</span><h2>Central plant</h2></div>
+    <p class="d-sub">Chiller + boiler make chilled &amp; hot water → piped to one big AHU → terminals trim each zone. The zones&#8217; <b>exhaust valves</b> pull used air out, it gives up its energy in the <b>ERM</b>, and the <b>LEF</b> throws it high above the roof. Nothing is recirculated.</p>
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="aC1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+        <marker id="aA1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="aB1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+        <marker id="aR1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+      </defs>
+
+      <line class="roofline" x1="20" y1="106" x2="660" y2="106"/>
+      <text class="rooflab" x="24" y="100">OUTDOORS / ROOF</text>
+
+      <!-- pipes first (under boxes) -->
+      <!-- condenser water tower<->chiller -->
+      <path class="pipe p-cyan" d="M115,92 V175" marker-end="url(#aC1)" marker-start="url(#aC1)"/>
+      <text class="pl pl-c" x="122" y="140">condenser water</text>
+      <!-- chilled water chiller->AHU -->
+      <path class="pipe p-cyan" d="M190,204 H275" marker-end="url(#aC1)"/>
+      <text class="pl pl-c" x="198" y="198">chilled water</text>
+      <!-- hot water boiler->AHU -->
+      <path class="pipe p-amber" d="M115,300 V250 H275" marker-end="url(#aA1)"/>
+      <text class="pl pl-a" x="196" y="244">hot water</text>
+      <!-- OA -> ERM -->
+      <path class="pipe p-blue" d="M190,389 H310 V366" marker-end="url(#aB1)"/>
+      <rect class="eq c-blue" x="40" y="370" width="150" height="38" rx="8"/>
+      <text class="eqt" x="115" y="389" font-size="11">OA louver</text>
+      <text class="eqs" x="115" y="401">fresh air in</text>
+      <text class="pl pl-b" x="206" y="383">outside air</text>
+      <!-- ERM -> AHU -->
+      <path class="pipe p-blue" d="M350,322 V302" marker-end="url(#aB1)"/>
+      <text class="pl pl-b" x="358" y="315" font-size="10">tempered OA</text>
+      <!-- supply air AHU->Zones -->
+      <path class="pipe p-blue" d="M425,190 H490" marker-end="url(#aB1)"/>
+      <text class="pl pl-b" x="430" y="182">supply air</text>
+      <!-- return/exhaust Zones->ERM -->
+      <path class="pipe p-red" d="M565,300 V318" marker-end="url(#aR1)"/>
+      <text class="pl pl-r" x="556" y="315" text-anchor="end" font-size="10">exhaust from the zones</text>
+      <!-- exhaust ERM->LEF -->
+      <path class="pipe p-red" d="M640,342 H658 V67 H646" marker-end="url(#aR1)"/>
+      <text class="pl pl-r" x="650" y="140" text-anchor="end">to LEF · high above roof</text>
+
+      <!-- equipment boxes -->
+      <rect class="eq c-cyan" x="40" y="42" width="150" height="50" rx="8"/>
+      <text class="eqt" x="115" y="65">Cooling Tower</text><text class="eqs" x="115" y="80">rejects heat outside</text>
+
+      <rect class="eq c-red" x="490" y="42" width="150" height="50" rx="8"/>
+      <text class="eqt" x="565" y="65">LEF</text><text class="eqs" x="565" y="80">lab exhaust · high plume</text>
+
+      <rect class="eq c-cyan" x="40" y="175" width="150" height="58" rx="8"/>
+      <text class="eqt" x="115" y="200">Chiller</text><text class="eqs" x="115" y="215">makes chilled water</text>
+
+      <rect class="eq c-amber" x="40" y="300" width="150" height="58" rx="8"/>
+      <text class="eqt" x="115" y="325">Boiler</text><text class="eqs" x="115" y="340">makes hot water</text>
+
+      <rect class="eq c-blue" x="275" y="150" width="150" height="150" rx="8"/>
+      <text class="eqt" x="350" y="212">AHU</text><text class="eqs" x="350" y="228">filter · coils · fan</text><text class="eqs" x="350" y="240">100% outside air</text>
+
+      <rect class="eq c-green" x="275" y="322" width="365" height="40" rx="8"/>
+      <text class="eqt" x="457" y="340" font-size="11">ERM</text>
+      <text class="eqs" x="457" y="354">glycol run-around · recovers energy both ways</text>
+
+      <rect class="eq c-ink" x="490" y="150" width="150" height="150" rx="8"/>
+      <text class="eqt" x="565" y="192">Zones</text>
+      <text class="eqs" x="565" y="212">VAV · reheat coil</text>
+      <text class="eqs" x="565" y="226">FPT · reheat coil + CHW coil</text>
+      <text class="eqs" x="565" y="248">CRAC / CRAH</text>
+      <text class="eqs" x="565" y="260">recirculates room air · CHW coil</text>
+      <text class="eqs" x="565" y="284">exhaust valves → ERM → LEF</text>
+    </svg>
+  </div></div>
+    
+
+
+  
+    <div class="rotpage"><div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--cyan)">Illustrated</span><h2>Chilled-water plant — the two loops</h2></div>
+      <p class="d-sub">Warm zone = condenser water loop (tower side); cool zone = chilled water loop (building side). Pumps drive each loop; bowties are isolation valves. The <b>ERM</b> is not a box — it is <b>two coils</b>: one sitting in the AHU&#8217;s outside-air stream, one sitting in the exhaust duct ahead of the LEF, joined only by a <b>pumped glycol loop</b>. In summer it <b>pre-cools the incoming outside air</b>, so the chilled-water coil (and the chiller behind it) has less work to do.</p>
+      <svg viewBox="0 0 760 450" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ilG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <marker id="ilV" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+          
+          <marker id="ilR" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+          <marker id="ilB" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+          <linearGradient id="hvMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f7"/><stop offset="0.45" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4d2"/></linearGradient>
+          <linearGradient id="hvTan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4ecdd"/><stop offset="0.5" stop-color="#e9dfc9"/><stop offset="1" stop-color="#c8b795"/></linearGradient>
+          <linearGradient id="hvDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#667284"/><stop offset="0.4" stop-color="#49525f"/><stop offset="1" stop-color="#262d37"/></linearGradient>
+          <linearGradient id="hvRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0a49e"/><stop offset="0.45" stop-color="#f6c5c1"/><stop offset="1" stop-color="#bd5049"/></linearGradient>
+          <linearGradient id="hvBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a3c4f1"/><stop offset="0.45" stop-color="#c9def8"/><stop offset="1" stop-color="#5b85c3"/></linearGradient>
+        </defs>
+        <rect x="16" y="14" width="358" height="422" rx="12" fill="rgba(210,120,60,0.10)"/>
+        <rect x="380" y="14" width="364" height="422" rx="12" fill="rgba(47,109,204,0.08)"/>
+        <rect x="60" y="384" width="176" height="30" rx="6" fill="var(--blue)"/>
+        <text x="148" y="403" font-family="IBM Plex Mono" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="600">CONDENSER WATER LOOP</text>
+        <rect x="404" y="384" width="160" height="30" rx="6" fill="var(--blue)"/>
+        <text x="484" y="403" font-family="IBM Plex Mono" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="600">CHILLED WATER LOOP</text>
+
+        <path d="M64,158 V333 H94" fill="none" stroke="var(--red)" stroke-width="3.4" marker-end="url(#ilR)"/>
+        <path d="M118,310 V286 H260 V272 H332" fill="none" stroke="var(--red)" stroke-width="3.4" marker-end="url(#ilR)"/>
+        <path d="M334,260 H236 V96 H208" fill="none" stroke="var(--red)" stroke-width="3.4" marker-end="url(#ilR)"/>
+        <path d="M508,296 H556 V130" fill="none" stroke="var(--blue)" stroke-width="3.4" marker-end="url(#ilB)"/>
+        <path d="M694,126 V333 H687" fill="none" stroke="var(--blue)" stroke-width="3.4" marker-end="url(#ilB)"/>
+        <path d="M662,310 V286 H540 V308 H508" fill="none" stroke="var(--blue)" stroke-width="3.4" marker-end="url(#ilB)"/>
+
+        <path d="M193,281 L200,286 L193,291 Z M207,281 L200,286 L207,291 Z" fill="var(--red)"/>
+        <path d="M231,143 L236,150 L241,143 Z M231,157 L236,150 L241,157 Z" fill="var(--red)"/>
+        <path d="M551,203 L556,210 L561,203 Z M551,217 L556,210 L561,217 Z" fill="var(--blue)"/>
+        <path d="M689,213 L694,220 L699,213 Z M689,227 L694,220 L699,227 Z" fill="var(--blue)"/>
+        <path d="M583,281 L590,286 L583,291 Z M597,281 L590,286 L597,291 Z" fill="var(--blue)"/>
+
+        <rect x="98" y="50" width="68" height="18" rx="9" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <circle cx="132" cy="59" r="3" fill="#64748b"/>
+        <line x1="132" y1="59" x2="118" y2="54" stroke="#64748b" stroke-width="2"/>
+        <line x1="132" y1="59" x2="146" y2="54" stroke="#64748b" stroke-width="2"/>
+        <line x1="132" y1="59" x2="132" y2="66" stroke="#64748b" stroke-width="2"/>
+        <rect x="58" y="68" width="148" height="78" rx="4" fill="url(#hvTan)" stroke="#8a94a4" stroke-width="1.6"/>
+        <line x1="66" y1="112" x2="198" y2="112" stroke="#a8977a" stroke-width="1.4"/>
+        <line x1="66" y1="121" x2="198" y2="121" stroke="#a8977a" stroke-width="1.4"/>
+        <line x1="66" y1="130" x2="198" y2="130" stroke="#a8977a" stroke-width="1.4"/>
+        <line x1="66" y1="139" x2="198" y2="139" stroke="#a8977a" stroke-width="1.4"/>
+        <line x1="88" y1="78" x2="88" y2="90" stroke="var(--cyan)" stroke-width="1.4" stroke-dasharray="2 3"/>
+        <line x1="118" y1="78" x2="118" y2="90" stroke="var(--cyan)" stroke-width="1.4" stroke-dasharray="2 3"/>
+        <line x1="148" y1="78" x2="148" y2="90" stroke="var(--cyan)" stroke-width="1.4" stroke-dasharray="2 3"/>
+        <line x1="178" y1="78" x2="178" y2="90" stroke="var(--cyan)" stroke-width="1.4" stroke-dasharray="2 3"/>
+        <rect x="58" y="146" width="148" height="12" fill="rgba(14,143,166,0.28)"/>
+        <rect x="70" y="158" width="10" height="10" fill="#8a94a4"/>
+        <rect x="184" y="158" width="10" height="10" fill="#8a94a4"/>
+        <text x="132" y="188" font-family="Space Grotesk" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">Cooling Tower</text>
+
+        <rect x="92" y="346" width="84" height="6" rx="2" fill="#8a94a4"/>
+        <circle cx="118" cy="330" r="14" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.8"/>
+        <rect x="112" y="308" width="12" height="10" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.4"/>
+        <line x1="108" y1="308" x2="128" y2="308" stroke="#bd5049" stroke-width="2"/>
+        <rect x="94" y="325" width="10" height="10" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.4"/>
+        <rect x="136" y="318" width="40" height="24" rx="11" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.6"/>
+        <line x1="146" y1="320" x2="146" y2="340" stroke="#bd5049" stroke-width="1.2"/>
+        <line x1="154" y1="320" x2="154" y2="340" stroke="#bd5049" stroke-width="1.2"/>
+        <line x1="162" y1="320" x2="162" y2="340" stroke="#bd5049" stroke-width="1.2"/>
+        <rect x="148" y="310" width="10" height="8" rx="1" fill="#8a94a4"/>
+        <text x="134" y="372" font-family="Space Grotesk" font-size="11.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Condenser Water Pump</text>
+
+        <rect x="330" y="320" width="184" height="8" rx="2" fill="#262d37"/>
+        <ellipse cx="338" cy="266" rx="8" ry="15" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <ellipse cx="506" cy="266" rx="8" ry="15" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <rect x="338" y="251" width="168" height="30" rx="15" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <ellipse cx="338" cy="303" rx="8" ry="16" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <ellipse cx="506" cy="303" rx="8" ry="16" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <rect x="338" y="287" width="168" height="32" rx="16" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <line x1="352" y1="257" x2="492" y2="257" stroke="#8b96a6" stroke-width="1.2" opacity="0.7"/>
+        <line x1="352" y1="293" x2="492" y2="293" stroke="#8b96a6" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="418" cy="234" r="16" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.5"/>
+        <rect x="436" y="224" width="48" height="22" rx="11" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.4"/>
+        <rect x="414" y="248" width="8" height="6" fill="#262d37"/>
+        <rect x="352" y="228" width="30" height="20" rx="2" fill="#eef2f7" stroke="#64748b" stroke-width="1.3"/>
+        <line x1="357" y1="234" x2="377" y2="234" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="357" y1="240" x2="371" y2="240" stroke="var(--green)" stroke-width="1.6"/>
+        <text x="422" y="356" font-family="Space Grotesk" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">Water-Cooled Chiller</text>
+
+        <rect x="500" y="120" width="218" height="6" rx="2" fill="#8a94a4"/>
+        <rect x="500" y="60" width="218" height="60" rx="3" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.6"/>
+        <rect x="506" y="68" width="26" height="44" fill="rgba(31,154,85,0.12)" stroke="var(--green)" stroke-width="1.4"/>
+        <line x1="509" y1="108" x2="529" y2="72" stroke="var(--green)" stroke-width="1"/>
+        <line x1="509" y1="90" x2="521" y2="70" stroke="var(--green)" stroke-width="1"/>
+        <line x1="538" y1="62" x2="538" y2="118" stroke="#8a94a4" stroke-width="1.1"/>
+        <line x1="596" y1="62" x2="596" y2="118" stroke="#8a94a4" stroke-width="1.3"/>
+        <line x1="658" y1="62" x2="658" y2="118" stroke="#8a94a4" stroke-width="1.3"/>
+        <rect x="588" y="82" width="4" height="14" rx="1" fill="#64748b"/>
+        <rect x="650" y="82" width="4" height="14" rx="1" fill="#64748b"/>
+        <rect x="710" y="82" width="4" height="14" rx="1" fill="#64748b"/>
+        <line x1="546" y1="112" x2="586" y2="70" stroke="#9fb2c6" stroke-width="1.3"/>
+        <line x1="546" y1="94" x2="570" y2="70" stroke="#9fb2c6" stroke-width="1.3"/>
+        <line x1="562" y1="112" x2="586" y2="88" stroke="#9fb2c6" stroke-width="1.3"/>
+        <rect x="604" y="70" width="44" height="40" fill="rgba(14,143,166,0.10)" stroke="var(--cyan)" stroke-width="1.4"/>
+        <line x1="608" y1="106" x2="644" y2="74" stroke="var(--cyan)" stroke-width="1.2"/>
+        <line x1="608" y1="90" x2="628" y2="72" stroke="var(--cyan)" stroke-width="1.2"/>
+        <line x1="622" y1="108" x2="644" y2="88" stroke="var(--cyan)" stroke-width="1.2"/>
+        <circle cx="688" cy="90" r="17" fill="#fff" stroke="#64748b" stroke-width="1.6"/>
+        <path d="M688,90 L688,75 M688,90 L701,98 M688,90 L675,98" stroke="#64748b" stroke-width="2" fill="none"/>
+        <circle cx="688" cy="90" r="3" fill="#64748b"/>
+        <text x="609" y="144" font-family="Space Grotesk" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">AHU</text>
+        <text x="609" y="156" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-faint)" text-anchor="middle">first coil = ERM (in the OA stream)</text>
+
+        <rect x="604" y="346" width="84" height="6" rx="2" fill="#8a94a4"/>
+        <circle cx="662" cy="330" r="14" fill="url(#hvBlue)" stroke="#5b85c3" stroke-width="1.8"/>
+        <rect x="656" y="308" width="12" height="10" fill="url(#hvBlue)" stroke="#5b85c3" stroke-width="1.4"/>
+        <line x1="652" y1="308" x2="672" y2="308" stroke="#5b85c3" stroke-width="2"/>
+        <rect x="676" y="325" width="10" height="10" fill="url(#hvBlue)" stroke="#5b85c3" stroke-width="1.4"/>
+        <rect x="608" y="318" width="40" height="24" rx="11" fill="url(#hvBlue)" stroke="#5b85c3" stroke-width="1.6"/>
+        <line x1="618" y1="320" x2="618" y2="340" stroke="#5b85c3" stroke-width="1.2"/>
+        <line x1="626" y1="320" x2="626" y2="340" stroke="#5b85c3" stroke-width="1.2"/>
+        <line x1="634" y1="320" x2="634" y2="340" stroke="#5b85c3" stroke-width="1.2"/>
+        <rect x="616" y="310" width="10" height="8" rx="1" fill="#8a94a4"/>
+        <text x="648" y="372" font-family="Space Grotesk" font-size="11.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Chilled Water Pump</text>
+      
+        <rect x="390" y="34" width="88" height="40" rx="3" fill="#fff" stroke="#64748b" stroke-width="1.4"/>
+        <rect x="400" y="42" width="58" height="24" fill="rgba(31,154,85,0.10)" stroke="var(--green)" stroke-width="1.3"/>
+        <line x1="405" y1="63" x2="424" y2="44" stroke="var(--green)" stroke-width="1"/>
+        <line x1="420" y1="63" x2="439" y2="44" stroke="var(--green)" stroke-width="1"/>
+        <text x="434" y="28" font-family="IBM Plex Mono" font-size="7" fill="var(--green)" text-anchor="middle">ERM coil in the exhaust duct</text>
+        <path d="M540,54 H482" fill="none" stroke="var(--violet)" stroke-width="2.2" marker-end="url(#ilV)"/>
+        <text x="596" y="48" font-family="IBM Plex Mono" font-size="7" fill="var(--violet)" text-anchor="middle">exhaust from building</text>
+        <path d="M390,54 H382 V26" fill="none" stroke="var(--violet)" stroke-width="2.2" marker-end="url(#ilV)"/>
+        <text x="396" y="20" font-family="IBM Plex Mono" font-size="7" fill="var(--violet)" text-anchor="middle">to LEF</text>
+        <path d="M410,74 V96 H498" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#ilG)"/>
+        <path d="M520,66 V84 H448 V74" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#ilG)"/>
+        <circle cx="466" cy="96" r="5.5" fill="#fff" stroke="var(--green)" stroke-width="1.3"/>
+        <path d="M463.5,94 L469,96 L463.5,98 Z" fill="var(--green)"/>
+        <text x="470" y="112" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-faint)" text-anchor="middle">glycol loop</text>
+        <path d="M386,140 H496" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#ilG)"/>
+        <text x="404" y="132" font-family="IBM Plex Mono" font-size="7" fill="var(--green)">OA in</text>
+        <text x="450" y="166" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">ERM</text>
+        <text x="450" y="178" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-faint)" text-anchor="middle">pre-cools OA in summer</text>
+        <text x="450" y="188" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-faint)" text-anchor="middle">→ less load on the chiller</text>
+      </svg>
+    </div></div>
+
+  
+    <div class="rotpage"><div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--amber)">Illustrated</span><h2>Heating loop &amp; the air side — boiler, ERM, once-through air</h2></div>
+      <p class="d-sub">Top: 100% outside air passes through once — in through the ERM and AHU, out through the ERM and LEF — the ERM&#8217;s glycol coils moving energy between the two airstreams — preheating in winter, pre-cooling in summer. Bottom: the heating loop the coils drink from.</p>
+      <svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="hvaG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <marker id="hvaV" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+          <marker id="hvaA" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        </defs>
+        <rect x="16" y="14" width="728" height="246" rx="12" fill="rgba(31,154,85,0.06)"/>
+        <rect x="16" y="268" width="728" height="156" rx="12" fill="rgba(176,116,8,0.07)"/>
+        <text x="250" y="36" font-family="IBM Plex Mono" font-size="9.5" fill="var(--green)" font-weight="700" letter-spacing="2">AIR SIDE — 100% OUTSIDE AIR, ONCE THROUGH</text>
+        <text x="200" y="290" font-family="IBM Plex Mono" font-size="9.5" fill="var(--amber)" font-weight="700" letter-spacing="2">HEATING LOOP — HHW (setpoint depends on plant type)</text>
+
+        <rect x="96" y="78" width="34" height="30" rx="3" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <circle cx="113" cy="93" r="9" fill="#fff" stroke="#64748b" stroke-width="1.4"/>
+        <path d="M113,93 L113,85 M113,93 L120,98 M113,93 L106,98" stroke="#64748b" stroke-width="1.4" fill="none"/>
+        <path d="M113,78 V22" fill="none" stroke="var(--violet)" stroke-width="2.4" marker-end="url(#hvaV)"/>
+        <text x="124" y="32" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)">high above roof</text>
+        <text x="113" y="124" font-family="Space Grotesk" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">LEF</text>
+
+        <rect x="20" y="152" width="34" height="36" rx="3" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <line x1="24" y1="160" x2="50" y2="160" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="24" y1="167" x2="50" y2="167" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="24" y1="174" x2="50" y2="174" stroke="#64748b" stroke-width="1.2"/>
+        <line x1="24" y1="181" x2="50" y2="181" stroke="#64748b" stroke-width="1.2"/>
+        <text x="37" y="204" font-family="Space Grotesk" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">OA</text>
+        <path d="M54,170 H114" fill="none" stroke="var(--green)" stroke-width="2.8" marker-end="url(#hvaG)"/>
+
+        <rect x="150" y="74" width="52" height="38" rx="3" fill="#fff" stroke="#64748b" stroke-width="1.4"/>
+        <rect x="158" y="80" width="36" height="26" fill="rgba(31,154,85,0.10)" stroke="var(--green)" stroke-width="1.3"/>
+        <line x1="162" y1="103" x2="182" y2="83" stroke="var(--green)" stroke-width="1"/>
+        <line x1="174" y1="103" x2="191" y2="86" stroke="var(--green)" stroke-width="1"/>
+        <text x="176" y="68" font-family="IBM Plex Mono" font-size="7" fill="var(--green)" text-anchor="middle">ERM coil in exhaust duct</text>
+        <path d="M170,112 V140" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#hvaG)"/>
+        <path d="M188,140 V114" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#hvaG)"/>
+        <circle cx="188" cy="127" r="5.5" fill="#fff" stroke="var(--green)" stroke-width="1.3"/>
+        <path d="M186,129.5 L188,124 L190,129.5 Z" fill="var(--green)"/>
+        <text x="200" y="130" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-faint)">glycol loop</text>
+        <path d="M150,93 H134" fill="none" stroke="var(--violet)" stroke-width="2.8" marker-end="url(#hvaV)"/>
+                        
+        <rect x="118" y="198" width="294" height="6" rx="2" fill="#8a94a4"/>
+        <rect x="118" y="142" width="294" height="56" rx="3" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.6"/>
+        <line x1="126" y1="188" x2="150" y2="154" stroke="#64748b" stroke-width="1.8"/>
+        <line x1="126" y1="176" x2="144" y2="150" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
+        <circle cx="138" cy="170" r="2" fill="#64748b"/>
+        <rect x="144" y="190" width="8" height="6" rx="1" fill="#64748b"/>
+        <line x1="158" y1="144" x2="158" y2="196" stroke="#8a94a4" stroke-width="1.2"/>
+        <rect x="166" y="150" width="26" height="40" fill="rgba(31,154,85,0.12)" stroke="var(--green)" stroke-width="1.4"/>
+        <line x1="169" y1="186" x2="189" y2="154" stroke="var(--green)" stroke-width="1"/>
+        <line x1="169" y1="170" x2="181" y2="152" stroke="var(--green)" stroke-width="1"/>
+        <line x1="198" y1="144" x2="198" y2="196" stroke="#8a94a4" stroke-width="1.2"/>
+        <text x="138" y="214" font-family="IBM Plex Mono" font-size="6.5" fill="var(--ink-dim)" text-anchor="middle">OA damper</text>
+        <text x="179" y="214" font-family="IBM Plex Mono" font-size="6.5" fill="var(--green)" text-anchor="middle">ERM coil</text>
+        <line x1="302" y1="144" x2="302" y2="196" stroke="#8a94a4" stroke-width="1.2"/>
+        <line x1="268" y1="192" x2="298" y2="150" stroke="#9fb2c6" stroke-width="1.2"/>
+        <line x1="268" y1="172" x2="288" y2="148" stroke="#9fb2c6" stroke-width="1.2"/>
+        <line x1="280" y1="194" x2="298" y2="170" stroke="#9fb2c6" stroke-width="1.2"/>
+        <rect x="306" y="150" width="30" height="40" fill="rgba(14,143,166,0.10)" stroke="var(--cyan)" stroke-width="1.3"/>
+        <line x1="309" y1="186" x2="333" y2="154" stroke="var(--cyan)" stroke-width="1.1"/>
+        <line x1="309" y1="170" x2="323" y2="152" stroke="var(--cyan)" stroke-width="1.1"/>
+        <rect x="340" y="150" width="28" height="40" fill="rgba(176,116,8,0.10)" stroke="var(--amber)" stroke-width="1.3"/>
+        <line x1="343" y1="186" x2="365" y2="154" stroke="var(--amber)" stroke-width="1.1"/>
+        <line x1="343" y1="170" x2="357" y2="152" stroke="var(--amber)" stroke-width="1.1"/>
+        <circle cx="390" cy="170" r="15" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+        <path d="M390,170 L390,157 M390,170 L401,177 M390,170 L379,177" stroke="#64748b" stroke-width="1.8" fill="none"/>
+        <text x="300" y="222" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">AHU</text>
+        <text x="300" y="234" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">OA damper · ERM coil · filter · CHW coil · HHW coil · fan — all one AHU</text>
+
+        <path d="M412,170 H444" fill="none" stroke="var(--green)" stroke-width="2.8" marker-end="url(#hvaG)"/>
+        <rect x="448" y="150" width="54" height="40" rx="4" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <line x1="454" y1="184" x2="482" y2="156" stroke="#64748b" stroke-width="1.8"/>
+        <circle cx="468" cy="170" r="2.2" fill="#64748b"/>
+        <rect x="488" y="154" width="10" height="32" fill="rgba(176,116,8,0.10)" stroke="var(--amber)" stroke-width="1.1"/>
+        <line x1="489" y1="182" x2="497" y2="158" stroke="var(--amber)" stroke-width="1"/>
+        <text x="475" y="210" font-family="Space Grotesk" font-size="9.5" font-weight="600" fill="var(--ink)" text-anchor="middle">VAV / FPT + reheat</text>
+
+        <path d="M502,170 H536" fill="none" stroke="var(--green)" stroke-width="2.8" marker-end="url(#hvaG)"/>
+        <rect x="536" y="54" width="120" height="150" rx="6" fill="#fff" stroke="var(--line-2)" stroke-width="1.6"/>
+        <path d="M566,158 V136" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#hvaG)"/>
+        <path d="M592,158 V136" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#hvaG)"/>
+        <rect x="546" y="88" width="18" height="10" rx="1" fill="#fff" stroke="#8a94a4" stroke-width="1.2"/>
+        <line x1="549" y1="91" x2="561" y2="91" stroke="#8a94a4" stroke-width="1"/>
+        <line x1="549" y1="95" x2="561" y2="95" stroke="#8a94a4" stroke-width="1"/>
+        <text x="596" y="194" font-family="Space Grotesk" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">tenant / lab space</text>
+        <path d="M546,93 H206" fill="none" stroke="var(--violet)" stroke-width="2.8" marker-end="url(#hvaV)"/>
+        <text x="300" y="84" font-family="IBM Plex Mono" font-size="8" fill="var(--violet)">lab + tenant exhaust</text>
+        
+        <rect x="536" y="216" width="140" height="26" rx="4" fill="#fff" stroke="var(--line-2)" stroke-width="1.4"/>
+        <text x="606" y="233" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-dim)" text-anchor="middle">restroom · elec · MDF · mech</text>
+        <path d="M676,229 H681" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#hvaG)"/>
+        <rect x="683" y="214" width="34" height="30" rx="3" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.5"/>
+        <circle cx="700" cy="229" r="9" fill="#fff" stroke="#64748b" stroke-width="1.3"/>
+        <path d="M700,229 L700,221 M700,229 L707,234 M700,229 L693,234" stroke="#64748b" stroke-width="1.3" fill="none"/>
+        <text x="700" y="256" font-family="Space Grotesk" font-size="9.5" font-weight="600" fill="var(--ink)" text-anchor="middle">GEF</text>
+        <path d="M700,214 V62" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#hvaG)"/>
+        <text x="700" y="38" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">straight to roof</text>
+        <text x="700" y="48" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">no ERM · no LEF</text>
+
+        <rect x="56" y="306" width="112" height="62" rx="14" fill="url(#hvMetal)" stroke="#64748b" stroke-width="1.7"/>
+        <circle cx="84" cy="337" r="17" fill="url(#hvDark)" stroke="#232a34" stroke-width="1.5"/>
+        <circle cx="84" cy="326" r="1.5" fill="#8a94a4"/><circle cx="84" cy="348" r="1.5" fill="#8a94a4"/>
+        <circle cx="73" cy="337" r="1.5" fill="#8a94a4"/><circle cx="95" cy="337" r="1.5" fill="#8a94a4"/>
+        <rect x="30" y="330" width="26" height="14" rx="3" fill="#8a94a4"/>
+        <path d="M44,341 L48,333 L52,341 Z" fill="var(--amber)"/>
+        <rect x="118" y="284" width="12" height="22" fill="url(#hvMetal)" stroke="#8a94a4" stroke-width="1.3"/>
+        <rect x="113" y="280" width="22" height="5" rx="2" fill="#8a94a4"/>
+        <text x="58" y="392" font-family="Space Grotesk" font-size="11" font-weight="600" fill="var(--ink)">Boiler</text>
+
+        <path d="M168,336 H220" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#hvaA)"/>
+        <rect x="210" y="358" width="70" height="5" rx="2" fill="#8a94a4"/>
+        <circle cx="236" cy="344" r="12" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.7"/>
+        <rect x="231" y="324" width="10" height="9" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.3"/>
+        <rect x="250" y="334" width="30" height="20" rx="9" fill="url(#hvRed)" stroke="#bd5049" stroke-width="1.5"/>
+        <line x1="258" y1="336" x2="258" y2="352" stroke="#bd5049" stroke-width="1"/>
+        <line x1="266" y1="336" x2="266" y2="352" stroke="#bd5049" stroke-width="1"/>
+        <text x="246" y="390" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">HW Pump</text>
+
+        <path d="M236,322 V317 H424" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#hvaA)"/>
+        <path d="M370,317 V361 H424" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#hvaA)"/>
+        <text x="310" y="306" font-family="IBM Plex Mono" font-size="8.5" fill="var(--amber)">supply</text>
+        <rect x="428" y="300" width="152" height="34" rx="6" fill="#fff" stroke="var(--amber)" stroke-width="1.6"/>
+        <line x1="436" y1="328" x2="452" y2="306" stroke="var(--amber)" stroke-width="1.1"/>
+        <line x1="444" y1="328" x2="460" y2="306" stroke="var(--amber)" stroke-width="1.1"/>
+        <text x="516" y="321" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">AHU heating coil</text>
+        <rect x="428" y="344" width="152" height="34" rx="6" fill="#fff" stroke="var(--amber)" stroke-width="1.6"/>
+        <line x1="436" y1="372" x2="452" y2="350" stroke="var(--amber)" stroke-width="1.1"/>
+        <line x1="444" y1="372" x2="460" y2="350" stroke="var(--amber)" stroke-width="1.1"/>
+        <text x="516" y="365" font-family="Space Grotesk" font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">VAV / FPT reheat</text>
+        <path d="M580,317 H620 V404 H100 V372" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#hvaA)"/>
+        <path d="M580,361 H620" fill="none" stroke="var(--amber)" stroke-width="3"/>
+        <text x="376" y="418" font-family="IBM Plex Mono" font-size="8.5" fill="var(--amber)">return ⟲ back to boiler</text>
+      </svg>
+    </div></div>
+
+  <!-- SETUP 2 -->
+  <div class="rotpage"><div class="diagram d2">
+    <div class="d-head"><span class="tag">Setup 2</span><h2>Water-source heat pump loop</h2></div>
+    <p class="d-sub">Every zone has its own heat pump on a shared loop. The tower/boiler only trim the loop; a separate HV/MAU brings in fresh air and exhaust takes it out.</p>
+    <svg viewBox="0 0 680 430" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="aG2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+        <marker id="aA2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--amber)"/></marker>
+        <marker id="aV2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+        <marker id="aB2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+        <marker id="aR2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+      </defs>
+
+      <line class="roofline" x1="20" y1="104" x2="660" y2="104"/>
+      <text class="rooflab" x="24" y="98">OUTDOORS / ROOF</text>
+
+      <!-- cooler -> HX -> loop -->
+      <path class="pipe p-green" d="M120,92 V164" marker-end="url(#aG2)" marker-start="url(#aG2)"/>
+      <text class="pl pl-g" x="126" y="130">reject</text>
+      <!-- boiler -> loop -->
+      <path class="pipe p-amber" d="M300,92 V166" marker-end="url(#aA2)"/>
+      <text class="pl pl-a" x="306" y="130">adds heat</text>
+
+      <!-- WSHP <-> loop (3) -->
+      <path class="pipe p-green" d="M160,194 V250" marker-end="url(#aG2)" marker-start="url(#aG2)"/>
+      <path class="pipe p-green" d="M340,194 V250" marker-end="url(#aG2)" marker-start="url(#aG2)"/>
+      <path class="pipe p-green" d="M520,194 V250" marker-end="url(#aG2)" marker-start="url(#aG2)"/>
+      <text class="pl pl-g" x="166" y="228">reject / absorb</text>
+
+      <!-- WSHP -> zone (3) -->
+      <path class="pipe p-violet" d="M160,304 V330" marker-end="url(#aV2)"/>
+      <path class="pipe p-violet" d="M340,304 V330" marker-end="url(#aV2)"/>
+      <path class="pipe p-violet" d="M520,304 V330" marker-end="url(#aV2)"/>
+      <text class="pl pl-v" x="166" y="314">heat / cool</text>
+
+      <!-- ventilation header (MAU -> zones) -->
+      <path class="pipe p-blue" d="M580,92 V322 H160" marker-end="url(#aB2)"/>
+      <path class="pipe p-blue" d="M186,322 V330" marker-end="url(#aB2)"/>
+      <path class="pipe p-blue" d="M366,322 V330" marker-end="url(#aB2)"/>
+      <path class="pipe p-blue" d="M546,322 V330" marker-end="url(#aB2)"/>
+      <text class="pl pl-b" x="374" y="316">fresh air → zones</text>
+
+      <!-- exhaust header (zones -> out) -->
+      <path class="pipe p-red" d="M160,378 V398" marker-end="url(#aR2)"/>
+      <path class="pipe p-red" d="M340,378 V398" marker-end="url(#aR2)"/>
+      <path class="pipe p-red" d="M520,378 V398" marker-end="url(#aR2)"/>
+      <path class="pipe p-red" d="M160,398 H620 V92" marker-end="url(#aR2)"/>
+      <text class="pl pl-r" x="360" y="414">general + lab exhaust → roof</text>
+
+      <!-- loop bar -->
+      <rect class="loopbar" x="40" y="166" width="600" height="28" rx="6"/>
+      <text class="loopt" x="190" y="184">COMMON WATER LOOP</text>
+      <rect class="eq c-green" x="470" y="160" width="96" height="40" rx="8" fill="#fff"/>
+      <text class="eqt" x="518" y="184" font-size="11">Loop Pumps</text>
+
+      <!-- roof equipment -->
+      <rect class="eq c-cyan" x="40" y="42" width="160" height="50" rx="8"/>
+      <text class="eqt" x="120" y="63">Fluid Cooler / Tower</text><text class="eqs" x="120" y="78">rejects loop heat</text>
+
+      <rect class="eq c-amber" x="245" y="42" width="120" height="50" rx="8"/>
+      <text class="eqt" x="305" y="65">Boiler</text><text class="eqs" x="305" y="80">adds if short</text>
+
+      <rect class="eq c-blue" x="520" y="42" width="120" height="50" rx="8"/>
+      <text class="eqt" x="580" y="63">HV / MAU</text><text class="eqs" x="580" y="78">outside air in</text>
+
+      <!-- HX optional -->
+      <rect class="eq c-ink dash" x="60" y="112" width="120" height="30" rx="6"/>
+      <text class="eqs" x="120" y="131" font-size="9">HX — if open tower</text>
+
+      <!-- WSHP units -->
+      <rect class="eq c-violet" x="100" y="250" width="120" height="54" rx="8"/>
+      <text class="eqt" x="160" y="274" font-size="11.5">WSHP</text><text class="eqs" x="160" y="290">heat pump</text>
+      <rect class="eq c-violet" x="280" y="250" width="120" height="54" rx="8"/>
+      <text class="eqt" x="340" y="274" font-size="11.5">WSHP</text><text class="eqs" x="340" y="290">heat pump</text>
+      <rect class="eq c-violet" x="460" y="250" width="120" height="54" rx="8"/>
+      <text class="eqt" x="520" y="274" font-size="11.5">WSHP</text><text class="eqs" x="520" y="290">heat pump</text>
+
+      <!-- zones -->
+      <rect class="eq c-ink" x="100" y="330" width="120" height="48" rx="8"/>
+      <text class="eqt" x="160" y="359" font-size="12">Zone A</text>
+      <rect class="eq c-ink" x="280" y="330" width="120" height="48" rx="8"/>
+      <text class="eqt" x="340" y="359" font-size="12">Zone B</text>
+      <rect class="eq c-ink" x="460" y="330" width="120" height="48" rx="8"/>
+      <text class="eqt" x="520" y="359" font-size="12">Zone C</text>
+    </svg>
+  </div></div>
+
+  </section>
+
+
+  <!-- QUIZ -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">08</span><h2>Check yourself — quick quiz</h2><span class="line"></span></div>
+    <p class="lead">Tap an answer for instant feedback — nothing is graded or saved. On paper, circle your answers and review them with your mentor.</p>
+    <div class="q-score"><span><b id="qDone">0</b>/<span id="qTot">0</span> answered &middot; <b id="qRight">0</b> correct</span><button id="qReset" type="button">Reset quiz</button></div>
+    </div>
+    <div id="quizBox"></div>
+    <div class="q-openhead">Open questions — say it in your own words</div>
+    <div id="openBox"></div>
+  </section>
+
+  <script>
+  (function(){
+  var QUIZ=[{q:"Why does a lab building run 100% outside air instead of recirculating?",o:["Code requires it in all offices too","It is cheaper to condition","Lab air may carry fumes and hazards, so it must go out, not around","Recirculating wears out the fans"],a:2,e:"Lab air can never be recirculated — it is conditioned once, used once, and exhausted. That is what makes lab HVAC expensive and why the ERM matters."},
+{q:"Which piece of equipment is where the water side and the air side meet?",o:["AHU","Cooling tower","LEF","Boiler"],a:0,e:"The AHU holds the chilled-water and hot-water coils and pushes the air — every loop and the air path meet there."},
+{q:"What do the CW, CHW, and HW pumps actually do?",o:["Add chemicals","Make the loops circulate — no pump, no flow, no cooling or heat","Cool the water","Filter the water"],a:1,e:"Pumps are the movers. Water only picks up or drops off heat if it is flowing."},
+{q:"The condenser water loop runs between which two pieces?",o:["AHU and LEF","Cooling tower and chiller","Chiller and AHU","Boiler and VAV"],a:1,e:"The CW pump shuttles water tower ⇄ chiller: the chiller dumps building heat into it, the tower evaporates it away outside."},
+{q:"When it is cold outside, free cooling means…",o:["Opening the windows","The boiler pre-cools the water","Tower water cools the chilled loop through a plate heat exchanger — compressors off","The chiller runs faster"],a:2,e:"Cold outdoor air makes the tower water cold enough on its own; the free-cooling pump and HX chill the CHW loop directly. Big winter energy savings."},
+{q:"Our ERM recovers energy using…",o:["Mixing the two airstreams","Electric preheat","A rotating heat wheel","Glycol run-around coils — a coil in each airstream tied by a pumped glycol loop"],a:3,e:"A coil in the exhaust and a coil in the OA, connected by pumped glycol — heat crosses over but the airstreams never touch, so no cross-contamination."},
+{q:"Typical chilled-water supply temperature is around…",o:["34°F","44°F","70°F","58°F"],a:1,e:"About 44°F is the classic CHW supply ballpark — always confirm the actual setpoint on the plant."},
+{q:"A hot-water loop is running 125°F supply. What must you know before calling it a problem?",o:["The tower blowdown rate","The building\u2019s occupancy","The chilled water setpoint","Whether the plant is a condensing boiler (runs cool on purpose) or non-condensing (needs hot return)"],a:3,e:"Condensing boilers want ~120–140°F supply and cold return to condense flue gas. Non-condensing boilers want ~160–180°F and return above ~140°F, or the heat exchanger corrodes. Same reading, opposite verdicts."},
+{q:"A VAV/FPT reheat coil gets its heat from…",o:["The boiler’s hot water loop","The condenser water","Electric strips always","The exhaust air"],a:0,e:"Reheat coils ride the heating loop — the boiler makes the hot water, the HW pump delivers it."},
+{q:"In the WSHP setup, what trims the common loop temperature?",o:["The chiller","The MAU","Each heat pump individually","The fluid cooler / tower and the boiler"],a:3,e:"Zone heat pumps push and pull heat on the loop; the cooler rejects excess and the boiler adds heat only if the loop runs short."},
+{q:"In a WSHP building, fresh air for the zones comes from…",o:["The heat pumps themselves","The stairwells","A separate HV / MAU, with exhaust taking it back out","Opening dampers on each WSHP"],a:2,e:"WSHPs only recirculate zone air for temperature. The make-up air unit brings in and tempers the outside air the exhaust removes."},
+{q:"Used lab air leaves the building through…",o:["The cooling tower","Relief louvers at grade","The AHU return","The LEF, discharged high above the roof"],a:3,e:"Lab exhaust fans throw the air high above the roof so it disperses and never re-enters an intake."},
+{q:"CRAC units cool equipment rooms using…",o:["A chilled-water coil","Refrigerant from the chiller directly","Condenser water","Outside air only"],a:0,e:"CRACs on this campus ride the chilled-water loop, same as the AHU coil — just dedicated to IT/equipment rooms."},
+{q:"A GEF (general exhaust fan) serves…",o:["The AHU return air","Fume hoods and lab benches","The cooling tower basin","Restrooms, electrical/MDF rooms, elevator machine rooms and mechanical spaces — straight to the roof"],a:3,e:"General exhaust clears odor and heat from support spaces. It never passes through the ERM or the LEF — that air is neither hazardous nor worth recovering heat from."},
+{q:"In a 100% outside-air lab building, what sets the supply airflow?",o:["The outdoor air temperature","The chilled water setpoint","The thermostat in the corridor","The total exhaust — LEF plus GEF plus exfiltration; supply replaces what exhaust removes"],a:3,e:"Mass balance: air in must equal air out. Lab HVAC is exhaust-driven — fume hoods and lab exhaust are the boss, and the AHU exists to replace what they throw away."},
+{q:"A lab should be held ___ to the corridor, and the corridor ___ to the labs.",o:["negative / negative","negative / positive","positive / negative","neutral / neutral"],a:1,e:"Air flows clean → dirty. Exhaust exceeds supply in the lab so fumes stay in; the corridor runs supply-heavy so clean air pushes inward."},
+{q:"Why is a building normally kept slightly POSITIVE to the outside?",o:["Because code sets a maximum pressure","To keep the roof drains flowing","To make the fans work harder","So unconditioned outside air isn't sucked in through every crack — no drafts, no unfiltered humidity"],a:3,e:"Supply is set a little higher than total exhaust, so the surplus leaks out. Go negative and outside air infiltrates: cold drafts in winter, sticky humidity in summer, all unfiltered."},
+{q:"If you double the outside airflow (CFM) through the AHU, the energy needed to condition it roughly…",o:["Stays the same","Doubles","Halves","Goes up four times"],a:1,e:"Conditioning energy is linear in airflow (1.08 × CFM × ΔT for sensible heat). That's why airflow — not setpoints — is the biggest energy lever, and why the ERM matters so much."},
+{q:"When does the ERM do useful work?",o:["Winter only, preheating the incoming air","Summer only, pre-cooling the incoming air","Both — it preheats incoming air in winter and pre-cools it in summer","Only when the chiller is off"],a:2,e:"The glycol loop simply moves energy from the warmer airstream to the cooler one. In winter the exhaust is warmer than the OA (preheat); in summer the exhaust is cooler than the OA (pre-cool). Only in mild shoulder weather is there nothing to recover."},
+{q:"What is a unit heater (UH) usually there to do?",o:["Cool a server room","Boost the exhaust fan","Heat a space the ductwork doesn't reach — often for freeze protection of pipes","Humidify the labs"],a:2,e:"Docks, vestibules, stairs, garages, mechanical rooms. Their real job is frequently keeping sprinkler and water lines above freezing — a failed UH in January is a burst-pipe call."},
+{q:"The biggest difference between office air and lab air is…",o:["Office air is recirculated; lab air is 100% outside air, used once and exhausted","Office air is colder","Labs use more filters","Office air skips the AHU"],a:0,e:"Offices reuse their air (cheap, comfort-driven). Labs cannot recirculate at all — conditioned once, used once, out the LEF. That single difference drives the cost, the pressure, and the controls."},
+{q:"An economizer saves energy in an OFFICE AHU by…",o:["Running the chiller harder","Shutting the exhaust fans","Opening the OA dampers wide in mild weather to cool with fresh air instead of the chiller","Recirculating lab air"],a:2,e:"Free cooling on the air side. A lab AHU has no use for it — it is already at 100% outside air, so the ERM is where its savings come from instead."},
+{q:"How does an FPT differ from a plain VAV box?",o:["It has no coil","It has its own fan that pulls in return air and blends it with the primary supply air; four-pipe versions have both a hot and a chilled coil","It only serves labs","It replaces the AHU"],a:1,e:"The fan and the return-air path are the difference. A two-pipe FPT usually has hot water only; a four-pipe FPT has hot AND chilled coils, so the same box can heat or cool — handy on a perimeter zone that swings all day."},
+{q:"A room is 6,000 ft³ and gets 800 CFM of supply air. What is its air change rate?",o:["80 ACH","4 ACH","8 ACH","12 ACH"],a:2,e:"ACH = CFM × 60 ÷ volume = 800 × 60 ÷ 6,000 = 8. Or the other way: CFM = ACH × volume ÷ 60."},
+{q:"In a hood-heavy lab with every sash wide open, what is governing the supply airflow?",o:["The hood exhaust — supply must rise to match whatever the hoods pull","The ACH requirement","The chilled water setpoint","The thermostat"],a:0,e:"A lab has two demands for air — the ACH dilution requirement and the hood exhaust — and the larger one wins. Closing sashes lets airflow fall back to the ACH floor, which is why sash management is an energy program."},
+{q:"A chiller will not start. Which of these is a permissive that must be satisfied first?",o:["Proven condenser-water and chilled-water flow, warm oil, and no tripped safety","The AHU fans at full speed","The boiler running","A clear sky"],a:0,e:"A chiller needs somewhere to send heat (condenser-water flow from the tower), something to cool (chilled-water flow around the building loop), and a protected compressor (warm oil) before it will run. Miss any one and it stays off on purpose."},
+{q:"Why will a chiller whose oil heater was off overnight refuse to start in the morning?",o:["Cold oil is too thick to protect the bearings, so the cold-oil permissive holds the start","The water froze","The refrigerant leaked out","The BMS lost power"],a:0,e:"A heater keeps the compressor oil warm while the machine is idle. Start it cold and the oil cannot protect the bearings, so the chiller holds off until the oil is warm enough."},
+{q:"A chiller's approach temperature has been slowly climbing at the same load. What does that suggest?",o:["Nothing; approach always drifts","The tubes are fouling — scale or mud — and need cleaning","The building is getting colder","The pump is oversized"],a:1,e:"Approach is the gap between the water leaving a barrel and the refrigerant temperature in it — how well heat crosses the tubes. As tubes foul, the gap widens. A climbing approach at the same load is an early warning, visible on the trend long before the chiller struggles to hold setpoint."},
+{q:"A chiller is enabled at the BMS but will not start. Where do you look next?",o:["The AHU graphic","The chiller's own HMI — it reports its state and names the permissive it is waiting on","The cooling tower fan","The electrical panel schedule"],a:1,e:"The local screen is the machine's own account of itself, not the BMS version. It shows Local or Remote, the running state, active alarms or lockouts, and which permissive is still missing. Time spent there saves an hour of guessing."},
+{q:"A chiller's HMI shows it is in Local rather than Remote. What does that mean?",o:["It will ignore the BMS enable — the plant can call for cooling all day and nothing happens","It is in cool-down","It has lost power","It is running at part load"],a:0,e:"Remote means the chiller listens to the BMS. In Local it answers only to its own panel, so the BMS enable goes nowhere. It is one of the first things to read on the screen."}];;;;;;;;;
+  var box=document.getElementById('quizBox'),done=0,right=0;
+  function upd(){document.getElementById('qDone').textContent=done;document.getElementById('qRight').textContent=right;}
+  function render(){box.innerHTML='';done=0;right=0;upd();
+    QUIZ.forEach(function(it,i){
+      var c=document.createElement('div');c.className='q-card';
+      var top=document.createElement('div');top.className='q-top';
+      var n=document.createElement('span');n.className='q-num';n.textContent='Q'+(i+1);
+      var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+      top.appendChild(n);top.appendChild(t);c.appendChild(top);
+      var op=document.createElement('div');op.className='q-opts';
+      it.o.forEach(function(txt,j){
+        var b=document.createElement('button');b.type='button';
+        var em=document.createElement('em');em.textContent=String.fromCharCode(65+j);
+        var sp=document.createElement('span');sp.textContent=txt;
+        b.appendChild(em);b.appendChild(sp);
+        b.onclick=function(){if(c.dataset.a)return;c.dataset.a='1';done++;
+          if(j===it.a){b.classList.add('ok');right++;}
+          else{b.classList.add('bad');op.children[it.a].classList.add('ok');}
+          for(var k=0;k<op.children.length;k++){op.children[k].classList.add('lock');}
+          var e=document.createElement('div');e.className='q-exp';e.textContent=it.e;c.appendChild(e);upd();};
+        op.appendChild(b);});
+      c.appendChild(op);box.appendChild(c);});
+    document.getElementById('qTot').textContent=QUIZ.length;}
+  document.getElementById('qReset').onclick=render;
+  render();})();
+  </script>
+
+  <script>
+  (function(){
+  var OPEN=[
+{q:"A lab room is too warm. Walk the heat out of the building — name every loop and machine it passes through.",a:"Careful — there are two different paths, and a lab uses the first one. (1) The VAV box does not cool anything; it just meters in more 55°F supply air. That cold air absorbs the room's heat, warms up, and leaves through the exhaust valve — so in a 100% outside-air lab the room's heat physically leaves the building with the exhaust, out the LEF. The ERM's exhaust coil grabs some of it on the way. Meanwhile the chiller was never cooling room air at all: the AHU's chilled-water coil is cooling the incoming outside air. (2) A recirculating unit — a CRAC/CRAH, or a four-pipe FPT with a chilled-water coil — pulls room air across its own coil. Only there does the room's heat enter the chilled water, and then: CHW pump to the chiller, refrigerant lifts it into the condenser water, CW pump to the cooling tower, evaporation to the atmosphere."},
+{q:"It is 30°F outside. Explain what free cooling is doing right now and why the compressors can be off.",a:"The tower alone can make condenser water colder than the chilled-water setpoint. The free-cooling pump routes that cold tower water through a plate heat exchanger against the chilled loop, so the CHW gets cooled directly — no refrigeration cycle, compressors off, and the plant runs on pump and fan energy only."},
+{q:"Explain to a tenant why their lab cannot recirculate air like an office does — and what the ERM does about the cost.",a:"Lab air may carry fumes and hazards, so it is used once and exhausted; every cubic foot in is fresh outside air that must be fully conditioned. The ERM softens that cost: glycol run-around coils pull heat from the outgoing exhaust and hand it to the incoming air without the airstreams ever touching."},
+{q:"How is the WSHP setup different from the central plant — where does heating and cooling actually happen, and where does fresh air come from?",a:"Instead of one plant conditioning all the air, each zone has its own heat pump rejecting or absorbing heat on a shared water loop; the fluid cooler and boiler only trim the loop temperature. Temperature is handled at the zone; fresh air comes separately from an HV/MAU, and exhaust takes it back out."},
+{q:"The chilled-water pump trips. What symptoms show up, and in what order?",a:"No CHW flow means the coils stop absorbing heat: supply air temperature climbs first, then space temperatures drift up, hot calls start, and the chiller may alarm or unload on low flow. The fix chain starts at the pump — no pump, no flow, no cooling."},
+{q:"A restroom smells in the corridor, and on the same cold morning the lobby doors are hard to open. Explain both with pressure — and say what you'd check.",a:"Odor migrating out means the restroom is no longer negative: its GEF is likely down or a damper shut, so exhaust no longer exceeds supply there. The hard lobby door is stack effect — warm air rising makes the lower floors negative to outside, so the door fights you. Check the GEF and its damper first, then look at overall balance (supply vs. total exhaust) to see whether the building itself has drifted negative on top of the stack effect."},
+{q:"A tenant asks why their lab costs so much more to run than the office suite next door, when both are in the same building on the same chillers. Explain it.",a:"The plant is shared, but the air is not. The office recirculates most of its air and only conditions a small fraction of fresh outside air, so a mild day costs almost nothing — it can even economize and cool with fresh air. The lab runs 100% outside air: every cubic foot is heated or cooled from whatever the weather is, used once, and thrown away out the LEF, and its airflow is set by exhaust and hood safety rather than by the thermostat. The ERM buys some of that energy back, but a lab typically runs three to five times the energy per square foot."}
+];
+  var box=document.getElementById('openBox');
+  OPEN.forEach(function(it,i){
+    var c=document.createElement('div');c.className='q-card';
+    var top=document.createElement('div');top.className='q-top';
+    var n=document.createElement('span');n.className='q-num';n.textContent='O'+(i+1);
+    var t=document.createElement('span');t.className='q-text';t.textContent=it.q;
+    top.appendChild(n);top.appendChild(t);c.appendChild(top);
+    var lines=document.createElement('div');lines.className='q-lines';
+    for(var k=0;k<3;k++){lines.appendChild(document.createElement('i'));}
+    c.appendChild(lines);
+    var b=document.createElement('button');b.type='button';b.className='q-show';b.textContent='Show a strong answer';
+    b.onclick=function(){var e=document.createElement('div');e.className='q-exp';e.textContent=it.a;c.appendChild(e);b.remove();};
+    c.appendChild(b);box.appendChild(c);});
+  })();
+  </script>
+
+
+  <!-- ADVANCED -->
+  <section>
+    <div class="pgroup">
+    <div class="s-head"><span class="n">09</span><h2>Going deeper — building pressure &amp; energy balance</h2><span class="line"></span></div>
+    <span class="adv-badge">ADVANCED · READ AFTER THE QUIZ</span>
+    <p class="lead">Pressure and energy are the same story told twice. Every cubic foot of air you move has a <b>pressure consequence</b> and an <b>energy bill</b>. This section explains both — and the field symptoms that come straight out of them.</p>
+    </div>
+
+    <div class="callout">
+      <span class="ttl">⚖ The one law underneath everything — mass balance</span>
+      Air in must equal air out. Always. You never set building pressure directly; you set <b>airflows</b>, and pressure is what the building does in response.
+      <div class="fx">supply + infiltration  =  exhaust + exfiltration</div>
+      In a 100% outside-air building that becomes: <b>AHU supply = LEF exhaust + GEF exhaust + exfiltration</b>. Read that again — <b>the exhaust sets the supply</b>. Fume hoods and lab exhaust are the boss; the AHU exists to replace what the LEF throws away. That's why lab HVAC is <b>exhaust-driven</b> and an office building is supply-driven.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--blue);background:rgba(47,109,204,.05)">
+      <span class="ttl" style="color:var(--blue)">🏢 The building vs. outside — hold it slightly positive</span>
+      A building is normally kept <b>+0.02 to +0.05 in. w.c.</b> positive to outdoors: supply is deliberately a little greater than total exhaust, and the surplus leaks out. Why: <b>no infiltration</b> (unconditioned, unfiltered, humid or freezing air sneaking in), <b>doors behave</b>, and <b>dust and odor stay out</b>. Go negative and you get winter drafts on the lower floors and a clammy lobby in August.
+    </div>
+
+    <div class="diagram">
+      <div class="d-head"><span class="tag" style="color:var(--violet)">Cascade</span><h2>Zone pressure — air always flows clean → dirty</h2></div>
+      <p class="d-sub">Each room gets a deliberate supply/exhaust imbalance. The differentials are small — <b>0.01–0.05 in. w.c.</b> — but enough to hold a direction at the door gap.</p>
+      <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="pcG" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+          <marker id="pcV" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--violet)"/></marker>
+          <marker id="pcB" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--blue)"/></marker>
+        </defs>
+
+        <rect x="52" y="52" width="656" height="222" rx="10" fill="none" stroke="var(--line-2)" stroke-width="1.6" stroke-dasharray="6 4"/>
+        <text x="60" y="46" font-family="IBM Plex Mono" font-size="8.5" fill="var(--ink-faint)">BUILDING ENVELOPE — held +0.02 to +0.05 in. w.c. to outside</text>
+
+        <path d="M14,150 H50" fill="none" stroke="var(--green)" stroke-width="2.6" marker-end="url(#pcG)"/>
+        <text x="14" y="142" font-family="IBM Plex Mono" font-size="7.5" fill="var(--green)">OA in</text>
+        <path d="M710,196 H746" fill="none" stroke="var(--ink-faint)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#pcG)"/>
+        <text x="694" y="214" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)">exfiltration</text>
+
+        <rect x="72" y="72" width="614" height="6" rx="2" fill="var(--green)" opacity="0.35"/>
+        <text x="76" y="68" font-family="IBM Plex Mono" font-size="7.5" fill="var(--green)">conditioned supply air</text>
+
+        <rect x="88" y="152" width="132" height="82" rx="6" fill="rgba(210,59,53,0.05)" stroke="var(--red)" stroke-width="1.5"/>
+        <text x="154" y="176" font-family="Space Grotesk" font-size="11.5" font-weight="700" fill="var(--ink)" text-anchor="middle">LAB</text>
+        <text x="154" y="196" font-family="IBM Plex Mono" font-size="12" font-weight="700" fill="var(--red)" text-anchor="middle">−0.03</text>
+        <text x="154" y="210" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">exhaust &gt; supply</text>
+        <text x="154" y="222" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">fumes stay in</text>
+        <path d="M120,78 V148" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#pcG)"/>
+        <path d="M196,152 V82" fill="none" stroke="var(--violet)" stroke-width="2.6" marker-end="url(#pcV)"/>
+        <text x="204" y="100" font-family="IBM Plex Mono" font-size="7.5" fill="var(--violet)">to LEF</text>
+
+        <rect x="252" y="152" width="132" height="82" rx="6" fill="rgba(47,109,204,0.05)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="318" y="176" font-family="Space Grotesk" font-size="11.5" font-weight="700" fill="var(--ink)" text-anchor="middle">CORRIDOR</text>
+        <text x="318" y="196" font-family="IBM Plex Mono" font-size="12" font-weight="700" fill="var(--blue)" text-anchor="middle">+0.02</text>
+        <text x="318" y="210" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">supply &gt; exhaust</text>
+        <text x="318" y="222" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">clean air pushes out</text>
+        <path d="M318,78 V148" fill="none" stroke="var(--green)" stroke-width="2.4" marker-end="url(#pcG)"/>
+
+        <rect x="416" y="152" width="120" height="82" rx="6" fill="rgba(210,59,53,0.05)" stroke="var(--red)" stroke-width="1.5"/>
+        <text x="476" y="176" font-family="Space Grotesk" font-size="11.5" font-weight="700" fill="var(--ink)" text-anchor="middle">RESTROOM</text>
+        <text x="476" y="196" font-family="IBM Plex Mono" font-size="12" font-weight="700" fill="var(--red)" text-anchor="middle">−0.02</text>
+        <text x="476" y="210" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">exhaust only</text>
+        <text x="476" y="222" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">odor stays in</text>
+        <path d="M476,152 V82" fill="none" stroke="var(--green)" stroke-width="2.6" marker-end="url(#pcG)"/>
+        <text x="484" y="100" font-family="IBM Plex Mono" font-size="7.5" fill="var(--green)">to GEF</text>
+
+        <rect x="568" y="152" width="120" height="82" rx="6" fill="rgba(47,109,204,0.05)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="628" y="176" font-family="Space Grotesk" font-size="11.5" font-weight="700" fill="var(--ink)" text-anchor="middle">CLEANROOM</text>
+        <text x="628" y="196" font-family="IBM Plex Mono" font-size="12" font-weight="700" fill="var(--blue)" text-anchor="middle">+0.05</text>
+        <text x="628" y="210" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">supply &gt;&gt; exhaust</text>
+        <text x="628" y="222" font-family="IBM Plex Mono" font-size="7" fill="var(--ink-faint)" text-anchor="middle">nothing gets in</text>
+        <path d="M628,78 V148" fill="none" stroke="var(--green)" stroke-width="2.8" marker-end="url(#pcG)"/>
+
+        <path d="M248,258 H224" fill="none" stroke="var(--blue)" stroke-width="2.4" marker-end="url(#pcB)"/>
+        <path d="M388,258 H412" fill="none" stroke="var(--blue)" stroke-width="2.4" marker-end="url(#pcB)"/>
+        <path d="M564,258 H540" fill="none" stroke="var(--blue)" stroke-width="2.4" marker-end="url(#pcB)"/>
+        <text x="318" y="262" font-family="IBM Plex Mono" font-size="8" fill="var(--blue)" text-anchor="middle">air moves toward lower pressure</text>
+        <text x="380" y="292" font-family="IBM Plex Mono" font-size="9" font-weight="700" fill="var(--ink-dim)" text-anchor="middle">CLEAN  →  DIRTY   ·   never the reverse</text>
+        <text x="380" y="308" font-family="IBM Plex Mono" font-size="7.5" fill="var(--ink-faint)" text-anchor="middle">values in in. w.c. relative to the corridor · set by supply/exhaust offset CFM, not by a knob</text>
+      </svg>
+    </div>
+
+    <p class="flow-note"><b>How it's actually controlled:</b> a lab isn't given a pressure setpoint — it's given an <b>offset</b>. Exhaust runs, say, 10% or a fixed 100–200 CFM higher than supply. Open a fume hood sash and the hood pulls more air → the lab exhaust valve opens → the <b>supply valve tracks it</b> to hold the same offset → the room stays negative at whatever airflow it lands on. That's a <b>tracking pair</b>, and it's why lab VAV boxes come in matched supply/exhaust sets.</p>
+
+    <div class="pgroup">
+    <p class="lead" style="margin-top:24px"><b>Air changes per hour — the number behind the airflow</b></p>
+    <p class="flow-note" style="margin-top:2px">&#8220;6 ACH&#8221; means the room&#8217;s whole volume of air is replaced six times an hour. It is a <b>dilution</b> measure: how fast whatever is in the air gets carried away and replaced with clean air. Convert it to airflow like this:</p>
+    <div class="fx">CFM = ACH × room volume (ft³) ÷ 60</div>
+    <p class="flow-note" style="margin-top:4px"><b>Work one:</b> a lab 30 ft × 20 ft × 10 ft = <b>6,000 ft³</b>. At <b>8 ACH</b> → 6,000 × 8 ÷ 60 = <b>800 CFM</b> of supply air, continuously. Flip it around and you can size the other way: a box delivering 800 CFM into that room <i>is</i> 8 ACH.</p>
+
+    <table class="ptab">
+      <thead><tr><th>Space</th><th>Typical ACH</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><b>Office</b></td><td>4–6</td><td>Comfort and people-based ventilation; codes for offices are actually written in <b>CFM per person + CFM per ft²</b>, not ACH.</td></tr>
+        <tr><td><b>Lab (occupied)</b></td><td>6–12</td><td>Dilution of whatever escapes the bench or hood. Set by the design documents and the tenant&#8217;s EH&amp;S, not by one universal code number.</td></tr>
+        <tr><td><b>Lab (unoccupied)</b></td><td>2–6</td><td><b>Setback.</b> Nobody&#8217;s there, so dilute less and save real money — energy is linear in airflow.</td></tr>
+        <tr><td><b>Vivarium</b></td><td>10–15</td><td>Odor, dander, and ammonia control.</td></tr>
+        <tr><td><b>Cleanroom</b></td><td>20–600+</td><td>Particle control by relentless flushing; the number climbs steeply with ISO class.</td></tr>
+        <tr><td><b>Restroom / storage</b></td><td>~10 (exhaust)</td><td>Odor removal; pulled by the <b>GEF</b>, not supplied.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout" style="border-left-color:var(--violet);background:rgba(106,79,208,.05)">
+      <span class="ttl" style="color:var(--violet)">⚖ Which number actually governs — ACH or the hoods?</span>
+      A lab has two independent demands for air, and <b>the larger one wins</b>:<br><br>
+      <b>1. The ACH requirement</b> — enough air to dilute the room.<br>
+      <b>2. The hood exhaust</b> — whatever the fume hoods are pulling right now, plus the room&#8217;s negative offset.<br><br>
+      Open every sash in a hood-heavy lab and the hoods can demand far more than 8 ACH would ever have called for — so the supply must rise to match, and <b>the hoods are governing</b>. In a lab with few hoods, ACH governs and the airflow just sits there. This is why <b>sash management is an energy program</b>, not a housekeeping nag: closing sashes lets the airflow fall back to the ACH floor.
+    </div>
+
+    <p class="flow-note"><b>The connection to the energy formulas below:</b> ACH sets CFM, CFM sets the energy. Cutting a lab from 8 ACH to 4 ACH at night halves the airflow — and roughly <b>halves the conditioning energy</b> for those hours. No setpoint change comes close.</p>
+    </div>
+
+    <div class="pgroup">
+    <p class="lead" style="margin-top:24px"><b>The energy side — same air, different lens</b></p>
+    <p class="flow-note" style="margin-top:2px">Three formulas explain the entire cost of a lab building. For standard air:</p>
+    <div class="terms">
+      <div class="term-card">
+        <h4>Sensible heat</h4><span class="coil hi">temperature</span>
+        <div class="fx">1.08 × CFM × ΔT°F</div>
+        <p>Heating or cooling the air's <b>temperature</b>. This is preheat, cooling coil sensible load, and reheat.</p>
+      </div>
+      <div class="term-card">
+        <h4>Latent heat</h4><span class="coil lo">moisture</span>
+        <div class="fx">0.68 × CFM × Δgrains</div>
+        <p>Adding or removing <b>moisture</b>. In a humid summer, wringing water out of outside air can cost more than cooling it.</p>
+      </div>
+      <div class="term-card">
+        <h4>Total heat</h4><span class="coil stm">enthalpy</span>
+        <div class="fx">4.5 × CFM × Δh</div>
+        <p>Both at once, using <b>enthalpy</b> (Btu/lb). What the coil actually sees.</p>
+      </div>
+    </div>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--amber);background:rgba(176,116,8,.05)">
+      <span class="ttl" style="color:var(--amber)">🔢 Work one — why 100% OA is expensive</span>
+      <b>50,000 CFM</b> of outside air on a <b>10°F</b> design day, warmed to a 55°F supply — a 45°F rise:
+      <div class="fx">1.08 × 50,000 × 45  =  2,430,000 Btu/h</div>
+      That's roughly <b>2.4 million Btu/h of preheat</b>, continuously — and none of it has heated a single room yet. It only got the air to neutral. Summer is worse, because you pay the <b>latent</b> bill on top. <b>Every CFM you exhaust is a CFM of outside air you must fully condition.</b> That single sentence is the economics of lab HVAC.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--green);background:rgba(31,154,85,.05)">
+      <span class="ttl" style="color:var(--green)">♻ Where you get some back</span>
+      <b>The ERM is the rebate — in both seasons.</b> Glycol run-around coils recover roughly <b>40–60% of the sensible energy</b> — and <b>no latent</b>, because the airstreams never mix (which is exactly why labs use them). It <b>preheats in winter and pre-cools in summer</b>; only in mild shoulder weather is there nothing to recover. On the example above, recovering half is over a million Btu/h you don&#8217;t buy.<br><br>
+      <b>Airflow is the biggest lever — not temperature.</b> Energy is <i>linear in CFM</i>. Dropping lab air changes from 6 ACH occupied to 4 ACH unoccupied at night cuts a third of the load for those hours. Sash management does the same. This dwarfs any setpoint tweak.<br><br>
+      <b>The reheat penalty.</b> Air is cooled to ~55°F at the AHU, then a VAV/FPT reheat coil warms it back up for a zone that didn't need that much cooling — <b>you paid twice</b>. That's why supply-air-temperature reset and low VAV minimums matter.
+    </div>
+
+    <div class="pgroup">
+    <p class="lead" style="margin-top:24px"><b>What fights you — and what it looks like in the field</b></p>
+    <table class="ptab">
+      <thead><tr><th>Force</th><th>What it does</th><th>What you'd notice</th></tr></thead>
+      <tbody>
+        <tr><td><b>Stack effect</b></td><td>Cold day + tall building: warm air rises, lower floors go <span class="neg">negative</span>, upper floors <span class="pos">positive</span>, neutral plane in the middle.</td><td>Lobby doors hard to open; elevator shafts howl; winter drafts downstairs.</td></tr>
+        <tr><td><b>Wind</b></td><td>Windward face <span class="pos">positive</span>, leeward <span class="neg">negative</span>. Moves the neutral plane around.</td><td>Pressure readings that wander with the weather.</td></tr>
+        <tr><td><b>Propped door</b></td><td>Collapses the differential instantly — the cascade is gone.</td><td>Lab room-pressure alarm; hood face-velocity alarm.</td></tr>
+        <tr><td><b>Dead GEF</b></td><td>Restroom or MDF room stops being <span class="neg">negative</span>.</td><td>Odor migrating into the corridor; hot electrical/MDF room.</td></tr>
+        <tr><td><b>Building gone negative</b></td><td>Infiltration replaces conditioned supply air.</td><td>Cold drafts on lower floors in winter; clammy, humid lobby in summer.</td></tr>
+        <tr><td><b>Smoke control (alarm)</b></td><td><b>Deliberately breaks</b> the normal balance: stairs strongly <span class="pos">positive</span>, smoke zone <span class="neg">negative</span>.</td><td>Expected during an alarm — different mode, different goals.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="callout" style="border-left-color:var(--red);background:rgba(210,59,53,.05)">
+      <span class="ttl" style="color:var(--red)">⚠ The interlock that must never be defeated</span>
+      <b>If lab exhaust fails, supply must reduce or shut down too.</b> A lab with supply and no exhaust goes <b>positive</b> and pushes contaminated air out into the corridor — exactly backwards. This is why the LEF sits on <b>emergency power</b>, and why "lab exhaust fails safe" appears on the life-safety side as well.
+    </div>
+
+    <div class="callout" style="border-left-color:var(--violet);background:rgba(106,79,208,.05)">
+      <span class="ttl" style="color:var(--violet)">🧠 The four things to remember</span>
+      <b>1. Pressure is airflow's shadow.</b> You never adjust pressure — you adjust CFM, and pressure follows.<br>
+      <b>2. Exhaust rules the lab building.</b> Supply exists to replace what exhaust removes.<br>
+      <b>3. Clean flows to dirty.</b> Positive to outside; corridors positive to labs; labs and restrooms negative.<br>
+      <b>4. Every exhausted CFM is a paid-for CFM.</b> The ERM buys some back; reducing airflow buys back more.
+    </div>
+
+    <p class="flow-note" style="margin-top:14px"><b>A caveat worth stating plainly:</b> the offsets, ACH rates, and differential setpoints above are <b>typical ranges to build intuition</b>. The real numbers for each room come from the building's <b>sequences of operation</b> and the tenant's EH&amp;S requirements. Pull those before you teach — or change — a specific value.</p>
+  </section>
+
+  <footer>
+    <b>This is the big-picture version.</b> The detailed equipment-by-equipment reference (what to check on rounds, why we PM each unit, what "bad" looks like) is a separate deeper guide for once these basics click.<br>
+    Numbers (44°F chilled water; hot water ~120–140°F condensing, ~160–180°F non-condensing) are typical ballparks to build intuition — always go by the actual setpoints on each unit.
+  </footer>
+
+</div>
+
+</body>
+</html>
