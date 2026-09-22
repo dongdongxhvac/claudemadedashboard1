@@ -11,9 +11,10 @@ import { useUparkUserIds } from '../../hooks/useSiteScope';
 import { useMe, type ManageScope } from '../../hooks/useMe';
 import { CoveIdFinder } from '../../components/CoveIdFinder';
 import { NewHireProgramDrawer } from '../../components/NewHireProgramDrawer';
-import { useNewHireAll, nhUserState } from '../../hooks/useNewHire';
+import { useNewHireAll, nhUserState, programsOf } from '../../hooks/useNewHire';
 import { NH_WEEKS, nhWeekFor } from '../../lib/newHireProgram';
 import { useSignoffSheet } from '../../hooks/useSignoffSheet';
+import { PROGRAMS, programFor } from '../../lib/programs';
 import { supabase } from '../../lib/supabase';
 
 type Filter = 'active' | 'engineer' | 'newhire' | 'manager' | 'director' | 'admin' | 'inactive';
@@ -117,14 +118,18 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   const addEngineer = useAddEngineer();
   const deleteUser = useDeleteUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
-  const [trainingFor, setTrainingFor] = useState<EngineerRow | null>(null);
+  const [trainingFor, setTrainingFor] = useState<{ row: EngineerRow; programKey?: string } | null>(null);
   const [adding, setAdding] = useState(false);
-  // New-hire 8-week program state for the whole roster (tiny tables, one
-  // fetch) — drives the New hires filter, the progress pill under the name,
-  // and the Training drawer.
+  // Training-program state for the whole roster (tiny tables, one fetch) —
+  // drives the New hires filter, the per-program pills under the name, and
+  // the Training drawer. One sign-off sheet per program (its print station)
+  // so the pills can show a percentage.
   const nhQ = useNewHireAll();
-  const { sheet: nhSheet } = useSignoffSheet();
-  const enrolledIds = useMemo(() => new Set(nhQ.data?.enrollments.keys() ?? []), [nhQ.data]);
+  // (hooks can't run in a loop — add a line here when a program is added to PROGRAMS)
+  const { sheet: sheet0 } = useSignoffSheet(PROGRAMS[0]);
+  const { sheet: sheet1 } = useSignoffSheet(PROGRAMS[1]);
+  const sheetFor = (programKey: string) => programKey === PROGRAMS[0].key ? sheet0 : programKey === PROGRAMS[1].key ? sheet1 : null;
+  const enrolledIds = useMemo(() => new Set(nhQ.data?.byUser.keys() ?? []), [nhQ.data]);
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
   const canManageUsers  = manageScope === 'all';                 // full roster powers
@@ -301,29 +306,33 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                           hired {new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
                       )}
-                      {enrolledIds.has(r.user_id) && (() => {
-                        const st = nhUserState(nhQ.data, r.user_id, nhSheet);
-                        const wk = nhWeekFor(st.enrollment?.start_date);
-                        const done = st.enrollment?.status === 'completed';
-                        const wkText = done ? 'Certified' : wk === 0 ? 'not started' : wk > NH_WEEKS ? 'past wk 8' : `Wk ${wk}/${NH_WEEKS}`;
+                      {/* one pill per assigned training program → opens the drawer on it */}
+                      {programsOf(nhQ.data, r.user_id).map((e) => {
+                        const prog = programFor(e.program_key);
+                        const st = nhUserState(nhQ.data, r.user_id, e.program_key, sheetFor(e.program_key));
+                        const wk = nhWeekFor(e.start_date);
+                        const done = e.status === 'completed';
+                        const isWeekly = e.program_key === PROGRAMS[0].key;
+                        const wkText = done ? 'Certified' : wk === 0 ? 'not started' : !isWeekly ? `wk ${wk}` : wk > NH_WEEKS ? 'past wk 8' : `Wk ${wk}/${NH_WEEKS}`;
                         return (
                           <button
+                            key={e.program_key}
                             type="button"
-                            onClick={() => setTrainingFor(r)}
-                            className="t-small mt-0.5 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                            onClick={() => setTrainingFor({ row: r, programKey: e.program_key })}
+                            className="t-small mt-0.5 mr-1 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
                             style={{
                               background: done ? 'rgba(16,185,129,0.12)' : 'rgba(94,106,210,0.10)',
                               color: done ? '#047857' : 'var(--color-accent)',
                               fontSize: 10, fontWeight: 600, letterSpacing: '0.02em',
                             }}
-                            title={`New-hire program — ${st.progress.weekItemsDone}/${st.progress.weekItemsTotal} week items · ${st.progress.repsDone}/${st.progress.repsTotal} reps at target · ${st.progress.pct}%. Click to open the sign-off sheet.`}
+                            title={`${prog.title} — ${st.progress.weekItemsDone}/${st.progress.weekItemsTotal} items · ${st.progress.repsDone}/${st.progress.repsTotal} reps at target · ${st.progress.pct}%. Click to open the sign-off sheet.`}
                           >
-                            <span>8-WK</span>
+                            <span>{prog.short.toUpperCase()}</span>
                             <span>{wkText}</span>
                             <span style={{ opacity: 0.8 }}>· {st.progress.pct}%</span>
                           </button>
                         );
-                      })()}
+                      })}
                     </td>
                     <td className="py-2 px-2">
                       <RoleBadge role={r.role} />
@@ -395,14 +404,14 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                       </Link>
                       {r.role === 'engineer' && (
                         <button
-                          onClick={() => setTrainingFor(r)}
+                          onClick={() => setTrainingFor({ row: r })}
                           className="t-small px-2 py-0.5 rounded border"
                           style={{
                             color: enrolledIds.has(r.user_id) ? 'var(--color-accent)' : 'var(--color-text-muted)',
                             borderColor: 'var(--color-border)',
                             background: 'var(--color-card)',
                           }}
-                          title={enrolledIds.has(r.user_id) ? 'Open the sign-off sheet' : 'Assign training (8-week new-hire program)'}
+                          title={enrolledIds.has(r.user_id) ? 'Open the sign-off sheets' : 'Assign training (new-hire 8-week, Licensed HVAC development …)'}
                         >
                           Training
                         </button>
@@ -429,7 +438,8 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
 
       {trainingFor && (
         <NewHireProgramDrawer
-          person={trainingFor}
+          person={trainingFor.row}
+          initialProgramKey={trainingFor.programKey}
           people={(q.data ?? []).map((p) => ({ user_id: p.user_id, full_name: p.full_name, role: p.role, active: p.active, is_lead: p.is_lead, hiring_date: p.hiring_date }))}
           onClose={() => setTrainingFor(null)}
         />

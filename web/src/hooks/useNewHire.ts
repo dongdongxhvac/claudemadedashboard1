@@ -19,7 +19,8 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
-import { NH_PROGRAM_KEY, DOC_KEY_RE } from '../lib/newHireProgram';
+import { DOC_KEY_RE } from '../lib/newHireProgram';
+import { DEFAULT_PROGRAM, PROGRAMS, type TrainingProgram } from '../lib/programs';
 import { sheetProgress, type SignoffSheet, type SheetProgress } from '../lib/signoffSheet';
 
 export type NhStatus = 'active' | 'completed' | 'paused' | 'withdrawn';
@@ -38,6 +39,7 @@ export type NhEnrollment = {
 
 export type NhCheckoff = {
   user_id: string;
+  program_key: string;
   item_key: string;
   done_at: string;
   verified_by: string | null;
@@ -47,6 +49,7 @@ export type NhCheckoff = {
 export type NhRepLog = {
   id: string;
   user_id: string;
+  program_key: string;
   rep_key: string;
   occurred_on: string;
   note: string | null;
@@ -68,11 +71,15 @@ export type NhDocActivity = {
   at: string;
 };
 
+/** Everything is per (person, program): maps are keyed by `${user_id}:${program_key}` (see upKey). */
+export const upKey = (userId: string, programKey: string) => `${userId}:${programKey}`;
+
 export type NhAll = {
-  enrollments: Map<string, NhEnrollment>;      // user_id → enrollment
-  checkoffs: Map<string, Map<string, NhCheckoff>>; // user_id → item_key → row
-  repLogs: Map<string, NhRepLog[]>;            // user_id → logs (newest first)
-  activity: Map<string, NhDocActivity[]>;      // user_id → handout activity (newest first)
+  enrollments: Map<string, NhEnrollment>;      // user:program → enrollment
+  byUser: Map<string, NhEnrollment[]>;         // user_id → their enrollments (PROGRAMS order)
+  checkoffs: Map<string, Map<string, NhCheckoff>>; // user:program → item_key → row
+  repLogs: Map<string, NhRepLog[]>;            // user:program → logs (newest first)
+  activity: Map<string, NhDocActivity[]>;      // user:program → handout activity (newest first)
 };
 
 const KEY = ['new_hire', 'all'];
@@ -92,27 +99,32 @@ export function useNewHireAll(enabled = true) {
       if (c.error) throw c.error;
       if (r.error) throw r.error;
       if (a.error) throw a.error;
+      const order = new Map(PROGRAMS.map((p, i) => [p.key, i]));
       const enrollments = new Map<string, NhEnrollment>();
-      for (const row of (e.data ?? []) as NhEnrollment[]) enrollments.set(row.user_id, row);
+      const byUser = new Map<string, NhEnrollment[]>();
+      for (const row of (e.data ?? []) as NhEnrollment[]) {
+        enrollments.set(upKey(row.user_id, row.program_key), row);
+        const arr = byUser.get(row.user_id) ?? []; arr.push(row); byUser.set(row.user_id, arr);
+      }
+      for (const arr of byUser.values()) arr.sort((x, y) => (order.get(x.program_key) ?? 99) - (order.get(y.program_key) ?? 99));
       const checkoffs = new Map<string, Map<string, NhCheckoff>>();
       for (const row of (c.data ?? []) as NhCheckoff[]) {
-        let m = checkoffs.get(row.user_id);
-        if (!m) { m = new Map(); checkoffs.set(row.user_id, m); }
+        const k = upKey(row.user_id, row.program_key);
+        let m = checkoffs.get(k);
+        if (!m) { m = new Map(); checkoffs.set(k, m); }
         m.set(row.item_key, row);
       }
       const repLogs = new Map<string, NhRepLog[]>();
       for (const row of (r.data ?? []) as NhRepLog[]) {
-        const arr = repLogs.get(row.user_id) ?? [];
-        arr.push(row);
-        repLogs.set(row.user_id, arr);
+        const k = upKey(row.user_id, row.program_key);
+        const arr = repLogs.get(k) ?? []; arr.push(row); repLogs.set(k, arr);
       }
       const activity = new Map<string, NhDocActivity[]>();
       for (const row of (a.data ?? []) as NhDocActivity[]) {
-        const arr = activity.get(row.user_id) ?? [];
-        arr.push(row);
-        activity.set(row.user_id, arr);
+        const k = upKey(row.user_id, row.program_key);
+        const arr = activity.get(k) ?? []; arr.push(row); activity.set(k, arr);
       }
-      return { enrollments, checkoffs, repLogs, activity };
+      return { enrollments, byUser, checkoffs, repLogs, activity };
     },
     staleTime: 30_000,
   });
@@ -136,14 +148,20 @@ export type NhUserState = {
   docTicks: Map<string, { reviewed: boolean; quiz: boolean }>;
 };
 
-export function nhUserState(all: NhAll | undefined, userId: string, sheet: SignoffSheet | null = null): NhUserState {
-  const enrollment = all?.enrollments.get(userId) ?? null;
-  const checkoffs = all?.checkoffs.get(userId) ?? new Map<string, NhCheckoff>();
+/** The person's assigned programs, PROGRAMS order. */
+export function programsOf(all: NhAll | undefined, userId: string): NhEnrollment[] {
+  return all?.byUser.get(userId) ?? [];
+}
+
+export function nhUserState(all: NhAll | undefined, userId: string, programKey: string = DEFAULT_PROGRAM.key, sheet: SignoffSheet | null = null): NhUserState {
+  const k = upKey(userId, programKey);
+  const enrollment = all?.enrollments.get(k) ?? null;
+  const checkoffs = all?.checkoffs.get(k) ?? new Map<string, NhCheckoff>();
   const checked = new Set(checkoffs.keys());
-  const repLogs = all?.repLogs.get(userId) ?? [];
+  const repLogs = all?.repLogs.get(k) ?? [];
   const repCounts = new Map<string, number>();
   for (const l of repLogs) repCounts.set(l.rep_key, (repCounts.get(l.rep_key) ?? 0) + 1);
-  const activity = all?.activity.get(userId) ?? [];
+  const activity = all?.activity.get(k) ?? [];
   const bestQuizByDoc = new Map<string, NhDocActivity>();
   const openedByDoc = new Map<string, { last: NhDocActivity; days: number }>();
   for (const row of activity) {            // newest first
@@ -166,21 +184,23 @@ export function nhUserState(all: NhAll | undefined, userId: string, sheet: Signo
   return { enrollment, checked, checkoffs, repLogs, repCounts, progress: sheetProgress(sheet, checked, repCounts), activity, bestQuizByDoc, openedByDoc, docTicks };
 }
 
-export function useNewHireUser(userId: string, sheet: SignoffSheet | null = null) {
+export function useNewHireUser(userId: string, program: TrainingProgram = DEFAULT_PROGRAM, sheet: SignoffSheet | null = null) {
   const q = useNewHireAll();
-  const state = useMemo(() => nhUserState(q.data, userId, sheet), [q.data, userId, sheet]);
-  return { ...q, state };
+  const state = useMemo(() => nhUserState(q.data, userId, program.key, sheet), [q.data, userId, program.key, sheet]);
+  const programs = useMemo(() => programsOf(q.data, userId), [q.data, userId]);
+  return { ...q, state, programs };
 }
 
 /** Can the signed-in person edit THIS user's program? Mirrors the DB helper
  *  (admin / manager / lead / mentor) for showing vs hiding controls — the DB
  *  is still the gate; this just avoids offering buttons that would 0-row. */
-export function useCanEditNewHire(mentorUserId: string | null | undefined): boolean {
+export function useCanEditNewHire(mentorUserId: string | null | undefined | (string | null)[]): boolean {
   const me = useMe().data;
   if (!me || !me.active) return false;
   if (me.role === 'admin' || me.role === 'manager' || me.role === 'director') return true;
   if (me.is_manager || me.is_lead) return true;
-  return !!mentorUserId && mentorUserId === me.id;
+  const ids = Array.isArray(mentorUserId) ? mentorUserId : [mentorUserId];
+  return ids.some((id) => !!id && id === me.id);
 }
 
 function useInvalidate() {
@@ -192,21 +212,21 @@ export function useEnrollNewHire() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { user_id: string; start_date: string | null; mentor_user_id: string | null; notes?: string | null }) => {
+    mutationFn: async (input: { user_id: string; program_key: string; start_date: string | null; mentor_user_id: string | null; notes?: string | null }) => {
       const { data, error } = await supabase
         .from('new_hire_enrollments')
         .upsert({
           user_id: input.user_id,
-          program_key: NH_PROGRAM_KEY,
+          program_key: input.program_key,
           start_date: input.start_date,
           mentor_user_id: input.mentor_user_id,
           notes: input.notes ?? null,
           status: 'active',
           created_by: me?.id ?? null,
-        }, { onConflict: 'user_id' })
+        }, { onConflict: 'user_id,program_key' })
         .select('user_id');
       if (error) throw error;
-      if (!data?.length) throw new Error('Not permitted to enroll this user (outside your site or role scope).');
+      if (!data?.length) throw new Error('Not permitted to assign training to this user (outside your site or role scope).');
       return data[0];
     },
     onSuccess: inv,
@@ -216,11 +236,12 @@ export function useEnrollNewHire() {
 export function useUpdateEnrollment() {
   const inv = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { user_id: string; patch: Partial<Pick<NhEnrollment, 'start_date' | 'mentor_user_id' | 'status' | 'notes'>> }) => {
+    mutationFn: async (input: { user_id: string; program_key: string; patch: Partial<Pick<NhEnrollment, 'start_date' | 'mentor_user_id' | 'status' | 'notes'>> }) => {
       const { data, error } = await supabase
         .from('new_hire_enrollments')
         .update(input.patch)
         .eq('user_id', input.user_id)
+        .eq('program_key', input.program_key)
         .select('user_id');
       if (error) throw error;
       if (!data?.length) throw new Error('Not permitted to edit this enrollment.');
@@ -234,11 +255,12 @@ export function useUpdateEnrollment() {
 export function useUnenrollNewHire() {
   const inv = useInvalidate();
   return useMutation({
-    mutationFn: async (user_id: string) => {
+    mutationFn: async (input: { user_id: string; program_key: string }) => {
       const { data, error } = await supabase
         .from('new_hire_enrollments')
         .delete()
-        .eq('user_id', user_id)
+        .eq('user_id', input.user_id)
+        .eq('program_key', input.program_key)
         .select('user_id');
       if (error) throw error;
       if (!data?.length) throw new Error('Not permitted to remove this enrollment.');
@@ -253,17 +275,18 @@ export function useSetCheckoff() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { user_id: string; item_key: string; on: boolean; note?: string | null }) => {
+    mutationFn: async (input: { user_id: string; program_key: string; item_key: string; on: boolean; note?: string | null }) => {
       if (input.on) {
         const { data, error } = await supabase
           .from('new_hire_checkoffs')
           .upsert({
             user_id: input.user_id,
+            program_key: input.program_key,
             item_key: input.item_key,
             verified_by: me?.id ?? null,
             note: input.note ?? null,
             done_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,item_key' })
+          }, { onConflict: 'user_id,program_key,item_key' })
           .select('item_key');
         if (error) throw error;
         if (!data?.length) throw new Error('Not permitted to check this off.');
@@ -273,6 +296,7 @@ export function useSetCheckoff() {
         .from('new_hire_checkoffs')
         .delete()
         .eq('user_id', input.user_id)
+        .eq('program_key', input.program_key)
         .eq('item_key', input.item_key)
         .select('item_key');
       if (error) throw error;
@@ -287,11 +311,12 @@ export function useSetCheckoff() {
 export function useSetCheckoffNote() {
   const inv = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { user_id: string; item_key: string; note: string | null }) => {
+    mutationFn: async (input: { user_id: string; program_key: string; item_key: string; note: string | null }) => {
       const { data, error } = await supabase
         .from('new_hire_checkoffs')
         .update({ note: input.note })
         .eq('user_id', input.user_id)
+        .eq('program_key', input.program_key)
         .eq('item_key', input.item_key)
         .select('item_key');
       if (error) throw error;
@@ -306,11 +331,12 @@ export function useAddRepLog() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { user_id: string; rep_key: string; occurred_on: string; note?: string | null }) => {
+    mutationFn: async (input: { user_id: string; program_key: string; rep_key: string; occurred_on: string; note?: string | null }) => {
       const { data, error } = await supabase
         .from('new_hire_rep_logs')
         .insert({
           user_id: input.user_id,
+          program_key: input.program_key,
           rep_key: input.rep_key,
           occurred_on: input.occurred_on,
           note: input.note ?? null,
@@ -351,14 +377,14 @@ export function useRecordDocActivity() {
   const me = useMe().data;
   return useMutation({
     mutationFn: async (input:
-      | { kind: 'opened'; doc_key: string }
-      | { kind: 'quiz'; doc_key: string; quiz_title: string; score: number; total: number },
+      | { kind: 'opened'; program_key: string; doc_key: string }
+      | { kind: 'quiz'; program_key: string; doc_key: string; quiz_title: string; score: number; total: number },
     ) => {
       if (!me?.id) throw new Error('Not signed in.');
       if (input.kind === 'opened') {
         const { error } = await supabase
           .from('new_hire_doc_activity')
-          .upsert({ user_id: me.id, program_key: NH_PROGRAM_KEY, doc_key: input.doc_key, kind: 'opened' },
+          .upsert({ user_id: me.id, program_key: input.program_key, doc_key: input.doc_key, kind: 'opened' },
             { onConflict: 'user_id,doc_key,day', ignoreDuplicates: true });
         if (error) throw error;
         return null;
@@ -366,7 +392,7 @@ export function useRecordDocActivity() {
       const { data, error } = await supabase
         .from('new_hire_doc_activity')
         .insert({
-          user_id: me.id, program_key: NH_PROGRAM_KEY, doc_key: input.doc_key, kind: 'quiz',
+          user_id: me.id, program_key: input.program_key, doc_key: input.doc_key, kind: 'quiz',
           quiz_title: input.quiz_title, score: input.score, total: input.total,
         })
         .select('id');

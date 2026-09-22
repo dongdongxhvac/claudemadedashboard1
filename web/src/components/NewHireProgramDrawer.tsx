@@ -9,36 +9,31 @@
 // document is also the program DEFINITION (lib/signoffSheet.ts) — items,
 // reps, COVE weeks and signers all come from it.
 //
-// Around the sheet: assignment (program · start date · mentor · status),
-// the per-handout Reviewed / Quiz-passed ticks, the engineer's activity
-// trail, and removal. Only Plan B can be assigned today; later programs
-// (Licensed HVAC development, the 5 category tracks) are listed as coming.
+// A person can be on more than one program (lib/programs.ts — each with its
+// own print station + sign-off sheet; migration 0132): the drawer has one
+// tab per assigned program and an "Assign training" control for the rest.
+// Around the sheet: assignment (start date · mentor · status), the
+// per-handout Reviewed / Quiz-passed ticks, the engineer's activity trail,
+// and removal from that program.
 //
 // Opened from Admin › User Profiles (row "Training" button). Read-only for
 // anyone who can't edit this person (DB decides; useCanEditNewHire mirrors
 // it). The engineer sees the same sheet read-only on their training page.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { NH_PROGRAM_KEY, NH_PROGRAM_TITLE, NH_WEEKS, nhWeekFor, docKeyFor, noteKeyFor } from '../lib/newHireProgram';
+import { NH_WEEKS, nhWeekFor, docKeyFor, noteKeyFor } from '../lib/newHireProgram';
+import { PROGRAMS, programFor, type TrainingProgram } from '../lib/programs';
 import { coveKey } from '../lib/signoffSheet';
 import {
-  useNewHireUser, useCanEditNewHire, useEnrollNewHire, useUpdateEnrollment, useUnenrollNewHire,
+  useNewHireAll, programsOf, useNewHireUser, useCanEditNewHire, useEnrollNewHire, useUpdateEnrollment, useUnenrollNewHire,
   useSetCheckoff, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
   type NhStatus, type NhCheckoff, type NhDocActivity, type NhUserState,
 } from '../hooks/useNewHire';
-import { useTrainingDocs, NH_PRINT_STATION_URL } from '../hooks/useTrainingDocs';
+import { useTrainingDocs } from '../hooks/useTrainingDocs';
 import { useSignoffSheet } from '../hooks/useSignoffSheet';
 import { LiveSignoffSheet, type SheetActions } from './LiveDoc';
 import { useMe } from '../hooks/useMe';
 
 export type NhPerson = { user_id: string; full_name: string; role: string; active: boolean; is_lead: boolean; hiring_date?: string | null };
-
-/** Programs an admin can assign. Only Plan B exists today; the rest are
- *  placeholders so the picker already shows where they will go. */
-const PROGRAMS: { key: string; label: string; available: boolean }[] = [
-  { key: NH_PROGRAM_KEY, label: NH_PROGRAM_TITLE, available: true },
-  { key: 'upark_hvac_license_dev', label: 'Licensed HVAC development — coming', available: false },
-  { key: 'upark_categories_5', label: '5 category training (refrigeration · electrical · building knowledge · …) — coming', available: false },
-];
 
 const STATUS_META: Record<NhStatus, { label: string; bg: string; color: string }> = {
   active:    { label: 'In program', bg: 'rgba(59,130,246,0.12)',  color: '#1e40af' },
@@ -73,20 +68,21 @@ function QuizScoreChip({ row, compact = false }: { row?: NhDocActivity; compact?
   );
 }
 
-export function NewHireProgramDrawer({ person, people, onClose }: {
+export function NewHireProgramDrawer({ person, people, onClose, initialProgramKey }: {
   person: NhPerson;
   /** Everyone on the roster (names for verified_by / mentor picker). */
   people: NhPerson[];
   onClose: () => void;
+  /** Program tab to open on (roster pill click); default = the first assigned. */
+  initialProgramKey?: string;
 }) {
   const me = useMe().data;
-  const { sheet, error: sheetError, isLoading: sheetLoading } = useSignoffSheet();
-  const { state, isLoading, isError, error } = useNewHireUser(person.user_id, sheet);
-  const canEdit = useCanEditNewHire(state.enrollment?.mentor_user_id);
-  const nameOf = useMemo(() => {
-    const m = new Map(people.map((p) => [p.user_id, p.full_name]));
-    return (id: string | null | undefined) => (id ? (id === me?.id ? `${m.get(id) ?? 'you'} (you)` : (m.get(id) ?? '—')) : '—');
-  }, [people, me?.id]);
+  const all = useNewHireAll();
+  const assigned = useMemo(() => programsOf(all.data, person.user_id), [all.data, person.user_id]);
+  const [chosenKey, setChosenKey] = useState<string | null>(initialProgramKey ?? null);
+  const [assigning, setAssigning] = useState(false);
+  const program: TrainingProgram = programFor(chosenKey && assigned.some((e) => e.program_key === chosenKey) ? chosenKey : assigned[0]?.program_key ?? chosenKey ?? PROGRAMS[0].key);
+  const unassigned = PROGRAMS.filter((p) => p.available && !assigned.some((e) => e.program_key === p.key));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -94,31 +90,86 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const docs = useTrainingDocs();
+  const nameOf = useMemo(() => {
+    const m = new Map(people.map((p) => [p.user_id, p.full_name]));
+    return (id: string | null | undefined) => (id ? (id === me?.id ? `${m.get(id) ?? 'you'} (you)` : (m.get(id) ?? '—')) : '—');
+  }, [people, me?.id]);
+  const canEdit = useCanEditNewHire(assigned.map((e) => e.mentor_user_id));
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full h-full overflow-y-auto p-5" style={{ background: 'var(--color-bg)', maxWidth: 1000 }}>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <div className="t-small t-muted uppercase tracking-wider" style={mono}>Training</div>
+            <h3 className="t-section-title" style={{ marginBottom: 2 }}>{person.full_name}</h3>
+          </div>
+          <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
+        </div>
+
+        {/* program tabs + assign */}
+        <div className="flex items-center gap-1 flex-wrap mb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          {assigned.map((e) => {
+            const p = programFor(e.program_key);
+            const on = p.key === program.key && !assigning;
+            return (
+              <button key={p.key} type="button" onClick={() => { setChosenKey(p.key); setAssigning(false); }} className="t-small px-3 py-2" style={{ borderBottom: `2px solid ${on ? 'var(--color-accent)' : 'transparent'}`, color: on ? 'var(--color-accent)' : 'var(--color-text-muted)', fontWeight: 600, marginBottom: -1 }} title={p.title}>
+                {p.short}{e.status === 'completed' ? ' ✓' : ''}
+              </button>
+            );
+          })}
+          {canEdit && unassigned.length > 0 && (
+            <button type="button" onClick={() => setAssigning((a) => !a)} className="t-small px-3 py-2" style={{ borderBottom: `2px solid ${assigning ? 'var(--color-accent)' : 'transparent'}`, color: assigning ? 'var(--color-accent)' : 'var(--color-text-muted)', marginBottom: -1 }}>
+              + Assign training
+            </button>
+          )}
+          {all.isLoading && <span className="t-small t-muted px-2">Loading…</span>}
+          {all.isError && <span className="t-small px-2" style={{ color: 'var(--color-danger)' }}>Error: {(all.error as Error).message}</span>}
+        </div>
+
+        {!all.isLoading && (assigning || assigned.length === 0) && (
+          <AssignCard person={person} people={people} canEdit={canEdit} programs={unassigned} onDone={(key) => { setChosenKey(key); setAssigning(false); }} />
+        )}
+
+        {!assigning && assigned.length > 0 && (
+          <ProgramPanel key={program.key} person={person} people={people} program={program} canEdit={canEdit} nameOf={nameOf} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One assigned program: assignment card, the live sign-off sheet, handouts, activity, removal. */
+function ProgramPanel({ person, people, program, canEdit, nameOf }: {
+  person: NhPerson; people: NhPerson[]; program: TrainingProgram; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
+}) {
+  const docs = useTrainingDocs(program);
+  const { sheet, error: sheetError, isLoading: sheetLoading } = useSignoffSheet(program);
+  const { state } = useNewHireUser(person.user_id, program, sheet);
   const enr = state.enrollment;
 
-  // ── actions the live sheet calls ─────────────────────────────────────
   const setCheckoff = useSetCheckoff();
   const addRep = useAddRepLog();
   const delRep = useDeleteRepLog();
   const upd = useUpdateEnrollment();
   const [err, setErr] = useState<string | null>(null);
   const run = async (f: () => Promise<unknown>) => { setErr(null); try { await f(); } catch (ex) { setErr((ex as Error).message); } };
+  const uid = person.user_id, pk = program.key;
   const actions: SheetActions = {
-    toggleItem: (key, on) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: key, on })),
+    toggleItem: (key, on) => run(() => setCheckoff.mutateAsync({ user_id: uid, program_key: pk, item_key: key, on })),
     // A note is its own row (note.<key>) so it can exist without the initials; empty → removed.
-    setNote: (key, note) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: noteKeyFor(key), on: !!note, note })),
-    toggleCove: (n, on) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: coveKey(n), on })),
+    setNote: (key, note) => run(() => setCheckoff.mutateAsync({ user_id: uid, program_key: pk, item_key: noteKeyFor(key), on: !!note, note })),
+    toggleCove: (n, on) => run(() => setCheckoff.mutateAsync({ user_id: uid, program_key: pk, item_key: coveKey(n), on })),
     toggleRep: (repKey, _i, on, level) => run(async () => {
-      if (on) await addRep.mutateAsync({ user_id: person.user_id, rep_key: repKey, occurred_on: todayIso(), note: level });
+      if (on) await addRep.mutateAsync({ user_id: uid, program_key: pk, rep_key: repKey, occurred_on: todayIso(), note: level });
       else { const latest = state.repLogs.find((l) => l.rep_key === repKey); if (latest) await delRep.mutateAsync(latest.id); }
     }),
     toggleSigner: (key, on) => run(async () => {
-      await setCheckoff.mutateAsync({ user_id: person.user_id, item_key: key, on });
+      await setCheckoff.mutateAsync({ user_id: uid, program_key: pk, item_key: key, on });
       const signers = sheet?.signers ?? [];
       const nowSigned = signers.length > 0 && signers.every((s) => (s.key === key ? on : state.checked.has(s.key)));
-      if (nowSigned && enr?.status !== 'completed') await upd.mutateAsync({ user_id: person.user_id, patch: { status: 'completed' } });
-      if (!nowSigned && enr?.status === 'completed') await upd.mutateAsync({ user_id: person.user_id, patch: { status: 'active' } });
+      if (nowSigned && enr?.status !== 'completed') await upd.mutateAsync({ user_id: uid, program_key: pk, patch: { status: 'completed' } });
+      if (!nowSigned && enr?.status === 'completed') await upd.mutateAsync({ user_id: uid, program_key: pk, patch: { status: 'active' } });
     }),
   };
 
@@ -129,50 +180,41 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
     'Start date': enr?.start_date ?? '',
   };
 
+  if (!enr) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full h-full overflow-y-auto p-5" style={{ background: 'var(--color-bg)', maxWidth: 1000 }}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div className="t-small t-muted uppercase tracking-wider" style={mono}>Training · sign-off sheet</div>
-            <h3 className="t-section-title" style={{ marginBottom: 2 }}>{person.full_name}</h3>
-            <div className="t-small t-muted">{NH_PROGRAM_TITLE}</div>
-          </div>
-          <div className="flex items-center gap-2 whitespace-nowrap flex-wrap justify-end">
-            {docs.hrefFor('plan') && <a href={docs.hrefFor('plan')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="The 8-Week Schedule document">8-Week Schedule ↗</a>}
-            <a href={encodeURI(NH_PRINT_STATION_URL)} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="The Print Station — preview and print any of the handouts">Print station ↗</a>
-            {docs.hrefFor('signoff_sheet') && <a href={docs.hrefFor('signoff_sheet')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Blank printable sheet">Blank sheet ↗</a>}
-            <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
-          </div>
+    <>
+      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+        <div className="t-text font-medium">{program.title}</div>
+        <div className="flex items-center gap-2 whitespace-nowrap flex-wrap justify-end">
+          {docs.printStationUrl && <a href={docs.printStationUrl} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="The Print Station — preview and print any of the handouts">Print station ↗</a>}
+          {docs.hrefFor('signoff_sheet') && <a href={docs.hrefFor('signoff_sheet')!} target="_blank" rel="noreferrer" className="t-small px-2 py-1 rounded border no-underline" style={btnGhost} title="Blank printable sheet">Blank sheet ↗</a>}
         </div>
-
-        {(isLoading || sheetLoading) && <p className="t-text t-muted">Loading…</p>}
-        {isError && <p className="t-text t-danger">Error: {(error as Error).message}</p>}
-        {sheetError && <p className="t-text t-danger">{sheetError.message}</p>}
-
-        {!isLoading && !enr && <AssignCard person={person} people={people} canEdit={canEdit} />}
-
-        {enr && (
-          <>
-            <AssignmentCard person={person} people={people} canEdit={canEdit} nameOf={nameOf} enrollment={enr} state={state} />
-            {err && <p className="t-small mb-2" style={{ color: 'var(--color-danger)' }}>{err}</p>}
-            {sheet && (
-              <div className="mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-                <p className="t-small t-muted px-3 py-1.5" style={{ background: 'var(--color-card)', borderBottom: '1px solid var(--color-border)' }}>
-                  {canEdit ? 'Initials = complete: click an Initials or Date cell to verify an item (your initials + today). NOTES can be added to any item at any time. Click the rep tally, COVE audit boxes and signature lines to tick or sign.' : 'Read-only — only the mentor, a lead, a manager or an admin can sign here.'}
-                </p>
-                <LiveSignoffSheet sheet={sheet} checkoffs={state.checkoffs} repLogs={state.repLogs} bestQuizByDoc={state.bestQuizByDoc} fields={sheetFields} canEdit={canEdit} nameOf={nameOf} actions={actions} />
-              </div>
-            )}
-            <Secondary title="Handouts — reviewed & quiz sign-off (per handout)" hint="not on the paper sheet; the engineer sees these on their training page">
-              <HandoutsCard userId={person.user_id} state={state} canEdit={canEdit} nameOf={nameOf} />
-            </Secondary>
-            <ActivityCard state={state} canEdit={canEdit} />
-            {canEdit && <DangerCard userId={person.user_id} name={person.full_name} />}
-          </>
-        )}
       </div>
-    </div>
+
+      <AssignmentCard person={person} people={people} program={program} canEdit={canEdit} nameOf={nameOf} enrollment={enr} state={state} />
+      {err && <p className="t-small mb-2" style={{ color: 'var(--color-danger)' }}>{err}</p>}
+      {sheetLoading && <p className="t-small t-muted mb-2">Loading the print station…</p>}
+      {sheetError && (
+        <div className="t-card mb-3" style={{ borderLeft: '4px solid var(--color-warn)' }}>
+          <div className="t-text font-medium">No sign-off sheet yet</div>
+          <p className="t-small t-muted mt-1">{sheetError.message}</p>
+          <p className="t-small t-muted mt-1">Build this program's Print Station in the same format as the 8-week one (a "Master Sign-Off Sheet" document inside it), drop it at that path, push — the sheet appears here.</p>
+        </div>
+      )}
+      {sheet && (
+        <div className="mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+          <p className="t-small t-muted px-3 py-1.5" style={{ background: 'var(--color-card)', borderBottom: '1px solid var(--color-border)' }}>
+            {canEdit ? 'Initials = complete: click an Initials or Date cell to verify an item (your initials + today). NOTES can be added to any item at any time. Click the rep tally, COVE audit boxes and signature lines to tick or sign.' : 'Read-only — only the mentor, a lead, a manager or an admin can sign here.'}
+          </p>
+          <LiveSignoffSheet sheet={sheet} checkoffs={state.checkoffs} repLogs={state.repLogs} bestQuizByDoc={state.bestQuizByDoc} fields={sheetFields} canEdit={canEdit} nameOf={nameOf} actions={actions} />
+        </div>
+      )}
+      <Secondary title="All handouts — reviewed & quiz sign-off (per handout)" hint="every document in the print station; not on the paper sheet">
+        <HandoutsCard userId={uid} program={program} state={state} canEdit={canEdit} nameOf={nameOf} />
+      </Secondary>
+      <ActivityCard program={program} state={state} canEdit={canEdit} />
+      {canEdit && <DangerCard userId={uid} program={program} name={person.full_name} />}
+    </>
   );
 }
 
@@ -194,37 +236,38 @@ function mentorCandidates(people: NhPerson[], selfId: string) {
     .sort((a, b) => (Number(b.is_lead) - Number(a.is_lead)) || a.full_name.localeCompare(b.full_name));
 }
 
-function AssignCard({ person, people, canEdit }: { person: NhPerson; people: NhPerson[]; canEdit: boolean }) {
+function AssignCard({ person, people, canEdit, programs, onDone }: { person: NhPerson; people: NhPerson[]; canEdit: boolean; programs: TrainingProgram[]; onDone: (programKey: string) => void }) {
   const enroll = useEnrollNewHire();
-  const [program, setProgram] = useState<string>(NH_PROGRAM_KEY);
+  const [program, setProgram] = useState<string>(programs[0]?.key ?? '');
   const [start, setStart] = useState<string>(person.hiring_date ?? todayIso());
   const [mentor, setMentor] = useState<string>('');
   const [err, setErr] = useState<string | null>(null);
   const cands = useMemo(() => mentorCandidates(people, person.user_id), [people, person.user_id]);
-  const chosen = PROGRAMS.find((p) => p.key === program);
+  const chosen = programs.find((p) => p.key === program);
 
   return (
     <div className="t-card mb-3">
       <div className="t-small t-muted uppercase tracking-wider mb-1" style={mono}>Assign training</div>
-      <p className="t-text t-muted mb-3">{person.full_name} has no training assigned. Assigning opens this sign-off sheet for them and puts the live schedule on their training page.</p>
+      <p className="t-text t-muted mb-3">{programs.length === 0 ? `${person.full_name} is assigned to every available program.` : `Assigning a program opens its sign-off sheet for ${person.full_name} and puts its handouts on their training page.`}</p>
       {canEdit ? (
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={async (e) => {
             e.preventDefault(); setErr(null);
-            if (!chosen?.available) { setErr('That program is not built yet — only the 8-week Plan B can be assigned today.'); return; }
-            try { await enroll.mutateAsync({ user_id: person.user_id, start_date: start || null, mentor_user_id: mentor || null }); }
+            if (!chosen) { setErr('Pick a program.'); return; }
+            try { await enroll.mutateAsync({ user_id: person.user_id, program_key: chosen.key, start_date: start || null, mentor_user_id: mentor || null }); onDone(chosen.key); }
             catch (ex) { setErr((ex as Error).message); }
           }}
         >
           <label className="block" style={{ minWidth: 280 }}>
             <span className="t-small t-muted uppercase tracking-wider block mb-1" style={mono}>Program</span>
             <select value={program} onChange={(e) => setProgram(e.target.value)} className="border rounded px-2 py-1 t-text w-full" style={inputStyle}>
-              {PROGRAMS.map((p) => <option key={p.key} value={p.key} disabled={!p.available}>{p.label}</option>)}
+              {programs.map((p) => <option key={p.key} value={p.key}>{p.title}</option>)}
+              {PROGRAMS.filter((p) => !p.available).map((p) => <option key={p.key} value={p.key} disabled>{p.title}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1" style={mono}>Start date (Monday of week 1)</span>
+            <span className="t-small t-muted uppercase tracking-wider block mb-1" style={mono}>Start date</span>
             <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border rounded px-2 py-1 t-text t-mono" style={inputStyle} />
           </label>
           <label className="block">
@@ -246,8 +289,8 @@ function AssignCard({ person, people, canEdit }: { person: NhPerson; people: NhP
   );
 }
 
-function AssignmentCard({ person, people, canEdit, nameOf, enrollment, state }: {
-  person: NhPerson; people: NhPerson[]; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
+function AssignmentCard({ person, people, program, canEdit, nameOf, enrollment, state }: {
+  person: NhPerson; people: NhPerson[]; program: TrainingProgram; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
   enrollment: NonNullable<NhUserState['enrollment']>; state: NhUserState;
 }) {
   const upd = useUpdateEnrollment();
@@ -261,12 +304,13 @@ function AssignmentCard({ person, people, canEdit, nameOf, enrollment, state }: 
   const sm = STATUS_META[enrollment.status];
   const p = state.progress;
   const curWeek = nhWeekFor(enrollment.start_date);
-  const weekLabel = curWeek === 0 ? 'starts ' + fmtDate(enrollment.start_date) : curWeek > NH_WEEKS ? 'past week 8' : `Week ${curWeek} of ${NH_WEEKS}`;
+  // "of 8" is the new-hire program's length; other programs just count weeks since the start.
+  const weekly = program.key === PROGRAMS[0].key;
+  const weekLabel = curWeek === 0 ? 'starts ' + fmtDate(enrollment.start_date) : !weekly ? `week ${curWeek}` : curWeek > NH_WEEKS ? 'past week 8' : `Week ${curWeek} of ${NH_WEEKS}`;
   return (
     <div className="t-card mb-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="t-small px-2 py-0.5 rounded-full" style={{ background: sm.bg, color: sm.color, fontWeight: 600, fontSize: 11 }}>{sm.label}</span>
-        <span className="t-text"><span className="t-muted t-small uppercase tracking-wider mr-1" style={mono}>Program</span>{PROGRAMS.find((x) => x.key === enrollment.program_key)?.label ?? enrollment.program_key}</span>
         <span className="t-text"><span className="t-muted t-small uppercase tracking-wider mr-1" style={mono}>Start</span><b>{enrollment.start_date ? fmtDate(enrollment.start_date) : '—'}</b> <span className="t-small t-muted">· {weekLabel}</span></span>
         <span className="t-text"><span className="t-muted t-small uppercase tracking-wider mr-1" style={mono}>Mentor</span><b>{enrollment.mentor_user_id ? nameOf(enrollment.mentor_user_id) : '— not set —'}</b></span>
         {canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="t-small px-2 py-0.5 rounded border ml-auto" style={btnGhost}>Edit assignment</button>}
@@ -275,7 +319,7 @@ function AssignmentCard({ person, people, canEdit, nameOf, enrollment, state }: 
         <form className="mt-3 flex flex-wrap items-end gap-3 border-t pt-3" style={{ borderColor: 'var(--color-border)' }}
           onSubmit={async (e) => {
             e.preventDefault(); setErr(null);
-            try { await upd.mutateAsync({ user_id: person.user_id, patch: { start_date: start || null, mentor_user_id: mentor || null, status, notes: notes.trim() || null } }); setEditing(false); }
+            try { await upd.mutateAsync({ user_id: person.user_id, program_key: program.key, patch: { start_date: start || null, mentor_user_id: mentor || null, status, notes: notes.trim() || null } }); setEditing(false); }
             catch (ex) { setErr((ex as Error).message); }
           }}>
           <label className="block"><span className="t-small t-muted uppercase tracking-wider block mb-1" style={mono}>Start date</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border rounded px-2 py-1 t-text t-mono" style={inputStyle} /></label>
@@ -339,16 +383,16 @@ function SignToggle({
 }
 
 function HandoutsCard({
-  userId, state, canEdit, nameOf,
+  userId, program, state, canEdit, nameOf,
 }: {
-  userId: string; state: NhUserState; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
+  userId: string; program: TrainingProgram; state: NhUserState; canEdit: boolean; nameOf: (id: string | null | undefined) => string;
 }) {
-  const { docs, groups, href, isLoading, isError, error } = useTrainingDocs();
+  const { docs, groups, href, isLoading, isError, error } = useTrainingDocs(program);
   const set = useSetCheckoff();
   const [err, setErr] = useState<string | null>(null);
   const toggle = async (item_key: string, on: boolean) => {
     setErr(null);
-    try { await set.mutateAsync({ user_id: userId, item_key, on }); }
+    try { await set.mutateAsync({ user_id: userId, program_key: program.key, item_key, on }); }
     catch (ex) { setErr((ex as Error).message); }
   };
   return (
@@ -399,8 +443,8 @@ function HandoutsCard({
   );
 }
 
-function ActivityCard({ state, canEdit }: { state: NhUserState; canEdit: boolean }) {
-  const { byKey } = useTrainingDocs();
+function ActivityCard({ program, state, canEdit }: { program: TrainingProgram; state: NhUserState; canEdit: boolean }) {
+  const { byKey } = useTrainingDocs(program);
   const del = useDeleteDocActivity();
   const [open, setOpen] = useState(false);
   const [showOpened, setShowOpened] = useState(false);
@@ -440,7 +484,7 @@ function ActivityCard({ state, canEdit }: { state: NhUserState; canEdit: boolean
   );
 }
 
-function DangerCard({ userId, name }: { userId: string; name: string }) {
+function DangerCard({ userId, program, name }: { userId: string; program: TrainingProgram; name: string }) {
   const un = useUnenrollNewHire();
   const [armed, setArmed] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -449,16 +493,16 @@ function DangerCard({ userId, name }: { userId: string; name: string }) {
       {!armed ? (
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="t-small t-muted uppercase tracking-wider block">Remove from program</span>
-            <p className="t-small t-muted mt-0.5">Deletes the enrollment and every check-off and rep log for {name}. To pause instead, set Status → Paused.</p>
+            <span className="t-small t-muted uppercase tracking-wider block">Remove from {program.short}</span>
+            <p className="t-small t-muted mt-0.5">Deletes {name}'s assignment to {program.title} and every check-off, note and rep log recorded on it. Other programs are untouched. To pause instead, set Status → Paused.</p>
           </div>
           <button type="button" onClick={() => setArmed(true)} className="t-small px-3 py-1 rounded border font-medium" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)', background: 'transparent' }}>Remove…</button>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <span className="t-small" style={{ color: 'var(--color-danger)', fontWeight: 600 }}>This cannot be undone. Remove {name}'s enrollment and all progress?</span>
+          <span className="t-small" style={{ color: 'var(--color-danger)', fontWeight: 600 }}>This cannot be undone. Remove {name} from {program.short} and delete its record?</span>
           <div className="flex gap-2">
-            <button type="button" disabled={un.isPending} onClick={async () => { setErr(null); try { await un.mutateAsync(userId); } catch (ex) { setErr((ex as Error).message); } }} className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-40" style={{ background: 'var(--color-danger)' }}>Remove</button>
+            <button type="button" disabled={un.isPending} onClick={async () => { setErr(null); try { await un.mutateAsync({ user_id: userId, program_key: program.key }); } catch (ex) { setErr((ex as Error).message); } }} className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-40" style={{ background: 'var(--color-danger)' }}>Remove</button>
             <button type="button" onClick={() => setArmed(false)} className="t-small px-2 py-1 rounded border" style={{ borderColor: 'var(--color-border)' }}>Cancel</button>
           </div>
         </div>

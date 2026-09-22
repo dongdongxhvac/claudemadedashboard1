@@ -13,18 +13,19 @@ key, the equipment glossary, the portfolio Find It & Tag It, Find It On Screen
 |---|---|
 | **All training content — one file** | `web/public/training/new hire 8 weeks training package/new_hire_print_station.html` — the Print Station SPA embeds every document (27 today: schedule, sign-off sheet, week guides/checklists, both site maps, building check, 5 overviews, 8 equipment pages, worked example, glossary, terminology, answer key, manager SOP). Served as a static file under `/training/…`. The dashboard reads the documents out of it at load time. |
 | How the dashboard reads it | `web/src/hooks/useTrainingDocs.ts` — parses the print station's `TITLES` / `DOCS` arrays and group headings, derives a permanent key per document from its title (alias rules in that file), detects quizzes (`id="qDone"`). |
-| **The program definition** — groups, verified items, rep tally, COVE audit, certification | The **Master Sign-Off Sheet document inside the print station**, parsed at load time by `web/src/lib/signoffSheet.ts` (served by `hooks/useSignoffSheet.ts`). Nothing is transcribed into code. `web/src/lib/newHireProgram.ts` keeps only the program key, the week-from-start-date rule and the per-handout tick keys. |
-| Progress tables + RLS | `supabase/migrations/0128_new_hire_program.sql` (enrollment, check-offs, rep logs) + `0131_new_hire_doc_activity.sql` (engineer's own opened / quiz rows) |
+| **The program definition** — groups, verified items, rep tally, COVE audit, certification | The **Master Sign-Off Sheet document inside the print station**, parsed at load time by `web/src/lib/signoffSheet.ts` (served by `hooks/useSignoffSheet.ts`). Nothing is transcribed into code. `web/src/lib/newHireProgram.ts` keeps only the week-from-start-date rule and the per-handout tick / note keys. |
+| **The list of programs** (key, title, print station path) | `web/src/lib/programs.ts` — new-hire 8-week, Licensed HVAC development (print station at `web/public/training/licensed hvac development program/print_station.html`), 5 categories (coming). See "Adding a program". |
+| Progress tables + RLS | `supabase/migrations/0128_new_hire_program.sql` (enrollment, check-offs, rep logs) + `0131_new_hire_doc_activity.sql` (engineer's own opened / quiz rows) + `0132_training_programs_per_person.sql` (everything keyed per person **and program**) |
 | Data hooks | `web/src/hooks/useNewHire.ts` (progress + activity), `useTrainingDocs.ts` (documents from the print station), `useQuizWatcher.ts` (detects a finished quiz inside the viewer) |
-| UI — the **sign-off sheet**, live (Admin › User Profiles → Training) | `web/src/components/NewHireProgramDrawer.tsx` + `LiveDoc.tsx` — the actual sheet document rendered in the drawer: click an item's Initials/Date cell to verify (your initials + date), NOTES to add a note, rep tally / COVE boxes to tick, signature lines to sign. "Assign training" (program · start · mentor) for people with nothing assigned. |
-| UI — the engineer's page (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` + `LiveDoc.tsx` — tabs: the actual **8-Week Schedule** document (file chips open the handout; Check off ticks mirror the mentor's sign-offs), **My sign-off record** (the sheet, read-only, filled in), All handouts. Quiz runs save automatically from the viewer. UPark only. |
+| UI — the **sign-off sheet**, live (Admin › User Profiles → Training) | `web/src/components/NewHireProgramDrawer.tsx` + `LiveDoc.tsx` — one tab per assigned program; in each, the actual sheet document rendered in the drawer: click an item's Initials/Date cell to verify (your initials + date), NOTES to add a note (independent of the initials), rep tally / COVE boxes to tick, signature lines to sign. "+ Assign training" (program · start · mentor) adds another program. Header links: the program's Print station, a blank sheet. |
+| UI — the engineer's page (`/upark/training/new-hire`, "Training" link on the engineer home) | `web/src/routes/engineer/NewHireTraining.tsx` + `LiveDoc.tsx` — one tab per assigned program (nothing assigned → the new-hire material, read only); inside: the program's **Schedule** document when it has one (file chips open the handout; Check off ticks mirror the mentor's sign-offs), **My sign-off record** (the sheet, read-only, filled in), All handouts. Quiz runs save automatically from the viewer under that program. UPark only. |
 | Original build notes for the handouts (conventions, site facts) | `HANDOFF.md` here |
 
 ## Decisions (2026-09-21)
 
 - **Engineer view = the schedule printout, live; admin view = the sign-off sheet, live** (per user). No separate library page — the schedule links every handout in the week it belongs to.
 - The Sep-21 schedule puts the **boiler plant in Week 2 and the chiller in Week 5** ("why boiler first"). Item keys `w2.boiler_24_verbals` / `w5.chiller_36_fault_drill` replaced the Aug-19 keys (no progress existed on them).
-- Programs are data on the enrollment (`program_key`). Only Plan B can be assigned today; Licensed HVAC development and the 5 category tracks are listed as coming in the picker.
+- Programs are data on the enrollment (`program_key`), and a person can be in more than one (2026-09-22, migration 0132). New-hire 8-week and Licensed HVAC development are assignable; the 5 category tracks are listed as coming in the picker.
 
 ## Decisions (2026-08-19)
 
@@ -104,3 +105,41 @@ moot.
 Mentor sign-off is separate from the engineer's score: the engineer's best run shows as
 a chip; the mentor ticks **Reviewed** and **Quiz passed** per handout in the drawer, and the
 weekly items stay as printed on the sign-off sheet.
+
+## Adding a program (2026-09-22)
+
+Every program is the same two things: **one Print Station file** and **one entry in
+`web/src/lib/programs.ts`**. The Licensed HVAC Development Program is already listed there
+and expects its print station at
+
+```
+web/public/training/licensed hvac development program/print_station.html
+```
+
+Until that file exists, the admin drawer and the engineer page show "Print station … not
+found yet — expected at …" for it (it can still be assigned). Drop the file in, push, done.
+
+Rules for the print station of any program:
+- same format as the new-hire one (a Print Station SPA: `const TITLES=[…]` / `const DOCS=[…]`,
+  the document list with `.row[data-g]` groups) — build it in chat the same way;
+- it must contain a document titled **Master Sign-Off Sheet** in the sheet markup described
+  above (groups, items, rep tally, COVE audit, signature lines — any subset is fine, an empty
+  section is skipped). That sheet IS the program: the drawer and the engineer's record are
+  rendered from it, and progress is counted from its items;
+- a document whose title ends in "Schedule" (key `plan`) is optional — it becomes the
+  engineer's first tab; without one the record tab comes first;
+- document keys, item keys and quiz detection work exactly as above (same `keyForTitle`
+  rules; new titles get slug keys).
+
+To register a new program: add an entry to `PROGRAMS` in `web/src/lib/programs.ts`
+(`key` — permanent, stamped on every record; `title`; `short` — the roster pill / tab label;
+`printStation` — its URL under `web/public`; `available: true`) and add a
+`useSignoffSheet(PROGRAMS[n])` line in `web/src/routes/admin/UserProfilesTab.tsx` next to
+the existing two (that page needs each sheet for the roster pills' percentages). To turn a
+"coming" program on, set `available: true` and give it a `printStation`.
+
+`print_station.py` works on any print station — pass the file:
+```
+python3 seed/training/new-hire/print_station.py --station "web/public/training/licensed hvac development program/print_station.html" --src /tmp/hvac-src unpack
+python3 seed/training/new-hire/print_station.py --station "web/public/training/licensed hvac development program/print_station.html" --src /tmp/hvac-src pack
+```

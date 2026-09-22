@@ -1,13 +1,13 @@
-// New-hire training — every handout comes from ONE file: the Print Station.
+// Training documents — every handout of a program comes from ONE file: its
+// Print Station (lib/programs.ts names the file per program).
 //
 // Per user 2026-09-21: "just go by new_hire_print_station file only for all
-// 8 week training content". new_hire_print_station.html embeds all the
-// program's documents as base64 (`const DOCS=[…]`, index-aligned with
+// 8 week training content". A print station embeds all the program's
+// documents as base64 (`const DOCS=[…]`, index-aligned with
 // `const TITLES=[…]`) and lists them under group headings (`.row[data-g]`
 // / `data-i`). This hook fetches that file, parses the three, decodes each
 // document and hands the app a doc list. To UPDATE TRAINING: overwrite the
-// print station and push — nothing else to edit. To move it: change
-// NH_PRINT_STATION_URL.
+// print station and push — nothing else to edit.
 //
 // Keys are what progress hangs on (quiz runs → new_hire_doc_activity.doc_key;
 // mentor ticks → new_hire_checkoffs 'doc.<key>.reviewed' / '.quiz'; the
@@ -22,9 +22,7 @@
 // watcher can see inside) and in a new tab via a blob: URL.
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-
-export const NH_PACKAGE_BASE = '/training/new hire 8 weeks training package';
-export const NH_PRINT_STATION_URL = `${NH_PACKAGE_BASE}/new_hire_print_station.html`;
+import { DEFAULT_PROGRAM, type TrainingProgram } from '../lib/programs';
 
 export type NhDoc = {
   /** Permanent — see the alias rules. */
@@ -142,15 +140,29 @@ export function docBlobUrl(doc: NhDoc): string {
   return u;
 }
 
-export const TRAINING_DOCS_KEY = ['training_docs', NH_PRINT_STATION_URL];
+export class PrintStationMissing extends Error {
+  readonly program: TrainingProgram;
+  readonly status: number;
+  constructor(program: TrainingProgram, status: number) {
+    super(`Print station for "${program.title}" not found yet (HTTP ${status}) — expected at web/public${program.printStation}`);
+    this.name = 'PrintStationMissing';
+    this.program = program;
+    this.status = status;
+  }
+}
 
-export function useTrainingDocs() {
+export function useTrainingDocs(program: TrainingProgram = DEFAULT_PROGRAM) {
+  const url = program.printStation;
   const q = useQuery({
-    queryKey: TRAINING_DOCS_KEY,
+    queryKey: ['training_docs', program.key, url],
+    enabled: !!url,
     queryFn: async () => {
-      const res = await fetch(encodeURI(NH_PRINT_STATION_URL));
-      if (!res.ok) throw new Error(`${NH_PRINT_STATION_URL}: HTTP ${res.status}`);
-      return parsePrintStation(await res.text());
+      const res = await fetch(encodeURI(url));
+      if (!res.ok) throw new PrintStationMissing(program, res.status);
+      const text = await res.text();
+      // Vercel / Vite answer index.html for a missing file behind the SPA rewrite — treat that as missing too.
+      if (!/const DOCS=\[/.test(text)) throw new PrintStationMissing(program, 404);
+      return parsePrintStation(text);
     },
     staleTime: 10 * 60_000,
     retry: 1,
@@ -158,6 +170,9 @@ export function useTrainingDocs() {
   const byKey = useMemo(() => new Map((q.data?.docs ?? []).map((d) => [d.key, d])), [q.data]);
   return {
     ...q,
+    program,
+    /** The print station SPA itself (preview + print any handout), for a link. */
+    printStationUrl: url ? encodeURI(url) : null,
     docs: q.data?.docs ?? [],
     groups: q.data?.groups ?? [],
     byKey,

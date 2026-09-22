@@ -4,12 +4,10 @@
 // certification) is NOT transcribed here any more: it is read from the
 // Master Sign-Off Sheet document inside the Print Station
 // (lib/signoffSheet.ts). Progress is keyed on the sheet's own items.
-// This file keeps what is not in the sheet: the program key stamped on
-// enrollments, the week-from-start-date rule, and the per-handout mentor
-// tick keys.
+// This file keeps what is not in the sheet: the week-from-start-date rule
+// and the per-handout mentor tick / note keys. The list of programs (keys,
+// titles, print stations) lives in lib/programs.ts.
 
-export const NH_PROGRAM_KEY = 'upark_l1_plan_b';
-export const NH_PROGRAM_TITLE = 'UPark New-Hire — 8-Week Program (Plan B · Level 1)';
 export const NH_WEEKS = 8;
 
 /** new_hire_checkoffs keys for the per-handout MENTOR ticks (Reviewed / Quiz passed). */
