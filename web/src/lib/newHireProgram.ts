@@ -19,6 +19,11 @@ export const docKeyFor = (docKey: string) => ({
 });
 export const DOC_KEY_RE = /^doc\.(.+)\.(reviewed|quiz)$/;
 
+/** new_hire_checkoffs key for a free-standing NOTE on a sign-off item — a
+ *  note is independent of the initials (initials = complete). The row's
+ *  `note` holds the text, `verified_by` / `done_at` who wrote it and when. */
+export const noteKeyFor = (itemKey: string) => `note.${itemKey}`;
+
 /** Which program week "should" be in progress for a start date (1..8, or
  *  9 = past the program, 0 = not started). Weeks roll on Mondays relative
  *  to the start date. */

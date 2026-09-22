@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { SignoffSheet } from '../lib/signoffSheet';
 import { coveKey, docKeyForFile, quizDocForItem, tickTarget } from '../lib/signoffSheet';
+import { noteKeyFor } from '../lib/newHireProgram';
 import type { NhCheckoff, NhDocActivity, NhRepLog } from '../hooks/useNewHire';
 
 const fmtDate = (iso: string | null | undefined) =>
@@ -29,6 +30,7 @@ const LIVE_CSS = `
   .lv-init{font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:700;font-size:.85rem;letter-spacing:.04em;color:#1a1f2b}
   .lv-date{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:.72rem;color:#1a1f2b}
   .lv-note{font-size:.78rem;color:#1a1f2b;margin-left:8px}
+  .lv-note-by{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:.62rem;color:#9aa3b0;margin-left:6px}
   .lv-chip{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:.62rem;font-weight:600;vertical-align:middle}
   .lv-chip.ok{background:#e6f4ea;color:#1e6b3a}.lv-chip.warn{background:#fff4d6;color:#8a5a00}
   .lv-edit td.init,.lv-edit td.date,.lv-edit .box,.lv-edit .sigline,.lv-edit tr.noter td{cursor:pointer}
@@ -147,12 +149,17 @@ export function LiveSignoffSheet({ sheet, checkoffs, repLogs, bestQuizByDoc, fie
           chip.className = 'lv-chip ' + (ok ? 'ok' : 'warn'); chip.textContent = `engineer's quiz ${best.score}/${best.total} · ${fmtDate(best.at)}`;
         } else chip?.remove();
       }
-      // note
+      // note — its own row (note.<key>), independent of the initials; a note
+      // saved on the verified row itself (older data) still shows.
+      const noteRow = checkoffs.get(noteKeyFor(item.key)) ?? (row?.note ? row : undefined);
       if (noter) {
         let n = noter.querySelector('.lv-note') as HTMLElement | null;
         if (!n) { n = doc.createElement('span'); n.className = 'lv-note'; noter.appendChild(n); }
-        n.textContent = row?.note ?? '';
-        (noter as HTMLElement).title = canEdit && row ? 'Click to edit the note' : '';
+        n.textContent = noteRow?.note ?? '';
+        let by = noter.querySelector('.lv-note-by') as HTMLElement | null;
+        if (!by) { by = doc.createElement('span'); by.className = 'lv-note-by'; noter.appendChild(by); }
+        by.textContent = noteRow?.note ? `${initialsOf(nameOf(noteRow.verified_by))} · ${fmtDate(noteRow.done_at)}` : '';
+        (noter as HTMLElement).title = canEdit ? (noteRow?.note ? 'Click to edit the note' : 'Click to add a note') : '';
       }
       if (!(tb as HTMLElement).dataset.lvBound) {
         (tb as HTMLElement).dataset.lvBound = '1';
@@ -160,8 +167,8 @@ export function LiveSignoffSheet({ sheet, checkoffs, repLogs, bestQuizByDoc, fie
         init.addEventListener('click', toggle); date.addEventListener('click', toggle);
         noter?.addEventListener('click', () => {
           const p = propsRef.current; if (!p.canEdit || !p.actions) return;
-          const cur = p.checkoffs.get(item.key); if (!cur) { window.alert('Initial the item first, then add a note.'); return; }
-          const v = window.prompt('Note for: ' + item.text, cur.note ?? ''); if (v === null) return;
+          const cur = p.checkoffs.get(noteKeyFor(item.key))?.note ?? p.checkoffs.get(item.key)?.note ?? '';
+          const v = window.prompt('Note for: ' + item.text, cur); if (v === null) return;
           p.actions.setNote(item.key, v.trim() || null);
         });
       }

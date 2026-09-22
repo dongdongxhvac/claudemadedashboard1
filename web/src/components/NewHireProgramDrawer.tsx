@@ -18,11 +18,11 @@
 // anyone who can't edit this person (DB decides; useCanEditNewHire mirrors
 // it). The engineer sees the same sheet read-only on their training page.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { NH_PROGRAM_KEY, NH_PROGRAM_TITLE, NH_WEEKS, nhWeekFor, docKeyFor } from '../lib/newHireProgram';
+import { NH_PROGRAM_KEY, NH_PROGRAM_TITLE, NH_WEEKS, nhWeekFor, docKeyFor, noteKeyFor } from '../lib/newHireProgram';
 import { coveKey } from '../lib/signoffSheet';
 import {
   useNewHireUser, useCanEditNewHire, useEnrollNewHire, useUpdateEnrollment, useUnenrollNewHire,
-  useSetCheckoff, useSetCheckoffNote, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
+  useSetCheckoff, useAddRepLog, useDeleteRepLog, useDeleteDocActivity,
   type NhStatus, type NhCheckoff, type NhDocActivity, type NhUserState,
 } from '../hooks/useNewHire';
 import { useTrainingDocs, NH_PRINT_STATION_URL } from '../hooks/useTrainingDocs';
@@ -99,7 +99,6 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
 
   // ── actions the live sheet calls ─────────────────────────────────────
   const setCheckoff = useSetCheckoff();
-  const setNote = useSetCheckoffNote();
   const addRep = useAddRepLog();
   const delRep = useDeleteRepLog();
   const upd = useUpdateEnrollment();
@@ -107,7 +106,8 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
   const run = async (f: () => Promise<unknown>) => { setErr(null); try { await f(); } catch (ex) { setErr((ex as Error).message); } };
   const actions: SheetActions = {
     toggleItem: (key, on) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: key, on })),
-    setNote: (key, note) => run(() => setNote.mutateAsync({ user_id: person.user_id, item_key: key, note })),
+    // A note is its own row (note.<key>) so it can exist without the initials; empty → removed.
+    setNote: (key, note) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: noteKeyFor(key), on: !!note, note })),
     toggleCove: (n, on) => run(() => setCheckoff.mutateAsync({ user_id: person.user_id, item_key: coveKey(n), on })),
     toggleRep: (repKey, _i, on, level) => run(async () => {
       if (on) await addRep.mutateAsync({ user_id: person.user_id, rep_key: repKey, occurred_on: todayIso(), note: level });
@@ -159,7 +159,7 @@ export function NewHireProgramDrawer({ person, people, onClose }: {
             {sheet && (
               <div className="mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
                 <p className="t-small t-muted px-3 py-1.5" style={{ background: 'var(--color-card)', borderBottom: '1px solid var(--color-border)' }}>
-                  {canEdit ? 'Click an Initials or Date cell to verify an item (your initials + today). Click NOTES to add a note. Click the rep tally, COVE audit boxes and signature lines to tick or sign.' : 'Read-only — only the mentor, a lead, a manager or an admin can sign here.'}
+                  {canEdit ? 'Initials = complete: click an Initials or Date cell to verify an item (your initials + today). NOTES can be added to any item at any time. Click the rep tally, COVE audit boxes and signature lines to tick or sign.' : 'Read-only — only the mentor, a lead, a manager or an admin can sign here.'}
                 </p>
                 <LiveSignoffSheet sheet={sheet} checkoffs={state.checkoffs} repLogs={state.repLogs} bestQuizByDoc={state.bestQuizByDoc} fields={sheetFields} canEdit={canEdit} nameOf={nameOf} actions={actions} />
               </div>
