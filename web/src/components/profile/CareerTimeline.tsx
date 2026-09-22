@@ -6,9 +6,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { KIND_META, EDITABLE_KINDS, type CareerEvent, type CareerEventKind, type CareerEventRow } from '../../lib/careerTimeline';
 import { useAddCareerEvent, useUpdateCareerEvent, useDeleteCareerEvent } from '../../hooks/useCareerTimeline';
-
-const panel = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' } as const;
-const input = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 13 } as const;
+import { PT, panel, input } from './theme';
 const fmt = (ymd: string) => new Date(ymd + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 type FormState = { kind: CareerEventKind; occurred_on: string; title: string; detail: string; visibility: 'public' | 'managers' };
@@ -50,9 +48,9 @@ function EventForm({ userId, row, canManagerRows, onDone }: { userId: string; ro
             <option value="managers">Managers only</option>
           </select></label>
       </div>
-      {err && <p className="text-xs mt-2" style={{ color: '#fca5a5' }}>{err}</p>}
+      {err && <p className="text-xs mt-2" style={{ color: PT.danger }}>{err}</p>}
       <div className="flex gap-2 mt-3">
-        <button type="button" onClick={submit} disabled={pending} className="text-sm px-3 py-1 rounded-md" style={{ background: '#7c3aed', color: '#fff' }}>{pending ? 'Saving…' : row ? 'Save' : 'Add event'}</button>
+        <button type="button" onClick={submit} disabled={pending} className="text-sm px-3 py-1 rounded-md" style={{ background: PT.button, color: '#fff' }}>{pending ? 'Saving…' : row ? 'Save' : 'Add event'}</button>
         <button type="button" onClick={onDone} className="text-sm px-3 py-1 rounded-md opacity-70 hover:opacity-100">Cancel</button>
       </div>
     </div>
@@ -110,18 +108,18 @@ export function CareerTimeline({ userId, events, isLoading, error, canEdit, canM
 
       {canEdit && adding && <EventForm userId={userId} row={null} canManagerRows={canManagerRows} onDone={() => setAdding(false)} />}
       {canEdit && editing && <EventForm key={editing.id} userId={userId} row={editing} canManagerRows={canManagerRows} onDone={() => setEditing(null)} />}
-      {err && <p className="text-xs mb-2" style={{ color: '#fca5a5' }}>{err}</p>}
+      {err && <p className="text-xs mb-2" style={{ color: PT.danger }}>{err}</p>}
 
       <div className="rounded-lg" style={panel}>
         {isLoading && <p className="text-sm opacity-60 p-4">Loading…</p>}
-        {error && <p className="text-sm p-4" style={{ color: '#fca5a5' }}>Error: {error.message}</p>}
+        {error && <p className="text-sm p-4" style={{ color: PT.danger }}>Error: {error.message}</p>}
         {!isLoading && !error && shown.length === 0 && (
           <p className="text-sm opacity-50 italic p-4">{visible.length === 0 ? 'Nothing on the timeline yet — it fills in from hiring, training, PMs and on-call.' : 'No milestones yet — show all events to see the small steps.'}</p>
         )}
         {years.map((y) => (
           <div key={y.year} className="px-4 pt-3 pb-1">
             <div className="text-xs font-mono opacity-50 mb-2">{y.year}</div>
-            <ol className="relative ml-3" style={{ borderLeft: '1px solid rgba(255,255,255,0.12)' }}>
+            <ol className="relative ml-3" style={{ borderLeft: `1px solid ${PT.panelBorder}` }}>
               {y.rows.map((e) => (
                 <li key={e.id} className="relative pl-6 pb-3">
                   <span className="absolute flex items-center justify-center rounded-full"
@@ -129,8 +127,8 @@ export function CareerTimeline({ userId, events, isLoading, error, canEdit, canM
                       left: e.milestone ? -15 : -11, top: e.milestone ? 0 : 3,
                       width: e.milestone ? 29 : 21, height: e.milestone ? 29 : 21,
                       fontSize: e.milestone ? 16 : 11,
-                      background: e.milestone ? 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)' : '#0f172a',
-                      border: `1px solid ${e.milestone ? 'rgba(167,139,250,0.7)' : 'rgba(255,255,255,0.15)'}`,
+                      background: e.milestone ? PT.headerBg : PT.panel,
+                      border: `1px solid ${e.milestone ? PT.chipBorder : PT.panelBorder}`,
                       boxShadow: e.milestone ? `0 0 14px ${glow}` : 'none',
                     }} title={KIND_META[e.kind].label}>{e.icon}</span>
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -139,11 +137,11 @@ export function CareerTimeline({ userId, events, isLoading, error, canEdit, canM
                       {e.link ? <Link to={e.link} className="hover:underline">{e.title}</Link> : e.title}
                     </span>
                     {e.detail && <span className="text-xs opacity-55">{e.detail}</span>}
-                    {e.audience === 'managers' && <span className="text-xs px-1.5 rounded-full opacity-70" style={{ background: 'rgba(255,255,255,0.08)' }}>managers only</span>}
+                    {e.audience === 'managers' && <span className="text-xs px-1.5 rounded-full opacity-70" style={{ background: PT.lockedBg, border: `1px solid ${PT.lockedBorder}` }}>managers only</span>}
                     {e.editable && canEdit && (
                       <span className="text-xs flex gap-2 ml-auto">
                         <button type="button" className="underline opacity-60 hover:opacity-100" onClick={() => { setEditing(e.editable); setAdding(false); }}>edit</button>
-                        <button type="button" className="underline opacity-60 hover:opacity-100" style={{ color: '#fca5a5' }}
+                        <button type="button" className="underline opacity-60 hover:opacity-100" style={{ color: PT.danger }}
                           onClick={() => { if (window.confirm(`Delete "${e.title}"?`)) del.mutate(e.editable!.id, { onError: (x) => setErr((x as Error).message) }); }}>remove</button>
                       </span>
                     )}

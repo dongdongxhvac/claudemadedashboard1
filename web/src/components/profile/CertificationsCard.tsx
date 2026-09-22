@@ -5,18 +5,16 @@
 import { useState } from 'react';
 import { certExpiryState, daysUntil, type AutoMilestone, type CertificationRow } from '../../lib/careerTimeline';
 import { useCertifications, useUpsertCertification, useDeleteCertification, useCertificationFileUrl } from '../../hooks/useCertifications';
-
-const panel = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' } as const;
-const input = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 13 } as const;
+import { PT, panel, input } from './theme';
 const fmt = (ymd: string | null | undefined) => (ymd ? new Date(ymd + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
 export function ExpiryBadge({ expiresOn, today = new Date() }: { expiresOn: string | null; today?: Date }) {
   const st = certExpiryState(expiresOn, today);
   if (st === 'none') return <span className="text-xs opacity-50">no expiry</span>;
   const d = daysUntil(expiresOn!, today);
-  const style = st === 'expired' ? { background: 'rgba(239,68,68,0.2)', color: '#fca5a5' }
-    : st === 'soon' ? { background: 'rgba(245,158,11,0.2)', color: '#fcd34d' }
-    : { background: 'rgba(16,185,129,0.15)', color: '#6ee7b7' };
+  const style = st === 'expired' ? { background: PT.bad.bg, color: PT.bad.text }
+    : st === 'soon' ? { background: PT.warn.bg, color: PT.warn.text }
+    : { background: PT.ok.bg, color: PT.ok.text };
   const text = st === 'expired' ? `EXPIRED ${fmt(expiresOn)}` : st === 'soon' ? `EXPIRES IN ${d} D` : `valid to ${fmt(expiresOn)}`;
   return <span className="text-xs px-2 py-0.5 rounded-full font-mono" style={style}>{text}</span>;
 }
@@ -66,9 +64,9 @@ function CertForm({ userId, row, onDone }: { userId: string; row: CertificationR
           )}
         </label>
       </div>
-      {err && <p className="text-xs mt-2" style={{ color: '#fca5a5' }}>{err}</p>}
+      {err && <p className="text-xs mt-2" style={{ color: PT.danger }}>{err}</p>}
       <div className="flex gap-2 mt-3">
-        <button type="button" onClick={submit} disabled={upsert.isPending} className="text-sm px-3 py-1 rounded-md" style={{ background: '#7c3aed', color: '#fff' }}>
+        <button type="button" onClick={submit} disabled={upsert.isPending} className="text-sm px-3 py-1 rounded-md" style={{ background: PT.button, color: '#fff' }}>
           {upsert.isPending ? 'Saving…' : row ? 'Save' : 'Add certification'}
         </button>
         <button type="button" onClick={onDone} className="text-sm px-3 py-1 rounded-md opacity-70 hover:opacity-100">Cancel</button>
@@ -103,8 +101,8 @@ export function CertificationsCard({ userId, milestones, canEdit, glow }: {
             <span key={m.key} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
               title={on ? `Earned ${fmt(m.earnedOn)}` : `Locked — ${m.hint}`}
               style={on
-                ? { background: 'rgba(124,58,237,0.25)', color: '#e9d5ff', border: '1px solid rgba(167,139,250,0.5)', boxShadow: `0 0 14px ${glow}` }
-                : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                ? { background: PT.chipBg, color: PT.chipText, border: `1px solid ${PT.chipBorder}`, boxShadow: `0 0 14px ${glow}` }
+                : { background: PT.lockedBg, color: PT.lockedText, border: `1px solid ${PT.lockedBorder}` }}>
               <span style={{ filter: on ? 'none' : 'grayscale(1)' }}>{m.icon}</span>
               {m.label}
               {on && <span className="font-mono opacity-70">· {fmt(m.earnedOn)}</span>}
@@ -115,12 +113,12 @@ export function CertificationsCard({ userId, milestones, canEdit, glow }: {
 
       <div className="rounded-lg overflow-hidden" style={panel}>
         {q.isLoading && <p className="text-sm opacity-60 p-4">Loading…</p>}
-        {q.isError && <p className="text-sm p-4" style={{ color: '#fca5a5' }}>Error: {(q.error as Error).message}</p>}
+        {q.isError && <p className="text-sm p-4" style={{ color: PT.danger }}>Error: {(q.error as Error).message}</p>}
         {!q.isLoading && rows.length === 0 && (
           <p className="text-sm opacity-50 italic p-4">No licenses or certifications on file{canEdit ? ' — add one below.' : '.'}</p>
         )}
         {rows.map((r, i) => (
-          <div key={r.id} className="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1" style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+          <div key={r.id} className="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1" style={{ borderTop: i === 0 ? 'none' : `1px solid ${PT.panelBorder}` }}>
             <span className="text-xl">📜</span>
             <div style={{ flex: '1 1 240px', minWidth: 0 }}>
               <div className="text-sm font-medium">{r.name}{r.issuer && <span className="opacity-60"> · {r.issuer}</span>}</div>
@@ -133,14 +131,14 @@ export function CertificationsCard({ userId, milestones, canEdit, glow }: {
             {canEdit && (
               <span className="text-xs flex gap-2">
                 <button type="button" className="underline opacity-70 hover:opacity-100" onClick={() => { setEditing(r); setAdding(false); }}>edit</button>
-                <button type="button" className="underline opacity-70 hover:opacity-100" style={{ color: '#fca5a5' }}
+                <button type="button" className="underline opacity-70 hover:opacity-100" style={{ color: PT.danger }}
                   onClick={() => { if (window.confirm(`Delete "${r.name}"?`)) del.mutate({ id: r.id, file_path: r.file_path }, { onError: (e) => setErr((e as Error).message) }); }}>remove</button>
               </span>
             )}
           </div>
         ))}
       </div>
-      {err && <p className="text-xs mt-2" style={{ color: '#fca5a5' }}>{err}</p>}
+      {err && <p className="text-xs mt-2" style={{ color: PT.danger }}>{err}</p>}
 
       {canEdit && !adding && !editing && (
         <button type="button" onClick={() => setAdding(true)} className="text-sm mt-3 underline opacity-80 hover:opacity-100">+ Add certification</button>

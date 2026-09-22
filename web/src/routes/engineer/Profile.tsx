@@ -1,6 +1,7 @@
 // /engineer/:id/profile — the RPG-styled engineer profile sub-page.
 // Per plan: the ONLY RPG-styled screen in the app. Independent of the
-// V5/Linear theme tokens (always RPG).
+// V5/Linear theme tokens. Light / warm palette since 2026-09-22 (per user:
+// "too dark") — colours live in components/profile/theme.ts.
 //
 // Access: admin/manager can view any; engineer can view own iff
 // visible_to_self=true; otherwise RLS returns no row → friendly 403 message.
@@ -12,6 +13,7 @@ import { CareerTimeline } from '../../components/profile/CareerTimeline';
 import { CertificationsCard } from '../../components/profile/CertificationsCard';
 import { useMySiteAccess, useHomeSiteCodeOf } from '../../hooks/useSiteScope';
 import { DISCIPLINES, type Discipline } from '../../hooks/useEngineers';
+import { PT, panel } from '../../components/profile/theme';
 
 // ----- level → tier visuals -----
 const TIERS = [
@@ -53,7 +55,7 @@ export default function EngineerProfile() {
   const career = useCareerTimeline(id);
 
   if (q.isLoading || me.isLoading) return <Wrap><p>Loading...</p></Wrap>;
-  if (q.isError) return <Wrap><p style={{ color: '#fecaca' }}>Error: {(q.error as Error).message}</p></Wrap>;
+  if (q.isError) return <Wrap><p style={{ color: PT.danger }}>Error: {(q.error as Error).message}</p></Wrap>;
 
   // No row from RLS → either bad id, deleted, or not an engineer.
   if (!q.data || !q.data.profile) {
@@ -130,14 +132,15 @@ export default function EngineerProfile() {
         {/* ---- Header card ------------------------------------------------ */}
         <header className="rounded-2xl p-8 mb-8 relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)',
-            boxShadow: `0 0 80px ${tier.glow} inset`,
+            background: PT.headerBg,
+            border: `1px solid ${PT.headerBorder}`,
+            boxShadow: `0 0 60px ${tier.glow} inset`,
           }}
         >
           <div className="flex items-center gap-6">
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold shrink-0"
-              style={{ background: tier.bg, boxShadow: `0 0 30px ${tier.glow}` }}
+              style={{ background: tier.bg, color: '#fff', boxShadow: `0 0 30px ${tier.glow}` }}
             >
               {initials}
             </div>
@@ -147,7 +150,7 @@ export default function EngineerProfile() {
                 <h1 className="text-3xl font-medium tracking-tight">{p.full_name}</h1>
                 {p.discipline && (
                   <span className="text-xs uppercase tracking-widest px-2 py-1 rounded-full"
-                    style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}>
+                    style={{ background: PT.chipBg, color: PT.chipText }}>
                     {DISCIPLINES.find((d) => d.value === p.discipline)?.label ?? p.discipline}
                   </span>
                 )}
@@ -170,7 +173,7 @@ export default function EngineerProfile() {
               )}
 
               <div className="mt-4 flex items-center gap-4">
-                <div className="px-3 py-1 rounded-md font-mono text-sm" style={{ background: tier.bg }}>
+                <div className="px-3 py-1 rounded-md font-mono text-sm" style={{ background: tier.bg, color: '#fff' }}>
                   LVL {p.level}
                 </div>
                 <span className="text-xs uppercase tracking-widest opacity-70">{tier.label}</span>
@@ -179,7 +182,7 @@ export default function EngineerProfile() {
 
               {/* XP bar */}
               <div className="mt-4">
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: PT.track }}>
                   <div
                     className="h-full transition-all"
                     style={{
@@ -216,10 +219,8 @@ export default function EngineerProfile() {
                   key={b.key}
                   className="rounded-xl p-4 text-center transition-opacity"
                   style={{
-                    background: isPrimary
-                      ? 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)'
-                      : 'rgba(255,255,255,0.03)',
-                    border: isPrimary ? `1px solid ${tier.bg}` : '1px solid rgba(255,255,255,0.06)',
+                    background: isPrimary ? PT.headerBg : PT.panel,
+                    border: isPrimary ? `1px solid ${tier.bg}` : `1px solid ${PT.panelBorder}`,
                     boxShadow: isPrimary ? `0 0 30px ${tier.glow}` : 'none',
                     opacity: isPrimary ? 1 : 0.45,
                   }}
@@ -247,7 +248,7 @@ export default function EngineerProfile() {
             <div className="flex flex-wrap gap-2">
               {p.badges.map((b, i) => (
                 <span key={i} className="px-3 py-1 rounded-full text-xs"
-                  style={{ background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd' }}>
+                  style={{ background: PT.chipBg, color: PT.chipText }}>
                   {String(b)}
                 </span>
               ))}
@@ -286,7 +287,7 @@ export default function EngineerProfile() {
             <h2 className="text-xs uppercase tracking-widest opacity-60 mb-3">
               Notes <span className="opacity-60 italic">(admin/manager only)</span>
             </h2>
-            <div className="rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="rounded-lg p-4" style={panel}>
               <p className="whitespace-pre-wrap opacity-90">{p.notes}</p>
             </div>
           </section>
@@ -298,7 +299,7 @@ export default function EngineerProfile() {
 
 function CompletionList({ rows }: { rows: CompletionEntry[] }) {
   return (
-    <div className="rounded-lg overflow-hidden" style={{ background: 'rgba(255,255,255,0.03)' }}>
+    <div className="rounded-lg overflow-hidden" style={panel}>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-xs uppercase tracking-widest opacity-50">
@@ -310,7 +311,7 @@ function CompletionList({ rows }: { rows: CompletionEntry[] }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={`${r.task_no}-${i}`} style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+            <tr key={`${r.task_no}-${i}`} style={{ borderTop: i === 0 ? 'none' : `1px solid ${PT.panelBorder}` }}>
               <td className="py-2 px-4 font-mono text-xs">{r.task_no}</td>
               <td className="py-2 px-4 text-xs">{r.pm_type ?? '—'}</td>
               <td className="py-2 px-4 text-right font-mono text-xs">{r.labor_hours ?? '—'}</td>
@@ -328,10 +329,10 @@ function CompletionList({ rows }: { rows: CompletionEntry[] }) {
 function Wrap({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="min-h-screen text-white"
+      className="min-h-screen"
       style={{
-        background:
-          'radial-gradient(ellipse at top, #1e1b4b 0%, #0a0a0f 60%), #0a0a0f',
+        background: PT.page,
+        color: PT.text,
         fontFamily:
           'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       }}
