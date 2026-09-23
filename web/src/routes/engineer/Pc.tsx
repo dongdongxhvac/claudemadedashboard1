@@ -16,6 +16,7 @@ import {
   useMyEngineerContext, useMyPmRows, useMyLaborRows, useMyPmCloses,
 } from '../../hooks/useMyAssignedData';
 import { MyPtoSection } from '../../components/MyPtoSection';
+import { MyWorkRecordSection } from '../../components/profile/MyWorkRecordSection';
 import type { PmRow } from '../../hooks/useCurrentSnapshots';
 import {
   isClosed, localISODate, fmtMd, mondayOf, addDays,
@@ -151,7 +152,10 @@ export default function EngineerPc() {
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {binneyOnly ? (
           /* Binney St: PTO-only view — no CMMS-backed panels for this site yet. */
-          <MyPtoSection userId={ctx.data.user_id} />
+          <>
+            <MyPtoSection userId={ctx.data.user_id} />
+            <MyWorkRecordSection userId={ctx.data.user_id} />
+          </>
         ) : (
         <>
         {/* stat strip */}
@@ -167,6 +171,10 @@ export default function EngineerPc() {
 
         {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
         <MyPtoSection userId={ctx.data.user_id} />
+
+        {/* Work record (2026-09-23) — the engineer logs their own day-to-day;
+            leads verify from the profile page. */}
+        <MyWorkRecordSection userId={ctx.data.user_id} />
 
         {snapshotLocal && (
           <p className="t-small t-muted text-center pt-2">Data as of {snapshotLocal}</p>

@@ -29,6 +29,7 @@ import type { PmCloseEvent } from '../../hooks/useCurrentSnapshots';
 import { isClosed, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dashboard';
 import { OncallBadge } from '../../components/OncallBadge';
 import { MyPtoSection } from '../../components/MyPtoSection';
+import { MyWorkRecordSection } from '../../components/profile/MyWorkRecordSection';
 
 
 export default function EngineerMobile() {
@@ -82,6 +83,7 @@ export default function EngineerMobile() {
         </header>
         <main className="p-4 space-y-4 pb-8">
           <MyPtoSection userId={ctx.data.user_id} compact />
+          <MyWorkRecordSection userId={ctx.data.user_id} compact />
         </main>
       </Wrap>
     );
@@ -125,9 +127,11 @@ export default function EngineerMobile() {
           closes={closesQ.data ?? []}
           loading={pmQ.isLoading}
         />
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 space-y-4">
           {/* Phase 12b — engineer self-serve PTO. Locked to the signed-in user. */}
           <MyPtoSection userId={ctx.data.user_id} compact />
+          {/* Work record (2026-09-23) — log today's job from the phone. */}
+          <MyWorkRecordSection userId={ctx.data.user_id} compact />
         </div>
       </main>
     </Wrap>
