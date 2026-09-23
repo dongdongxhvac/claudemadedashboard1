@@ -30,8 +30,10 @@ import {
   useWorkRecords, useVerifyWorkRecord, useDeleteWorkRecord, useWorkRecordPhotoUrl,
   useOtAvailability, useUpsertOtAvailability, useOvertimeHistory,
   KIND_LABELS, INDEPENDENCE_LABELS, TASK_SUGGESTIONS, OT_DAYS, kindHasIndependence,
+  BUILDING_SYSTEMS, systemSignoffs,
   type WorkRecord, type WorkRecordKind, type Independence, type OtDay,
 } from '../../hooks/useWorkRecords';
+import { BuildingSheet } from '../../components/profile/BuildingSheet';
 import { OVERTIME_CATEGORY_LABELS, OVERTIME_CATEGORY_ORDER, type OvertimeCategory } from '../../hooks/useOvertime';
 import { WorkRecordForm, type FormBuilding } from '../../components/profile/WorkRecordForm';
 import { PT } from '../../components/profile/theme';
@@ -152,6 +154,8 @@ function ProfileBody({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkRecord | null>(null);
   const [showAllRecords, setShowAllRecords] = useState(false);
+  // Building set-up sheet, tucked under the grid — opens from a column head.
+  const [openBuilding, setOpenBuilding] = useState<string | null>(null);
   // Snapshot of "now" for this mount — keeps render pure (react-hooks/purity).
   const [now] = useState(() => Date.now());
 
@@ -172,7 +176,7 @@ function ProfileBody({
   // ── Section 1 roll-up: task rows × building columns ─────────────────────
   type Cell = { count: number; best: Independence | null; verifiedCount: number };
   const grid = useMemo(() => {
-    const kinds: WorkRecordKind[] = ['knowledge', 'skill', 'problem', 'major_pm'];
+    const kinds: WorkRecordKind[] = ['skill', 'problem', 'major_pm'];
     const rowsByKind = new Map<WorkRecordKind, Map<string, Map<string, Cell>>>();
     for (const k of kinds) {
       const m = new Map<string, Map<string, Cell>>();
@@ -193,7 +197,7 @@ function ProfileBody({
     }
     // drop fixed suggestion rows that have no entries at all, except a
     // couple of anchors so a fresh profile still shows the shape
-    const ANCHOR = new Set(['HVAC mechanical set-up — explained in office (hand drawing)', 'Cooling tower cleaning support', 'Motor & pump rebuild', 'BMS operation', 'VFD fault troubleshooting', 'Major off-hour PM']);
+    const ANCHOR = new Set(['Cooling tower cleaning support', 'Motor & pump rebuild', 'BMS operation', 'VFD fault troubleshooting', 'Major off-hour PM']);
     const out: { kind: WorkRecordKind; task: string; cells: Map<string, Cell>; total: number }[] = [];
     for (const k of kinds) {
       for (const [task, cells] of rowsByKind.get(k)!) {
@@ -256,7 +260,7 @@ function ProfileBody({
         <h3 style={h3}>
           <span>1 · Buildings</span>
           <span style={sub}>
-            task × building · times done · <Mark i="with_lead" /> with lead <Mark i="solo" /> solo <Mark i="solo_clean" /> solo, no interruption · <Mark i="know" /> set-up explained / walked
+            task × building · times done · <Mark i="with_lead" /> with lead <Mark i="solo" /> solo <Mark i="solo_clean" /> solo, no interruption · click a building for its set-up sheet
             {canEdit && !adding && !editing && (
               <button onClick={() => setAdding(true)} style={{ ...linkBtn, marginLeft: 12, fontWeight: 600 }}>+ Add entry</button>
             )}
@@ -282,13 +286,44 @@ function ProfileBody({
             <thead>
               <tr>
                 <th style={{ ...th, paddingLeft: 0, minWidth: 200 }}>Task / skill</th>
-                {buildings.map((b) => <th key={b.id} style={{ ...th, textAlign: 'center', fontSize: 10.5, letterSpacing: 0, padding: '5px 3px' }}>{b.short_code ?? b.code}</th>)}
+                {buildings.map((b) => (
+                  <th key={b.id} style={{ ...th, textAlign: 'center', fontSize: 10.5, letterSpacing: 0, padding: '5px 3px', background: openBuilding === b.id ? '#fbf3d6' : undefined }}>
+                    <button onClick={() => setOpenBuilding(openBuilding === b.id ? null : b.id)} title={`${b.name} — open set-up sheet`} style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                      {b.short_code ?? b.code}
+                    </button>
+                  </th>
+                ))}
                 {hasSiteWide && <th style={{ ...th, textAlign: 'center', fontSize: 10.5 }}>Site</th>}
                 <th style={{ ...th, textAlign: 'right' }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {(['knowledge', 'skill', 'problem', 'major_pm'] as WorkRecordKind[]).map((k) => {
+              <GridGroup label="Knowledge · building set-up · systems signed off" span={buildings.length + 2 + (hasSiteWide ? 1 : 0)}>
+                <tr>
+                  <td style={{ ...td, paddingLeft: 0, fontWeight: 500 }}>HVAC mechanical set-up <span style={{ fontWeight: 400, color: C.mute, fontSize: 11 }}>· {BUILDING_SYSTEMS.length} systems, explained in office</span></td>
+                  {buildings.map((b) => {
+                    const signs = systemSignoffs(records, b.id);
+                    const v = BUILDING_SYSTEMS.filter((s) => signs.get(s)?.status === 'verified').length;
+                    const pend = BUILDING_SYSTEMS.filter((s) => signs.get(s)?.status === 'self').length;
+                    const none = v === 0 && pend === 0;
+                    return (
+                      <td key={b.id} style={{ ...td, textAlign: 'center', fontFamily: MONO, fontSize: 12, padding: '5px 3px', whiteSpace: 'nowrap', color: none ? C.ex : C.ink, fontWeight: v === BUILDING_SYSTEMS.length ? 600 : 400, background: openBuilding === b.id ? '#fbf3d6' : undefined }}
+                          title={`${v} verified · ${pend} pending · of ${BUILDING_SYSTEMS.length}`}>
+                        {none ? '·' : <>{v}/{BUILDING_SYSTEMS.length}{pend > 0 && <sup style={{ color: C.warn }}>+{pend}</sup>}</>}
+                      </td>
+                    );
+                  })}
+                  {hasSiteWide && <td style={{ ...td, textAlign: 'center', color: C.ex }}>·</td>}
+                  <td style={{ ...td, textAlign: 'right', fontFamily: MONO, fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const done = buildings.filter((b) => { const s = systemSignoffs(records, b.id); return BUILDING_SYSTEMS.every((x) => s.get(x)?.status === 'verified'); }).length;
+                      const sys = buildings.reduce((n, b) => { const s = systemSignoffs(records, b.id); return n + BUILDING_SYSTEMS.filter((x) => s.get(x)?.status === 'verified').length; }, 0);
+                      return sys === 0 ? <span style={{ color: C.faint }}>—</span> : <><b>{done}</b> of {buildings.length} bldgs · {sys}/{buildings.length * BUILDING_SYSTEMS.length} systems</>;
+                    })()}
+                  </td>
+                </tr>
+              </GridGroup>
+              {(['skill', 'problem', 'major_pm'] as WorkRecordKind[]).map((k) => {
                 const rows = grid.filter((g) => g.kind === k);
                 if (rows.length === 0) return null;
                 return (
@@ -300,9 +335,7 @@ function ProfileBody({
                           const c = g.cells.get(col);
                           return (
                             <td key={col} style={{ ...td, textAlign: 'center', fontFamily: MONO, fontSize: 12, padding: '5px 3px', whiteSpace: 'nowrap', color: c ? C.ink : C.ex }}>
-                              {!c ? '·' : g.kind === 'knowledge'
-                                ? <span title={`${c.verifiedCount} of ${c.count} verified`}><Mark i="know" />{c.verifiedCount > 0 ? '✓' : '…'}</span>
-                                : <span title={`${c.count} × · ${c.best ? INDEPENDENCE_LABELS[c.best] : ''} · ${c.verifiedCount} verified`}>{c.best && <Mark i={c.best} />}{c.count}</span>}
+                              {!c ? '·' : <span title={`${c.count} × · ${c.best ? INDEPENDENCE_LABELS[c.best] : ''} · ${c.verifiedCount} verified`}>{c.best && <Mark i={c.best} />}{c.count}</span>}
                             </td>
                           );
                         })}
@@ -310,9 +343,7 @@ function ProfileBody({
                           {g.total === 0 ? <span style={{ color: C.faint }}>—</span> : (
                             <>
                               <b>{g.total}</b>
-                              {g.kind === 'knowledge'
-                                ? ` · ${[...g.cells.keys()].filter((k2) => k2 !== '__site').length} of ${buildings.length} bldgs`
-                                : (() => { const best = [...g.cells.values()].reduce<Independence | null>((b, c) => (c.best && (!b || RANK[c.best] > RANK[b]) ? c.best : b), null); return best ? ` · best: ${INDEPENDENCE_LABELS[best].toLowerCase()}` : ''; })()}
+                              {(() => { const best = [...g.cells.values()].reduce<Independence | null>((b, c) => (c.best && (!b || RANK[c.best] > RANK[b]) ? c.best : b), null); return best ? ` · best: ${INDEPENDENCE_LABELS[best].toLowerCase()}` : ''; })()}
                             </>
                           )}
                         </td>
@@ -324,6 +355,24 @@ function ProfileBody({
             </tbody>
           </table>
         </div>
+
+        {openBuilding && (() => {
+          const b = buildings.find((x) => x.id === openBuilding);
+          return b ? (
+            <div style={{ marginTop: 12 }}>
+              <BuildingSheet
+                buildingId={b.id}
+                buildingLabel={b.short_code ?? b.code}
+                buildingName={b.name}
+                userId={p.user_id}
+                isSelf={isSelf}
+                canVerify={canEdit}
+                onClose={() => setOpenBuilding(null)}
+                kbHref={(managerIsh || canEdit) && siteCode !== 'binney' ? `/buildings/${encodeURIComponent(b.short_code ?? b.code)}` : null}
+              />
+            </div>
+          ) : null;
+        })()}
 
         <h3 style={{ ...h3, marginTop: 18 }}>
           <span>Record</span>

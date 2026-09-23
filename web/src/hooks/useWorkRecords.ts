@@ -31,16 +31,39 @@ export function kindHasIndependence(k: WorkRecordKind): boolean {
   return k === 'skill' || k === 'problem' || k === 'major_pm';
 }
 
+/** The eight systems an engineer signs off per building (building set-up
+ *  knowledge). A sign-off = a knowledge work_record for that building with
+ *  task = the system label. Order is the order on the sheet. */
+export const BUILDING_SYSTEMS = [
+  'Chiller plant',
+  'Cooling towers & sump',
+  'Boiler plant',
+  'AHUs & dampers',
+  'BMS & controls',
+  'Electrical',
+  'Life safety',
+  'Plumbing',
+] as const;
+export type BuildingSystem = (typeof BUILDING_SYSTEMS)[number];
+
+/** Latest knowledge record per system for one building — verified beats
+ *  self-recorded, then newest. */
+export function systemSignoffs(records: WorkRecord[], buildingId: string): Map<string, WorkRecord> {
+  const m = new Map<string, WorkRecord>();
+  const rank = (r: WorkRecord) => (r.status === 'verified' ? 1 : 0);
+  for (const r of records) {
+    if (r.kind !== 'knowledge' || r.building_id !== buildingId) continue;
+    if (!(BUILDING_SYSTEMS as readonly string[]).includes(r.task)) continue;
+    const cur = m.get(r.task);
+    if (!cur || rank(r) > rank(cur) || (rank(r) === rank(cur) && r.occurred_on > cur.occurred_on)) m.set(r.task, r);
+  }
+  return m;
+}
+
 /** Fixed task rows the profile grid always shows (plus anything else that
  *  turns up in records). Also the datalist suggestions in the form. */
 export const TASK_SUGGESTIONS: Record<WorkRecordKind, string[]> = {
-  knowledge: [
-    'HVAC mechanical set-up — explained in office (hand drawing)',
-    'HVAC mechanical set-up — plant walk with lead',
-    'Electrical — MCC, ATS, breakers',
-    'Plumbing — RO, sand filters, backflow',
-    'BMS — points, schedules, alarms',
-  ],
+  knowledge: [...BUILDING_SYSTEMS],
   skill: [
     'Cooling tower cleaning support',
     'Motor & pump rebuild',

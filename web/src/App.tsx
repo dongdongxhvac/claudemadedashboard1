@@ -9,6 +9,7 @@ import Manager from './routes/manager/Manager';
 import Admin from './routes/admin/Admin';
 import EngineerProfile from './routes/engineer/Profile';
 import EngineerMe from './routes/engineer/Me';
+import EngineerBuildings from './routes/engineer/Buildings';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
 import TvView from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
@@ -153,6 +154,8 @@ export default function App() {
             Binney staff don't land in UPark data (admin/director pass). */}
         <Route path="/engineer/shift" element={<Protected><RequireSite site="upark"><EngineerShiftTv /></RequireSite></Protected>} />
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
+        {/* Engineer's own building set-up sheets + system sign-offs (2026-09-23). */}
+        <Route path="/engineer/buildings" element={<Protected><EngineerBuildings /></Protected>} />
         <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
         {/* Buildings KB is UPark-only content (Index filters via

@@ -108,6 +108,10 @@ export default function EngineerMobile() {
           <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
             Training
           </Link>
+          {/* Set-up sheets + system sign-offs — separate tab (2026-09-23). */}
+          <Link to="/engineer/buildings" className="t-small t-accent hover:underline">
+            Buildings
+          </Link>
           {/* Buildings link removed 2026-09-08 per user — technicians don't
               need the KB index from this surface. */}
           {/* No Admin link on the phone surface (removed 2026-07-29 per user):

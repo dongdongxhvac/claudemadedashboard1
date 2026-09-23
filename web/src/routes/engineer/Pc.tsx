@@ -136,8 +136,12 @@ export default function EngineerPc() {
                 Training
               </Link>
             )}
-            {/* Buildings link removed 2026-09-08 per user — technicians
-                don't need the KB index from this surface. */}
+            {/* Buildings (2026-09-23): the engineer's own set-up sheets +
+                system sign-offs — a separate tab, not on this page. (The KB
+                index link was removed 2026-09-08; this is a different page.) */}
+            <Link to="/engineer/buildings" className="t-small t-accent hover:underline">
+              Buildings
+            </Link>
             {canAdmin && (
               <Link to="/admin" className="t-small t-accent hover:underline">
                 {isAdmin ? 'Admin' : 'Admin (lead)'}
