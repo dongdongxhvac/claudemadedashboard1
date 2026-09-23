@@ -43,9 +43,9 @@ export default function BinneyManager() {
                 Admin
               </Link>
             )}
-            <Link to="/binney/manual" className="t-small t-accent hover:underline">
-              Manual
-            </Link>
+            {/* Manual header link hidden (user 2026-09-23), same as UPark's
+                dashboard — /binney/manual still routes, just not surfaced here.
+                Binney's header never had Buildings / Training links. */}
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">
               Sign out
