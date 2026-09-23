@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile demo · UPark work record</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&family=Public+Sans:wght@400;500;700&display=swap">
+<style>
+  html{ color-scheme: light; }
+  body{ margin:0; }
+
+  :root{
+    --bg:#f3f2ee; --ink:#1c1d21; --mute:#5c5f66; --line:#d9d7d0; --card:#ffffff; --accent:#245c7a;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){ --bg:#17181b; --ink:#ececea; --mute:#a2a5ad; --line:#33353b; --card:#202226; --accent:#8fc1dc; color-scheme: dark; }
+  }
+  :root[data-theme="dark"]{ --bg:#17181b; --ink:#ececea; --mute:#a2a5ad; --line:#33353b; --card:#202226; --accent:#8fc1dc; color-scheme: dark; }
+
+  body{ background:var(--bg); color:var(--ink); font-family:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; padding-inline:16px; padding-block:24px 64px; font-size:14px; line-height:1.45; }
+  .wrap{ max-width:1080px; margin:0 auto; }
+  h1{ font-size:22px; font-weight:700; margin:0 0 4px; letter-spacing:-0.01em; text-wrap:balance; }
+  .lede{ color:var(--mute); margin:0 0 18px; max-width:68ch; }
+  .tabs{ display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:22px; flex-wrap:wrap; }
+  .tabs button{ background:none; border:0; border-bottom:2px solid transparent; padding:10px 12px; font:inherit; font-weight:600; color:var(--mute); cursor:pointer; margin-bottom:-1px; }
+  .tabs button[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--accent); }
+  .tabs button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  .why{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px 28px; color:var(--mute); margin:0 0 22px; padding:0; list-style:none; }
+  .why b{ color:var(--ink); font-weight:600; }
+  .why li{ max-width:52ch; }
+  .frame{ border:1px solid var(--line); background:#fff; color:#1c1d21; border-radius:6px; overflow:hidden; }
+  .frame .topbar{ display:flex; justify-content:space-between; align-items:center; padding:8px 20px; font-size:12px; color:#6b6e75; border-bottom:1px solid #e6e4dd; background:#fafaf7; }
+  .ex{ font-size:11px; color:#8a6d1f; background:#fbf3d6; border:1px solid #efdca0; padding:1px 6px; border-radius:3px; white-space:nowrap; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric:tabular-nums; }
+  section[hidden]{ display:none; }
+  .footnote{ color:var(--mute); font-size:12px; margin-top:28px; max-width:70ch; }
+
+  /* ================= A · Personnel record (revised) ================= */
+  .a{ font-family:"IBM Plex Sans", system-ui, sans-serif; background:#fbfaf6; }
+  .a .hdr{ display:grid; grid-template-columns:auto 1fr auto; gap:16px 20px; align-items:center; padding:14px 24px; border-bottom:1px solid #1c1d21; background:#f6f4ec; }
+  .a .initials{ width:44px; height:44px; border:2px solid #1c1d21; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; letter-spacing:.02em; background:#fff; }
+  .a .name{ font-size:19px; font-weight:600; line-height:1.15; }
+  .a .sub{ color:#5c5f66; font-size:12.5px; margin-top:2px; display:flex; flex-wrap:wrap; gap:0 14px; }
+  .a .grade{ display:grid; grid-template-columns:auto 150px; gap:4px 12px; align-items:center; min-width:250px; }
+  .a .grade .lv{ font-size:13px; font-weight:600; white-space:nowrap; }
+  .a .grade .lv small{ font-weight:400; color:#5c5f66; text-transform:uppercase; letter-spacing:.08em; font-size:10.5px; margin-left:6px; }
+  .a .meter{ height:6px; background:#e3e0d6; position:relative; }
+  .a .meter i{ position:absolute; inset:0 auto 0 0; background:#1c1d21; }
+  .a .grade .cap{ grid-column:1 / -1; display:flex; justify-content:space-between; font-size:11px; color:#5c5f66; }
+  .a .main{ padding:22px 24px 28px; }
+  .a h3{ font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:#6b6e75; margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid #1c1d21; display:flex; justify-content:space-between; align-items:baseline; font-weight:600; gap:12px; flex-wrap:wrap; }
+  .a h3 span{ font-weight:400; letter-spacing:0; text-transform:none; font-size:12px; }
+  .a .sec{ margin-bottom:26px; }
+  .a table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .a td, .a th{ padding:7px 6px; border-bottom:1px solid #e3e0d6; text-align:left; vertical-align:middle; }
+  .a td:first-child, .a th:first-child{ padding-left:0; }
+  .a th{ font-weight:500; color:#6b6e75; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .a td.r, .a th.r{ text-align:right; }
+  .a td.c, .a th.c{ text-align:center; }
+  /* competency matrix */
+  .a .mx th.c{ width:11%; font-size:10.5px; line-height:1.2; padding:6px 4px; vertical-align:bottom; }
+  .a .mx th.c small{ display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#8a8d94; font-size:10px; margin-top:2px; }
+  .a .mx td.c{ padding:5px 4px; }
+  .a .cell{ display:inline-block; width:34px; height:14px; background:#ece9e0; border:1px solid #d9d5c9; }
+  .a .cell.on{ background:#1c1d21; border-color:#1c1d21; }
+  .a .cell.cur{ background:#1c1d21; border-color:#1c1d21; box-shadow:inset 0 0 0 2px #fbfaf6, inset 0 0 0 3px #1c1d21; }
+  .a .mx .stage{ font-size:12px; white-space:nowrap; }
+  .a .mx .who{ font-size:11.5px; color:#6b6e75; white-space:nowrap; }
+  .a .mx td.area{ font-weight:500; }
+  .a .mx td.area small{ display:block; font-weight:400; color:#6b6e75; font-size:11px; }
+  .a .legend{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:6px 18px; font-size:11.5px; color:#5c5f66; margin-top:10px; }
+  .a .legend b{ color:#1c1d21; font-weight:600; display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .a .ticks{ display:inline-flex; gap:3px; }
+  .a .ticks i{ width:14px; height:8px; background:#e3e0d6; display:block; }
+  .a .ticks i.on{ background:#1c1d21; }
+  .a .pill{ font-size:11px; border:1px solid #1c1d21; padding:1px 6px; border-radius:2px; white-space:nowrap; }
+  .a .pill.ok{ border-color:#2f7d4f; color:#2f7d4f; }
+  .a .pill.soon{ border-color:#a4620b; color:#a4620b; }
+  .a .two{ display:grid; grid-template-columns:1fr 1fr; gap:0 32px; }
+  .a .events{ list-style:none; margin:0; padding:0; }
+  .a .events li{ display:grid; grid-template-columns:82px 1fr; gap:12px; padding:7px 0; border-bottom:1px solid #e3e0d6; font-size:13px; }
+  .a .events .d{ color:#6b6e75; }
+  .a .events .k{ color:#6b6e75; font-size:11.5px; }
+  .a .mx tr.bld td{ background:#efece3; border-top:2px solid #1c1d21; border-bottom:1px solid #1c1d21; padding:6px 6px; font-size:12px; }
+  .a .mx tr.bld td b{ font-size:13px; font-weight:600; margin-right:10px; }
+  .a .mx tr.bld td .sum{ color:#5c5f66; }
+  .a .mx tr.bld td .tog{ float:right; color:#5c5f66; font-size:11px; }
+  .a .mx tr.folded td{ background:#f6f4ec; border-top:1px solid #d9d5c9; padding:5px 6px; font-size:12px; color:#5c5f66; }
+  .a .mx tr.folded td b{ color:#1c1d21; font-weight:600; margin-right:10px; }
+  .a .mx td.kind{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#6b6e75; white-space:nowrap; }
+  .a .mx td.rec{ font-size:12px; white-space:nowrap; }
+  .a .mx td.rec .n{ font-weight:600; }
+  .a .mx td.rec.none{ color:#8a8d94; }
+  .a .cell.na{ background:transparent; border-color:transparent; }
+  .a .mx td.area.v2{ padding-left:0; }
+  .a .mx td.area.v2 small{ display:block; margin-left:0; }
+  .a .hdr.nolvl{ grid-template-columns:auto 1fr; }
+  .a .g th.b, .a .g td.b{ text-align:center; width:9%; }
+  .a .g th.b{ font-size:11px; }
+  .a .g td.b{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:12px; white-space:nowrap; }
+  .a .g td.b.empty{ color:#c4c0b4; }
+  .a .g td.t{ font-weight:500; }
+  .a .g td.t small{ display:block; font-weight:400; color:#6b6e75; font-size:11px; }
+  .a .g td.tot{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:12px; text-align:right; white-space:nowrap; }
+  .a .g td.tot b{ font-weight:600; }
+  .a .g tr.grp td{ background:#efece3; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:#5c5f66; padding:4px 6px; border-top:1px solid #d9d5c9; }
+  .a .mark{ display:inline-block; width:10px; height:10px; border-radius:50%; border:1.5px solid #1c1d21; vertical-align:-1px; margin-right:4px; background:#fff; }
+  .a .mark.solo{ background:#1c1d21; }
+  .a .mark.clean{ background:#1c1d21; box-shadow:inset 0 0 0 2px #fbfaf6; }
+  .a .mark.know{ border-radius:0; width:9px; height:9px; background:#1c1d21; }
+  .a .log li{ grid-template-columns:82px 52px 1fr auto; }
+  .a .log .how{ font-size:11.5px; color:#5c5f66; white-space:nowrap; }
+  .a .log .bl{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:12px; }
+  .a .kv{ display:grid; grid-template-columns:repeat(4,1fr); gap:0; border:1px solid #e3e0d6; margin-bottom:12px; }
+  .a .kv div{ padding:8px 12px; border-right:1px solid #e3e0d6; }
+  .a .kv div:last-child{ border-right:0; }
+  .a .kv .k{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:#6b6e75; }
+  .a .kv .v{ font-size:16px; font-weight:600; margin-top:1px; }
+  .a .kv .v small{ font-size:11px; font-weight:400; color:#6b6e75; margin-left:4px; }
+  .a .bars{ display:flex; gap:3px; align-items:flex-end; height:34px; margin:6px 0 4px; }
+  .a .bars i{ flex:1; background:#1c1d21; display:block; min-height:2px; }
+  .a .bars i.z{ background:#e3e0d6; }
+  .a .bars-cap{ display:flex; justify-content:space-between; font-size:11px; color:#6b6e75; }
+  .a .ot td.cat{ font-weight:500; }
+  .a .ot td.n{ font-family:"IBM Plex Mono", ui-monospace, monospace; text-align:right; }
+  .a .avail{ display:inline-flex; gap:3px; }
+  .a .avail i{ width:26px; height:18px; display:flex; align-items:center; justify-content:center; font-size:10px; border:1px solid #d9d5c9; background:#fff; font-style:normal; color:#8a8d94; }
+  .a .avail i.on{ background:#1c1d21; color:#fff; border-color:#1c1d21; }
+  @media (max-width:760px){ .a .kv{ grid-template-columns:1fr 1fr; } .a .kv div:nth-child(2){ border-right:0; } .a .g{ min-width:720px; } .a .log li{ grid-template-columns:82px 1fr; } .a .log .how{ white-space:normal; } }
+  .a .g18{ min-width:1180px; }
+  .a .g18 th.b, .a .g18 td.b{ width:auto; padding:5px 3px; font-size:11px; }
+  .a .g18 th.b{ font-size:10.5px; letter-spacing:0; }
+  .a .g18 td.t{ min-width:200px; }
+  .a .g18 th.hi, .a .g18 td.hi{ background:#fbf3d6; }
+  .a .g18 td.b .mark{ width:8px; height:8px; margin-right:2px; }
+  .a .g18 td.kn{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
+  .a .g18 td.kn.part{ color:#1c1d21; }
+  .a .g18 td.kn.done{ font-weight:600; }
+  .a .g18 td.kn.none{ color:#c4c0b4; }
+  .a .sheet{ border:1px solid #1c1d21; margin-top:14px; display:grid; grid-template-columns:1fr 300px; }
+  .a .sheet .l{ padding:12px 16px; }
+  .a .sheet .r{ border-left:1px solid #e3e0d6; padding:12px 16px; background:#f6f4ec; }
+  .a .sheet h4{ margin:0 0 8px; font-size:13px; font-weight:600; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .a .sheet h4 span{ font-weight:400; color:#5c5f66; font-size:12px; }
+  .a .sheet dl{ margin:0; display:grid; grid-template-columns:130px 1fr; gap:5px 12px; font-size:12.5px; }
+  .a .sheet dt{ color:#6b6e75; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; padding-top:2px; }
+  .a .sheet dd{ margin:0; }
+  .a .sheet .warn{ border-left:3px solid #a4620b; padding:4px 8px; background:#fbf3d6; margin-top:8px; font-size:12px; }
+  .a .sheet ul{ list-style:none; margin:0; padding:0; font-size:12.5px; }
+  .a .sheet li{ display:grid; grid-template-columns:14px 1fr auto; gap:8px; padding:4px 0; border-bottom:1px solid #e3e0d6; align-items:center; }
+  .a .sheet li .bx{ width:11px; height:11px; border:1.5px solid #1c1d21; display:block; }
+  .a .sheet li.ok .bx{ background:#1c1d21; }
+  .a .sheet li .by{ font-size:11px; color:#6b6e75; white-space:nowrap; }
+  @media (max-width:760px){ .a .sheet{ grid-template-columns:1fr; } .a .sheet .r{ border-left:0; border-top:1px solid #e3e0d6; } }
+  @media (max-width:760px){ .a .hdr{ grid-template-columns:auto 1fr; } .a .grade{ grid-column:1 / -1; min-width:0; grid-template-columns:auto 1fr; } .a .two{ grid-template-columns:1fr; } .a .mx{ min-width:640px; } .a .mxwrap{ overflow-x:auto; } }
+
+
+  .demo-note{ font-size:12px; color:var(--mute); margin:0 0 16px; max-width:70ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Engineer profile · demo of layout A</h1>
+  <p class="demo-note">Static mock-up for discussion — Austin Myette's real header, everything else marked <span class="ex">example</span>. The live page is at <code>/engineer/&lt;id&gt;/profile</code>; this demo is served from <code>/demo/profile-a.html</code>.</p>
+  <!-- ===================== A (work record) ===================== -->
+  <section id="opt-a">
+    <ul class="why">
+      <li><b>The model.</b> Everything below is a <em>record</em>: a dated entry of what was done, where, and how independently. The page rolls those entries up; nothing is a score someone typed in. That's what makes it usable for both career development and job distribution.</li>
+      <li><b>How independence is shown.</b> Three marks throughout: <i class="mark"></i> with lead · <i class="mark solo"></i> solo · <i class="mark clean"></i> solo with no operation interruption. Counts are times done. Knowledge rows use <i class="mark know"></i> for "walked / can explain".</li>
+      <li><b>Knowledge = set-up sheet + sign-offs.</b> Each building gets a set-up sheet written by the lead (88 is shown from your description). Find It &amp; Tag It signs off one system at a time against that sheet, and the knowledge cell shows signed / total. Header, OT counts, and COVE completions are real tables today; building records, sheets, and training rows need one new table. Those rows are <span class="ex">example</span>.</li>
+    </ul>
+    <div class="frame a">
+      <div class="topbar"><span>UPark · Engineer profile</span><span>Dashboard · Admin</span></div>
+      <div class="hdr nolvl">
+        <div class="initials">AM</div>
+        <div>
+          <div class="name">Austin Myette</div>
+          <div class="sub">
+            <span>Engineer · UPark</span><span>9:30am shift</span><span>Hired Jun 22, 2026 · 13 wk</span>
+            <span class="mono">austin.myette@cwservices.com</span><span class="mono">617-413-3841</span>
+          </div>
+        </div>
+      </div>
+      <div class="main">
+
+        <div class="sec">
+          <h3>1 · Buildings <span>one column per building · knowledge = systems signed / total · skills = times done · <i class="mark"></i> with lead <i class="mark solo"></i> solo <i class="mark clean"></i> solo, no interruption <span class="ex">example</span></span></h3>
+          <div class="mxwrap">
+          <table class="g g18">
+            <tr><th style="width:18%">Task / skill</th><th class="b">45</th><th class="b">75</th><th class="b hi">88</th><th class="b">64</th><th class="b">20</th><th class="b">38</th><th class="b">26</th><th class="b">35</th><th class="b">40</th><th class="b">65</th><th class="b">300</th><th class="b">350</th><th class="b">730</th><th class="b">750</th><th class="b">10</th><th class="b">G-30</th><th class="b">G-55</th><th class="b">G-80</th><th class="r">Total</th></tr>
+              <tr class="grp"><td colspan="20">Knowledge · systems signed off in Find It &amp; Tag It, against each building's set-up sheet</td></tr>
+              <tr><td class="t">HVAC mechanical set-up<small>chillers, pumps, towers, boilers, AHUs, controls, electrical, plumbing</small></td><td class="b kn done">8/8</td><td class="b kn done">8/8</td><td class="b kn part hi">5/8</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn part">3/7</td><td class="b kn none">·</td><td class="b kn part">2/6</td><td class="b kn part">2/6</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="b kn none">·</td><td class="tot"><b>2</b> of 18 complete · 28/128 systems</td></tr>
+              <tr class="grp"><td colspan="20">Skills</td></tr>
+              <tr><td class="t">Cooling tower cleaning support<small>seasonal · supports the lead on tower cleaning</small></td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b"><i class="mark clean"></i>1</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>1</b> · solo, no interruption</td></tr>
+              <tr><td class="t">Motor &amp; pump rebuild<small>bearings, seals, coupling</small></td><td class="b"><i class="mark solo"></i>2</td><td class="b"><i class="mark solo"></i>1</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b"><i class="mark solo"></i>1</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>4</b> · solo</td></tr>
+              <tr><td class="t">Motor &amp; pump alignment<small>dial / laser alignment</small></td><td class="b empty">·</td><td class="b"><i class="mark"></i>2</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>2</b> · with lead</td></tr>
+              <tr><td class="t">BMS operation<small>trends, overrides, schedules, alarm response</small></td><td class="b"><i class="mark solo"></i>3</td><td class="b"><i class="mark solo"></i>2</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b"><i class="mark"></i>2</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>7</b> · solo at 45/75</td></tr>
+              <tr class="grp"><td colspan="20">Problem solving</td></tr>
+              <tr><td class="t">VFD fault troubleshooting<small>why it tripped, not just the reset</small></td><td class="b empty">·</td><td class="b"><i class="mark solo"></i>1</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b"><i class="mark"></i>1</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>2</b> · 1 solo</td></tr>
+              <tr><td class="t">No-SOP problems<small>faults with no procedure; escalations handled</small></td><td class="b"><i class="mark"></i>1</td><td class="b empty">·</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>1</b> · with lead</td></tr>
+              <tr class="grp"><td colspan="20">Major PM &amp; off-hour repairs</td></tr>
+              <tr><td class="t">Major off-hour PM / repair<small>from §11 overtime posts · Major off-hour PM + Off-hour repair</small></td><td class="b">1</td><td class="b">1</td><td class="b empty hi">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b">1</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="b empty">·</td><td class="tot"><b>3</b> · last Sep 12</td></tr>
+          </table>
+          </div>
+          <div class="sheet">
+            <div class="l">
+              <h4>Building set-up sheet · 88 Sidney St <span>the reference the knowledge sign-offs are checked against · written by the lead · <span class="ex">from your description</span></span></h4>
+              <dl>
+                <dt>Chillers</dt><dd>2, each with a primary pump</dd>
+                <dt>Secondary pumps</dt><dd>2 loops: AHU loop and building loop</dd>
+                <dt>Cooling towers</dt><dd>3 with bypass; shared sump across all three</dd>
+                <dt>Boilers</dt><dd>9 low-efficiency, with 2 sets of pumps (AHU loop, building loop)</dd>
+                <dt>AHUs</dt><dd>2 with mixing-air dampers; wing duct set-up</dd>
+              </dl>
+              <div class="warn"><b>Known condition</b> · middle sump heater is off: breaker undersized. Confirm before winter.</div>
+            </div>
+            <div class="r">
+              <h4>Austin · 88 sign-offs <span>5 of 8</span></h4>
+              <ul>
+                <li class="ok"><span class="bx"></span><span>Chiller plant</span><span class="by">Sep 3 · J. Figueroa</span></li>
+                <li class="ok"><span class="bx"></span><span>Cooling towers &amp; sump</span><span class="by">Sep 3 · J. Figueroa</span></li>
+                <li class="ok"><span class="bx"></span><span>Boiler plant</span><span class="by">Sep 10 · D. Lao</span></li>
+                <li class="ok"><span class="bx"></span><span>AHUs &amp; dampers</span><span class="by">Sep 10 · D. Lao</span></li>
+                <li class="ok"><span class="bx"></span><span>BMS &amp; controls</span><span class="by">Sep 10 · D. Lao</span></li>
+                <li><span class="bx"></span><span>Electrical</span><span class="by">open</span></li>
+                <li><span class="bx"></span><span>Life safety</span><span class="by">open</span></li>
+                <li><span class="bx"></span><span>Plumbing</span><span class="by">open</span></li>
+              </ul>
+              <p style="font-size:11.5px;color:#5c5f66;margin:8px 0 0">Click any building column head to open its sheet. Signing a section on the Find It &amp; Tag It page writes the row here.</p>
+            </div>
+          </div>
+
+          <h3 style="margin-top:18px">Record <span>newest first · every entry is verified by a lead or manager</span></h3>
+          <ul class="events log">
+              <li><span class="d mono">2026-09-12</span><span class="bl">300</span><span><b>Major off-hour PM</b> · Exh fan annual PM <span class="ex">example</span></span><span class="how">from OT post · solo</span></li>
+              <li><span class="d mono">2026-09-05</span><span class="bl">45/75</span><span><b>VFD fault troubleshooting</b> · CH-2 CHWP-1 overcurrent, found failed bearing</span><span class="how">solo · verified J. Figueroa</span></li>
+              <li><span class="d mono">2026-08-29</span><span class="bl">65</span><span><b>Cooling tower cleaning support</b> · full clean, no operation interruption</span><span class="how">solo, no interruption · verified D. Lao</span></li>
+              <li><span class="d mono">2026-08-22</span><span class="bl">45/75</span><span><b>Motor &amp; pump rebuild</b> · HWP-2, bearings + seal</span><span class="how">solo · verified J. Figueroa</span></li>
+              <li><span class="d mono">2026-08-15</span><span class="bl">45/75</span><span><b>Motor &amp; pump alignment</b> · HWP-2 laser alignment</span><span class="how">with lead · J. Figueroa</span></li>
+              <li><span class="d mono">2026-07-30</span><span class="bl">730/750</span><span><b>VFD fault troubleshooting</b> · AHU-3 supply fan, reset after loose lug</span><span class="how">with lead · S. Martell</span></li>
+              <li><span class="d mono">2026-07-06</span><span class="bl">45/75</span><span><b>HVAC mechanical set-up</b> · plant walk-through, shutoffs and sequence</span><span class="how">knowledge · D. Lao</span></li>
+          </ul>
+        </div>
+
+        <div class="sec">
+          <h3>2 · Training &amp; certifications <span>3 trainings · 2 certifications <span class="ex">example</span></span></h3>
+          <table>
+            <tr><th>Training / certification</th><th>Kind</th><th class="r">Completed</th><th class="r">Expires</th><th class="r">Status</th></tr>
+            <tr><td>New-hire 8-week program<br><small style="color:#6b6e75">8 of 8 weeks signed off</small></td><td>Training</td><td class="r mono">2026-08-17</td><td class="r mono">—</td><td class="r"><span class="pill ok">Complete</span></td></tr>
+            <tr><td>Cooling tower cleaning &amp; water treatment<br><small style="color:#6b6e75">classroom + hands-on at 65</small></td><td>Training</td><td class="r mono">2026-08-29</td><td class="r mono">—</td><td class="r"><span class="pill ok">Complete</span></td></tr>
+            <tr><td>Generator / load-bank test<br><small style="color:#6b6e75">on-call SOP</small></td><td>Training</td><td class="r mono">—</td><td class="r mono">—</td><td class="r"><span class="pill">Scheduled Oct</span></td></tr>
+            <tr><td>EPA 608 Universal</td><td>Certification</td><td class="r mono">2024-05-02</td><td class="r mono">—</td><td class="r"><span class="pill ok">Valid</span></td></tr>
+            <tr><td>OSHA 10 · Construction</td><td>Certification</td><td class="r mono">2026-08-18</td><td class="r mono">2027-03-14</td><td class="r"><span class="pill ok">Valid</span></td></tr>
+          </table>
+        </div>
+
+        <div class="sec">
+          <h3>3 · COVE performance <span>from CMMS completions · updates monthly · real data, currently 0</span></h3>
+          <div class="kv">
+            <div><div class="k">Completions · 90 d</div><div class="v mono">0</div></div>
+            <div><div class="k">PMs on time</div><div class="v mono">—<small>no PMs yet</small></div></div>
+            <div><div class="k">Labor hours · 90 d</div><div class="v mono">0</div></div>
+            <div><div class="k">Last completion</div><div class="v">—</div></div>
+          </div>
+          <div class="bars"><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i></div>
+          <div class="bars-cap"><span>Jul 6</span><span>completions per week</span><span>Sep 22</span></div>
+          <p style="color:#6b6e75;margin:10px 0 0;font-size:13px">Recent completions list here as task number, type, labor hours, date. Assigned-but-open PMs and any overdue count also belong in this section.</p>
+        </div>
+
+        <div class="sec">
+          <h3>4 · OT availability <span>from §11 overtime posts · sign-ups and assignments · real data <span class="ex">example values</span></span></h3>
+          <div class="two">
+            <table class="ot">
+              <tr><th>Category</th><th class="r">Worked</th><th class="r">Signed up</th><th class="r">Last</th></tr>
+              <tr><td class="cat">Major off-hour PM</td><td class="n">2</td><td class="n">3</td><td class="r mono">Sep 12</td></tr>
+              <tr><td class="cat">Off-hour repair</td><td class="n">1</td><td class="n">1</td><td class="r mono">Aug 2</td></tr>
+              <tr><td class="cat">Vendor escort</td><td class="n">2</td><td class="n">2</td><td class="r mono">Sep 25 · upcoming</td></tr>
+              <tr><td class="cat">Cold weather</td><td class="n">0</td><td class="n">0</td><td class="r mono">—</td></tr>
+              <tr><td class="cat"><b>Total</b></td><td class="n"><b>5</b></td><td class="n"><b>6</b></td><td class="r mono">of 9 posts open to him</td></tr>
+            </table>
+            <div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b6e75;margin-bottom:6px">Usually available</div>
+              <div class="avail"><i class="on">Sa</i><i class="on">Su</i><i>M</i><i>Tu</i><i>W</i><i class="on">Th</i><i class="on">F</i></div>
+              <div style="font-size:12px;color:#5c5f66;margin-top:8px">Nights: yes · Early (before 6am): yes · Notice: 24 h preferred</div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b6e75;margin:14px 0 4px">Sign-up rate</div>
+              <div style="font-size:16px;font-weight:600">6 of 9 <small style="font-size:11px;font-weight:400;color:#6b6e75">posts he was eligible for · 67%</small></div>
+              <p style="font-size:12px;color:#5c5f66;margin:8px 0 0">Availability is set by the engineer on their own page; the counts come from posts and sign-ups.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+</div>
+</body>
+</html>
