@@ -203,6 +203,9 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             {nextYearEstimate.year} estimate · Vacation {nextYearEstimate.vacation}h · Sick {nextYearEstimate.sick}h
             {nextYearEstimate.sickCarry > 0 && ` (+ up to ${nextYearEstimate.sickCarry}h carried)`}
             {nextYearEstimate.holiday > 0 && ` · Floater ${nextYearEstimate.holiday}h`}
+            <span className="block italic" style={{ fontSize: '0.68rem' }}>
+              Estimate only — not guaranteed. Final {nextYearEstimate.year} hours are set at year-end and may change.
+            </span>
           </p>
         )}
       </div>
@@ -265,6 +268,9 @@ function NextYearLine({ s }: { s: PtoSummary }) {
   return (
     <p className="t-small t-muted mt-2" style={{ fontSize: '0.72rem' }}>
       {s.year} projected · {bits.join(' · ')}
+      <span className="block italic" style={{ fontSize: '0.68rem' }}>
+        Projection — not guaranteed. May change with the year-end close-out.
+      </span>
     </p>
   );
 }
