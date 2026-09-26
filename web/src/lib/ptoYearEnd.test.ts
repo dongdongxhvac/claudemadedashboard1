@@ -27,6 +27,7 @@ assert.equal(pick('2024-01-01', 2027, 8)!.vacation, 120);  // 3 yrs
 assert.equal(pick('2019-01-01', 2027, 8)!.vacation, 160);  // 8 yrs
 assert.equal(pick('2009-01-01', 2027, 8)!.vacation, 200);  // 18 yrs
 assert.deepEqual(pick('2020-05-01', 2027, 8, 16), { vacation: 120, sick: 64, holiday: 16 });
+assert.equal(pick('2020-05-01', 2027, 8, 0)!.holiday, 0);  // 0 last year stays 0
 assert.equal(cbaAllotment(null, 2027, 8), null);
 
 assert.deepEqual(sickCloseoutPreview(40, 8), { cap: 16, carry: 16, payout: 24 });

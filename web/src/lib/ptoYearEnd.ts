@@ -36,7 +36,7 @@ export function vacationCloseoutPreview(remaining: number, action: VacationActio
 //   Sick     — days by service (<3 mo 0, 3–<6 mo 2, 6–<9 mo 3, 9–<12 mo 4,
 //              1 yr+ 8) × the engineer's daily hours.
 //   Floating holiday — not in the schedule: keeps the prior year's
-//              allotment, else 1 day.
+//              allotment (even 0), else 1 day when there's no prior row.
 // It's a starting point; the manager can edit every number before saving.
 
 export type CbaAllotment = {
@@ -73,7 +73,7 @@ export function cbaAllotment(
     : months < 9  ? 3
     : months < 12 ? 4
     :               8;
-  const holiday = prevHoliday != null && prevHoliday > 0 ? prevHoliday : dailyHours;
+  const holiday = prevHoliday != null ? prevHoliday : dailyHours;
   const svc = months < 12 ? `${months} mo` : `${(months / 12).toFixed(1)} yrs`;
   return {
     vacation,

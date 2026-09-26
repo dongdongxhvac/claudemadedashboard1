@@ -142,19 +142,26 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
     const booked = (t: string) => myRequests
       .filter((r) => r.status === 'approved' && r.type === t && r.starts_on.startsWith(String(year + 1)))
       .reduce((n, r) => n + Number(r.hours), 0);
+    // Sick carry follows the close-out rule: up to 2 days carry, and a
+    // negative balance carries as owed.
     const sickCarry = mySummary
-      ? Math.max(0, sickCloseoutPreview(Number(mySummary.sick_remaining), dailyHours).carry)
+      ? sickCloseoutPreview(Number(mySummary.sick_remaining), dailyHours).carry
       : 0;
+    const round = (n: number) => Math.round(n * 100) / 100;
     return {
       year: year + 1,
-      vacation: cba.vacation - booked('vacation'),
-      sick: cba.sick - booked('sick'),
-      holiday: cba.holiday - booked('holiday'),
-      sickCarry,
+      vacation: cba.vacation, vacationBooked: booked('vacation'),
+      sick: round(cba.sick + sickCarry), sickBooked: booked('sick'),
+      holiday: cba.holiday, holidayBooked: booked('holiday'),
+      sickCarry: round(sickCarry),
     };
   }, [myNextYear, overrideQ.isLoading, hireQ.data, year, dailyHours, mySummary, myRequests]);
   const myYearLog = useMemo(
     () => myRequests.filter((r) => r.starts_on.startsWith(String(year))),
+    [myRequests, year],
+  );
+  const myNextYearLog = useMemo(
+    () => myRequests.filter((r) => r.starts_on.startsWith(String(year + 1))),
     [myRequests, year],
   );
 
@@ -200,9 +207,14 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             style={{ fontSize: '0.72rem' }}
             title="Estimated from the CBA schedule by your hire date. Final once your manager sets next year's allotment."
           >
-            {nextYearEstimate.year} estimate · Vacation {nextYearEstimate.vacation}h · Sick {nextYearEstimate.sick}h
-            {nextYearEstimate.sickCarry > 0 && ` (+ up to ${nextYearEstimate.sickCarry}h carried)`}
+            {nextYearEstimate.year} estimate · Vacation {nextYearEstimate.vacation}h
+            {nextYearEstimate.vacationBooked > 0 && ` (${nextYearEstimate.vacationBooked}h booked)`}
+            {' · '}Sick {nextYearEstimate.sick}h
+            {nextYearEstimate.sickCarry > 0 && ` (incl. up to ${nextYearEstimate.sickCarry}h carried)`}
+            {nextYearEstimate.sickCarry < 0 && ` (after ${-nextYearEstimate.sickCarry}h owed from ${year})`}
+            {nextYearEstimate.sickBooked > 0 && ` (${nextYearEstimate.sickBooked}h booked)`}
             {nextYearEstimate.holiday > 0 && ` · Floater ${nextYearEstimate.holiday}h`}
+            {nextYearEstimate.holidayBooked > 0 && ` (${nextYearEstimate.holidayBooked}h booked)`}
             <span className="block italic" style={{ fontSize: '0.68rem' }}>
               Estimate only — not guaranteed. Final {nextYearEstimate.year} hours are set at year-end and may change.
             </span>
@@ -248,6 +260,16 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
           <PtoYearLog rows={myYearLog} year={year} />
         )}
       </div>
+
+      {/* Next-year entries booked ahead — only when there are any */}
+      {myNextYearLog.length > 0 && (
+        <div className="px-4 py-3" style={{ borderTop: '1px solid var(--color-border-soft)' }}>
+          <div className="t-small t-muted uppercase tracking-wider mb-1.5">
+            {year + 1} booked ahead
+          </div>
+          <PtoYearLog rows={myNextYearLog} year={year + 1} />
+        </div>
+      )}
     </section>
   );
 }
@@ -258,13 +280,13 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
 function NextYearLine({ s }: { s: PtoSummary }) {
   const part = (label: string, rem: number, carry: number) => {
     const c = Number(carry ?? 0);
-    return `${label} ${Number(rem)}h${c !== 0 ? ` (${Math.abs(c)}h ${c > 0 ? 'carried' : 'owed'})` : ''}`;
+    return `${label} ${Number(rem)}h left${c !== 0 ? ` (${Math.abs(c)}h ${c > 0 ? 'carried' : 'owed'})` : ''}`;
   };
   const bits = [
     part('Vacation', s.vacation_remaining, s.vacation_carryover ?? 0),
     part('Sick', s.sick_remaining, s.sick_carryover ?? 0),
   ];
-  if (Number(s.holiday_alloted) > 0) bits.push(`Floater ${Number(s.holiday_remaining)}h`);
+  if (Number(s.holiday_alloted) > 0) bits.push(`Floater ${Number(s.holiday_remaining)}h left`);
   return (
     <p className="t-small t-muted mt-2" style={{ fontSize: '0.72rem' }}>
       {s.year} projected · {bits.join(' · ')}
