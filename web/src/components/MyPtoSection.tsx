@@ -29,6 +29,7 @@ import {
 } from '../hooks/usePto';
 import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
+import { cbaAllotment, sickCloseoutPreview } from '../lib/ptoYearEnd';
 
 /** user_ids homed at the given site — scopes the vacation-cap warning to the
  *  requester's OWN building, so a Binney engineer is never warned about two
@@ -119,6 +120,39 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
     () => (summaryQ.data ?? []).find((s) => s.user_id === userId && s.year === year + 1) ?? null,
     [summaryQ.data, userId, year],
   );
+  // Until the manager saves next year's row, show an estimate: CBA rule by
+  // hire date, minus next-year PTO already approved, plus the sick hours
+  // that would carry (max 2 days). Vacation carry is the manager's call, so
+  // it's left out of the estimate.
+  const hireQ = useQuery({
+    queryKey: ['my_hiring_date', userId],
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from('users').select('hiring_date').eq('id', userId).maybeSingle();
+      if (error) throw error;
+      return (data as { hiring_date: string | null } | null)?.hiring_date ?? null;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const nextYearEstimate = useMemo(() => {
+    if (myNextYear || overrideQ.isLoading) return null;
+    const cba = cbaAllotment(hireQ.data, year + 1, dailyHours,
+      mySummary ? Number(mySummary.holiday_alloted) : null);
+    if (!cba) return null;
+    const booked = (t: string) => myRequests
+      .filter((r) => r.status === 'approved' && r.type === t && r.starts_on.startsWith(String(year + 1)))
+      .reduce((n, r) => n + Number(r.hours), 0);
+    const sickCarry = mySummary
+      ? Math.max(0, sickCloseoutPreview(Number(mySummary.sick_remaining), dailyHours).carry)
+      : 0;
+    return {
+      year: year + 1,
+      vacation: cba.vacation - booked('vacation'),
+      sick: cba.sick - booked('sick'),
+      holiday: cba.holiday - booked('holiday'),
+      sickCarry,
+    };
+  }, [myNextYear, overrideQ.isLoading, hireQ.data, year, dailyHours, mySummary, myRequests]);
   const myYearLog = useMemo(
     () => myRequests.filter((r) => r.starts_on.startsWith(String(year))),
     [myRequests, year],
@@ -160,6 +194,17 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
           </div>
         )}
         {myNextYear && <NextYearLine s={myNextYear} />}
+        {nextYearEstimate && (
+          <p
+            className="t-small t-muted mt-2"
+            style={{ fontSize: '0.72rem' }}
+            title="Estimated from the CBA schedule by your hire date. Final once your manager sets next year's allotment."
+          >
+            {nextYearEstimate.year} estimate · Vacation {nextYearEstimate.vacation}h · Sick {nextYearEstimate.sick}h
+            {nextYearEstimate.sickCarry > 0 && ` (+ up to ${nextYearEstimate.sickCarry}h carried)`}
+            {nextYearEstimate.holiday > 0 && ` · Floater ${nextYearEstimate.holiday}h`}
+          </p>
+        )}
       </div>
 
       {showForm && (
