@@ -12,8 +12,10 @@
 // below mirrors it only to preview numbers before the manager commits.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import type { VacationAction } from '../lib/ptoYearEnd';
 
-export type VacationAction = 'carry' | 'lose' | 'custom';
+// Pure rules live in lib/ptoYearEnd (node-testable); re-exported for callers.
+export * from '../lib/ptoYearEnd';
 
 export type PtoCloseout = {
   id: string;
@@ -38,30 +40,6 @@ export type PtoCloseout = {
   voided_at: string | null;
   voided_by: string | null;
 };
-
-export const SICK_CARRY_MAX_DAYS = 2;
-
-export const VACATION_ACTION_LABELS: Record<VacationAction, string> = {
-  carry:  'Carry balance',
-  lose:   'Lose (forfeit)',
-  custom: 'Carry custom hours',
-};
-
-/** Client-side preview of the sick split — same rule as pto_close_year(). */
-export function sickCloseoutPreview(sickRemaining: number, dailyHours: number) {
-  const cap = SICK_CARRY_MAX_DAYS * dailyHours;
-  return {
-    cap,
-    carry: Math.min(sickRemaining, cap),
-    payout: Math.max(sickRemaining - cap, 0),
-  };
-}
-
-/** Client-side preview of the vacation split — same rule as pto_close_year(). */
-export function vacationCloseoutPreview(remaining: number, action: VacationAction, custom: number | null) {
-  const carry = action === 'carry' ? remaining : action === 'lose' ? 0 : (custom ?? 0);
-  return { carry, forfeit: remaining - carry };
-}
 
 const KEY_CLOSEOUTS = ['pto_year_end_closeouts'];
 

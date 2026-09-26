@@ -38,7 +38,7 @@ import { Section } from '../../components/Section';
 import { downloadPtoWorkbook } from '../../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from '../../components/PtoCalRecipientsEditor';
 import { PtoYearEndModal } from '../../components/PtoYearEndModal';
-import { useCopyAllotments } from '../../hooks/usePtoYearEnd';
+import { useCopyAllotments, usePtoDailyHoursMap, cbaAllotment } from '../../hooks/usePtoYearEnd';
 
 // ───────────────────────────── helpers
 
@@ -461,6 +461,8 @@ export function BinneyPtoPanel() {
       {showEditBalance && (
         <EditBalanceModal
           summary={showEditBalance}
+          hireDate={(engineersQ.data ?? []).find((e) => e.user_id === showEditBalance.user_id)?.hiring_date ?? null}
+          prevHoliday={(summaryQ.data ?? []).find((x) => x.user_id === showEditBalance.user_id && x.year === showEditBalance.year - 1)?.holiday_alloted ?? null}
           onClose={() => setShowEditBalance(null)}
         />
       )}
@@ -2226,7 +2228,6 @@ function BalancesGrid({
   const thisYear = new Date().getFullYear();
   const [viewYear, setViewYear] = useState(thisYear);
   const currentYear = viewYear;
-  const isNextYear = viewYear > thisYear;
   const [showCloseout, setShowCloseout] = useState(false);
   const copyAllot = useCopyAllotments();
   // Column sorting: name (default) or one of the three balances. A balance
@@ -2311,12 +2312,16 @@ function BalancesGrid({
     return m;
   }, [allRequests, currentYear]);
 
-  // Next-year "not set" rows that have a this-year allotment to copy.
-  const copyable = isNextYear
-    ? placeholders
-        .map((ph) => summaries.find((x) => x.user_id === ph.user_id && x.year === thisYear))
-        .filter((x): x is PtoSummary => !!x)
-    : [];
+  // "Not set" rows the CBA rule can preload (needs a hire date).
+  const dailyMapQ = usePtoDailyHoursMap();
+  const preloadable = placeholders.flatMap((ph) => {
+    const eng = engineers.find((e) => e.user_id === ph.user_id);
+    const override = dailyMapQ.data?.get(ph.user_id);
+    const prev = summaries.find((x) => x.user_id === ph.user_id && x.year === viewYear - 1);
+    const a = cbaAllotment(eng?.hiring_date, viewYear, override != null ? override : 10,
+      prev ? Number(prev.holiday_alloted) : null);
+    return a ? [{ user_id: ph.user_id, year: viewYear, vacation_alloted: a.vacation, sick_alloted: a.sick, holiday_alloted: a.holiday }] : [];
+  });
   const roster = engineers
     .filter((e) => e.active && e.role === 'engineer')
     .map((e) => ({ user_id: e.user_id, full_name: e.full_name }));
@@ -2366,24 +2371,19 @@ function BalancesGrid({
           </button>
         ))}
         <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
-        {isNextYear && copyable.length > 0 && (
+        {preloadable.length > 0 && !dailyMapQ.isLoading && (
           <button
             type="button"
             onClick={() => {
-              if (!confirm(`Copy ${thisYear} allotments into ${viewYear} for ${copyable.length} engineer(s) not set yet? You can edit each one after.`)) return;
-              copyAllot.mutate(copyable.map((x) => ({
-                user_id: x.user_id, year: viewYear,
-                vacation_alloted: Number(x.vacation_alloted),
-                sick_alloted: Number(x.sick_alloted),
-                holiday_alloted: Number(x.holiday_alloted),
-              })), { onError: (e) => alert(`Copy failed: ${(e as Error).message}`) });
+              if (!confirm(`Preload ${viewYear} allotments by the CBA rule for ${preloadable.length} engineer(s) not set yet? (Service on 1/1/${viewYear}; floater keeps last year's.) You can edit each one after.`)) return;
+              copyAllot.mutate(preloadable, { onError: (e) => alert(`Preload failed: ${(e as Error).message}`) });
             }}
             disabled={copyAllot.isPending}
             className="t-accent hover:underline ml-3"
             style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
-            title={`Seed each unset ${viewYear} row with that engineer's ${thisYear} allotment`}
+            title={`Fill each unset ${viewYear} row from the CBA schedule by hire date`}
           >
-            {copyAllot.isPending ? 'Copying…' : `⧉ Copy ${thisYear} allotments (${copyable.length})`}
+            {copyAllot.isPending ? 'Preloading…' : `⧉ Preload by CBA (${preloadable.length})`}
           </button>
         )}
         <button
@@ -3450,14 +3450,40 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
 
 // ───────────────────────────── Edit balance modal
 
-function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: () => void }) {
+function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
+  summary: PtoSummary;
+  /** users.hiring_date — drives the CBA preload. */
+  hireDate?: string | null;
+  /** Prior year's floater allotment, carried into the preload. */
+  prevHoliday?: number | null;
+  onClose: () => void;
+}) {
   const update = useUpdatePtoBalance();
   // Binney default is 10h/day; per-engineer override (e.g. McCarthy = 8) wins.
   const dailyHoursQ = useEngineerPtoDailyHours(summary.user_id);
   const sickDailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
+  // CBA rule preload — a not-yet-set row opens pre-filled from the contract
+  // schedule (service on Jan 1 of that year); saved rows keep their values
+  // and offer "apply CBA" instead. Recomputed once the daily-hours override
+  // loads, until the manager types in a field.
+  const notSet = summary.id.startsWith('new:');
+  const cba = cbaAllotment(hireDate, summary.year, sickDailyHours, prevHoliday != null ? Number(prevHoliday) : null);
   const [vac, setVac]   = useState<string>(String(summary.vacation_alloted));
   const [sick, setSick] = useState<string>(String(summary.sick_alloted));
   const [holiday, setHoliday] = useState<string>(String(summary.holiday_alloted));
+  const [touched, setTouched] = useState(false);
+  const applyCba = () => {
+    if (!cba) return;
+    setVac(String(cba.vacation));
+    setSick(String(cba.sick));
+    setHoliday(String(cba.holiday));
+  };
+  const cbaKey = cba ? `${cba.vacation}|${cba.sick}|${cba.holiday}` : '';
+  const [preloadedKey, setPreloadedKey] = useState('');
+  if (notSet && !touched && cba && !dailyHoursQ.isLoading && preloadedKey !== cbaKey) {
+    setPreloadedKey(cbaKey);
+    applyCba();
+  }
   const [err, setErr]   = useState<string | null>(null);
 
   const onSave = async () => {
@@ -3502,6 +3528,23 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
           Used hours are computed from approved requests — only the annual allotment is editable here.
         </p>
 
+        {cba ? (
+          <div className="t-small mb-3" style={{ padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid var(--color-border-soft)' }}>
+            <div>
+              <strong>CBA rule:</strong> vacation {cba.vacation}h · sick {cba.sick}h · floater {cba.holiday}h
+              {notSet && !touched && <span className="t-muted"> — preloaded</span>}
+            </div>
+            <div className="t-muted" style={{ fontSize: '0.7rem' }}>{cba.basis}</div>
+            {(Number(vac) !== cba.vacation || Number(sick) !== cba.sick || Number(holiday) !== cba.holiday) && (
+              <button type="button" onClick={() => { setTouched(true); applyCba(); }} className="t-accent hover:underline" style={{ fontSize: '0.72rem' }}>
+                apply CBA values
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="t-small t-muted mb-3" style={{ fontSize: '0.72rem' }}>No hire date on file — can’t preload from the CBA schedule.</p>
+        )}
+
         {(Number(summary.vacation_carryover ?? 0) !== 0 || Number(summary.sick_carryover ?? 0) !== 0) && (
           <p className="t-small mb-3" style={{ padding: '0.4rem 0.6rem', borderRadius: 4, background: 'rgba(0,0,0,0.03)' }}>
             Carried in from {summary.year - 1} (year-end close-out, on top of the allotment):{' '}
@@ -3513,7 +3556,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
         <div className="space-y-3">
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Vacation Allotted</span>
-            <input type="number" min={0} value={vac} onChange={(e) => setVac(e.target.value)}
+            <input type="number" min={0} value={vac} onChange={(e) => { setTouched(true); setVac(e.target.value); }}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
             <p className="t-small t-muted mt-1">Used: {summary.vacation_used}h</p>
@@ -3549,7 +3592,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
           </label>
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Sick Allotted</span>
-            <input type="number" min={0} value={sick} onChange={(e) => setSick(e.target.value)}
+            <input type="number" min={0} value={sick} onChange={(e) => { setTouched(true); setSick(e.target.value); }}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
             <p className="t-small t-muted mt-1">Used: {summary.sick_used}h</p>
@@ -3577,7 +3620,7 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
           </label>
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Floating Holiday Allotted</span>
-            <input type="number" min={0} value={holiday} onChange={(e) => setHoliday(e.target.value)}
+            <input type="number" min={0} value={holiday} onChange={(e) => { setTouched(true); setHoliday(e.target.value); }}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
             <p className="t-small t-muted mt-1">Used: {summary.holiday_used}h</p>
