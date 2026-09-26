@@ -34,6 +34,8 @@ import { BMR_HOLIDAYS } from '../lib/bmrHolidays';
 import { Section } from './Section';
 import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
+import { PtoYearEndModal } from './PtoYearEndModal';
+import { useCopyAllotments } from '../hooks/usePtoYearEnd';
 
 // ───────────────────────────── helpers
 
@@ -603,11 +605,12 @@ function PendingQueue({
  *  balance types; other leave kinds have no allotment to check. */
 function BalanceHint({ req, summaries }: { req: PtoRequest; summaries: PtoSummary[] }) {
   if (req.type !== 'vacation' && req.type !== 'sick' && req.type !== 'holiday') return null;
-  const s = summaries.find((x) => x.user_id === req.user_id);
+  const reqYear = Number(req.starts_on.slice(0, 4));
+  const s = summaries.find((x) => x.user_id === req.user_id && x.year === reqYear);
   if (!s) {
     return (
       <p className="t-small t-muted mt-1 italic">
-        No balance set for this engineer this year — set the allotment in Balances below.
+        No {reqYear} balance set for this engineer — set the allotment in Balances below.
       </p>
     );
   }
@@ -1305,7 +1308,9 @@ function QuickPtoModal({
   // Live balance card — same as AddPtoModal. Engineer is locked here so
   // we always know who to look up.
   const summaryQ = usePtoSummary();
-  const currentYear = new Date().getFullYear();
+  // Balance year = the PTO date's year, so a next-year request is checked
+  // against the next-year allotment.
+  const currentYear = Number(dateIso.slice(0, 4)) || new Date().getFullYear();
   const balance = useMemo(() => {
     const all = (summaryQ.data ?? []).filter((s) => s.user_id === engineer.user_id);
     if (all.length === 0) return null;
@@ -2076,7 +2081,14 @@ function BalancesGrid({
   onDeleteRequest?: (id: string) => void;
   onCancelRequest?: (id: string) => void;
 }) {
-  const currentYear = new Date().getFullYear();
+  // Year toggle: this year, or next year's allotments so engineers can
+  // book ahead. `currentYear` below = the year being viewed.
+  const thisYear = new Date().getFullYear();
+  const [viewYear, setViewYear] = useState(thisYear);
+  const currentYear = viewYear;
+  const isNextYear = viewYear > thisYear;
+  const [showCloseout, setShowCloseout] = useState(false);
+  const copyAllot = useCopyAllotments();
   // Column sorting: name (default) or one of the three balances. A balance
   // header click sorts lowest-first (who's running out); click again to
   // flip. "not set" rows always sink to the bottom of balance sorts.
@@ -2159,6 +2171,16 @@ function BalancesGrid({
     return m;
   }, [allRequests, currentYear]);
 
+  // Next-year "not set" rows that have a this-year allotment to copy.
+  const copyable = isNextYear
+    ? placeholders
+        .map((ph) => summaries.find((x) => x.user_id === ph.user_id && x.year === thisYear))
+        .filter((x): x is PtoSummary => !!x)
+    : [];
+  const roster = engineers
+    .filter((e) => e.active && e.role === 'engineer')
+    .map((e) => ({ user_id: e.user_id, full_name: e.full_name }));
+
   if (rows.length === 0) return null;
 
   // Crew split (ported from BinneyPtoPanel): left = Saturday crew, right =
@@ -2185,7 +2207,54 @@ function BalancesGrid({
   return (
     <div>
       <div className="t-small t-muted uppercase tracking-wider mb-2">
-        Balances ({currentYear}) <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
+        Balances{' '}
+        {[thisYear, thisYear + 1].map((y) => (
+          <button
+            key={y}
+            type="button"
+            onClick={() => setViewYear(y)}
+            className="px-1.5 rounded"
+            style={{
+              textTransform: 'none', letterSpacing: 0, fontWeight: 600, marginRight: 2,
+              background: viewYear === y ? 'var(--color-accent)' : 'transparent',
+              color: viewYear === y ? '#fff' : 'var(--color-text-muted)',
+              border: '1px solid ' + (viewYear === y ? 'var(--color-accent)' : 'var(--color-border)'),
+            }}
+            title={y === thisYear ? 'This year' : 'Next year — set allotments so engineers can book ahead'}
+          >
+            {y}{y > thisYear ? ' · next' : ''}
+          </button>
+        ))}
+        <span className="t-muted normal-case ml-1" style={{ textTransform: 'none' }}>· click a name to see the log · click a column to sort</span>
+        {isNextYear && copyable.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm(`Copy ${thisYear} allotments into ${viewYear} for ${copyable.length} engineer(s) not set yet? You can edit each one after.`)) return;
+              copyAllot.mutate(copyable.map((x) => ({
+                user_id: x.user_id, year: viewYear,
+                vacation_alloted: Number(x.vacation_alloted),
+                sick_alloted: Number(x.sick_alloted),
+                holiday_alloted: Number(x.holiday_alloted),
+              })), { onError: (e) => alert(`Copy failed: ${(e as Error).message}`) });
+            }}
+            disabled={copyAllot.isPending}
+            className="t-accent hover:underline ml-3"
+            style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
+            title={`Seed each unset ${viewYear} row with that engineer's ${thisYear} allotment`}
+          >
+            {copyAllot.isPending ? 'Copying…' : `⧉ Copy ${thisYear} allotments (${copyable.length})`}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowCloseout(true)}
+          className="t-accent hover:underline ml-3"
+          style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
+          title={`Close out ${thisYear}: sick carries max 2 days (rest paid out), vacation carry/lose per engineer — logged`}
+        >
+          ⇥ {thisYear} year-end close-out
+        </button>
         {/* Excel export — same workbook as the hand-built 2026-09-15 file:
             summary + full log + one detail-log tab per engineer. Built from
             the props already on this grid, so it's always in sync with what
@@ -2280,8 +2349,8 @@ function BalancesGrid({
                       </div>
                     )}
                   </td>
-                  <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} />
-                  <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} />
+                  <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} carry={Number(s.vacation_carryover ?? 0)} />
+                  <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} carry={Number(s.sick_carryover ?? 0)} />
                   <BalanceCell remaining={s.holiday_remaining}  used={s.holiday_used}  alloted={s.holiday_alloted} />
                   <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
                     <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline" title={notSet ? 'Set allotment' : 'Edit allotment'}>{notSet ? 'set' : 'edit'}</button>
@@ -2308,6 +2377,16 @@ function BalancesGrid({
       </div>
       ))}
       </div>
+      {showCloseout && (
+        <PtoYearEndModal
+          fromYear={thisYear}
+          summaries={summaries}
+          roster={roster}
+          siteDefaultDaily={8}
+          siteLabel="UPark"
+          onClose={() => setShowCloseout(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2315,8 +2394,8 @@ function BalancesGrid({
 /** One compact cell per PTO type: emphasized balance + muted used/allotted
  *  ("34h 8/42"). Single-cell keeps each half-table narrow enough for the
  *  split two-column balances layout to fit side by side. */
-function BalanceCell({ remaining, used, alloted }: { remaining: number; used: number; alloted: number }) {
-  if (alloted === 0) {
+function BalanceCell({ remaining, used, alloted, carry = 0 }: { remaining: number; used: number; alloted: number; carry?: number }) {
+  if (alloted === 0 && carry === 0) {
     return (
       <td className="py-1 px-1.5 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
     );
@@ -2329,6 +2408,15 @@ function BalanceCell({ remaining, used, alloted }: { remaining: number; used: nu
     <td className="py-1 px-1.5 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
       <span style={{ color, fontWeight: low ? 600 : 400 }}>{remaining}h</span>
       <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 4 }}>{used}/{alloted}</span>
+      {carry !== 0 && (
+        <span
+          className="t-muted"
+          style={{ fontSize: '0.68rem', marginLeft: 3, color: carry < 0 ? 'var(--color-danger)' : undefined }}
+          title={`${carry > 0 ? '+' : ''}${carry}h carried over from last year (included in the balance)`}
+        >
+          {carry > 0 ? '+' : ''}{carry}c
+        </span>
+      )}
     </td>
   );
 }
@@ -2600,7 +2688,9 @@ function AddPtoModal({
   // an engineer is selected. We pick the current-year row (or the most
   // recent one if a current row doesn't exist yet for the engineer).
   const summaryQ = usePtoSummary();
-  const currentYear = new Date().getFullYear();
+  // Balance year = the start date's year, so a next-year request is checked
+  // against the next-year allotment.
+  const currentYear = Number(startsOn.slice(0, 4)) || new Date().getFullYear();
   const balance = useMemo(() => {
     if (!userId) return null;
     const all = (summaryQ.data ?? []).filter((s) => s.user_id === userId);
@@ -3006,7 +3096,8 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
 
   // Live balance for this engineer (same card as Add and Quick modals).
   const summaryQ = usePtoSummary();
-  const currentYear = new Date().getFullYear();
+  // Balance year = the start date's year (next-year entries → next-year row).
+  const currentYear = Number(startsOn.slice(0, 4)) || new Date().getFullYear();
   const balance = useMemo(() => {
     const all = (summaryQ.data ?? []).filter((s) => s.user_id === request.user_id);
     if (all.length === 0) return null;
@@ -3285,6 +3376,14 @@ function EditBalanceModal({ summary, onClose }: { summary: PtoSummary; onClose: 
         <p className="t-small t-muted mb-3">
           Used hours are computed from approved requests — only the annual allotment is editable here.
         </p>
+
+        {(Number(summary.vacation_carryover ?? 0) !== 0 || Number(summary.sick_carryover ?? 0) !== 0) && (
+          <p className="t-small mb-3" style={{ padding: '0.4rem 0.6rem', borderRadius: 4, background: 'rgba(0,0,0,0.03)' }}>
+            Carried in from {summary.year - 1} (year-end close-out, on top of the allotment):{' '}
+            <strong>vacation {Number(summary.vacation_carryover ?? 0)}h</strong>,{' '}
+            <strong>sick {Number(summary.sick_carryover ?? 0)}h</strong>.
+          </p>
+        )}
 
         <div className="space-y-3">
           <label className="block">

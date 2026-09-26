@@ -25,7 +25,7 @@ import {
   usePtoRequests, usePtoSummary, usePtoRealtime,
   useSubmitPto, useCancelPto, useEngineerPtoDailyHours,
   checkVacationCap, findOwnOverlaps, ptoTypeLabel, PTO_ENGINEER_TYPE_OPTIONS,
-  type PtoRequest, type PtoType,
+  type PtoRequest, type PtoType, type PtoSummary,
 } from '../hooks/usePto';
 import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
@@ -113,6 +113,12 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
     () => (summaryQ.data ?? []).find((s) => s.user_id === userId && s.year === year) ?? null,
     [summaryQ.data, userId, year],
   );
+  // Next year's row, once a manager has set it (allotment or close-out
+  // carryover). Shown as one quiet line — a projection, not a balance.
+  const myNextYear = useMemo(
+    () => (summaryQ.data ?? []).find((s) => s.user_id === userId && s.year === year + 1) ?? null,
+    [summaryQ.data, userId, year],
+  );
   const myYearLog = useMemo(
     () => myRequests.filter((r) => r.starts_on.startsWith(String(year))),
     [myRequests, year],
@@ -153,6 +159,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             )}
           </div>
         )}
+        {myNextYear && <NextYearLine s={myNextYear} />}
       </div>
 
       {showForm && (
@@ -194,6 +201,26 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
         )}
       </div>
     </section>
+  );
+}
+
+/** "2027 projected · Vacation 96h (16h carried) · Sick 80h" — muted, one
+ *  line, so engineers can plan ahead without it competing with this
+ *  year's balances. Remaining already nets out approved next-year PTO. */
+function NextYearLine({ s }: { s: PtoSummary }) {
+  const part = (label: string, rem: number, carry: number) => {
+    const c = Number(carry ?? 0);
+    return `${label} ${Number(rem)}h${c !== 0 ? ` (${Math.abs(c)}h ${c > 0 ? 'carried' : 'owed'})` : ''}`;
+  };
+  const bits = [
+    part('Vacation', s.vacation_remaining, s.vacation_carryover ?? 0),
+    part('Sick', s.sick_remaining, s.sick_carryover ?? 0),
+  ];
+  if (Number(s.holiday_alloted) > 0) bits.push(`Floater ${Number(s.holiday_remaining)}h`);
+  return (
+    <p className="t-small t-muted mt-2" style={{ fontSize: '0.72rem' }}>
+      {s.year} projected · {bits.join(' · ')}
+    </p>
   );
 }
 

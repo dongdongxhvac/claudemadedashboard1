@@ -176,6 +176,11 @@ export type PtoSummary = {
   holiday_remaining: number;
   notes: string | null;
   updated_at: string;
+  /** Hours brought in by the prior year's close-out (migration 0135).
+   *  Already folded into *_remaining; optional so rows read before 0135
+   *  is applied still type-check (treat missing as 0). */
+  vacation_carryover?: number;
+  sick_carryover?: number;
 };
 
 const KEY_REQUESTS = ['pto_requests'];
