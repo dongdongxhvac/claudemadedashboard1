@@ -2211,6 +2211,14 @@ function fmtHireSeniority(hireIso: string | null): string {
   return `Hired ${mm}/${dd}/${yy} · ${seniority}`;
 }
 
+/** No allotment for the year yet: a synthesized placeholder ('new:' id) or a
+ *  row holding only close-out carryover. Only these get the CBA preload. */
+function allotmentNotSet(s: PtoSummary): boolean {
+  return s.id.startsWith('new:') || (
+    Number(s.vacation_alloted) === 0 && Number(s.sick_alloted) === 0 && Number(s.holiday_alloted) === 0
+  );
+}
+
 function BalancesGrid({
   summaries, allRequests, engineers, crewByUser, onEdit, onEditRequest, onDeleteRequest, onCancelRequest,
 }: {
@@ -2316,7 +2324,11 @@ function BalancesGrid({
   // "Not set" rows the CBA rule can preload (needs a hire date).
   const dailyMapQ = usePtoDailyHoursMap();
   const [showPreload, setShowPreload] = useState(false);
-  const preloadRows: CbaPreloadRow[] = placeholders.map((ph) => {
+  // Preload targets only engineers with no allotment for this year: no row
+  // at all, or a row the year-end close-out created with carryover only.
+  // (Upsert writes just the *_alloted columns, so carryover is kept.)
+  const unsetRows = [...placeholders, ...realRows.filter(allotmentNotSet)];
+  const preloadRows: CbaPreloadRow[] = unsetRows.map((ph) => {
     const eng = engineers.find((e) => e.user_id === ph.user_id);
     const override = dailyMapQ.data?.get(ph.user_id);
     const prev = summaries.find((x) => x.user_id === ph.user_id && x.year === viewYear - 1);
@@ -2462,7 +2474,7 @@ function BalancesGrid({
             const isOpen = expandedUserId === s.user_id;
             const log = logByUser.get(s.user_id) ?? [];
             const hireLine = fmtHireSeniority(hireByUser.get(s.user_id) ?? null);
-            const notSet = s.id.startsWith('new:');
+            const notSet = allotmentNotSet(s);
             return (
               <Fragment key={s.id}>
                 <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--color-border-soft)' }}>
@@ -3481,7 +3493,7 @@ function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
   // schedule (service on Jan 1 of that year); saved rows keep their values
   // and offer "apply CBA" instead. Recomputed once the daily-hours override
   // loads, until the manager types in a field.
-  const notSet = summary.id.startsWith('new:');
+  const notSet = allotmentNotSet(summary);
   const cba = cbaAllotment(hireDate, summary.year, sickDailyHours, prevHoliday != null ? Number(prevHoliday) : null);
   const [vac, setVac]   = useState<string>(String(summary.vacation_alloted));
   const [sick, setSick] = useState<string>(String(summary.sick_alloted));
@@ -3550,7 +3562,7 @@ function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
               {notSet && !touched && <span className="t-muted"> — preloaded</span>}
             </div>
             <div className="t-muted" style={{ fontSize: '0.7rem' }}>{cba.basis}</div>
-            {(Number(vac) !== cba.vacation || Number(sick) !== cba.sick || Number(holiday) !== cba.holiday) && (
+            {notSet && (Number(vac) !== cba.vacation || Number(sick) !== cba.sick || Number(holiday) !== cba.holiday) && (
               <button type="button" onClick={() => { setTouched(true); applyCba(); }} className="t-accent hover:underline" style={{ fontSize: '0.72rem' }}>
                 apply CBA values
               </button>
