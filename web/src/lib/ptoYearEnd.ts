@@ -31,13 +31,18 @@ export function vacationCloseoutPreview(remaining: number, action: VacationActio
 // ── CBA allotment rule (preload for a year's allotment)
 //
 // Service is measured on Jan 1 of the target year.
-//   Vacation — after probation (3 months) <3 yrs 80h, 3–<8 yrs 120h,
-//              8–<18 yrs 160h, 18+ yrs 200h (weeks × 40h).
+//   Vacation — starts after the 60-day probation. In the year probation
+//              ends it's pro-rated: 80h × days left in that year (from the
+//              day after probation) ÷ days in the year, rounded to the hour.
+//              After that: <3 yrs 80h, 3–<8 yrs 120h, 8–<18 yrs 160h,
+//              18+ yrs 200h (weeks × 40h).
 //   Sick     — days by service (<3 mo 0, 3–<6 mo 2, 6–<9 mo 3, 9–<12 mo 4,
 //              1 yr+ 8) × the engineer's daily hours.
 //   Floating holiday — not in the schedule: keeps the prior year's
 //              allotment (even 0), else 1 day when there's no prior row.
 // It's a starting point; the manager can edit every number before saving.
+
+export const PROBATION_DAYS = 60;
 
 export type CbaAllotment = {
   vacation: number;
@@ -61,8 +66,31 @@ export function cbaAllotment(
   if (asOf.getDate() < hire.getDate()) months -= 1;
   months = Math.max(0, months);
 
+  // Probation: 60 days from hire. Day math in UTC so DST can't shift it.
+  const DAY = 86_400_000;
+  const hireUtc   = Date.UTC(hire.getFullYear(), hire.getMonth(), hire.getDate());
+  const probEnd   = hireUtc + PROBATION_DAYS * DAY;          // first day vacation accrues
+  const yearStart = Date.UTC(year, 0, 1);
+  const yearEnd   = Date.UTC(year, 11, 31);
+  const daysInYear = Math.round((yearEnd - yearStart) / DAY) + 1;
+  const fmtUtc = (t: number) => {
+    const d = new Date(t);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${String(d.getUTCFullYear()).slice(2)}`;
+  };
+
+  let proRated: [number, string] | null = null;
+  if (probEnd > yearEnd) {
+    proRated = [0, `in probation until ${fmtUtc(probEnd)}`];
+  } else if (probEnd > yearStart) {
+    const days = Math.round((yearEnd - probEnd) / DAY) + 1;
+    proRated = [
+      Math.round((80 * days) / daysInYear),
+      `first year, pro-rated from ${fmtUtc(probEnd)}: 80h × ${days}/${daysInYear} days`,
+    ];
+  }
+
   const [vacation, vacTier] =
-    months < 3        ? [0,   'in probation']
+    proRated          ? proRated
     : months < 36     ? [80,  '<3 yrs']
     : months < 96     ? [120, '3–<8 yrs']
     : months < 216    ? [160, '8–<18 yrs']

@@ -19,8 +19,13 @@ const pick = (h: string | null, y: number, d: number, prev?: number) => {
 };
 
 // Service measured on Jan 1 of the target year.
-assert.deepEqual(pick('2026-11-01', 2027, 8), { vacation: 0, sick: 0, holiday: 8 });    // 2 mo, probation
-assert.deepEqual(pick('2026-07-01', 2027, 8), { vacation: 80, sick: 24, holiday: 8 });  // 6 mo
+// 60-day probation; the year it ends is pro-rated by days left.
+assert.deepEqual(pick('2026-11-01', 2027, 8), { vacation: 80, sick: 0, holiday: 8 });   // probation ended 12/31/26 → full 2027
+assert.deepEqual(pick('2026-12-15', 2027, 8), { vacation: 71, sick: 0, holiday: 8 });   // ends 2/13/27 → 80 × 322/365
+assert.deepEqual(pick('2027-11-15', 2027, 8), { vacation: 0, sick: 0, holiday: 8 });    // still in probation all of 2027
+assert.equal(pick('2026-05-01', 2026, 8)!.vacation, 41);                                // ends 6/30/26 → 80 × 185/365
+assert.equal(pick('2026-01-01', 2026, 8)!.vacation, 67);                                // ends 3/2/26 → 80 × 305/365
+assert.deepEqual(pick('2026-07-01', 2027, 8), { vacation: 80, sick: 24, holiday: 8 });  // 6 mo, probation done in 2026
 assert.deepEqual(pick('2026-03-15', 2027, 10), { vacation: 80, sick: 40, holiday: 10 }); // 9 mo
 assert.equal(pick('2024-01-02', 2027, 8)!.vacation, 80);   // just under 3 yrs
 assert.equal(pick('2024-01-01', 2027, 8)!.vacation, 120);  // 3 yrs

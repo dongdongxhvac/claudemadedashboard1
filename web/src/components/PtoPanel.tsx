@@ -3457,6 +3457,16 @@ function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
               <table className="t-small t-mono mt-1" style={{ borderCollapse: 'collapse', fontSize: '0.7rem' }}>
                 <tbody>
                   <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">Probation (first 60 days)</td>
+                    <td className="text-right py-0.5">—</td>
+                    <td className="pl-2 py-0.5 t-muted">0h</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
+                    <td className="pr-3 py-0.5 t-muted">Year probation ends</td>
+                    <td className="text-right py-0.5">pro-rated</td>
+                    <td className="pl-2 py-0.5 t-muted">80h × days left</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-soft, rgba(0,0,0,0.08))' }}>
                     <td className="pr-3 py-0.5 t-muted">After probation – &lt;3 yrs</td>
                     <td className="text-right py-0.5">2 wks</td>
                     <td className="pl-2 py-0.5 t-muted">80h</td>
