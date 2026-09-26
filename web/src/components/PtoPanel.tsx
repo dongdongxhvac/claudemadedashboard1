@@ -35,6 +35,7 @@ import { Section } from './Section';
 import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
 import { PtoYearEndModal } from './PtoYearEndModal';
+import { PtoCbaPreloadModal, type CbaPreloadRow } from './PtoCbaPreloadModal';
 import { useCopyAllotments, usePtoDailyHoursMap, cbaAllotment } from '../hooks/usePtoYearEnd';
 
 // ───────────────────────────── helpers
@@ -2174,14 +2175,22 @@ function BalancesGrid({
 
   // "Not set" rows the CBA rule can preload (needs a hire date).
   const dailyMapQ = usePtoDailyHoursMap();
-  const preloadable = placeholders.flatMap((ph) => {
+  const [showPreload, setShowPreload] = useState(false);
+  const preloadRows: CbaPreloadRow[] = placeholders.map((ph) => {
     const eng = engineers.find((e) => e.user_id === ph.user_id);
     const override = dailyMapQ.data?.get(ph.user_id);
     const prev = summaries.find((x) => x.user_id === ph.user_id && x.year === viewYear - 1);
     const a = cbaAllotment(eng?.hiring_date, viewYear, override != null ? override : 8,
       prev ? Number(prev.holiday_alloted) : null);
-    return a ? [{ user_id: ph.user_id, year: viewYear, vacation_alloted: a.vacation, sick_alloted: a.sick, holiday_alloted: a.holiday }] : [];
+    return {
+      user_id: ph.user_id,
+      name: ph.user_full_name ?? '?',
+      hire_date: eng?.hiring_date ?? null,
+      basis: a?.basis ?? null,
+      vacation: a?.vacation ?? 0, sick: a?.sick ?? 0, holiday: a?.holiday ?? 0,
+    };
   });
+  const preloadable = preloadRows.filter((r) => r.basis);
   const roster = engineers
     .filter((e) => e.active && e.role === 'engineer')
     .map((e) => ({ user_id: e.user_id, full_name: e.full_name }));
@@ -2234,16 +2243,13 @@ function BalancesGrid({
         {preloadable.length > 0 && !dailyMapQ.isLoading && (
           <button
             type="button"
-            onClick={() => {
-              if (!confirm(`Preload ${viewYear} allotments by the CBA rule for ${preloadable.length} engineer(s) not set yet? (Service on 1/1/${viewYear}; floater keeps last year's.) You can edit each one after.`)) return;
-              copyAllot.mutate(preloadable, { onError: (e) => alert(`Preload failed: ${(e as Error).message}`) });
-            }}
+            onClick={() => setShowPreload(true)}
             disabled={copyAllot.isPending}
             className="t-accent hover:underline ml-3"
             style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
             title={`Fill each unset ${viewYear} row from the CBA schedule by hire date`}
           >
-            {copyAllot.isPending ? 'Preloading…' : `⧉ Preload by CBA (${preloadable.length})`}
+            {copyAllot.isPending ? 'Preloading…' : `⧉ Preload by CBA (${preloadable.length})…`}
           </button>
         )}
         <button
@@ -2377,6 +2383,15 @@ function BalancesGrid({
       </div>
       ))}
       </div>
+      {showPreload && (
+        <PtoCbaPreloadModal
+          year={viewYear}
+          rows={preloadRows}
+          pending={copyAllot.isPending}
+          onApply={(writes) => copyAllot.mutateAsync(writes)}
+          onClose={() => setShowPreload(false)}
+        />
+      )}
       {showCloseout && (
         <PtoYearEndModal
           fromYear={thisYear}

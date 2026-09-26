@@ -7,7 +7,7 @@
 // Floating holiday never carries. Every run is written to
 // pto_year_end_closeouts; a re-run or undo voids the prior row, so the log
 // below keeps the whole history.
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import type { PtoSummary } from '../hooks/usePto';
 import {
   usePtoCloseouts, usePtoDailyHoursMap, useClosePtoYear, useUndoPtoCloseout, useMarkPayoutPaid,
@@ -56,6 +56,9 @@ export function PtoYearEndModal({
   const [customs, setCustoms] = useState<Record<string, string>>({});
   const [busy, setBusy]       = useState<string | null>(null);
   const [err, setErr]         = useState<string | null>(null);
+  // Set by Cancel so a running "close out all" stops after the current one.
+  const cancelRef = useRef(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   const rosterIds = useMemo(() => new Set(roster.map((r) => r.user_id)), [roster]);
   const nameOf = useMemo(() => {
@@ -130,9 +133,27 @@ export function PtoYearEndModal({
   const openRows = rows.filter((r) => !r.active);
   const runAllOpen = async () => {
     if (!confirm(`Close out ${openRows.length} engineer(s) for ${fromYear} with the choices shown?`)) return;
-    for (const r of openRows) {
-      await runOne(r);
+    cancelRef.current = false;
+    setBulkRunning(true);
+    try {
+      for (const r of openRows) {
+        if (cancelRef.current) break;
+        await runOne(r);
+      }
+    } finally {
+      setBulkRunning(false);
     }
+  };
+
+  // Cancel: close without saving the unsaved vacation choices. Mid-run it
+  // stops the batch instead — anyone already closed out stays (undo per row).
+  const onCancel = () => {
+    if (bulkRunning) {
+      cancelRef.current = true;
+      setErr('Stopped — anyone already closed out stays closed (use undo on their row).');
+      return;
+    }
+    onClose();
   };
 
   const downloadCsv = () => {
@@ -184,7 +205,7 @@ export function PtoYearEndModal({
       >
         <div className="flex items-center justify-between mb-2">
           <h3 className="t-section-title">{siteLabel} · {fromYear} → {fromYear + 1} year-end close-out</h3>
-          <button onClick={onClose} className="t-small t-muted">✕</button>
+          <button onClick={onCancel} className="t-small t-muted" title="Cancel">✕</button>
         </div>
 
         <p className="t-small t-muted mb-1">
@@ -312,8 +333,15 @@ export function PtoYearEndModal({
             {totalPayout > 0 && <> · sick payout logged: <strong>{fmtH(totalPayout)}</strong></>}
           </span>
           <div className="flex gap-2">
-            <button onClick={onClose} className="t-small px-3 py-1 rounded border" style={{ borderColor: 'var(--color-border)' }}>
-              Done
+            <button
+              onClick={onCancel}
+              className="t-small px-3 py-1 rounded border"
+              style={{ borderColor: 'var(--color-border)' }}
+              title={bulkRunning
+                ? 'Stop after the current engineer'
+                : 'Close without saving — nothing changes for rows you haven’t closed out'}
+            >
+              {bulkRunning ? 'Stop' : 'Cancel'}
             </button>
             <button
               onClick={runAllOpen}
