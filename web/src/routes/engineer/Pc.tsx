@@ -133,7 +133,7 @@ export default function EngineerPc() {
             {/* New-hire training handouts + quizzes (UPark program). */}
             {!binneyOnly && (
               <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
-                Training
+                Career tracker
               </Link>
             )}
             {/* Buildings (2026-09-23): the engineer's own set-up sheets +

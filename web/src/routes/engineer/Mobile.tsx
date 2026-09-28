@@ -106,7 +106,7 @@ export default function EngineerMobile() {
           )}
           {/* New-hire training handouts + quizzes (UPark program). */}
           <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
-            Training
+            Career tracker
           </Link>
           {/* Set-up sheets + system sign-offs — separate tab (2026-09-23). */}
           <Link to="/engineer/buildings" className="t-small t-accent hover:underline">
