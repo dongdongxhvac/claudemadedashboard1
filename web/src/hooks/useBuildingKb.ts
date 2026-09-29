@@ -57,7 +57,7 @@ export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
   chiller_plant:  'Chiller plant',
   boiler_plant:   'Boiler plant',
   ahu:            'AHU / GEF',
-  vcair:          'vcAIR',
+  vcair:          'V/C AIR',
   rodi:           'RODI',
   plumbing:       'Plumbing',
   bms:            'BMS',

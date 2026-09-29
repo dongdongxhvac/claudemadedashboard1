@@ -66,8 +66,6 @@ export function EquipmentForm({
   }, [eqQ.data, existing?.id]);
   const [locationNote, setLocationNote]     = useState(existing?.location_note ?? '');
   const [partsNotes, setPartsNotes]         = useState(existing?.parts_notes ?? '');
-  const [commonIssues, setCommonIssues]     = useState(existing?.common_issues ?? '');
-  const [troubleshooting, setTroubleshooting] = useState(existing?.troubleshooting ?? '');
   const [photoFile, setPhotoFile]           = useState<File | null>(null);
   const [removePhoto, setRemovePhoto]       = useState(false);
   const [uploading, setUploading]           = useState(false);
@@ -95,8 +93,10 @@ export function EquipmentForm({
         category: category || null,
         location_note: locationNote.trim() || null,
         parts_notes: partsNotes.trim() || null,
-        common_issues: commonIssues.trim() || null,
-        troubleshooting: troubleshooting.trim() || null,
+        // Not on the form any more (user 2026-09-29) — keep whatever the row
+        // already has so an edit doesn't wipe older notes.
+        common_issues: existing?.common_issues ?? null,
+        troubleshooting: existing?.troubleshooting ?? null,
         photo_url: removePhoto ? null : existing?.photo_url ?? null,
         sort_order: existing?.sort_order ?? 0,
         status,
@@ -176,8 +176,38 @@ export function EquipmentForm({
         )}
       </div>
 
-      {/* Row 1: identity (full name + short) */}
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 6 }}>
+      {/* Row 1: category — a button row, not a dropdown (user 2026-09-29).
+          Click the selected one again to clear. */}
+      <Field label="Category" block>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {EQUIPMENT_CATEGORIES.map((c) => {
+            const on = category === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(on ? '' : c)}
+                aria-pressed={on}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: 4,
+                  fontSize: '0.8rem',
+                  fontWeight: on ? 600 : 400,
+                  border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                  background: on ? 'var(--color-accent)' : 'var(--color-card)',
+                  color: on ? 'white' : 'var(--color-text)',
+                  cursor: 'pointer',
+                }}
+              >
+                {EQUIPMENT_CATEGORY_LABELS[c]}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      {/* Row 2: full name · short name · component of */}
+      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr 1.5fr', gap: 6 }}>
         <Field label="Full name *" hint='"Hot Water Pump 3", "Chiller 1"'>
           <input
             type="text"
@@ -196,26 +226,7 @@ export function EquipmentForm({
             style={inputStyle}
           />
         </Field>
-      </div>
-
-      {/* Row 2: category + parent */}
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        <Field label="Category">
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as EquipmentCategory | '')}
-            style={inputStyle}
-          >
-            <option value="">— pick —</option>
-            {EQUIPMENT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{EQUIPMENT_CATEGORY_LABELS[c]}</option>
-            ))}
-          </select>
-        </Field>
-        <Field
-          label="Component of"
-          hint="leave blank if top-level; pick a parent for sub-components"
-        >
+        <Field label="Component of" hint="blank = top-level">
           <select
             value={parentId}
             onChange={(e) => setParentId(e.target.value)}
@@ -232,46 +243,25 @@ export function EquipmentForm({
         </Field>
       </div>
 
-      <Field label="Location" hint='"Penthouse, west wall" / "B1 Mech Room"'>
-        <input
-          type="text"
-          value={locationNote}
-          onChange={(e) => setLocationNote(e.target.value)}
-          style={inputStyle}
-        />
-      </Field>
-
-      {/* KB textareas — 2-col grid on PC, stacks naturally on narrow */}
-      <div
-        className="grid"
-        style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}
-      >
-        <Field label="Parts / consumables" hint="filter / belt / oil">
-          <textarea
-            value={partsNotes}
-            onChange={(e) => setPartsNotes(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
+      {/* Row 3: location · parts / consumables */}
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <Field label="Location" hint='"Penthouse, west wall" / "B1 Mech Room"'>
+          <input
+            type="text"
+            value={locationNote}
+            onChange={(e) => setLocationNote(e.target.value)}
+            style={inputStyle}
           />
         </Field>
-        <Field label="Common issues">
-          <textarea
-            value={commonIssues}
-            onChange={(e) => setCommonIssues(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
+        <Field label="Parts / consumables" hint="filter / belt / oil">
+          <input
+            type="text"
+            value={partsNotes}
+            onChange={(e) => setPartsNotes(e.target.value)}
+            style={inputStyle}
           />
         </Field>
       </div>
-
-      <Field label="Troubleshooting" hint="what to check first if down">
-        <textarea
-          value={troubleshooting}
-          onChange={(e) => setTroubleshooting(e.target.value)}
-          rows={2}
-          style={{ ...inputStyle, resize: 'vertical', minHeight: 0 }}
-        />
-      </Field>
 
       {/* Photo + status on one row to save vertical */}
       <div
@@ -416,13 +406,17 @@ function Field({
   label,
   hint,
   children,
+  block = false,
 }: {
   label: string;
   hint?: string;
   children: React.ReactNode;
+  /** Render as a div (for button groups) instead of a <label>. */
+  block?: boolean;
 }) {
+  const Tag: 'label' | 'div' = block ? 'div' : 'label';
   return (
-    <label style={{ display: 'block' }}>
+    <Tag style={{ display: 'block' }}>
       <div
         className="t-small"
         style={{
@@ -443,7 +437,7 @@ function Field({
         )}
       </div>
       {children}
-    </label>
+    </Tag>
   );
 }
 
