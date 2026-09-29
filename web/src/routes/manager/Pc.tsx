@@ -168,6 +168,12 @@ export default function ManagerPc() {
                 Admin
               </Link>
             )}
+            {/* Buildings KB (UPark) — equipment / issues behind §10.1. Back in
+                this header per user 2026-09-29 (hidden 09-23, briefly on the
+                admin header). Training / Manual stay hidden. */}
+            <Link to="/buildings" className="t-small t-accent hover:underline">
+              Buildings
+            </Link>
             {/* Static demo of profile layout A (user 2026-09-23) — for
                 discussion; the real page is /engineer/:id/profile. */}
             {canOpenAdmin && (
@@ -175,9 +181,9 @@ export default function ManagerPc() {
                 Profile demo
               </a>
             )}
-            {/* Buildings / Training / Manual header links hidden (user
-                2026-09-23) — the routes still exist (/buildings, /training,
-                /upark/manual); they're just not surfaced from this header. */}
+            {/* Training / Manual header links hidden (user 2026-09-23) — the
+                routes still exist (/training, /upark/manual); they're just
+                not surfaced from this header. Buildings is back above. */}
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">
               Sign out
