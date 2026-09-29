@@ -69,6 +69,12 @@ export default function Admin() {
             <Link to={isAdmin ? '/upark/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
+            {/* Static demo of profile layout A (mock-up for discussion; the
+                real page is /engineer/:id/profile). Moved here from the
+                dashboard header per user 2026-09-29. */}
+            <a href="/demo/profile-a.html" target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">
+              Profile demo
+            </a>
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
           </div>

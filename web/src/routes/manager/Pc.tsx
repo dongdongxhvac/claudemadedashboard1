@@ -174,13 +174,6 @@ export default function ManagerPc() {
             <Link to="/buildings" className="t-small t-accent hover:underline">
               Buildings
             </Link>
-            {/* Static demo of profile layout A (user 2026-09-23) — for
-                discussion; the real page is /engineer/:id/profile. */}
-            {canOpenAdmin && (
-              <a href="/demo/profile-a.html" target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">
-                Profile demo
-              </a>
-            )}
             {/* Training / Manual header links hidden (user 2026-09-23) — the
                 routes still exist (/training, /upark/manual); they're just
                 not surfaced from this header. Buildings is back above. */}
