@@ -69,6 +69,12 @@ export default function Admin() {
             <Link to={isAdmin ? '/upark/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
+            {/* Buildings KB (UPark) — the equipment / issue data behind §10.1
+                Equipment needing attention. Back here per user 2026-09-29
+                after the dashboard header link was hidden 09-23. */}
+            <Link to="/buildings" className="t-small t-accent hover:underline">
+              Buildings
+            </Link>
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
           </div>
