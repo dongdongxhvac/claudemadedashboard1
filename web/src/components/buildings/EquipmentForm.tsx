@@ -74,18 +74,27 @@ export function EquipmentForm({
   );
 
   const [error, setError] = useState<string | null>(null);
+  // "Save as new" (user 2026-09-29): duplicate the form's current values as a
+  // fresh row so similar equipment can be added by editing one and copying.
+  // The form stays open on the ORIGINAL so the next copy is one rename away.
+  const [savedAsNew, setSavedAsNew] = useState<string | null>(null);
   const tone = equipmentStatusTone(status);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e: React.FormEvent | null, asNew = false) {
+    e?.preventDefault();
     setError(null);
+    setSavedAsNew(null);
     if (!fullName.trim()) {
       setError('Full name is required.');
       return;
     }
+    if (asNew && existing && fullName.trim().toLowerCase() === existing.full_name.trim().toLowerCase()) {
+      setError('Change the full name first — the copy would have the same name as the original.');
+      return;
+    }
     try {
       const saved = await upsert.mutateAsync({
-        id: existing?.id,
+        id: asNew ? undefined : existing?.id,
         building_id: buildingId,
         parent_equipment_id: parentId || null,
         full_name: fullName.trim(),
@@ -97,7 +106,8 @@ export function EquipmentForm({
         // already has so an edit doesn't wipe older notes.
         common_issues: existing?.common_issues ?? null,
         troubleshooting: existing?.troubleshooting ?? null,
-        photo_url: removePhoto ? null : existing?.photo_url ?? null,
+        // a copy never inherits the original's photo (it's that unit's picture)
+        photo_url: asNew ? null : removePhoto ? null : existing?.photo_url ?? null,
         sort_order: existing?.sort_order ?? 0,
         status,
       });
@@ -115,6 +125,11 @@ export function EquipmentForm({
         } finally {
           setUploading(false);
         }
+      }
+      if (asNew) {
+        setSavedAsNew(saved.short_name ? `${saved.short_name} · ${saved.full_name}` : saved.full_name);
+        setPhotoFile(null);
+        return;                      // stay open for the next copy
       }
       onClose();
     } catch (err) {
@@ -345,6 +360,11 @@ export function EquipmentForm({
       {error && (
         <div className="t-small" style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
+      {savedAsNew && (
+        <div className="t-small" style={{ color: 'var(--color-ok, #10b981)' }}>
+          Added as new: <b>{savedAsNew}</b>. Change the name again and save as new for the next one, or Cancel when done.
+        </div>
+      )}
 
       <div className="flex gap-2" style={{ marginTop: 2 }}>
         <button
@@ -383,6 +403,24 @@ export function EquipmentForm({
             </span>
           )}
         </button>
+        {existing && (
+          <button
+            type="button"
+            onClick={() => submit(null, true)}
+            disabled={upsert.isPending || uploading}
+            className="t-small t-accent"
+            title="Create a new piece of equipment from these values (the original is left as is)"
+            style={{
+              padding: '6px 12px',
+              border: '1px dashed var(--color-accent)',
+              borderRadius: 4,
+              background: 'transparent',
+              fontSize: '0.8rem',
+            }}
+          >
+            Save as new
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
