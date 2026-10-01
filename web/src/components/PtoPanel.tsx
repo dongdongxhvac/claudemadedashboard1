@@ -466,18 +466,22 @@ export function PtoPanel() {
           {/* Coverage section: rotated heatmap (weeks as rows, Mon–Sun
               across the top) on the left, 7-workday attendance roll beside
               it — layout ported from BinneyPtoPanel.tsx 2026-07-25. */}
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {/* Pinned to the grid's width (34 gutter + 7×40 cells + 21 gaps
                 = 335) plus room for a non-overlay scrollbar on the 52w
                 view — otherwise the title/legend rows set the flex-basis
-                and starve the roll beside it. */}
-            <div style={{ flex: '0 0 350px', width: 350 }}>
+                and starve the roll beside it. maxWidth keeps a phone
+                narrower than 350px from side-scrolling the page. */}
+            <div style={{ flex: '0 0 350px', width: 350, maxWidth: '100%' }}>
               <CapHeatmap
                 requests={buckets.all}
                 onPickDate={(iso) => { setAddPresetDate(iso); setShowAdd(true); }}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* 560px basis: sits beside the heatmap on laptops/monitors
+                (≥ ~930px container) and wraps to a stacked full-width row
+                on tablets and phones instead of squeezing. */}
+            <div style={{ flex: '1 1 560px', minWidth: 0 }}>
               <TodayAttendance
                 engineers={engineers}
                 shifts={shiftsQ.data ?? []}
@@ -1608,6 +1612,14 @@ function CapHeatmap({ requests, onPickDate }: {
   // the fact. Views taller than 24+2 week rows scroll (see the maxHeight
   // on the grid's scroll window below). Ported from Binney 2026-09-08.
   const [weeks, setWeeks] = useState<9 | 13 | 26 | 52>(13);
+  // Phones/tablets have no hover, so the cell tooltip is unreachable there.
+  // On coarse-pointer devices a tap opens a bottom detail sheet instead
+  // (with its own Add-PTO shortcut); desktop keeps hover + click-to-add.
+  const coarse = useMemo(
+    () => window.matchMedia('(hover: none), (pointer: coarse)').matches,
+    [],
+  );
+  const [detailCell, setDetailCell] = useState<Cell | null>(null);
   const PAST_WEEKS = 2;
   const today = todayIso();
 
@@ -1942,14 +1954,20 @@ function CapHeatmap({ requests, onPickDate }: {
               const parts = cellParts(cell.people, cell.sick, cell.other);
               // Approximate rendered length (chars + separators) for sizing.
               const labelLen = parts.reduce((s, p) => s + p.text.length + 1, -1);
-              const clickable = !cell.isPast && !!onPickDate;
+              // Coarse pointers: every cell (past included) taps open the
+              // detail sheet; fine pointers keep hover tooltip + click-to-add.
+              const clickable = coarse || (!cell.isPast && !!onPickDate);
               const hasSick = cell.sick.length > 0;
               const hasOther = cell.other.length > 0;
               return (
                 <button
                   key={cell.iso}
                   type="button"
-                  onClick={clickable ? () => onPickDate!(cell.iso) : undefined}
+                  onClick={
+                    coarse ? () => setDetailCell(cell)
+                    : clickable ? () => onPickDate!(cell.iso)
+                    : undefined
+                  }
                   disabled={!clickable}
                   title={tooltip(cell)}
                   style={{
@@ -2032,8 +2050,92 @@ function CapHeatmap({ requests, onPickDate }: {
         ))}
       </div>
       <div className="t-muted" style={{ fontSize: 9, marginTop: 4, fontStyle: 'italic' }}>
-        Click a future cell to add PTO
+        {coarse ? 'Tap a cell for details' : 'Click a future cell to add PTO'}
       </div>
+
+      {/* Tap-detail bottom sheet (coarse-pointer devices) — the hover
+          tooltip's content, structured: date, holiday, who is out by type,
+          and an Add-PTO shortcut for future days. */}
+      {detailCell && (
+        <>
+          <div
+            onClick={() => setDetailCell(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 60 }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
+              background: 'var(--color-card)',
+              borderTopLeftRadius: 12, borderTopRightRadius: 12,
+              boxShadow: '0 -6px 24px rgba(0,0,0,0.25)',
+              padding: '0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom))',
+              maxHeight: '70vh', overflowY: 'auto',
+            }}
+          >
+            <div className="t-text" style={{ fontWeight: 700 }}>
+              {new Date(detailCell.iso + 'T00:00:00').toLocaleDateString(undefined, {
+                weekday: 'long', month: 'long', day: 'numeric',
+              })}
+              {detailCell.isToday && <span style={{ color: 'var(--color-accent)' }}> · today</span>}
+              {detailCell.isPast && <span className="t-muted" style={{ fontWeight: 400 }}> · past</span>}
+            </div>
+            {detailCell.holiday && (
+              <div className="t-small" style={{ color: '#10b981', fontWeight: 600, marginTop: 2 }}>
+                ★ BMR holiday — {detailCell.holiday}
+              </div>
+            )}
+            <div className="t-small t-muted" style={{ marginTop: 2 }}>
+              Vacation cap: {detailCell.people.length} of 2 used
+            </div>
+            <ul className="space-y-1" style={{ margin: '0.6rem 0 0', padding: 0, listStyle: 'none' }}>
+              {detailCell.people.length + detailCell.sick.length + detailCell.other.length === 0 && (
+                <li className="t-small t-muted italic">No one out.</li>
+              )}
+              {detailCell.people.map((p, i) => (
+                <li key={`v${i}`} className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: PTO_TYPE_COLOR.vacation, flexShrink: 0 }} />
+                  <strong>{p.name}</strong>
+                  <span className="t-muted">vacation{p.status === 'pending' ? ' · pending' : ''}</span>
+                </li>
+              ))}
+              {detailCell.sick.map((p, i) => (
+                <li key={`s${i}`} className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: PTO_TYPE_COLOR.sick, flexShrink: 0 }} />
+                  <strong>{p.name}</strong>
+                  <span className="t-muted">sick{p.status === 'pending' ? ' · pending' : ''}</span>
+                </li>
+              ))}
+              {detailCell.other.map((p, i) => (
+                <li key={`o${i}`} className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: '#8b5cf6', flexShrink: 0 }} />
+                  <strong>{p.name}</strong>
+                  <span className="t-muted">{p.label ?? 'leave'}{p.status === 'pending' ? ' · pending' : ''}</span>
+                </li>
+              ))}
+            </ul>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              {!detailCell.isPast && onPickDate && (
+                <button
+                  type="button"
+                  onClick={() => { const iso = detailCell.iso; setDetailCell(null); onPickDate(iso); }}
+                  className="t-small"
+                  style={{ flex: 1, background: 'var(--color-accent)', color: 'white', border: 'none', borderRadius: 8, padding: '0.55rem', fontWeight: 600 }}
+                >
+                  + Add PTO {fmtMd(detailCell.iso)}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDetailCell(null)}
+                className="t-small"
+                style={{ flex: 1, border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.55rem', fontWeight: 600, background: 'var(--color-card)', color: 'var(--color-text)' }}
+              >Close</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
