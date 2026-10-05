@@ -18,8 +18,9 @@
 // Focus-board announcements still surface via the header strip (top-2);
 // the standalone panel got displaced when BMS health moved in.
 //
-// This file also exports Tv2View (/upark/tv2) — the second wall screen, a
-// 2×2 of four of these same panels. See the "TV2" section near the bottom.
+// This file also exports Tv2View (/upark/tv2) — the second wall screen,
+// built from these same panels plus a PTO heat map. See the "TV2" section
+// near the bottom.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { rotationWeeksByMember } from '../../lib/oncallRotation';
@@ -59,7 +60,8 @@ import {
 } from '../../hooks/usePto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
-import { isClosed, addDays, localISODate } from '../../lib/dashboard';
+import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
+import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
 import { daysWorkedByName, workdaysInWindow, type PtoDayRow } from '../../lib/daysWorked';
 
 /** "data 3h old" / "fresh" / "—" — hours for fresh data, days for stale. */
@@ -1882,25 +1884,20 @@ function OvertimeTvPanel({ now }: { now: Date }) {
 // §12 Coverage — the 5-work-day PTO attendance preview. OT moved out to
 // OvertimeTvPanel (2026-09-14).
 //
-// TV2 reuses it as a dedicated PTO panel: workDays=10, two days per row
-// (columns=2), under its own title.
+// TV2 stacks it under the PTO heat map with fit=true (see the prop).
 function CoverageTvPanel({
   engineers,
   pto,
   now,
-  workDays = 5,
-  columns = 1,
-  title = 'Coverage · §12 PTO',
+  fit = false,
 }: {
   engineers: EngineerRow[];
   pto: PtoRequest[];
   now: Date;
-  /** Today + this many − 1 following work days. */
-  workDays?: number;
-  /** 2 = two days per row, nearest first, filling the panel's height;
-   *  days that don't fit are dropped whole and counted in the title row. */
-  columns?: 1 | 2;
-  title?: string;
+  /** For a panel whose height is squeezed by a neighbour: days that don't
+   *  fit are dropped whole, furthest-out first, and counted in the title
+   *  row, instead of being cut off mid-row. */
+  fit?: boolean;
 }) {
   // Active engineer headcount drives the "X/Y in" denominator. Engineers
   // only — leads/managers don't show up on the daily roster.
@@ -1909,7 +1906,7 @@ function CoverageTvPanel({
     [engineers],
   );
 
-  // Work-day attendance preview (5 by default): today + the next WORK days. UPark works
+  // 5-work-day attendance preview: today + next 4 WORK days. UPark works
   // Mon–Fri, so Saturday/Sunday are skipped. Today is always included
   // (even if it's a weekend) — managers still want a glance at any
   // weekend coverage / on-call situation. Partial-day rows DON'T
@@ -1945,11 +1942,11 @@ function CoverageTvPanel({
     };
     // Day 0 — today, always included.
     pushDay(today, 'today');
-    // Remaining days — the following work days (skip Sat/Sun). Label "tmrw" only if
+    // Days 1–4 — next four work days (skip Sat/Sun). Label "tmrw" only if
     // the work day actually is tomorrow (Thu → Fri); otherwise use the
     // weekday name (Fri → Mon, not "tmrw").
     const cursor = new Date(today);
-    while (out.length < workDays) {
+    while (out.length < 5) {
       cursor.setDate(cursor.getDate() + 1);
       const dow = cursor.getDay();
       if (dow === 0 || dow === 6) continue;
@@ -1964,20 +1961,18 @@ function CoverageTvPanel({
       );
     }
     return out;
-  }, [pto, now, totalEngineers, workDays]);
+  }, [pto, now, totalEngineers]);
 
-  // 2-column mode takes whatever height the panel is given, so in a heavy
-  // week (several people out every day) the last rows may not fit. Those
-  // days are hidden whole — furthest-out first, since rows run nearest to
-  // furthest — and the title row says how many. In 1-column mode the ref is
-  // never attached and every day counts as fitting.
+  // fit mode: in a heavy week (several people out every day) the last days
+  // may not fit the height the panel is given. Without fit the ref is never
+  // attached and every day counts as fitting.
   const { ref: daysRef, fit: daysFit } = useFittingRows<HTMLDivElement>(days);
-  const hiddenDays = columns === 2 ? days.length - daysFit : 0;
+  const hiddenDays = fit ? days.length - daysFit : 0;
 
   return (
     <section className="tv-panel" style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">{title}</h2>
+        <h2 className="tv-panel-title">Coverage · §12 PTO</h2>
         <div className="tv-panel-meta">
           {hiddenDays > 0 && (
             <>
@@ -1992,16 +1987,16 @@ function CoverageTvPanel({
         </div>
       </div>
       <div className="tv-panel-body tv-cov-body">
-        {/* Work-day attendance preview */}
+        {/* Top: 5-work-day attendance preview */}
         <div
-          className={columns === 2 ? 'tv-cov-days tv-cov-days-2col' : 'tv-cov-days'}
-          ref={columns === 2 ? daysRef : undefined}
+          className={fit ? 'tv-cov-days tv-cov-days-fit' : 'tv-cov-days'}
+          ref={fit ? daysRef : undefined}
         >
           {days.map((d, i) => (
             <div
               key={d.iso}
               className="tv-cov-day"
-              style={columns === 2 && i >= daysFit ? { visibility: 'hidden' } : undefined}
+              style={fit && i >= daysFit ? { visibility: 'hidden' } : undefined}
             >
               <div className="tv-cov-day-head">
                 <span className="tv-cov-day-label">{d.label}</span>
@@ -2063,25 +2058,22 @@ function CoverageTvPanel({
 // TV2 — second wall screen (/upark/tv2)
 // ============================================================================
 //
-// A coverage board: who's out, what's locked out or limping, who's on call,
-// and which overtime still needs takers. Four panels in a 2×2, each one a
-// TV1 panel reused as-is so the two screens can't drift apart:
+// A coverage board: who's out (now and for the next half year), which
+// overtime still needs takers, what's locked out or limping, who's on call.
+// Same three equal columns as TV1 (layout per user 2026-10-05):
 //   ┌── header (same as TV1) ───────────────────────────────────────────┐
-//   ├──────────────────────────────┬────────────────────────────────────┤
-//   │ PTO · next 10 work days      │ EQUIPMENT ATTENTION · LOTO         │
-//   │  (takes what on-call leaves) │  (takes what OT leaves)            │
-//   ├──────────────────────────────┼────────────────────────────────────┤
-//   │ ON-CALL SCHEDULE             │ OVERTIME COVERAGE POSTS            │
-//   │  (content-sized, never cut)  │  (content-sized, ≤ 5 posts)        │
-//   └──────────────────────────────┴────────────────────────────────────┘
-// Four panels instead of six leaves room to draw everything larger: the
-// whole board is magnified by TV2_SCALE (mechanism in Tv2Styles).
-
-/** How much larger TV2 draws everything than TV1. At 1.3 a half-width
- *  panel still has slightly more room than a TV1 third-width column, so
- *  the panels' fixed vw lanes keep fitting. Raising it buys size at the
- *  cost of that slack and of vertical room in heavy-PTO weeks. */
-const TV2_SCALE = 1.3;
+//   ├──────────────────┬─────────────────────────────────────────────────┤
+//   │ PTO HEAT MAP     │ OVERTIME COVERAGE POSTS                         │
+//   │  26 weeks        │  (content-sized, ≤ 5 posts)                     │
+//   │  (takes what     ├────────────────────────┬────────────────────────┤
+//   │   coverage       │ LOTO · EQUIPMENT       │ ON-CALL SCHEDULE       │
+//   │   leaves)        │ ATTENTION              │                        │
+//   ├──────────────────┤                        │                        │
+//   │ COVERAGE · PTO   │                        │                        │
+//   │  next 5 work days│                        │                        │
+//   └──────────────────┴────────────────────────┴────────────────────────┘
+// Coverage, OT, equipment and on-call are TV1's panels reused as-is, so the
+// two screens can't drift apart; the heat map is TV2's own.
 
 export function Tv2View() {
   return (
@@ -2092,7 +2084,7 @@ export function Tv2View() {
 }
 
 function Tv2ViewInner() {
-  // Live data — only the feeds these four panels (and the header) read.
+  // Live data — only the feeds these panels (and the header) read.
   // OvertimeTvPanel subscribes to its own.
   useOncallRealtime();
   useOncallNotesRealtime();
@@ -2112,26 +2104,26 @@ function Tv2ViewInner() {
   useKioskCursorHide();
 
   return (
-    <div className="tv2-viewport">
-      <div className="tv-root tv2-root">
-        <TvStyles />
-        <Tv2Styles />
-        <Header
-          now={now}
-          oncall={oncallQ.data ?? []}
-          weather={weatherQ.data ?? null}
-          focusItems={focusItems}
-        />
-        <main className="tv2-grid">
-          <div className="tv2-col tv2-col-people">
-            <CoverageTvPanel
-              engineers={engineers}
-              pto={ptoRows}
-              now={now}
-              workDays={10}
-              columns={2}
-              title="PTO · next 10 work days"
-            />
+    <div className="tv-root">
+      <TvStyles />
+      <Tv2Styles />
+      <Header
+        now={now}
+        oncall={oncallQ.data ?? []}
+        weather={weatherQ.data ?? null}
+        focusItems={focusItems}
+      />
+      <main className="tv2-grid">
+        {/* Column 1 — PTO: the long view over the short view. */}
+        <div className="tv2-pto-col">
+          <PtoHeatmapTvPanel pto={ptoRows} now={now} />
+          <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} fit />
+        </div>
+        {/* Columns 2–3 — OT across the top, then one panel per column. */}
+        <div className="tv2-right-block">
+          <OvertimeTvPanel now={now} />
+          <div className="tv2-right-cols">
+            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
             <OncallPanel
               participants={participantsQ.data ?? []}
               settings={oncallSettingsQ.data ?? null}
@@ -2139,13 +2131,211 @@ function Tv2ViewInner() {
               now={now}
             />
           </div>
-          <div className="tv2-col">
-            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
-            <OvertimeTvPanel now={now} />
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
+  );
+}
+
+// ── PTO heat map ──────────────────────────────────────────────────────────
+//
+// The manager dashboard's vacation-cap heat map (CapHeatmap in
+// components/PtoPanel.tsx), read-only and restyled for the wall: one row per
+// Mon–Sun week, HEAT_TV_WEEKS rows starting at the current week, each cell
+// coloured by how many engineers are on vacation that day against the
+// 2-engineer cap. The counting rules are a copy of CapHeatmap's — keep the
+// two in sync:
+//   · approved AND pending requests count
+//   · only vacation drives the colour; sick and every other leave type show
+//     as red / purple text but never change it
+//   · under 3 people out, a cell lists initials; from 3 up, head-counts
+//   · a week belongs to the month of its Tuesday
+// Copied rather than imported, like TV1's other rules, so the manager
+// panel's interactive code stays out of the kiosk.
+const HEAT_TV_WEEKS = 26;
+
+type HeatCell = {
+  iso: string;
+  isToday: boolean;
+  isPast: boolean;
+  isWeekend: boolean;
+  vac: string[];     // names on vacation — the only list that sets the colour
+  sick: string[];
+  other: string[];
+  holiday: boolean;  // BMR-observed holiday (outline only)
+};
+type HeatWeek = {
+  key: string;
+  label: string;            // the week's Monday as m/d
+  monthTag: string | null;  // "OCT" on the first row and wherever a month starts
+  banded: boolean;          // odd months sit on a faint band
+  isCurrent: boolean;
+  cells: HeatCell[];        // Mon–Sun
+};
+
+function buildPtoHeatWeeks(pto: PtoRequest[], todayIso: string, weeks: number): HeatWeek[] {
+  const start = mondayOf(new Date(todayIso + 'T00:00:00'));
+  const startIso = localISODate(start);
+  const endIso = localISODate(addDays(start, weeks * 7 - 1));
+
+  const vac = new Map<string, string[]>();
+  const sick = new Map<string, string[]>();
+  const other = new Map<string, string[]>();
+  for (const r of pto) {
+    if (r.status !== 'approved' && r.status !== 'pending') continue;
+    const bucket = r.type === 'vacation' ? vac : r.type === 'sick' ? sick : other;
+    // Walk only the part of the request that falls inside the window.
+    const from = r.starts_on > startIso ? r.starts_on : startIso;
+    const to = r.ends_on < endIso ? r.ends_on : endIso;
+    for (let d = new Date(from + 'T00:00:00'); localISODate(d) <= to; d = addDays(d, 1)) {
+      const iso = localISODate(d);
+      const list = bucket.get(iso);
+      if (list) list.push(r.user_full_name ?? '?');
+      else bucket.set(iso, [r.user_full_name ?? '?']);
+    }
+  }
+  const holidays = new Set(BMR_HOLIDAYS.map((h) => h.date));
+
+  const out: HeatWeek[] = [];
+  let prevMonth = -1;
+  for (let w = 0; w < weeks; w++) {
+    const monday = addDays(start, w * 7);
+    const cells: HeatCell[] = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = localISODate(addDays(monday, i));
+      cells.push({
+        iso,
+        isToday: iso === todayIso,
+        isPast: iso < todayIso,
+        isWeekend: i >= 5,
+        vac: vac.get(iso) ?? [],
+        sick: sick.get(iso) ?? [],
+        other: other.get(iso) ?? [],
+        holiday: holidays.has(iso),
+      });
+    }
+    const tue = addDays(monday, 1);
+    const month = tue.getFullYear() * 12 + tue.getMonth();
+    const startsMonth = month !== prevMonth;   // also true for the first row
+    prevMonth = month;
+    out.push({
+      key: cells[0].iso,
+      label: `${monday.getMonth() + 1}/${monday.getDate()}`,
+      monthTag: startsMonth
+        ? tue.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()
+        : null,
+      banded: tue.getMonth() % 2 === 1,
+      isCurrent: w === 0,
+      cells,
+    });
+  }
+  return out;
+}
+
+/** "Edwin Sepulveda" → "ES". First letter of the first and last name words;
+ *  words with no letters are skipped ("301 Tommy" → "T"), so a number in a
+ *  cell always means a head-count, never part of a name. */
+function heatInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
+  if (words.length === 0) return '?';
+  const first = (w: string) => w.match(/[A-Za-z]/)![0].toUpperCase();
+  if (words.length === 1) return first(words[0]);
+  return first(words[0]) + first(words[words.length - 1]);
+}
+
+type HeatPart = { text: string; tone?: 'sick' | 'other' };
+function heatCellParts(c: HeatCell): HeatPart[] {
+  const total = c.vac.length + c.sick.length + c.other.length;
+  if (total === 0) return [];
+  if (total < 3) {
+    return [
+      ...c.vac.map((n) => ({ text: heatInitials(n) })),
+      ...c.sick.map((n) => ({ text: heatInitials(n), tone: 'sick' as const })),
+      ...c.other.map((n) => ({ text: heatInitials(n), tone: 'other' as const })),
+    ];
+  }
+  const out: HeatPart[] = [];
+  if (c.vac.length > 0)   out.push({ text: String(c.vac.length) });
+  if (c.sick.length > 0)  out.push({ text: `+${c.sick.length}`, tone: 'sick' });
+  if (c.other.length > 0) out.push({ text: `+${c.other.length}`, tone: 'other' });
+  return out;
+}
+
+const HEAT_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function PtoHeatmapTvPanel({ pto, now }: { pto: PtoRequest[]; now: Date }) {
+  // Keyed on the date, not the minute clock, so the grid rebuilds once a day.
+  const todayIso = localISODate(now);
+  const weeks = useMemo(
+    () => buildPtoHeatWeeks(pto, todayIso, HEAT_TV_WEEKS),
+    [pto, todayIso],
+  );
+  const lastDay = weeks[weeks.length - 1].cells[6].iso;
+  const [, lastM, lastD] = lastDay.split('-').map(Number);
+
+  return (
+    <section className="tv-panel tv-heat-panel" style={{ borderTopColor: '#fbbf24' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">PTO heat map · {HEAT_TV_WEEKS} weeks</h2>
+        <div className="tv-panel-meta">{weeks[0].label} – {lastM}/{lastD}</div>
+      </div>
+      <div className="tv-panel-body tv-heat-body">
+        <div className="tv-heat-legend">
+          <span className="tv-heat-legend-item">on vacation:</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-c0" />0</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-c1" />1</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-c2" />2 cap</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-c3" />3+</span>
+          <span className="tv-heat-legend-item tv-heat-sick">sick</span>
+          <span className="tv-heat-legend-item tv-heat-other">other leave</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-holiday" />holiday</span>
+        </div>
+        <div className="tv-heat-dow">
+          <span />
+          <span />
+          {HEAT_DOW.map((d) => <span key={d}>{d}</span>)}
+        </div>
+        <div
+          className="tv-heat-weeks"
+          style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+        >
+          {weeks.map((wk) => (
+            <div
+              key={wk.key}
+              className={[
+                'tv-heat-week',
+                wk.banded && 'tv-heat-week-banded',
+                wk.isCurrent && 'tv-heat-week-current',
+              ].filter(Boolean).join(' ')}
+            >
+              <span className="tv-heat-month">{wk.monthTag}</span>
+              <span className="tv-heat-date">{wk.label}</span>
+              {wk.cells.map((c) => (
+                <span
+                  key={c.iso}
+                  className={[
+                    'tv-heat-cell',
+                    `tv-heat-c${Math.min(c.vac.length, 3)}`,
+                    c.isWeekend && 'tv-heat-weekend',
+                    c.isPast && 'tv-heat-past',
+                    c.holiday && 'tv-heat-holiday',
+                    c.isToday && 'tv-heat-today',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {heatCellParts(c).map((part, i) => (
+                    <Fragment key={i}>
+                      {/* No dot before a "+n" count — "2+1" reads as one expression. */}
+                      {i > 0 && !part.text.startsWith('+') && <span className="tv-heat-sep">·</span>}
+                      <span className={part.tone ? `tv-heat-${part.tone}` : undefined}>{part.text}</span>
+                    </Fragment>
+                  ))}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -2181,7 +2371,7 @@ function useFittingRows<T extends HTMLElement>(rows: readonly unknown[]) {
 /** TV2's standalone Equipment panel — the same open-issue rows TV1 tucks
  *  under its BMS heartbeats (EquipmentDownStripe), given a panel of their
  *  own with the active-LOTO count called out in the title row. Its height
- *  is whatever the OT panel below leaves, so "+N more" counts the rows
+ *  is whatever the OT panel above leaves, so "+N more" counts the rows
  *  that actually don't fit, not just those past the cap. */
 function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) {
   const s = useMemo(() => summarizeEquipmentDown(eqDown), [eqDown]);
@@ -2192,7 +2382,7 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
   return (
     <section className="tv-panel tv2-eq-panel" style={{ borderTopColor: '#dc2626' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Equipment attention · LOTO</h2>
+        <h2 className="tv-panel-title">LOTO · Equipment attention</h2>
         <div className="tv-panel-meta">
           {eqDown.length === 0 ? 'none open' : (
             <>
@@ -3191,19 +3381,14 @@ function TvStyles() {
         display: flex; flex-direction: column; gap: 0.25vw;
         flex: 0 0 auto;
       }
-      /* 2-column variant: the grid owns the panel's leftover height and is
-         the clipping box useFittingRows measures. Rows keep their natural
-         height (align-content: start) instead of stretching to fill. */
-      .tv-cov-days-2col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        align-content: start;
-        gap: 0.25vw 0.6vw;
-        flex: 1 1 auto;
+      /* fit variant: the day list shrinks with the panel and is the
+         clipping box useFittingRows measures; the days keep their height. */
+      .tv-cov-days-fit {
+        flex: 0 1 auto;
         min-height: 0;
         overflow: hidden;
       }
-      .tv-cov-days-2col > .tv-cov-day { min-width: 0; }
+      .tv-cov-days-fit > .tv-cov-day { flex: 0 0 auto; }
       .tv-cov-day {
         padding: 0.18vw 0.35vw;
         background: rgba(59, 130, 246, 0.08);
@@ -3417,58 +3602,55 @@ function TvStyles() {
 function Tv2Styles() {
   return (
     <style>{`
-      /* Magnification. Every size in TvStyles is in vw, so the board can't
-         be enlarged by raising a font-size. Instead the root is laid out in
-         a box 1/TV2_SCALE the size of the viewport and scaled back up to
-         fill it: the vw lengths inside still resolve against the real
-         viewport, the box they're arranged in is smaller, so everything
-         lands TV2_SCALE× larger with the layout intact. */
-      .tv2-viewport {
-        width: 100vw;
-        height: 100vh;
-        overflow: hidden;
-        background: #0b1220;
-      }
-      .tv-root.tv2-root {
-        width: calc(100vw / ${TV2_SCALE});
-        height: calc(100vh / ${TV2_SCALE});
-        transform: scale(${TV2_SCALE});
-        transform-origin: 0 0;
-      }
-
+      /* Three equal columns, like TV1. Column 1 is the PTO stack; columns
+         2–3 are one block (OT strip over a 2-column row) whose inner
+         columns line up with the outer thirds. */
       .tv2-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
       }
       /* Same guard as .tv-grid: content adapts to its track, never the
          reverse. */
-      .tv2-grid > * { min-width: 0; }
-      /* Each column stacks two panels. The bottom one is content-sized and
-         never shrinks — the rotation table must not lose a row, and OT is
-         already capped at OT_TV_MAX_ROWS — while the top one takes whatever
-         height is left and clips if a heavy week overfills it. */
-      .tv2-col {
+      .tv2-grid > * { min-width: 0; min-height: 0; }
+
+      /* PTO column. Coverage is content-sized; the heat map takes the rest
+         and its week rows stretch to fill it. The heat map's floor keeps
+         the rows tall enough to read, so in a very heavy week it is
+         Coverage that gives way (dropping whole days — see its fit prop). */
+      .tv2-pto-col {
         display: flex;
         flex-direction: column;
         gap: 0.6vw;
-        min-height: 0;
       }
-      .tv2-col > .tv-panel { flex: 1 1 auto; min-height: 0; }
-      .tv2-col > .tv-panel:last-child { flex: 0 0 auto; }
+      .tv2-pto-col > .tv-heat-panel { flex: 1 1 0; min-height: 30.5vw; }
+      .tv2-pto-col > .tv-panel:last-child { flex: 0 1 auto; min-height: 0; }
+
+      .tv2-right-block {
+        grid-column: 2 / span 2;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6vw;
+      }
+      .tv2-right-cols {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6vw;
+      }
+      .tv2-right-cols > * { min-width: 0; min-height: 0; }
 
       /* Equipment: the row list is the clipping box useFittingRows
          measures, so it has to own the leftover height. The meta is set a
-         touch tighter so a full tally (LOTO + all four statuses + overflow)
-         still shares a line with the title. */
+         touch tighter so the tally shares a line with the title; when it
+         can't, it drops to its own line rather than breaking the title. */
       .tv2-eq-panel .tv-panel-body { display: flex; flex-direction: column; }
       .tv2-eq-panel .tv-eq-down-list { flex: 1 1 auto; }
       .tv2-eq-panel .tv-panel-meta { font-size: 0.62vw; letter-spacing: 0.08em; }
-      /* If even that is too wide, the tally drops to its own line rather
-         than breaking the title mid-phrase. */
       .tv2-eq-panel .tv-panel-titlerow { flex-wrap: wrap; row-gap: 0.1vw; }
       .tv2-eq-panel .tv-panel-title { white-space: nowrap; }
       .tv2-eq-loto {
@@ -3480,21 +3662,100 @@ function Tv2Styles() {
         margin-right: 0.6vw;
       }
 
-      /* OT rows were laid out for a two-thirds-wide tile. At half width the
-         category text lane goes — the row's dot and the legend bar above
-         already carry it — so the names lane keeps its room. */
-      .tv2-root .tv-ot-l1 { grid-template-columns: 12.5vw 10vw 2.2vw 1fr; }
-      .tv2-root .tv-ot-cat { display: none; }
-      /* …and the sign-up prompt wraps under the title rather than
-         squeezing between the title and the counts. */
-      .tv2-root .tv-ot-panel .tv-panel-titlerow { flex-wrap: wrap; row-gap: 0.15vw; }
-      .tv2-root .tv-ot-cta-inline { order: 3; margin: 0; }
-      /* In the narrower names lane the OPEN pill goes first, so the cue
-         that a slot needs a taker is never the part that gets cut off.
-         (!important: the pill's left margin is set inline.) */
-      .tv2-root .tv-ot-slots { display: flex; align-items: baseline; }
-      .tv2-root .tv-ot-slots > * { flex: 0 0 auto; }
-      .tv2-root .tv-ot-empty-open { order: -1; margin: 0 0.5vw 0 0 !important; }
+      /* PTO heat map. The legend and the day-of-week row are fixed; the
+         week rows share whatever height is left equally. */
+      .tv-heat-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.22vw;
+        min-height: 0;
+      }
+      .tv-heat-legend {
+        flex: 0 0 auto;
+        display: flex; flex-wrap: wrap; align-items: center;
+        gap: 0.1vw 0.65vw;
+        font-size: 0.62vw;
+        color: #94a3b8;
+      }
+      .tv-heat-legend-item { display: inline-flex; align-items: center; gap: 0.25vw; }
+      .tv-heat-swatch {
+        width: 0.95vw; height: 0.62vw;
+        border-radius: 2px;
+        display: inline-block;
+        box-sizing: border-box;
+      }
+      /* Columns: month tag · week's Monday · Mon–Sun. Shared by the header
+         row and every week row so they line up. */
+      .tv-heat-dow, .tv-heat-week {
+        display: grid;
+        grid-template-columns: 1.9vw 2.3vw repeat(7, minmax(0, 1fr));
+        gap: 0.16vw;
+      }
+      .tv-heat-dow {
+        flex: 0 0 auto;
+        font-size: 0.56vw;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #64748b;
+        text-align: center;
+      }
+      .tv-heat-weeks {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        gap: 0.14vw;
+      }
+      .tv-heat-week { min-height: 0; border-radius: 2px; }
+      .tv-heat-week-banded { background: rgba(99, 102, 241, 0.09); }
+      .tv-heat-month, .tv-heat-date {
+        align-self: center;
+        white-space: nowrap;
+        overflow: hidden;
+        line-height: 1;
+      }
+      .tv-heat-month {
+        font-size: 0.56vw;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #93c5fd;
+      }
+      .tv-heat-date {
+        font-size: 0.62vw;
+        color: #64748b;
+        text-align: right;
+        padding-right: 0.2vw;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-heat-week-current .tv-heat-date { color: #38bdf8; font-weight: 700; }
+      .tv-heat-cell {
+        min-height: 0;
+        box-sizing: border-box;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 2px;
+        display: flex; align-items: center; justify-content: center;
+        gap: 0.1vw;
+        font-size: 0.62vw;
+        font-weight: 700;
+        line-height: 1;
+        color: #f1f5f9;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      /* Vacation head-count against the 2-engineer cap. */
+      .tv-heat-c0 { background: rgba(34, 197, 94, 0.13); }
+      .tv-heat-c1 { background: rgba(234, 179, 8, 0.40); }
+      .tv-heat-c2 { background: rgba(234, 88, 12, 0.62); }
+      .tv-heat-c3 { background: rgba(220, 38, 38, 0.72); }
+      /* UPark is a Mon–Fri site, so weekends read as "off"; days already
+         gone this week fade harder. */
+      .tv-heat-weekend { opacity: 0.5; }
+      .tv-heat-past { opacity: 0.35; }
+      .tv-heat-holiday { border: 2px solid #10b981; }
+      /* Today's ring wins over the holiday outline. */
+      .tv-heat-today { border: 2px solid #38bdf8; }
+      .tv-heat-sick { color: #fca5a5; }
+      .tv-heat-other { color: #c4b5fd; }
+      .tv-heat-sep { opacity: 0.55; }
     `}</style>
   );
 }
