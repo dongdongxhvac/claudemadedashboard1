@@ -13,7 +13,7 @@ in with**:
 | Layout | Account | URL path | Panels |
 |---|---|---|---|
 | TV1 — operations board | Shop TV (`tv@cove.local`) | `/upark/tv` | Workload + performance, BMS + equipment, projects, PTO, on-call, overtime |
-| TV2 — coverage board | Shop TV 2 (`tv2@upark.shop`) | `/upark/tv2` | PTO heat map (26 weeks) over coverage (next 5 work days); overtime posts; LOTO / equipment attention; on-call |
+| TV2 — coverage board | Shop TV 2 (`tv2@upark.shop`) | `/upark/tv2` | PTO heat map (20 weeks) over coverage (next 7 work days); overtime posts; on-call; LOTO / equipment attention |
 
 A TV account is always sent to its own layout, whichever of the two addresses
 the browser opened. Each kiosk still boots into its own layout's URL — that is

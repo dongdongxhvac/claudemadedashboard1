@@ -1881,19 +1881,22 @@ function OvertimeTvPanel({ now }: { now: Date }) {
   );
 }
 
-// §12 Coverage — the 5-work-day PTO attendance preview. OT moved out to
-// OvertimeTvPanel (2026-09-14).
+// §12 Coverage — the work-day PTO attendance preview (5 days on TV1). OT
+// moved out to OvertimeTvPanel (2026-09-14).
 //
-// TV2 stacks it under the PTO heat map with fit=true (see the prop).
+// TV2 stacks it under the PTO heat map with workDays=7 and fit=true.
 function CoverageTvPanel({
   engineers,
   pto,
   now,
+  workDays = 5,
   fit = false,
 }: {
   engineers: EngineerRow[];
   pto: PtoRequest[];
   now: Date;
+  /** How many days to list: today plus the following work days. */
+  workDays?: number;
   /** For a panel whose height is squeezed by a neighbour: days that don't
    *  fit are dropped whole, furthest-out first, and counted in the title
    *  row, instead of being cut off mid-row. */
@@ -1906,7 +1909,8 @@ function CoverageTvPanel({
     [engineers],
   );
 
-  // 5-work-day attendance preview: today + next 4 WORK days. UPark works
+  // Work-day attendance preview: today + the next WORK days, `workDays` in
+  // all (5 by default — today + next 4). UPark works
   // Mon–Fri, so Saturday/Sunday are skipped. Today is always included
   // (even if it's a weekend) — managers still want a glance at any
   // weekend coverage / on-call situation. Partial-day rows DON'T
@@ -1942,11 +1946,11 @@ function CoverageTvPanel({
     };
     // Day 0 — today, always included.
     pushDay(today, 'today');
-    // Days 1–4 — next four work days (skip Sat/Sun). Label "tmrw" only if
+    // The rest — the following work days (skip Sat/Sun). Label "tmrw" only if
     // the work day actually is tomorrow (Thu → Fri); otherwise use the
     // weekday name (Fri → Mon, not "tmrw").
     const cursor = new Date(today);
-    while (out.length < 5) {
+    while (out.length < workDays) {
       cursor.setDate(cursor.getDate() + 1);
       const dow = cursor.getDay();
       if (dow === 0 || dow === 6) continue;
@@ -1961,7 +1965,7 @@ function CoverageTvPanel({
       );
     }
     return out;
-  }, [pto, now, totalEngineers]);
+  }, [pto, now, totalEngineers, workDays]);
 
   // fit mode: in a heavy week (several people out every day) the last days
   // may not fit the height the panel is given. Without fit the ref is never
@@ -1987,7 +1991,7 @@ function CoverageTvPanel({
         </div>
       </div>
       <div className="tv-panel-body tv-cov-body">
-        {/* Top: 5-work-day attendance preview */}
+        {/* Top: work-day attendance preview */}
         <div
           className={fit ? 'tv-cov-days tv-cov-days-fit' : 'tv-cov-days'}
           ref={fit ? daysRef : undefined}
@@ -2058,19 +2062,19 @@ function CoverageTvPanel({
 // TV2 — second wall screen (/upark/tv2)
 // ============================================================================
 //
-// A coverage board: who's out (now and for the next half year), which
-// overtime still needs takers, what's locked out or limping, who's on call.
+// A coverage board: who's out (this week and over the coming months), which
+// overtime still needs takers, who's on call, what's locked out or limping.
 // Same three equal columns as TV1 (layout per user 2026-10-05):
 //   ┌── header (same as TV1) ───────────────────────────────────────────┐
 //   ├──────────────────┬─────────────────────────────────────────────────┤
 //   │ PTO HEAT MAP     │ OVERTIME COVERAGE POSTS                         │
-//   │  26 weeks        │  (content-sized, ≤ 5 posts)                     │
+//   │  20 weeks        │  (content-sized, ≤ 5 posts)                     │
 //   │  (takes what     ├────────────────────────┬────────────────────────┤
-//   │   coverage       │ LOTO · EQUIPMENT       │ ON-CALL SCHEDULE       │
-//   │   leaves)        │ ATTENTION              │                        │
+//   │   coverage       │ ON-CALL SCHEDULE       │ LOTO · EQUIPMENT       │
+//   │   leaves)        │                        │ ATTENTION              │
 //   ├──────────────────┤                        │                        │
 //   │ COVERAGE · PTO   │                        │                        │
-//   │  next 5 work days│                        │                        │
+//   │  next 7 work days│                        │                        │
 //   └──────────────────┴────────────────────────┴────────────────────────┘
 // Coverage, OT, equipment and on-call are TV1's panels reused as-is, so the
 // two screens can't drift apart; the heat map is TV2's own.
@@ -2117,19 +2121,19 @@ function Tv2ViewInner() {
         {/* Column 1 — PTO: the long view over the short view. */}
         <div className="tv2-pto-col">
           <PtoHeatmapTvPanel pto={ptoRows} now={now} />
-          <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} fit />
+          <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
         </div>
         {/* Columns 2–3 — OT across the top, then one panel per column. */}
         <div className="tv2-right-block">
           <OvertimeTvPanel now={now} />
           <div className="tv2-right-cols">
-            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
             <OncallPanel
               participants={participantsQ.data ?? []}
               settings={oncallSettingsQ.data ?? null}
               notes={oncallNotesQ.data ?? []}
               now={now}
             />
+            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
           </div>
         </div>
       </main>
@@ -2152,7 +2156,7 @@ function Tv2ViewInner() {
 //   · a week belongs to the month of its Tuesday
 // Copied rather than imported, like TV1's other rules, so the manager
 // panel's interactive code stays out of the kiosk.
-const HEAT_TV_WEEKS = 26;
+const HEAT_TV_WEEKS = 20;
 
 type HeatCell = {
   iso: string;
@@ -3618,15 +3622,16 @@ function Tv2Styles() {
       .tv2-grid > * { min-width: 0; min-height: 0; }
 
       /* PTO column. Coverage is content-sized; the heat map takes the rest
-         and its week rows stretch to fill it. The heat map's floor keeps
-         the rows tall enough to read, so in a very heavy week it is
-         Coverage that gives way (dropping whole days — see its fit prop). */
+         and its week rows stretch to fill it. The heat map's floor — its
+         title/legend/header (~5.4vw) plus ~0.97vw per week row — keeps the
+         rows tall enough to read, so in a very heavy week it is Coverage
+         that gives way (dropping whole days — see its fit prop). */
       .tv2-pto-col {
         display: flex;
         flex-direction: column;
         gap: 0.6vw;
       }
-      .tv2-pto-col > .tv-heat-panel { flex: 1 1 0; min-height: 30.5vw; }
+      .tv2-pto-col > .tv-heat-panel { flex: 1 1 0; min-height: ${(5.4 + HEAT_TV_WEEKS * 0.97).toFixed(1)}vw; }
       .tv2-pto-col > .tv-panel:last-child { flex: 0 1 auto; min-height: 0; }
 
       .tv2-right-block {
