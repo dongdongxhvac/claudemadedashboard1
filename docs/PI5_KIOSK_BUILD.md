@@ -7,12 +7,17 @@ and needs no keyboard after day one.
 **Kiosk URL:** `https://claudemadedashboard1.vercel.app/upark/tv`
 (update here and in `~/kiosk.sh` on the Pi when the custom domain goes live)
 
-**Two wall layouts** — each kiosk shows one, chosen by the URL it boots into:
+**Two wall layouts** — each kiosk shows one, chosen by the **account it signs
+in with**:
 
-| Layout | URL path | Panels |
-|---|---|---|
-| TV1 — operations board | `/upark/tv` | Workload + performance, BMS + equipment, projects, PTO, on-call, overtime |
-| TV2 — coverage board | `/upark/tv2` | PTO (next 10 work days), equipment attention / LOTO, on-call, overtime posts |
+| Layout | Account | URL path | Panels |
+|---|---|---|---|
+| TV1 — operations board | Shop TV (`tv@cove.local`) | `/upark/tv` | Workload + performance, BMS + equipment, projects, PTO, on-call, overtime |
+| TV2 — coverage board | Shop TV 2 (`tv2@upark.shop`) | `/upark/tv2` | PTO (next 10 work days), equipment attention / LOTO, on-call, overtime posts |
+
+A TV account is always sent to its own layout, whichever of the two addresses
+the browser opened. Each kiosk still boots into its own layout's URL — that is
+what it shows if the account's setting can't be read.
 
 Everything below builds a TV1 kiosk. For a TV2 kiosk only Phase 1's hostname
 and Phase 4's command differ — see **Second kiosk** near the end.
@@ -176,15 +181,14 @@ Same hardware, same steps, two differences:
    ```
 
 Phase 5: sign in with the second screen's own account, **`tv2@upark.shop`**
-("Shop TV 2") — set its password first in Admin → User Profiles → Set
-password. (Set the password *after* any email change: editing a profile's
-email unlinks its login, so the password has to be set again.) After the sign-in the kiosk returns to the layout it booted into
-(TV2 stays TV2). The layout comes from the URL the kiosk opens, not from the
-account; separate accounts just mean one screen's password can be changed or
-its access switched off without touching the other.
+("Shop TV 2"). Signing in with that account is what makes the screen the
+coverage board. (If its email is ever edited in User Profiles, set its
+password again afterwards — an email change unlinks the login.)
 
-To switch an existing kiosk between layouts, edit the URL in `~/kiosk.sh` on
-that Pi and refresh it (`pkill -f chromium`).
+To switch an existing kiosk between layouts, sign it in with the other
+screen's account, and point `~/kiosk.sh` on that Pi at the matching URL so
+the fallback agrees (then `pkill -f chromium`). A third screen needs its own
+tv-role account with `preferences.tv_layout` set to the layout it should show.
 
 ---
 

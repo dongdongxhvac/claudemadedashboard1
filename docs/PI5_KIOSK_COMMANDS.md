@@ -29,7 +29,7 @@ show nothing while you type; that's normal.
 | Stop the kiosk (browser stays closed) | `ssh kiosk1@kiosk1.local "pkill -f kiosk.sh; pkill -f chromium"` |
 | Start the kiosk again | `ssh kiosk1@kiosk1.local sudo reboot` |
 | Change the kiosk URL | edit `~/kiosk.sh` on the Pi (`nano ~/kiosk.sh`), then refresh |
-| Switch layout (TV1 ↔ TV2) | same edit — URL ends in `/upark/tv` or `/upark/tv2` |
+| Switch layout (TV1 ↔ TV2) | sign in with the other screen's account (the account picks the layout); set the URL to `/upark/tv` or `/upark/tv2` to match |
 | Shut down cleanly (before unplugging for transport) | `ssh kiosk1@kiosk1.local sudo shutdown -h now` |
 | Power on | no button — plug in the USB-C cable |
 

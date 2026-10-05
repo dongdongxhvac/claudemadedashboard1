@@ -22,7 +22,7 @@ import BinneyAdmin from './routes/binney/Admin';
 import BinneyEscortExp from './routes/binney/EscortExp';
 import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
-import { useMe } from './hooks/useMe';
+import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
 
 /** Reset scroll to the top on every route change. Without this, navigating
@@ -50,30 +50,39 @@ function AuthLinkRedirect() {
   return null;
 }
 
-/** The shop has more than one wall screen, and each kiosk opens its own
- *  layout URL. A signed-out kiosk is bounced to /login, and the post-login
- *  home redirect would otherwise land every tv-role sign-in on /upark/tv —
- *  so remember which layout this tab asked for and send it back there.
- *  Per-tab (sessionStorage), and only these known paths are honored. */
-const TV_PATHS = ['/upark/tv', '/upark/tv2'];
-const TV_RETURN_KEY = 'tv_return_path';
-function tvHomePath(): string {
-  try {
-    const p = sessionStorage.getItem(TV_RETURN_KEY);
-    if (p && TV_PATHS.includes(p)) return p;
-  } catch { /* storage unavailable — fall through to the default */ }
-  return '/upark/tv';
-}
-
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
-  const { pathname } = useLocation();
   if (loading) return <div className="p-8 text-gray-500">Loading...</div>;
-  if (!session) {
-    if (TV_PATHS.includes(pathname)) {
-      try { sessionStorage.setItem(TV_RETURN_KEY, pathname); } catch { /* see tvHomePath */ }
-    }
-    return <Navigate to="/login" replace />;
+  if (!session) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+/** The shop has more than one wall screen, and each one signs in with its
+ *  own tv-role account. The ACCOUNT decides which layout it shows:
+ *  users.preferences.tv_layout names it ('tv2' → the coverage board), and an
+ *  account without one gets the original operations board. */
+const TV_LAYOUT_PATHS: Record<string, string> = {
+  tv:  '/upark/tv',
+  tv2: '/upark/tv2',
+};
+function tvLayoutPath(me: Me | null | undefined): string {
+  const layout = me?.preferences?.tv_layout;
+  return (typeof layout === 'string' && TV_LAYOUT_PATHS[layout]) || TV_LAYOUT_PATHS.tv;
+}
+
+/** Wraps each wall-layout route. A tv-role account is always sent to its own
+ *  layout, whichever TV address the browser opened — so signing a screen in
+ *  as "Shop TV 2" is all it takes to make it the coverage board. Everyone
+ *  else (an admin previewing a layout) gets the address they asked for.
+ *  If the profile can't be read, the address wins: a kiosk must not sit on
+ *  a spinner or the wrong board because one lookup failed, which is why the
+ *  kiosk still boots into its own layout's URL. */
+function TvLayoutGate({ path, children }: { path: string; children: React.ReactNode }) {
+  const me = useMe();
+  if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (me.data?.role === 'tv') {
+    const own = tvLayoutPath(me.data);
+    if (own !== path) return <Navigate to={own} replace />;
   }
   return <>{children}</>;
 }
@@ -86,14 +95,14 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
 }
 
 /** Role-aware home redirect — always to a site-prefixed address:
- *  engineers → /<site>/engineer, tv → its wall layout (/upark/tv unless the
- *  kiosk asked for another — see tvHomePath), others → /<site>/manager. */
+ *  engineers → /<site>/engineer, tv → the wall layout its account is set to
+ *  (see tvLayoutPath), others → /<site>/manager. */
 function Home() {
   const me = useMe();
   const access = useMySiteAccess();
   if (me.isLoading || access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to={`/${access.homeSite}/engineer`} replace />;
-  if (me.data?.role === 'tv')       return <Navigate to={tvHomePath()} replace />;
+  if (me.data?.role === 'tv')       return <Navigate to={tvLayoutPath(me.data)} replace />;
   return <Navigate to={`/${access.homeSite}/manager`} replace />;
 }
 
@@ -134,7 +143,7 @@ function RequireManagerArea({ children }: { children: React.ReactNode }) {
   const me = useMe();
   if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
-  if (me.data?.role === 'tv')       return <Navigate to={tvHomePath()} replace />;
+  if (me.data?.role === 'tv')       return <Navigate to={tvLayoutPath(me.data)} replace />;
   return <>{children}</>;
 }
 
@@ -178,10 +187,10 @@ export default function App() {
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         {/* Engineer's own building set-up sheets + system sign-offs (2026-09-23). */}
         <Route path="/engineer/buildings" element={<Protected><EngineerBuildings /></Protected>} />
-        <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
+        <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv"><TvView /></TvLayoutGate></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
         {/* Second wall screen — PTO, equipment/LOTO, on-call, OT posts. */}
-        <Route path="/upark/tv2" element={<Protected><RequireSite site="upark"><Tv2View /></RequireSite></Protected>} />
+        <Route path="/upark/tv2" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv2"><Tv2View /></TvLayoutGate></RequireSite></Protected>} />
         {/* Buildings KB is UPark-only content (Index filters via
             useUparkBuildingIds), so fence it like the other UPark surfaces —
             otherwise Binney staff land in UPark's building list. */}
