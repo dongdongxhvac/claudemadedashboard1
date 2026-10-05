@@ -175,9 +175,12 @@ Same hardware, same steps, two differences:
    KIOSK_URL=https://claudemadedashboard1.vercel.app/upark/tv2 bash kiosk-setup.sh
    ```
 
-Phase 5 is unchanged — sign in with the same **tv account**. Both screens can
-be signed in at once, and after the sign-in the kiosk returns to the layout it
-booted into (TV2 stays TV2).
+Phase 5: sign in with the second screen's own account, **`tv2@cove.local`**
+("Shop TV 2") — set its password first in Admin → User Profiles → Set
+password. After the sign-in the kiosk returns to the layout it booted into
+(TV2 stays TV2). The layout comes from the URL the kiosk opens, not from the
+account; separate accounts just mean one screen's password can be changed or
+its access switched off without touching the other.
 
 To switch an existing kiosk between layouts, edit the URL in `~/kiosk.sh` on
 that Pi and refresh it (`pkill -f chromium`).
