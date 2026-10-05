@@ -175,9 +175,10 @@ Same hardware, same steps, two differences:
    KIOSK_URL=https://claudemadedashboard1.vercel.app/upark/tv2 bash kiosk-setup.sh
    ```
 
-Phase 5: sign in with the second screen's own account, **`tv2@cove.local`**
+Phase 5: sign in with the second screen's own account, **`tv2@upark.shop`**
 ("Shop TV 2") — set its password first in Admin → User Profiles → Set
-password. After the sign-in the kiosk returns to the layout it booted into
+password. (Set the password *after* any email change: editing a profile's
+email unlinks its login, so the password has to be set again.) After the sign-in the kiosk returns to the layout it booted into
 (TV2 stays TV2). The layout comes from the URL the kiosk opens, not from the
 account; separate accounts just mean one screen's password can be changed or
 its access switched off without touching the other.
