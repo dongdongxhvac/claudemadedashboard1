@@ -17,7 +17,10 @@
 //
 // Focus-board announcements still surface via the header strip (top-2);
 // the standalone panel got displaced when BMS health moved in.
-import { Fragment, useEffect, useMemo, useState } from 'react';
+//
+// This file also exports Tv2View (/upark/tv2) — the second wall screen, a
+// 2×2 of four of these same panels. See the "TV2" section near the bottom.
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useUpcomingOncall, useOncallRealtime, useOncallParticipants, useOncallSettings, useOncallNotes, useOncallNotesRealtime, type OncallParticipant, type OncallSettings, type OncallNote } from '../../hooks/useOncall';
 import { rotationWeeksByMember } from '../../lib/oncallRotation';
 import { useActiveFocusItems, useFocusBoardRealtime } from '../../hooks/useFocusBoard';
@@ -38,6 +41,7 @@ import {
   useAllActiveProjectsRealtime,
   EQUIPMENT_STATUS_LABELS,
   lotoTypeLabel,
+  isLotoActive,
   type IssueStatus,
   type BuildingEquipmentStatusRow,
 } from '../../hooks/useBuildingKb';
@@ -106,6 +110,67 @@ const kioskClient = new QueryClient({
   },
 });
 
+// ── Plumbing shared by both wall layouts (TvView + Tv2View) ───────────────
+
+/** Tick once a minute so the header clock + freshness stay live. */
+function useMinuteClock(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+/** Kiosk: hide the mouse pointer after 30 s without movement. A nudge
+ *  brings it back (class rule lives in TvStyles). */
+function useKioskCursorHide() {
+  useEffect(() => {
+    let t: number | undefined;
+    const onMove = () => {
+      document.body.classList.remove('tv-cursor-hidden');
+      window.clearTimeout(t);
+      t = window.setTimeout(
+        () => document.body.classList.add('tv-cursor-hidden'),
+        30_000,
+      );
+    };
+    onMove();
+    window.addEventListener('mousemove', onMove);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.clearTimeout(t);
+      document.body.classList.remove('tv-cursor-hidden');
+    };
+  }, []);
+}
+
+/** UPark scope for the people-shaped data on the wall. The Binney seed put
+ *  a second site's people/PTO into the shared tables; these screens are
+ *  UPark's, so filter them out (see useSiteScope). One hook for both
+ *  layouts so a scoping fix can't land on one screen and miss the other. */
+function useUparkTvPeople() {
+  const engineersQ = useEngineers();
+  const ptoQ       = usePtoRequests();
+  const focusQ     = useActiveFocusItems();
+  const uparkIds   = useUparkUserIds();
+  const access     = useMySiteAccess();
+  const engineers = useMemo(
+    () => (engineersQ.data ?? []).filter((e) => !uparkIds || uparkIds.has(e.user_id)),
+    [engineersQ.data, uparkIds],
+  );
+  const ptoRows = useMemo(
+    () => (ptoQ.data ?? []).filter((r) => !uparkIds || uparkIds.has(r.user_id)),
+    [ptoQ.data, uparkIds],
+  );
+  const focusItems = useMemo(
+    () => (focusQ.data ?? []).filter((it) =>
+      it.site_id === null || access.homeSiteId === null || it.site_id === access.homeSiteId),
+    [focusQ.data, access.homeSiteId],
+  );
+  return { engineers, ptoRows, focusItems };
+}
+
 export default function TvView() {
   return (
     <QueryClientProvider client={kioskClient}>
@@ -132,8 +197,6 @@ function TvViewInner() {
   const participantsQ = useOncallParticipants();
   const oncallSettingsQ = useOncallSettings();
   const oncallNotesQ = useOncallNotes();
-  const ptoQ         = usePtoRequests();
-  const focusQ       = useActiveFocusItems();
   const pmQ          = useCurrentPmRows();
   const laborQ       = useCurrentLaborRows();      // kept only for labor-data freshness display
   const closesQ     = useRecentPmCloses(14);       // crew table's trailing 7d window (+margin)
@@ -144,60 +207,20 @@ function TvViewInner() {
   const shiftsQ      = useShifts();
   const buildingsQ   = useBuildings();
   const assignmentsQ = useCurrentBuildingAssignments();
-  const engineersQ   = useEngineers();
   const weatherQ     = useWeather();
 
   // UPark scope (data only — the locked panel layout is untouched). The
   // Binney seed put a second site's people/buildings/PTO into the shared
   // tables; this wall is UPark's, so filter them out (see useSiteScope).
-  const uparkIds = useUparkUserIds();
+  const { engineers, ptoRows, focusItems } = useUparkTvPeople();
   const uparkBldgIds = useUparkBuildingIds();
-  const access = useMySiteAccess();
-  const engineers = useMemo(
-    () => (engineersQ.data ?? []).filter((e) => !uparkIds || uparkIds.has(e.user_id)),
-    [engineersQ.data, uparkIds],
-  );
-  const ptoRows = useMemo(
-    () => (ptoQ.data ?? []).filter((r) => !uparkIds || uparkIds.has(r.user_id)),
-    [ptoQ.data, uparkIds],
-  );
   const uparkBuildings = useMemo(
     () => (buildingsQ.data ?? []).filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)),
     [buildingsQ.data, uparkBldgIds],
   );
-  const focusItems = useMemo(
-    () => (focusQ.data ?? []).filter((it) =>
-      it.site_id === null || access.homeSiteId === null || it.site_id === access.homeSiteId),
-    [focusQ.data, access.homeSiteId],
-  );
 
-  // Tick once a minute so the header clock + freshness stay live.
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Kiosk: hide the mouse pointer after 30 s without movement. A nudge
-  // brings it back (class rule lives in TvStyles).
-  useEffect(() => {
-    let t: number | undefined;
-    const onMove = () => {
-      document.body.classList.remove('tv-cursor-hidden');
-      window.clearTimeout(t);
-      t = window.setTimeout(
-        () => document.body.classList.add('tv-cursor-hidden'),
-        30_000,
-      );
-    };
-    onMove();
-    window.addEventListener('mousemove', onMove);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.clearTimeout(t);
-      document.body.classList.remove('tv-cursor-hidden');
-    };
-  }, []);
+  const now = useMinuteClock();
+  useKioskCursorHide();
 
   return (
     <div className="tv-root">
@@ -945,50 +968,101 @@ function BmsHealthPanel() {
  *
  *  Two-line block per item:
  *    Line 1: building · short name · status pill · WO# · RSP · "Nd ago"
- *    Line 2: full_name + status_detail (when detail is present, ellipsis) */
-function EquipmentDownStripe({
-  eqDown,
-}: {
-  eqDown: ReturnType<typeof useBuildingEquipmentDown>['data'] extends infer T ? T : never;
-}) {
-  const rows = eqDown ?? [];
+ *    Line 2: full_name + status_detail (when detail is present, ellipsis)
+ *
+ *  The sort/tally, the count chips and the row list are separate pieces
+ *  because TV2's standalone Equipment panel renders the same three under
+ *  its own title row (see EquipmentTvPanel). */
+const EQ_TV_VISIBLE_CAP = 10;
 
+type EquipmentDownSummary = {
+  sorted: BuildingEquipmentStatusRow[];
+  downCm: number;
+  offPm: number;
+  degraded: number;
+  bypass: number;
+  /** Issues with a lock/isolation applied and not yet removed. */
+  loto: number;
+};
+
+function summarizeEquipmentDown(rows: BuildingEquipmentStatusRow[]): EquipmentDownSummary {
   // Sort: status severity (down_cm → off_pm → degraded → bypass), then
   // building (75 → 88 → 300 → 26LD → …), then most-recent within a tie.
   // Building sort extracts leading digits so numeric short_codes sort
   // numerically; alpha-prefixed codes ("26LD") fall after pure numerics
   // of the same prefix value. NO grouping by equipment — every open
   // issue gets its own row.
-  const sortedRows: BuildingEquipmentStatusRow[] = (() => {
-    const order: Record<IssueStatus, number> = {
-      down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
-    };
-    const buildingKey = (r: BuildingEquipmentStatusRow): [number, string] => {
-      const code = r.building_short_code ?? r.building_name ?? '';
-      const m = code.match(/^(\d+)/);
-      const num = m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
-      return [num, code];
-    };
-    return [...rows].sort((a, b) => {
-      const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
-      if (d !== 0) return d;
-      const [an, as] = buildingKey(a);
-      const [bn, bs] = buildingKey(b);
-      if (an !== bn) return an - bn;
-      const sd = as.localeCompare(bs);
-      if (sd !== 0) return sd;
-      return b.last_status_change_at.localeCompare(a.last_status_change_at);
-    });
-  })();
+  const order: Record<IssueStatus, number> = {
+    down_cm: 0, off_pm: 1, degraded: 2, bypass: 3,
+  };
+  const buildingKey = (r: BuildingEquipmentStatusRow): [number, string] => {
+    const code = r.building_short_code ?? r.building_name ?? '';
+    const m = code.match(/^(\d+)/);
+    const num = m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+    return [num, code];
+  };
+  const sorted = [...rows].sort((a, b) => {
+    const d = (order[a.status] ?? 99) - (order[b.status] ?? 99);
+    if (d !== 0) return d;
+    const [an, as] = buildingKey(a);
+    const [bn, bs] = buildingKey(b);
+    if (an !== bn) return an - bn;
+    const sd = as.localeCompare(bs);
+    if (sd !== 0) return sd;
+    return b.last_status_change_at.localeCompare(a.last_status_change_at);
+  });
+  return {
+    sorted,
+    downCm:   rows.filter((r) => r.status === 'down_cm').length,
+    offPm:    rows.filter((r) => r.status === 'off_pm').length,
+    degraded: rows.filter((r) => r.status === 'degraded').length,
+    bypass:   rows.filter((r) => r.status === 'bypass').length,
+    loto:     rows.filter(isLotoActive).length,
+  };
+}
 
-  const downCm   = rows.filter((r) => r.status === 'down_cm').length;
-  const offPm    = rows.filter((r) => r.status === 'off_pm').length;
-  const degraded = rows.filter((r) => r.status === 'degraded').length;
-  const bypass   = rows.filter((r) => r.status === 'bypass').length;
-  const VISIBLE_CAP = 10;
-  const visible = sortedRows.slice(0, VISIBLE_CAP);
-  const overflow = sortedRows.length - visible.length;
+/** "1 CM · 2 deg · +3 more" — the per-status tally. */
+function EquipmentDownCounts({ s, overflow }: { s: EquipmentDownSummary; overflow: number }) {
+  const { downCm, offPm, degraded, bypass } = s;
+  return (
+    <>
+      {downCm > 0 && (
+        <span style={{ color: '#fca5a5', fontWeight: 700 }}>{downCm} CM</span>
+      )}
+      {downCm > 0 && offPm > 0 && <span style={{ color: '#475569' }}> · </span>}
+      {offPm > 0 && (
+        <span style={{ color: '#fca5a5' }}>{offPm} PM</span>
+      )}
+      {(downCm > 0 || offPm > 0) && (degraded + bypass) > 0 && <span style={{ color: '#475569' }}> · </span>}
+      {degraded > 0 && (
+        <span style={{ color: '#fbbf24', fontWeight: 700 }}>{degraded} deg</span>
+      )}
+      {degraded > 0 && bypass > 0 && <span style={{ color: '#475569' }}> · </span>}
+      {bypass > 0 && (
+        <span style={{ color: '#fbbf24' }}>{bypass} byp</span>
+      )}
+      {overflow > 0 && (
+        <>
+          <span style={{ color: '#475569' }}> · </span>
+          <span
+            style={{ color: '#94a3b8' }}
+            title="See §10.1 on the manager dashboard for the full list"
+          >
+            +{overflow} more
+          </span>
+        </>
+      )}
+    </>
+  );
+}
 
+/** The issue rows — one two-line block per open issue. `hideFrom` keeps
+ *  rows from that index on laid out but invisible (see useFittingRows). */
+function EquipmentDownList({ rows, listRef, hideFrom }: {
+  rows: BuildingEquipmentStatusRow[];
+  listRef?: React.Ref<HTMLUListElement>;
+  hideFrom?: number;
+}) {
   // "3d ago" / "5h ago" / "now"
   const rel = (utcIso: string): string => {
     const ms = Date.now() - new Date(utcIso).getTime();
@@ -1002,6 +1076,84 @@ function EquipmentDownStripe({
   };
 
   return (
+    <ul className="tv-eq-down-list" ref={listRef}>
+      {rows.map((r, i) => {
+        // Red for offline states, amber for "running but degraded".
+        const statusFg =
+          r.status === 'down_cm' || r.status === 'off_pm' ? '#fca5a5' : '#fbbf24';
+        const equipDisplay = r.short_name
+          ? `${r.short_name} · ${r.full_name}`
+          : r.full_name;
+        return (
+          <li
+            key={r.id}
+            className="tv-eq-down-item"
+            style={hideFrom !== undefined && i >= hideFrom ? { visibility: 'hidden' } : undefined}
+          >
+            <div className="tv-eq-down-line1">
+              <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
+              <span
+                className="tv-eq-down-status"
+                style={{
+                  color: statusFg,
+                  border: `1px solid ${statusFg}`,
+                }}
+              >
+                {EQUIPMENT_STATUS_LABELS[r.status]}
+              </span>
+              <span className="tv-eq-down-name">{equipDisplay}</span>
+              {r.loto_applied_at && !r.loto_removed_at && (
+                <span
+                  className="tv-eq-down-loto"
+                  title={
+                    `${lotoTypeLabel(r.loto_type)} applied ${r.loto_applied_at}` +
+                    (r.loto_applied_by_name ? ` by ${r.loto_applied_by_name}` : '')
+                  }
+                >
+                  🔒 {lotoTypeLabel(r.loto_type)}
+                  {r.loto_applied_by_name && (
+                    <span style={{ marginLeft: '0.2vw' }}>
+                      {r.loto_applied_by_name.split(' ')[0]}
+                    </span>
+                  )}
+                </span>
+              )}
+              {r.wo_number && (
+                <span className="tv-eq-down-wo">{r.wo_number}</span>
+              )}
+              {r.rsp && (
+                <span className="tv-eq-down-rsp">{r.rsp}</span>
+              )}
+              <span
+                className="tv-eq-down-age"
+                title={new Date(r.last_status_change_at).toLocaleString()}
+              >
+                {rel(r.last_status_change_at)}
+              </span>
+            </div>
+            {r.status_detail && (
+              <div className="tv-eq-down-line2" title={r.status_detail}>
+                {r.status_detail}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function EquipmentDownStripe({
+  eqDown,
+}: {
+  eqDown: ReturnType<typeof useBuildingEquipmentDown>['data'] extends infer T ? T : never;
+}) {
+  const rows = eqDown ?? [];
+  const s = summarizeEquipmentDown(rows);
+  const visible = s.sorted.slice(0, EQ_TV_VISIBLE_CAP);
+  const overflow = s.sorted.length - visible.length;
+
+  return (
     <>
       <div className="tv-bms-divider" />
       <div className="tv-bms-stripe">
@@ -1009,101 +1161,13 @@ function EquipmentDownStripe({
           <span className="tv-bms-stripe-tag">EQ</span>
           <span className="tv-bms-stripe-label">Equipment attention</span>
           <span className="tv-bms-stripe-meta">
-            {rows.length === 0 ? '—' : (
-              <>
-                {downCm > 0 && (
-                  <span style={{ color: '#fca5a5', fontWeight: 700 }}>{downCm} CM</span>
-                )}
-                {downCm > 0 && offPm > 0 && <span style={{ color: '#475569' }}> · </span>}
-                {offPm > 0 && (
-                  <span style={{ color: '#fca5a5' }}>{offPm} PM</span>
-                )}
-                {(downCm > 0 || offPm > 0) && (degraded + bypass) > 0 && <span style={{ color: '#475569' }}> · </span>}
-                {degraded > 0 && (
-                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>{degraded} deg</span>
-                )}
-                {degraded > 0 && bypass > 0 && <span style={{ color: '#475569' }}> · </span>}
-                {bypass > 0 && (
-                  <span style={{ color: '#fbbf24' }}>{bypass} byp</span>
-                )}
-                {overflow > 0 && (
-                  <>
-                    <span style={{ color: '#475569' }}> · </span>
-                    <span
-                      style={{ color: '#94a3b8' }}
-                      title="See §10.1 on the manager dashboard for the full list"
-                    >
-                      +{overflow} more
-                    </span>
-                  </>
-                )}
-              </>
-            )}
+            {rows.length === 0 ? '—' : <EquipmentDownCounts s={s} overflow={overflow} />}
           </span>
         </div>
         {rows.length === 0 ? (
           <p className="tv-muted" style={{ fontSize: '0.78vw' }}>All catalogued equipment operational.</p>
         ) : (
-          <ul className="tv-eq-down-list">
-            {visible.map((r) => {
-              // Red for offline states, amber for "running but degraded".
-              const statusFg =
-                r.status === 'down_cm' || r.status === 'off_pm' ? '#fca5a5' : '#fbbf24';
-              const equipDisplay = r.short_name
-                ? `${r.short_name} · ${r.full_name}`
-                : r.full_name;
-              return (
-                <li key={r.id} className="tv-eq-down-item">
-                  <div className="tv-eq-down-line1">
-                    <span className="tv-eq-down-bld">{r.building_short_code ?? r.building_name}</span>
-                    <span
-                      className="tv-eq-down-status"
-                      style={{
-                        color: statusFg,
-                        border: `1px solid ${statusFg}`,
-                      }}
-                    >
-                      {EQUIPMENT_STATUS_LABELS[r.status]}
-                    </span>
-                    <span className="tv-eq-down-name">{equipDisplay}</span>
-                    {r.loto_applied_at && !r.loto_removed_at && (
-                      <span
-                        className="tv-eq-down-loto"
-                        title={
-                          `${lotoTypeLabel(r.loto_type)} applied ${r.loto_applied_at}` +
-                          (r.loto_applied_by_name ? ` by ${r.loto_applied_by_name}` : '')
-                        }
-                      >
-                        🔒 {lotoTypeLabel(r.loto_type)}
-                        {r.loto_applied_by_name && (
-                          <span style={{ marginLeft: '0.2vw' }}>
-                            {r.loto_applied_by_name.split(' ')[0]}
-                          </span>
-                        )}
-                      </span>
-                    )}
-                    {r.wo_number && (
-                      <span className="tv-eq-down-wo">{r.wo_number}</span>
-                    )}
-                    {r.rsp && (
-                      <span className="tv-eq-down-rsp">{r.rsp}</span>
-                    )}
-                    <span
-                      className="tv-eq-down-age"
-                      title={new Date(r.last_status_change_at).toLocaleString()}
-                    >
-                      {rel(r.last_status_change_at)}
-                    </span>
-                  </div>
-                  {r.status_detail && (
-                    <div className="tv-eq-down-line2" title={r.status_detail}>
-                      {r.status_detail}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <EquipmentDownList rows={visible} />
         )}
       </div>
     </>
@@ -1817,14 +1881,26 @@ function OvertimeTvPanel({ now }: { now: Date }) {
 
 // §12 Coverage — the 5-work-day PTO attendance preview. OT moved out to
 // OvertimeTvPanel (2026-09-14).
+//
+// TV2 reuses it as a dedicated PTO panel: workDays=10, two days per row
+// (columns=2), under its own title.
 function CoverageTvPanel({
   engineers,
   pto,
   now,
+  workDays = 5,
+  columns = 1,
+  title = 'Coverage · §12 PTO',
 }: {
   engineers: EngineerRow[];
   pto: PtoRequest[];
   now: Date;
+  /** Today + this many − 1 following work days. */
+  workDays?: number;
+  /** 2 = two days per row, nearest first, filling the panel's height;
+   *  days that don't fit are dropped whole and counted in the title row. */
+  columns?: 1 | 2;
+  title?: string;
 }) {
   // Active engineer headcount drives the "X/Y in" denominator. Engineers
   // only — leads/managers don't show up on the daily roster.
@@ -1833,7 +1909,7 @@ function CoverageTvPanel({
     [engineers],
   );
 
-  // 5-work-day attendance preview: today + next 4 WORK days. UPark works
+  // Work-day attendance preview (5 by default): today + the next WORK days. UPark works
   // Mon–Fri, so Saturday/Sunday are skipped. Today is always included
   // (even if it's a weekend) — managers still want a glance at any
   // weekend coverage / on-call situation. Partial-day rows DON'T
@@ -1869,11 +1945,11 @@ function CoverageTvPanel({
     };
     // Day 0 — today, always included.
     pushDay(today, 'today');
-    // Days 1–4 — next four work days (skip Sat/Sun). Label "tmrw" only if
+    // Remaining days — the following work days (skip Sat/Sun). Label "tmrw" only if
     // the work day actually is tomorrow (Thu → Fri); otherwise use the
     // weekday name (Fri → Mon, not "tmrw").
     const cursor = new Date(today);
-    while (out.length < 5) {
+    while (out.length < workDays) {
       cursor.setDate(cursor.getDate() + 1);
       const dow = cursor.getDay();
       if (dow === 0 || dow === 6) continue;
@@ -1888,22 +1964,45 @@ function CoverageTvPanel({
       );
     }
     return out;
-  }, [pto, now, totalEngineers]);
+  }, [pto, now, totalEngineers, workDays]);
+
+  // 2-column mode takes whatever height the panel is given, so in a heavy
+  // week (several people out every day) the last rows may not fit. Those
+  // days are hidden whole — furthest-out first, since rows run nearest to
+  // furthest — and the title row says how many. In 1-column mode the ref is
+  // never attached and every day counts as fitting.
+  const { ref: daysRef, fit: daysFit } = useFittingRows<HTMLDivElement>(days);
+  const hiddenDays = columns === 2 ? days.length - daysFit : 0;
 
   return (
     <section className="tv-panel" style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Coverage · §12 PTO</h2>
+        <h2 className="tv-panel-title">{title}</h2>
         <div className="tv-panel-meta">
+          {hiddenDays > 0 && (
+            <>
+              <span style={{ color: '#fbbf24' }}>
+                +{hiddenDays} more day{hiddenDays === 1 ? '' : 's'} not shown
+              </span>
+              <span style={{ color: '#475569', margin: '0 0.35vw' }}>·</span>
+            </>
+          )}
           <span style={{ color: '#f8fafc', fontWeight: 700 }}>{days[0]?.inCount ?? totalEngineers}</span>
           <span style={{ color: '#475569' }}>/{totalEngineers}</span> in today
         </div>
       </div>
       <div className="tv-panel-body tv-cov-body">
-        {/* Top: 5-work-day attendance preview */}
-        <div className="tv-cov-days">
-          {days.map((d) => (
-            <div key={d.iso} className="tv-cov-day">
+        {/* Work-day attendance preview */}
+        <div
+          className={columns === 2 ? 'tv-cov-days tv-cov-days-2col' : 'tv-cov-days'}
+          ref={columns === 2 ? daysRef : undefined}
+        >
+          {days.map((d, i) => (
+            <div
+              key={d.iso}
+              className="tv-cov-day"
+              style={columns === 2 && i >= daysFit ? { visibility: 'hidden' } : undefined}
+            >
               <div className="tv-cov-day-head">
                 <span className="tv-cov-day-label">{d.label}</span>
                 <span className="tv-cov-day-date">{d.monthDay}</span>
@@ -1959,6 +2058,160 @@ function CoverageTvPanel({
   );
 }
 
+
+// ============================================================================
+// TV2 — second wall screen (/upark/tv2)
+// ============================================================================
+//
+// A coverage board: who's out, what's locked out or limping, who's on call,
+// and which overtime still needs takers. Four panels in a 2×2, each one a
+// TV1 panel reused as-is so the two screens can't drift apart:
+//   ┌── header (same as TV1) ───────────────────────────────────────────┐
+//   ├──────────────────────────────┬────────────────────────────────────┤
+//   │ PTO · next 10 work days      │ EQUIPMENT ATTENTION · LOTO         │
+//   │  (takes what on-call leaves) │  (takes what OT leaves)            │
+//   ├──────────────────────────────┼────────────────────────────────────┤
+//   │ ON-CALL SCHEDULE             │ OVERTIME COVERAGE POSTS            │
+//   │  (content-sized, never cut)  │  (content-sized, ≤ 5 posts)        │
+//   └──────────────────────────────┴────────────────────────────────────┘
+// Four panels instead of six leaves room to draw everything larger: the
+// whole board is magnified by TV2_SCALE (mechanism in Tv2Styles).
+
+/** How much larger TV2 draws everything than TV1. At 1.3 a half-width
+ *  panel still has slightly more room than a TV1 third-width column, so
+ *  the panels' fixed vw lanes keep fitting. Raising it buys size at the
+ *  cost of that slack and of vertical room in heavy-PTO weeks. */
+const TV2_SCALE = 1.3;
+
+export function Tv2View() {
+  return (
+    <QueryClientProvider client={kioskClient}>
+      <Tv2ViewInner />
+    </QueryClientProvider>
+  );
+}
+
+function Tv2ViewInner() {
+  // Live data — only the feeds these four panels (and the header) read.
+  // OvertimeTvPanel subscribes to its own.
+  useOncallRealtime();
+  useOncallNotesRealtime();
+  useFocusBoardRealtime();
+  usePtoRealtime();
+  useBuildingEquipmentDownRealtime();
+
+  const oncallQ         = useUpcomingOncall(12);
+  const participantsQ   = useOncallParticipants();
+  const oncallSettingsQ = useOncallSettings();
+  const oncallNotesQ    = useOncallNotes();
+  const weatherQ        = useWeather();
+  const eqDownQ         = useBuildingEquipmentDown();
+  const { engineers, ptoRows, focusItems } = useUparkTvPeople();
+
+  const now = useMinuteClock();
+  useKioskCursorHide();
+
+  return (
+    <div className="tv2-viewport">
+      <div className="tv-root tv2-root">
+        <TvStyles />
+        <Tv2Styles />
+        <Header
+          now={now}
+          oncall={oncallQ.data ?? []}
+          weather={weatherQ.data ?? null}
+          focusItems={focusItems}
+        />
+        <main className="tv2-grid">
+          <div className="tv2-col tv2-col-people">
+            <CoverageTvPanel
+              engineers={engineers}
+              pto={ptoRows}
+              now={now}
+              workDays={10}
+              columns={2}
+              title="PTO · next 10 work days"
+            />
+            <OncallPanel
+              participants={participantsQ.data ?? []}
+              settings={oncallSettingsQ.data ?? null}
+              notes={oncallNotesQ.data ?? []}
+              now={now}
+            />
+          </div>
+          <div className="tv2-col">
+            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
+            <OvertimeTvPanel now={now} />
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/** How many of a clipped list's rows fit completely. The list keeps every
+ *  row in the DOM (its overflow:hidden does the clipping) so the count can
+ *  be re-measured whenever the box or a row changes size — the neighbouring
+ *  panel growing, a row gaining a detail line. The caller hides the cut-off
+ *  rows and counts them in "+N more" rather than trusting a fixed cap. */
+function useFittingRows<T extends HTMLElement>(rows: readonly unknown[]) {
+  const ref = useRef<T>(null);
+  const [fit, setFit] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const bottom = el.getBoundingClientRect().bottom;
+      let n = 0;
+      for (const child of Array.from(el.children)) {
+        if (child.getBoundingClientRect().bottom > bottom + 1) break;
+        n++;
+      }
+      setFit(n);
+    };
+    // Observing fires once immediately, so this also takes the first reading.
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => ro.disconnect();
+  }, [rows]);
+  return { ref, fit: Math.min(fit ?? rows.length, rows.length) };
+}
+
+/** TV2's standalone Equipment panel — the same open-issue rows TV1 tucks
+ *  under its BMS heartbeats (EquipmentDownStripe), given a panel of their
+ *  own with the active-LOTO count called out in the title row. Its height
+ *  is whatever the OT panel below leaves, so "+N more" counts the rows
+ *  that actually don't fit, not just those past the cap. */
+function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) {
+  const s = useMemo(() => summarizeEquipmentDown(eqDown), [eqDown]);
+  const capped = useMemo(() => s.sorted.slice(0, EQ_TV_VISIBLE_CAP), [s]);
+  const { ref, fit } = useFittingRows<HTMLUListElement>(capped);
+  const overflow = s.sorted.length - fit;
+
+  return (
+    <section className="tv-panel tv2-eq-panel" style={{ borderTopColor: '#dc2626' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Equipment attention · LOTO</h2>
+        <div className="tv-panel-meta">
+          {eqDown.length === 0 ? 'none open' : (
+            <>
+              {s.loto > 0 && <span className="tv2-eq-loto">🔒 {s.loto} LOTO</span>}
+              <EquipmentDownCounts s={s} overflow={overflow} />
+            </>
+          )}
+        </div>
+      </div>
+      <div className="tv-panel-body">
+        {eqDown.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.85vw', margin: 0 }}>All catalogued equipment operational.</p>
+        ) : (
+          <EquipmentDownList rows={capped} listRef={ref} hideFrom={fit} />
+        )}
+      </div>
+    </section>
+  );
+}
 
 // ============================================================================
 // Styles
@@ -2938,6 +3191,19 @@ function TvStyles() {
         display: flex; flex-direction: column; gap: 0.25vw;
         flex: 0 0 auto;
       }
+      /* 2-column variant: the grid owns the panel's leftover height and is
+         the clipping box useFittingRows measures. Rows keep their natural
+         height (align-content: start) instead of stretching to fill. */
+      .tv-cov-days-2col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-content: start;
+        gap: 0.25vw 0.6vw;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .tv-cov-days-2col > .tv-cov-day { min-width: 0; }
       .tv-cov-day {
         padding: 0.18vw 0.35vw;
         background: rgba(59, 130, 246, 0.08);
@@ -3143,6 +3409,92 @@ function TvStyles() {
       .tv-upcoming-bar-bg { background: #1e293b; height: 1.1vw; border-radius: 4px; overflow: hidden; }
       .tv-upcoming-bar-fill { background: linear-gradient(90deg, #10b981, #34d399); height: 100%; }
       .tv-upcoming-count { color: #e2e8f0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    `}</style>
+  );
+}
+
+/** TV2-only rules, rendered after TvStyles so they win where they overlap. */
+function Tv2Styles() {
+  return (
+    <style>{`
+      /* Magnification. Every size in TvStyles is in vw, so the board can't
+         be enlarged by raising a font-size. Instead the root is laid out in
+         a box 1/TV2_SCALE the size of the viewport and scaled back up to
+         fill it: the vw lengths inside still resolve against the real
+         viewport, the box they're arranged in is smaller, so everything
+         lands TV2_SCALE× larger with the layout intact. */
+      .tv2-viewport {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: #0b1220;
+      }
+      .tv-root.tv2-root {
+        width: calc(100vw / ${TV2_SCALE});
+        height: calc(100vh / ${TV2_SCALE});
+        transform: scale(${TV2_SCALE});
+        transform-origin: 0 0;
+      }
+
+      .tv2-grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6vw;
+        min-height: 0;
+        min-width: 0;
+      }
+      /* Same guard as .tv-grid: content adapts to its track, never the
+         reverse. */
+      .tv2-grid > * { min-width: 0; }
+      /* Each column stacks two panels. The bottom one is content-sized and
+         never shrinks — the rotation table must not lose a row, and OT is
+         already capped at OT_TV_MAX_ROWS — while the top one takes whatever
+         height is left and clips if a heavy week overfills it. */
+      .tv2-col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6vw;
+        min-height: 0;
+      }
+      .tv2-col > .tv-panel { flex: 1 1 auto; min-height: 0; }
+      .tv2-col > .tv-panel:last-child { flex: 0 0 auto; }
+
+      /* Equipment: the row list is the clipping box useFittingRows
+         measures, so it has to own the leftover height. The meta is set a
+         touch tighter so a full tally (LOTO + all four statuses + overflow)
+         still shares a line with the title. */
+      .tv2-eq-panel .tv-panel-body { display: flex; flex-direction: column; }
+      .tv2-eq-panel .tv-eq-down-list { flex: 1 1 auto; }
+      .tv2-eq-panel .tv-panel-meta { font-size: 0.62vw; letter-spacing: 0.08em; }
+      /* If even that is too wide, the tally drops to its own line rather
+         than breaking the title mid-phrase. */
+      .tv2-eq-panel .tv-panel-titlerow { flex-wrap: wrap; row-gap: 0.1vw; }
+      .tv2-eq-panel .tv-panel-title { white-space: nowrap; }
+      .tv2-eq-loto {
+        color: #fca5a5;
+        font-weight: 700;
+        border: 1px solid #ef4444;
+        border-radius: 2px;
+        padding: 0 0.3vw;
+        margin-right: 0.6vw;
+      }
+
+      /* OT rows were laid out for a two-thirds-wide tile. At half width the
+         category text lane goes — the row's dot and the legend bar above
+         already carry it — so the names lane keeps its room. */
+      .tv2-root .tv-ot-l1 { grid-template-columns: 12.5vw 10vw 2.2vw 1fr; }
+      .tv2-root .tv-ot-cat { display: none; }
+      /* …and the sign-up prompt wraps under the title rather than
+         squeezing between the title and the counts. */
+      .tv2-root .tv-ot-panel .tv-panel-titlerow { flex-wrap: wrap; row-gap: 0.15vw; }
+      .tv2-root .tv-ot-cta-inline { order: 3; margin: 0; }
+      /* In the narrower names lane the OPEN pill goes first, so the cue
+         that a slot needs a taker is never the part that gets cut off.
+         (!important: the pill's left margin is set inline.) */
+      .tv2-root .tv-ot-slots { display: flex; align-items: baseline; }
+      .tv2-root .tv-ot-slots > * { flex: 0 0 auto; }
+      .tv2-root .tv-ot-empty-open { order: -1; margin: 0 0.5vw 0 0 !important; }
     `}</style>
   );
 }

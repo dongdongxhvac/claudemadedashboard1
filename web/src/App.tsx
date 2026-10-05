@@ -11,7 +11,7 @@ import EngineerProfile from './routes/engineer/Profile';
 import EngineerMe from './routes/engineer/Me';
 import EngineerBuildings from './routes/engineer/Buildings';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
-import TvView from './routes/tv/TvView';
+import TvView, { Tv2View } from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
@@ -50,10 +50,31 @@ function AuthLinkRedirect() {
   return null;
 }
 
+/** The shop has more than one wall screen, and each kiosk opens its own
+ *  layout URL. A signed-out kiosk is bounced to /login, and the post-login
+ *  home redirect would otherwise land every tv-role sign-in on /upark/tv —
+ *  so remember which layout this tab asked for and send it back there.
+ *  Per-tab (sessionStorage), and only these known paths are honored. */
+const TV_PATHS = ['/upark/tv', '/upark/tv2'];
+const TV_RETURN_KEY = 'tv_return_path';
+function tvHomePath(): string {
+  try {
+    const p = sessionStorage.getItem(TV_RETURN_KEY);
+    if (p && TV_PATHS.includes(p)) return p;
+  } catch { /* storage unavailable — fall through to the default */ }
+  return '/upark/tv';
+}
+
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <div className="p-8 text-gray-500">Loading...</div>;
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session) {
+    if (TV_PATHS.includes(pathname)) {
+      try { sessionStorage.setItem(TV_RETURN_KEY, pathname); } catch { /* see tvHomePath */ }
+    }
+    return <Navigate to="/login" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -65,13 +86,14 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
 }
 
 /** Role-aware home redirect — always to a site-prefixed address:
- *  engineers → /<site>/engineer, tv → /upark/tv, others → /<site>/manager. */
+ *  engineers → /<site>/engineer, tv → its wall layout (/upark/tv unless the
+ *  kiosk asked for another — see tvHomePath), others → /<site>/manager. */
 function Home() {
   const me = useMe();
   const access = useMySiteAccess();
   if (me.isLoading || access.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to={`/${access.homeSite}/engineer`} replace />;
-  if (me.data?.role === 'tv')       return <Navigate to="/upark/tv" replace />;
+  if (me.data?.role === 'tv')       return <Navigate to={tvHomePath()} replace />;
   return <Navigate to={`/${access.homeSite}/manager`} replace />;
 }
 
@@ -112,7 +134,7 @@ function RequireManagerArea({ children }: { children: React.ReactNode }) {
   const me = useMe();
   if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'engineer') return <Navigate to="/engineer/me" replace />;
-  if (me.data?.role === 'tv')       return <Navigate to="/upark/tv" replace />;
+  if (me.data?.role === 'tv')       return <Navigate to={tvHomePath()} replace />;
   return <>{children}</>;
 }
 
@@ -158,6 +180,8 @@ export default function App() {
         <Route path="/engineer/buildings" element={<Protected><EngineerBuildings /></Protected>} />
         <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvView /></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
+        {/* Second wall screen — PTO, equipment/LOTO, on-call, OT posts. */}
+        <Route path="/upark/tv2" element={<Protected><RequireSite site="upark"><Tv2View /></RequireSite></Protected>} />
         {/* Buildings KB is UPark-only content (Index filters via
             useUparkBuildingIds), so fence it like the other UPark surfaces —
             otherwise Binney staff land in UPark's building list. */}

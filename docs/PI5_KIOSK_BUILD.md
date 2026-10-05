@@ -7,6 +7,16 @@ and needs no keyboard after day one.
 **Kiosk URL:** `https://claudemadedashboard1.vercel.app/upark/tv`
 (update here and in `~/kiosk.sh` on the Pi when the custom domain goes live)
 
+**Two wall layouts** — each kiosk shows one, chosen by the URL it boots into:
+
+| Layout | URL path | Panels |
+|---|---|---|
+| TV1 — operations board | `/upark/tv` | Workload + performance, BMS + equipment, projects, PTO, on-call, overtime |
+| TV2 — coverage board | `/upark/tv2` | PTO (next 10 work days), equipment attention / LOTO, on-call, overtime posts |
+
+Everything below builds a TV1 kiosk. For a TV2 kiosk only Phase 1's hostname
+and Phase 4's command differ — see **Second kiosk** near the end.
+
 ---
 
 ## Phase 0 — What you need on the table
@@ -148,6 +158,29 @@ dashboard reconnects and catches up on its own (realtime + polling).
 - Unplug keyboard and mouse. Store them with the **spare flashed SD card**
   (the kit's EVO+ card): if the kiosk ever misbehaves beyond a power cycle,
   swap card → power on → redo Phase 5 login. Recovery in minutes.
+
+---
+
+## Second kiosk (TV2 — the coverage board)
+
+Same hardware, same steps, two differences:
+
+1. **Phase 1:** flash it with hostname **`kiosk2`** so the two Pis are
+   distinct on the network and in Raspberry Pi Connect. (Any username works —
+   the setup script configures whichever user runs it.)
+2. **Phase 4:** pass the TV2 address to the setup script:
+
+   ```bash
+   curl -fsSL https://claudemadedashboard1.vercel.app/kiosk-setup.sh -o kiosk-setup.sh
+   KIOSK_URL=https://claudemadedashboard1.vercel.app/upark/tv2 bash kiosk-setup.sh
+   ```
+
+Phase 5 is unchanged — sign in with the same **tv account**. Both screens can
+be signed in at once, and after the sign-in the kiosk returns to the layout it
+booted into (TV2 stays TV2).
+
+To switch an existing kiosk between layouts, edit the URL in `~/kiosk.sh` on
+that Pi and refresh it (`pkill -f chromium`).
 
 ---
 

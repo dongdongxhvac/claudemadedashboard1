@@ -1,6 +1,7 @@
 #!/bin/bash
 # UPark TV kiosk setup — Raspberry Pi 5, Raspberry Pi OS (Bookworm, desktop).
 # Run as the desktop user (NOT root):  bash kiosk-setup.sh
+# Second wall screen (coverage board):   KIOSK_URL=https://claudemadedashboard1.vercel.app/upark/tv2 bash kiosk-setup.sh
 # Configures: boot-to-Chromium kiosk at the dashboard URL, crash auto-restart,
 # desktop auto-login, screen blanking off, nightly 4am reboot.
 set -e
