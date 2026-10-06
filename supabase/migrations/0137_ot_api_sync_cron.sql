@@ -12,8 +12,10 @@
 --   select set_app_secret('UPARK_OT_API_BASE', 'https://uparkot.rai-zenith.com');
 --
 -- Anon key satisfies verify_jwt, same pattern as flush-pto-notify-queue
--- (0109). The function itself refuses a second upstream read within 60 s,
--- so Steve's 60 reads/min limit can't be exceeded however often it's called.
+-- (0109). Every 6 minutes, not 5: the key is allowed one read per 300 s
+-- (the API's 429 says so — stricter than the handoff's 60/min), and a */5
+-- schedule lands within a second of that limit and gets refused. The
+-- function also refuses a second upstream read within 300 s itself.
 --
 -- Pause:   select cron.unschedule('ot-api-sync');
 -- Resume:  re-run this file.
@@ -22,7 +24,7 @@ select cron.unschedule(jobid) from cron.job where jobname = 'ot-api-sync';
 
 select cron.schedule(
   'ot-api-sync',
-  '*/5 * * * *',
+  '*/6 * * * *',
   $$
   select net.http_post(
     url     := 'https://iujuibvcahuapzowjtym.supabase.co/functions/v1/ot-api-sync',

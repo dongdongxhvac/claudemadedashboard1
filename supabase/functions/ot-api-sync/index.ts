@@ -4,16 +4,18 @@
 // into ot_api_jobs + ot_api_syncs (migration 0136). Hosted twin of
 // watcher/ot_api_poller.py for when the API is reachable from the public
 // internet (https://uparkot.rai-zenith.com) — then nothing has to run on a
-// VM or workstation: pg_cron POSTs here every 5 minutes (migration 0137).
+// VM or workstation: pg_cron POSTs here every 6 minutes (migration 0137).
 // Same write semantics as the poller: upsert this run's jobs on the API's
 // id, delete the rest (an id changes when the Outlook event moves), log one
 // syncs row per run (ok or error, with the raw payload).
 //
 // Request:  POST {}            (body ignored)
 // Auth:     verify_jwt — the cron job sends the anon key, like
-//           flush-pto-notify-queue (0109). Steve's limit is 60 reads/min;
-//           a run is skipped when the last OK sync is under 60 s old, so a
-//           burst of calls can never exceed one upstream read a minute.
+//           flush-pto-notify-queue (0109). The key may read the board once
+//           per 300 s (the API's own 429 message; stricter than the
+//           handoff's 60/min), so a run is skipped when the last OK sync is
+//           under 300 s old, and an upstream 429 is reported as a skip, not
+//           logged as a failure — the previous mirror is still current.
 // Response: 200 { ok, jobs, open_spaces, skipped?, warnings }
 //           | 502 { error }  (upstream failure — also logged to ot_api_syncs)
 //
@@ -30,7 +32,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DEFAULT_BASE = "https://uparkot.rai-zenith.com";
-const MIN_GAP_MS = 60_000;
+const MIN_GAP_MS = 300_000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const fetchedAt = new Date().toISOString();
 
-  // Debounce: never more than one upstream read a minute, whoever calls.
+  // Debounce: never more than one upstream read per 5 minutes, whoever calls.
   const { data: last } = await admin
     .from("ot_api_syncs")
     .select("fetched_at")
@@ -128,7 +130,7 @@ Deno.serve(async (req) => {
     .limit(1)
     .maybeSingle();
   if (last && Date.now() - new Date(last.fetched_at as string).getTime() < MIN_GAP_MS) {
-    return json(200, { ok: true, skipped: "synced less than a minute ago" });
+    return json(200, { ok: true, skipped: "synced less than 5 minutes ago" });
   }
 
   const { key, base, days } = await config(admin);
@@ -155,7 +157,9 @@ Deno.serve(async (req) => {
     if (r.status !== 200) {
       let detail = "";
       try { detail = ((await r.json()) as { error?: string }).error ?? ""; } catch { /* non-JSON body */ }
-      const hint = { 401: "missing/invalid key", 403: "key not allowed", 429: "rate limited" }[r.status] ?? "";
+      // Rate-limited is not a broken mirror: the last OK sync still stands.
+      if (r.status === 429) return json(200, { ok: true, skipped: `rate limited upstream: ${detail}`.trim() });
+      const hint = { 401: "missing/invalid key", 403: "key not allowed" }[r.status] ?? "";
       return fail(`GET ${url} -> ${r.status} ${hint} ${detail}`.trim());
     }
     payload = (await r.json()) as ApiPayload;

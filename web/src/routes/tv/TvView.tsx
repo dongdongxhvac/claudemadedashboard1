@@ -152,6 +152,34 @@ function useKioskCursorHide() {
   }, []);
 }
 
+/** Kiosk: pick up a new deploy without waiting for the 4am reboot. Every
+ *  10 minutes fetch the live index.html and compare its main bundle name
+ *  with the one this page loaded; a different name means Vercel shipped a
+ *  new build, so reload. Seen 2026-10-06: the OT viewer strip went live on
+ *  the manager page while both wall screens kept showing the old build
+ *  until someone rebooted them. A fetch failure is ignored — the TV must
+ *  never reload itself on a Wi-Fi blip. */
+const KIOSK_BUILD_CHECK_MS = 10 * 60_000;
+function useKioskAutoReload() {
+  useEffect(() => {
+    const current = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src*="/assets/index-"]'))
+      .map((el) => el.getAttribute('src') ?? '')
+      .find(Boolean);
+    if (!current) return;
+    const check = async () => {
+      try {
+        const res = await fetch(`/index.html?build-check=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const html = await res.text();
+        const live = html.match(/src="(\/assets\/index-[^"]+\.js)"/)?.[1];
+        if (live && live !== current) window.location.reload();
+      } catch { /* offline or blocked — try again next tick */ }
+    };
+    const id = setInterval(check, KIOSK_BUILD_CHECK_MS);
+    return () => clearInterval(id);
+  }, []);
+}
+
 /** UPark scope for the people-shaped data on the wall. The Binney seed put
  *  a second site's people/PTO into the shared tables; these screens are
  *  UPark's, so filter them out (see useSiteScope). One hook for both
@@ -228,6 +256,7 @@ function TvViewInner() {
 
   const now = useMinuteClock();
   useKioskCursorHide();
+  useKioskAutoReload();
 
   return (
     <div className="tv-root">
@@ -2202,6 +2231,7 @@ function Tv2ViewInner() {
 
   const now = useMinuteClock();
   useKioskCursorHide();
+  useKioskAutoReload();
 
   return (
     <div className="tv-root">
