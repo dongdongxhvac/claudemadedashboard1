@@ -24,6 +24,7 @@ import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
+import { resolveTvLayout, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
 
 /** Reset scroll to the top on every route change. Without this, navigating
  *  from a long page (e.g. the manager dashboard) to another route leaves the
@@ -57,17 +58,13 @@ function Protected({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** The shop has more than one wall screen, and each one signs in with its
- *  own tv-role account. The ACCOUNT decides which layout it shows:
- *  users.preferences.tv_layout names it ('tv2' → the coverage board), and an
- *  account without one gets the original operations board. */
-const TV_LAYOUT_PATHS: Record<string, string> = {
-  tv:  '/upark/tv',
-  tv2: '/upark/tv2',
-};
-function tvLayoutPath(me: Me | null | undefined): string {
-  const layout = me?.preferences?.tv_layout;
-  return (typeof layout === 'string' && TV_LAYOUT_PATHS[layout]) || TV_LAYOUT_PATHS.tv;
+/** The shop's wall screens each sign in with a tv-role account, and the
+ *  ACCOUNT decides which layout it shows: users.preferences.tv_layout is
+ *  'tv' (operations), 'tv2' (coverage) or 'rotate' (alternate on 5-minute
+ *  slots — see resolveTvLayout); an account without one gets the
+ *  operations board. The Admin page's Shop TV card sets it (0138). */
+function tvLayoutPath(me: Me | null | undefined, now: Date = new Date()): string {
+  return TV_LAYOUT_PATHS[resolveTvLayout(me?.preferences?.tv_layout, now)];
 }
 
 /** Wraps each wall-layout route. A tv-role account is always sent to its own
@@ -79,9 +76,13 @@ function tvLayoutPath(me: Me | null | undefined): string {
  *  kiosk still boots into its own layout's URL. */
 function TvLayoutGate({ path, children }: { path: string; children: React.ReactNode }) {
   const me = useMe();
+  // Follow the kiosk's own users row (a layout flip from the admin page) and
+  // the clock (rotate slots) while the wall is up.
+  useTvLayoutLive(me.data?.role === 'tv' ? me.data.id : null);
+  const now = useMinuteTick();
   if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
   if (me.data?.role === 'tv') {
-    const own = tvLayoutPath(me.data);
+    const own = tvLayoutPath(me.data, now);
     if (own !== path) return <Navigate to={own} replace />;
   }
   return <>{children}</>;

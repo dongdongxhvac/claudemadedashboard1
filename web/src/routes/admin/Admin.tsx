@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/auth';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { UserProfilesTab } from './UserProfilesTab';
+import { ShopTvLayoutCard } from '../../components/ShopTvLayoutCard';
 import { OncallTab } from './OncallTab';
 import { OncallExperimentTab } from './OncallExperimentTab';
 import { BuildingsTab } from './BuildingsTab';
@@ -90,6 +91,8 @@ export default function Admin() {
           </p>
         ) : (
           <div className="space-y-4">
+            {/* Which board the wall screen shows (0138) — one TV, two layouts. */}
+            <ShopTvLayoutCard />
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
                 User Profiles {manageScope === 'none' && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
