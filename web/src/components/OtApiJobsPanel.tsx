@@ -153,8 +153,10 @@ export function OtApiJobsPanel() {
       subtitle={subtitle}
       loading={jobsQ.isLoading || syncQ.isLoading}
     >
-      {jobsQ.error ? (
-        <p className="t-text t-danger">Error: {(jobsQ.error as Error).message}</p>
+      {jobsQ.error || syncQ.error ? (
+        <p className="t-text t-danger">
+          Error reading the OT viewer mirror: {((jobsQ.error ?? syncQ.error) as Error).message}
+        </p>
       ) : !sync ? (
         <div className="t-text t-muted space-y-1">
           <p>No data yet — the OT viewer sync has not run.</p>
