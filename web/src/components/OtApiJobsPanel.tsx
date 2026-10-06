@@ -157,11 +157,12 @@ export function OtApiJobsPanel() {
         <p className="t-text t-danger">Error: {(jobsQ.error as Error).message}</p>
       ) : !sync ? (
         <div className="t-text t-muted space-y-1">
-          <p>No data yet — the OT API poller has not run.</p>
+          <p>No data yet — the OT viewer sync has not run.</p>
           <p style={{ fontSize: '0.8rem' }}>
-            Put the OT viewer key in <code>watcher/.env</code> as <code>UPARK_OT_API_KEY</code> on a
-            machine that is on the OT viewer's tailnet, then install the 5-minute timer
-            (<code>install_ot_api_poller_*</code>). The first poll fills this panel and the TV strips.
+            The <code>ot-api-sync</code> edge function runs every 5 minutes (cron job <code>ot-api-sync</code>)
+            with the key from the Vault (<code>UPARK_OT_API_KEY</code>). Check <code>ot_api_syncs</code> for an
+            error row; the watcher poller (<code>ot_api_poller.py</code>) is the fallback if the API is only
+            reachable on the tailnet.
           </p>
         </div>
       ) : (

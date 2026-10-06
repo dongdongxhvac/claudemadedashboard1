@@ -72,7 +72,7 @@ nssm start COVE-Watcher
 
 Logs end up in the Windows Event Log (or configure NSSM to redirect stdout to a file).
 
-## UPark Overtime API poller (`ot_api_poller.py`)
+## UPark Overtime API poller (`ot_api_poller.py`) — fallback only
 
 Mirrors Steve's (BMR) OT viewer — the crew's Outlook off-hours events and
 added OT jobs, with spaces and volunteers — into Supabase `ot_api_jobs`
@@ -80,9 +80,15 @@ every 5 minutes. Feeds §11b on `/upark/manager` and the overtime strip on
 both wall screens (`/upark/tv`, `/upark/tv2`). Read-only: the API's write
 endpoints are not used.
 
-The API host (`vpn-1.tail198a37.ts.net`) is on Tailscale and sends no CORS
-headers, so the poller must run on a machine that is on that tailnet, and the
-key must stay in `watcher/.env` — never in the web app or a commit.
+**In production this is done by the `ot-api-sync` edge function** (cron job
+`ot-api-sync`, migration 0137) against the OT viewer's public hostname
+`https://uparkot.rai-zenith.com`, with the key in the Vault
+(`select set_app_secret('UPARK_OT_API_KEY', ...)`). Nothing to install.
+This poller is the fallback for when the API is only reachable on Steve's
+Tailscale network (`vpn-1.tail198a37.ts.net`): then it must run on a machine
+on that tailnet, with the key in `watcher/.env` — never in the web app or a
+commit. Both writers use the same tables and semantics, so running both is
+harmless.
 
 ```ini
 # watcher/.env
