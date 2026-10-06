@@ -1768,9 +1768,11 @@ function tvBuildingLabel(p: OvertimePost): string {
  *  PtoOutStrip-on-OncallPanel approach so the shop floor has ONE place to
  *  scan for coverage gaps. */
 // §11 Overtime — its own tile across the right two-thirds (user
-// 2026-09-14). Content-sized: grows one row per open post up to
-// OT_TV_MAX_ROWS, then "+N more"; with nothing open it's a one-line strip.
+// 2026-09-14). Content-sized: grows one row per open post up to maxRows
+// (TV1 keeps the default 5; TV2 shows 10, user 2026-10-06), then "+N more";
+// with nothing open it's a one-line strip.
 const OT_TV_MAX_ROWS = 5;
+const OT_TV2_MAX_ROWS = 10;
 
 /** One row on the wall, whichever system the shift came from: the
  *  dashboard's own OT posts (§11, overtime_posts) and the OT viewer's
@@ -1844,7 +1846,7 @@ function apiJobToTvRow(j: OtApiJob): TvOtRow {
   };
 }
 
-function OvertimeTvPanel({ now }: { now: Date }) {
+function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows?: number }) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
   // The OT viewer mirror has no realtime hook here on purpose: the kiosk
@@ -1874,7 +1876,7 @@ function OvertimeTvPanel({ now }: { now: Date }) {
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
     [open, apiJobs],
   );
-  const visibleOt = sortedOt.slice(0, OT_TV_MAX_ROWS);
+  const visibleOt = sortedOt.slice(0, maxRows);
   const overflowOt = sortedOt.length - visibleOt.length;
 
   const catTotals = useMemo(() => {
@@ -2251,7 +2253,7 @@ function Tv2ViewInner() {
         </div>
         {/* Columns 2–3 — OT across the top, then one panel per column. */}
         <div className="tv2-right-block">
-          <OvertimeTvPanel now={now} />
+          <OvertimeTvPanel now={now} maxRows={OT_TV2_MAX_ROWS} />
           <div className="tv2-right-cols">
             <OncallPanel
               participants={participantsQ.data ?? []}
