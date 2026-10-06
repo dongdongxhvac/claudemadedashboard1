@@ -4,7 +4,7 @@
 // into ot_api_jobs + ot_api_syncs (migration 0136). Hosted twin of
 // watcher/ot_api_poller.py for when the API is reachable from the public
 // internet (https://uparkot.rai-zenith.com) — then nothing has to run on a
-// VM or workstation: pg_cron POSTs here every 6 minutes (migration 0137).
+// VM or workstation: pg_cron POSTs here every minute (migration 0137).
 // Same write semantics as the poller: upsert this run's jobs on the API's
 // id, delete the rest (an id changes when the Outlook event moves), log one
 // syncs row per run (ok or error, with the raw payload).
@@ -13,9 +13,12 @@
 // Auth:     verify_jwt — the cron job sends the anon key, like
 //           flush-pto-notify-queue (0109). The key may read the board once
 //           per 300 s (the API's own 429 message; stricter than the
-//           handoff's 60/min), so a run is skipped when the last OK sync is
-//           under 300 s old, and an upstream 429 is reported as a skip, not
-//           logged as a failure — the previous mirror is still current.
+//           handoff's 60/min). The cron POSTs every minute and this function
+//           reads upstream only when the last OK sync is older than
+//           UPARK_OT_API_MIN_GAP_S (default 310 s), so the mirror refreshes
+//           as soon as the key allows — about every 5-6 minutes — and an
+//           upstream 429 is a skip, not a logged failure. If Steve relaxes
+//           the key's limit, lower the gap with one set_app_secret call.
 // Response: 200 { ok, jobs, open_spaces, skipped?, warnings }
 //           | 502 { error }  (upstream failure — also logged to ot_api_syncs)
 //
@@ -24,6 +27,7 @@
 //   UPARK_OT_API_KEY   — bearer key from the OT viewer (required)
 //   UPARK_OT_API_BASE  — default https://uparkot.rai-zenith.com
 //   UPARK_OT_API_DAYS  — 1-90, default 14
+//   UPARK_OT_API_MIN_GAP_S — seconds between upstream reads, default 310
 //     select set_app_secret('UPARK_OT_API_KEY', 'upot_...');
 //     select set_app_secret('UPARK_OT_API_BASE', 'https://...');
 
@@ -32,7 +36,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DEFAULT_BASE = "https://uparkot.rai-zenith.com";
-const MIN_GAP_MS = 300_000;
+const DEFAULT_MIN_GAP_S = 310;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -111,7 +115,9 @@ async function config(admin: ReturnType<typeof createClient>) {
   const base = (Deno.env.get("UPARK_OT_API_BASE")?.trim() || await fromVault("UPARK_OT_API_BASE") || DEFAULT_BASE).replace(/\/+$/, "");
   const daysRaw = Deno.env.get("UPARK_OT_API_DAYS")?.trim() || await fromVault("UPARK_OT_API_DAYS");
   const days = Math.max(1, Math.min(90, int(daysRaw, 14) || 14));
-  return { key, base, days };
+  const gapRaw = Deno.env.get("UPARK_OT_API_MIN_GAP_S")?.trim() || await fromVault("UPARK_OT_API_MIN_GAP_S");
+  const minGapMs = Math.max(30, int(gapRaw, DEFAULT_MIN_GAP_S) || DEFAULT_MIN_GAP_S) * 1000;
+  return { key, base, days, minGapMs };
 }
 
 Deno.serve(async (req) => {
@@ -120,8 +126,9 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const fetchedAt = new Date().toISOString();
+  const { key, base, days, minGapMs } = await config(admin);
 
-  // Debounce: never more than one upstream read per 5 minutes, whoever calls.
+  // Debounce: one upstream read per minGapMs, whoever calls and however often.
   const { data: last } = await admin
     .from("ot_api_syncs")
     .select("fetched_at")
@@ -129,11 +136,10 @@ Deno.serve(async (req) => {
     .order("fetched_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (last && Date.now() - new Date(last.fetched_at as string).getTime() < MIN_GAP_MS) {
-    return json(200, { ok: true, skipped: "synced less than 5 minutes ago" });
+  if (last && Date.now() - new Date(last.fetched_at as string).getTime() < minGapMs) {
+    return json(200, { ok: true, skipped: `synced less than ${Math.round(minGapMs / 1000)} s ago` });
   }
 
-  const { key, base, days } = await config(admin);
   const url = `${base}/api/v1/ot?days=${days}`;
 
   const fail = async (msg: string) => {

@@ -56,6 +56,7 @@ import {
 } from '../../hooks/useOvertime';
 import {
   useOtApiJobs,
+  useOtApiRealtime,
   isOtApiJobCurrent,
   type OtApiJob,
 } from '../../hooks/useOtApi';
@@ -1849,8 +1850,10 @@ function apiJobToTvRow(j: OtApiJob): TvOtRow {
 function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows?: number }) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
-  // The OT viewer mirror has no realtime hook here on purpose: the kiosk
-  // client re-fetches every 5 minutes, which is the poller's own cadence.
+  // The OT viewer mirror (0136) is followed over realtime too, so a sign-up
+  // reaches the wall the moment the sync lands instead of on the kiosk
+  // client's 5-minute re-fetch.
+  useOtApiRealtime();
   const apiJobsQ = useOtApiJobs();
   // Filter to OT posts that are CURRENTLY relevant — status='open' AND the
   // event hasn't already ended. Without the time check, posts that managers
