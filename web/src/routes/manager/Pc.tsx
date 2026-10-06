@@ -12,6 +12,7 @@ import { EmailAlarmsPanel } from '../../components/EmailAlarmsPanel';
 import { BmsEmailAlarmsPanel } from '../../components/BmsEmailAlarmsPanel';
 import { EmailAlarmsHistoryPanel } from '../../components/EmailAlarmsHistoryPanel';
 import { OvertimePanel } from '../../components/OvertimePanel';
+import { OtApiJobsPanel } from '../../components/OtApiJobsPanel';
 import { PtoPanel } from '../../components/PtoPanel';
 import { CoverageForecastPanel } from '../../components/CoverageForecastPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
@@ -193,6 +194,9 @@ export default function ManagerPc() {
             (user 2026-09-14) so the two coverage boards read together. */}
         <PtoPanel />
         <OvertimePanel />
+        {/* §11b — the OT viewer's Outlook-sourced schedule (read-only mirror,
+            0136) directly under §11 so both overtime boards read together. */}
+        <OtApiJobsPanel />
         <FocusBoardBanner siteCode="upark" />
         <AnnouncementComposer siteCode="upark" />
         {pmQ.isLoading || woQ.isLoading ? (

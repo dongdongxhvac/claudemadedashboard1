@@ -71,3 +71,44 @@ nssm start COVE-Watcher
 ```
 
 Logs end up in the Windows Event Log (or configure NSSM to redirect stdout to a file).
+
+## UPark Overtime API poller (`ot_api_poller.py`)
+
+Mirrors Steve's (BMR) OT viewer — the crew's Outlook off-hours events and
+added OT jobs, with spaces and volunteers — into Supabase `ot_api_jobs`
+every 5 minutes. Feeds §11b on `/upark/manager` and the overtime strip on
+both wall screens (`/upark/tv`, `/upark/tv2`). Read-only: the API's write
+endpoints are not used.
+
+The API host (`vpn-1.tail198a37.ts.net`) is on Tailscale and sends no CORS
+headers, so the poller must run on a machine that is on that tailnet, and the
+key must stay in `watcher/.env` — never in the web app or a commit.
+
+```ini
+# watcher/.env
+UPARK_OT_API_KEY=upot_...          # from the OT viewer ("copy it now")
+# UPARK_OT_API_BASE=https://vpn-1.tail198a37.ts.net
+# UPARK_OT_API_DAYS=14             # 1-90
+```
+
+Check reachability first (same curl as Steve's handoff), then install the
+timer for your host:
+
+```bash
+curl -H "Authorization: Bearer $UPARK_OT_API_KEY" "https://vpn-1.tail198a37.ts.net/api/v1/ot?days=14"
+
+sudo ./install_ot_api_poller_linux.sh      # Hetzner VM / Linux (systemd timer)
+./install_ot_api_poller_mac.sh             # Mac (launchd)
+.\install_ot_api_poller_task.ps1           # Windows (elevated PowerShell)
+```
+
+Verify in the SQL editor:
+
+```sql
+select fetched_at, status, job_count, error_msg from ot_api_syncs order by fetched_at desc limit 5;
+select start_at, title, filled, spaces, status from ot_api_jobs order by start_at;
+```
+
+A failed poll (bad key, off the tailnet, 429 from polling too often) is
+recorded as a `status='error'` row and the manager panel says "last poll
+failed"; the previous mirror stays on screen.

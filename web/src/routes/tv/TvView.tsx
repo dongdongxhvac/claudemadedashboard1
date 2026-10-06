@@ -55,6 +55,11 @@ import {
   type OvertimePost,
 } from '../../hooks/useOvertime';
 import {
+  useOtApiJobs,
+  isOtApiJobCurrent,
+  type OtApiJob,
+} from '../../hooks/useOtApi';
+import {
   usePtoRequests, usePtoRealtime, isPartialDay, partialDayLabel,
   type PtoRequest,
 } from '../../hooks/usePto';
@@ -1738,9 +1743,84 @@ function tvBuildingLabel(p: OvertimePost): string {
 // OT_TV_MAX_ROWS, then "+N more"; with nothing open it's a one-line strip.
 const OT_TV_MAX_ROWS = 5;
 
+/** One row on the wall, whichever system the shift came from: the
+ *  dashboard's own OT posts (§11, overtime_posts) and the OT viewer's
+ *  Outlook-sourced jobs (§11b, ot_api_jobs mirror). Both land in the same
+ *  list, soonest first, so the shop floor has ONE place to scan for open
+ *  overtime — on TV1 and TV2 alike. */
+type TvOtRow = {
+  key: string;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+  /** Dot colour: category colour for a post, the OT-viewer teal for a job. */
+  dot: string;
+  /** Category lane: the post's category, or the job's source. */
+  lane: string;
+  laneColor: string;
+  where: string;
+  whereTitle: string;
+  scope: string;
+  notes: string | null;
+  filled: number;
+  needed: number;
+  names: string[];
+  footer: string;
+  allDayText?: string;
+};
+
+const TV_OT_API_DOT = '#2dd4bf';  // teal — the OT viewer, distinct from every category
+
+function postToTvRow(p: OvertimePost): TvOtRow {
+  return {
+    key: `post:${p.id}`,
+    startsAt: p.starts_at,
+    endsAt: p.ends_at,
+    allDay: false,
+    dot: TV_CATEGORY_DOT[p.category],
+    lane: OVERTIME_CATEGORY_LABELS[p.category],
+    laneColor: TV_CATEGORY_DOT[p.category],
+    where: tvBuildingLabel(p),
+    whereTitle: p.building_label ?? p.building_code ?? '',
+    scope: p.scope,
+    notes: p.notes,
+    filled: p.slots_filled,
+    needed: p.slots_needed,
+    names: p.signups.map((s) => s.user_name ?? '—'),
+    footer: `posted ${new Date(p.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${p.created_by_name ? ` by ${shortName(p.created_by_name)}` : ''}`,
+  };
+}
+
+function apiJobToTvRow(j: OtApiJob): TvOtRow {
+  const s = new Date(j.start_at);
+  const dStr = s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).replace(/,\s*/g, ' ');
+  return {
+    key: `api:${j.id}`,
+    startsAt: j.start_at,
+    endsAt: j.end_at,
+    allDay: j.all_day,
+    allDayText: `${dStr} · all day`,
+    dot: TV_OT_API_DOT,
+    lane: j.source === 'added' ? 'OT viewer' : 'Outlook',
+    laneColor: TV_OT_API_DOT,
+    where: j.location || j.title || '—',
+    whereTitle: j.location ?? '',
+    // When the location lane already shows the title, don't repeat it.
+    scope: j.location ? j.title : (j.notes ?? ''),
+    notes: j.location ? j.notes : null,
+    filled: j.filled,
+    needed: j.spaces,
+    names: j.volunteers.map((v) => v.name ?? v.email ?? '—'),
+    footer: j.source === 'added' ? 'OT viewer job' : 'Outlook calendar',
+  };
+}
+
 function OvertimeTvPanel({ now }: { now: Date }) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
+  // The OT viewer mirror has no realtime hook here on purpose: the kiosk
+  // client re-fetches every 5 minutes, which is the poller's own cadence.
+  const apiJobsQ = useOtApiJobs();
   // Filter to OT posts that are CURRENTLY relevant — status='open' AND the
   // event hasn't already ended. Without the time check, posts that managers
   // forget to close stay on /tv long after they happened. Use ends_at when
@@ -1754,10 +1834,16 @@ function OvertimeTvPanel({ now }: { now: Date }) {
       return tail >= nowMs;
     });
   }, [postsQ.data, now]);
-  // Sort soonest-first so the imminent slots surface at the top.
+  // OT viewer jobs still ahead of us (end, or start day for all-day jobs).
+  const apiJobs = useMemo(
+    () => (apiJobsQ.data ?? []).filter((j) => isOtApiJobCurrent(j, now)),
+    [apiJobsQ.data, now],
+  );
+  // One list, soonest-first, so the imminent slots surface at the top.
   const sortedOt = useMemo(
-    () => [...open].sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
-    [open],
+    () => [...open.map(postToTvRow), ...apiJobs.map(apiJobToTvRow)]
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    [open, apiJobs],
   );
   const visibleOt = sortedOt.slice(0, OT_TV_MAX_ROWS);
   const overflowOt = sortedOt.length - visibleOt.length;
@@ -1769,7 +1855,9 @@ function OvertimeTvPanel({ now }: { now: Date }) {
     for (const p of open) map[p.category] += Math.max(0, p.slots_needed - p.slots_filled);
     return map;
   }, [open]);
-  const totalOpenSlots = Object.values(catTotals).reduce((s, n) => s + n, 0);
+  const apiOpenSlots = apiJobs.reduce((s, j) => s + Math.max(0, j.open_spaces), 0);
+  const totalOpenSlots = Object.values(catTotals).reduce((s, n) => s + n, 0) + apiOpenSlots;
+  const totalRows = sortedOt.length;
 
   return (
     <section className="tv-panel tv-ot-panel" style={{ borderTopColor: '#fbbf24' }}>
@@ -1782,9 +1870,9 @@ function OvertimeTvPanel({ now }: { now: Date }) {
           <span className="tv-ot-cta-inline">→ Sign up on your phone</span>
         )}
         <div className="tv-panel-meta">
-          {open.length === 0 ? 'no OT posts' : (
+          {totalRows === 0 ? 'no OT posts' : (
             <>
-              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{open.length}</span> post{open.length === 1 ? '' : 's'}
+              <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalRows}</span> post{totalRows === 1 ? '' : 's'}
               <span style={{ color: '#475569', margin: '0 0.35vw' }}>·</span>
               <span style={{ color: '#f8fafc', fontWeight: 700 }}>{totalOpenSlots}</span> open slot{totalOpenSlots === 1 ? '' : 's'}
             </>
@@ -1792,7 +1880,7 @@ function OvertimeTvPanel({ now }: { now: Date }) {
         </div>
       </div>
       <div className="tv-panel-body tv-cov-ot">
-        {open.length === 0 ? (
+        {totalRows === 0 ? (
           <p className="tv-muted" style={{ fontSize: '0.85vw', margin: 0 }}>No open OT posts.</p>
         ) : (
           <>
@@ -1804,21 +1892,29 @@ function OvertimeTvPanel({ now }: { now: Date }) {
                   <span className="tv-ot-catbar-count">{catTotals[c]}</span>
                 </span>
               ))}
+              {/* The OT viewer's jobs get their own tally so the bar still
+                  sums to the open-slot count in the title row. */}
+              {apiJobs.length > 0 && (
+                <span className="tv-ot-catbar-item">
+                  <span className="tv-ot-dot" style={{ background: TV_OT_API_DOT }} />
+                  <span className="tv-ot-catbar-label">OT viewer</span>
+                  <span className="tv-ot-catbar-count">{apiOpenSlots}</span>
+                </span>
+              )}
             </div>
             <ul className="tv-ot-list">
-              {visibleOt.map((p) => {
-                const isFull   = p.slots_filled >= p.slots_needed;
-                const urgency  = urgencyTag(p.starts_at, now);
+              {visibleOt.map((r) => {
+                const isFull   = r.filled >= r.needed;
+                const urgency  = urgencyTag(r.startsAt, now);
                 const cls = [
                   'tv-ot-row',
                   isFull && 'tv-ot-row-full',
                   !isFull && 'tv-ot-row-open',
                 ].filter(Boolean).join(' ');
-                const openSlots = Math.max(0, p.slots_needed - p.slots_filled);
-                const postedOn = new Date(p.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+                const openSlots = Math.max(0, r.needed - r.filled);
                 return (
-                  <li key={p.id} className={cls}>
-                    <span className="tv-ot-dot" style={{ background: TV_CATEGORY_DOT[p.category] }} />
+                  <li key={r.key} className={cls}>
+                    <span className="tv-ot-dot" style={{ background: r.dot }} />
                     <div className="tv-ot-main">
                       {/* Line 1 — the facts in fixed lanes so rows line up:
                           when · building · category · x/y · who's on it. */}
@@ -1829,28 +1925,30 @@ function OvertimeTvPanel({ now }: { now: Date }) {
                               {urgency.text}
                             </span>
                           )}
-                          <span className="tv-ot-when-text">{fmtOvertimeWhen(p.starts_at, p.ends_at)}</span>
+                          <span className="tv-ot-when-text">
+                            {r.allDay ? r.allDayText : fmtOvertimeWhen(r.startsAt, r.endsAt)}
+                          </span>
                         </span>
-                        <span className="tv-ot-bld" title={p.building_label ?? p.building_code ?? ''}>
-                          {tvBuildingLabel(p)}
+                        <span className="tv-ot-bld" title={r.whereTitle}>
+                          {r.where}
                         </span>
-                        <span className="tv-ot-cat" style={{ color: TV_CATEGORY_DOT[p.category] }}>
-                          {OVERTIME_CATEGORY_LABELS[p.category]}
+                        <span className="tv-ot-cat" style={{ color: r.laneColor }}>
+                          {r.lane}
                         </span>
                         <span className="tv-ot-filled">
                           <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
-                            {p.slots_filled}/{p.slots_needed}
+                            {r.filled}/{r.needed}
                           </span>
                         </span>
                         <span className="tv-ot-slots">
-                          {p.signups.map((s, i) => (
-                            <span key={s.id}>
+                          {r.names.map((n, i) => (
+                            <span key={`${r.key}:${i}`}>
                               {i > 0 && <span className="tv-ot-sep">·</span>}
-                              <span className="tv-ot-name">{s.user_name ?? '—'}</span>
+                              <span className="tv-ot-name">{n}</span>
                             </span>
                           ))}
                           {openSlots > 0 && (
-                            <span className="tv-ot-empty-open" style={{ marginLeft: p.signups.length ? '0.5vw' : 0 }}>
+                            <span className="tv-ot-empty-open" style={{ marginLeft: r.names.length ? '0.5vw' : 0 }}>
                               OPEN{openSlots > 1 ? ` ×${openSlots}` : ''}
                             </span>
                           )}
@@ -1858,13 +1956,11 @@ function OvertimeTvPanel({ now }: { now: Date }) {
                       </div>
                       {/* Line 2 — scope, notes, who posted it. */}
                       <div className="tv-ot-l2">
-                        <span className="tv-ot-scope" title={p.scope}>
-                          {p.scope}
-                          {p.notes && <span className="tv-ot-notes"> — {p.notes}</span>}
+                        <span className="tv-ot-scope" title={r.scope}>
+                          {r.scope}
+                          {r.notes && <span className="tv-ot-notes"> — {r.notes}</span>}
                         </span>
-                        <span className="tv-ot-posted">
-                          posted {postedOn}{p.created_by_name ? ` by ${shortName(p.created_by_name)}` : ''}
-                        </span>
+                        <span className="tv-ot-posted">{r.footer}</span>
                       </div>
                     </div>
                   </li>
