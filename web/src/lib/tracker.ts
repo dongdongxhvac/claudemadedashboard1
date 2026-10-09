@@ -90,6 +90,7 @@ export const SKILLS: SkillDef[] = [
   { key: 'alignment_lab_precise',  label: 'Pump & motor alignment lab — precise',   group: 'Belts & alignment' },
   // Refrigeration
   { key: 'refrigeration_cycle_sop', label: 'Refrigeration cycle',                   group: 'Refrigeration', sop: true, hint: 'write down the refrigeration cycle' },
+  { key: 'refrigeration_gauges',   label: 'Hook up gauges',                         group: 'Refrigeration' },
   // Rebuilds
   { key: 'backflow_rebuild',       label: 'Backflow rebuild',                       group: 'Rebuilds' },
   { key: 'motor_rebuild',          label: 'Motor rebuild',                          group: 'Rebuilds' },
@@ -100,6 +101,8 @@ export const SKILLS: SkillDef[] = [
   { key: 'bms_network_lab',        label: 'BMS network infrastructure lab',         group: 'Controls & BMS', hint: 'Siemens · JCI · Delta · Schneider' },
   // Building knowledge
   { key: 'building_knowledge_lab', label: 'Building knowledge lab',                 group: 'Building knowledge', hint: 'mechanical set-up, specify the equipment' },
+  { key: 'bk_mechanical_setup',    label: 'Building mechanical set-up',             group: 'Building knowledge', hint: 'explain the building\'s mechanical set-up (hand drawing or plant walk)' },
+  { key: 'bk_equipment_issues',    label: 'Equipment issues in the building',       group: 'Building knowledge', hint: 'knows the building\'s known equipment issues and their workarounds' },
   // Plant operations
   { key: 'cooling_tower_cleaning', label: 'Cooling tower cleaning support',         group: 'Plant operations' },
   { key: 'chiller_open_close',     label: 'Chiller open / close',                   group: 'Plant operations' },
