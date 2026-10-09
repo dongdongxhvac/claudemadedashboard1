@@ -1,9 +1,12 @@
-// TrackerMatrix — the admin's whole-crew view (user 2026-10-09: "editable,
-// with all items showed"). Every item is a row — the log counts, the eight
-// professional traits, the 28 skills — and every active engineer is a
-// column. Trait scores and skill statuses are edited right in the cell;
-// notes, SOP write-ups and the dated log live on the per-person panel, which
-// a click on the engineer's name opens.
+// TrackerMatrix — the admin's whole-crew view, "inline list" layout (user
+// 2026-10-09, picked from the mockups): plain text, no colored boxes. One
+// line-block per engineer: name on the left, then every item written out
+// with its choices right after it, flowing left to right and wrapping.
+//   log       — the six kind counts + helped / straight (read-only here)
+//   traits    — 1 2 3 4, the picked one bold + underlined; click again clears
+//   skills    — – L D V (not started / learning / done / verified)
+// Notes, SOP write-ups and the dated log live on the per-person panel,
+// which a click on the engineer's name opens.
 import { useMemo } from 'react';
 import type { EngineerRow } from '../../hooks/useEngineers';
 import {
@@ -17,21 +20,59 @@ import {
   type SkillStatus,
 } from '../../lib/tracker';
 
-const STATUS_SHORT: Record<SkillStatus, string> = { not_started: '—', learning: 'L', done: 'D', verified: 'V' };
-const STATUS_BG: Record<SkillStatus, string> = {
-  not_started: 'transparent',
-  learning: 'rgba(212,160,23,0.18)',
-  done: 'rgba(94,106,210,0.18)',
-  verified: 'rgba(16,185,129,0.20)',
+const STATUS_LETTER: Record<SkillStatus, string> = { not_started: '–', learning: 'L', done: 'D', verified: 'V' };
+
+/** Short labels for the inline list (the full text is the tooltip). */
+const TRAIT_SHORT: Record<string, string> = {
+  learning: 'Learning', follow_direction: 'Direction', reliable: 'Reliable', communication: 'Communication',
+  responsibility: 'Responsibility', skills: 'Skills', experience: 'Experience', knowledge: 'Knowledge',
 };
-const cellSel: React.CSSProperties = {
-  width: 44, fontSize: 11, padding: '1px 2px', borderRadius: 3,
-  border: '1px solid var(--color-border)', color: 'var(--color-text)', textAlign: 'center',
+const SKILL_SHORT: Record<string, string> = {
+  actuator_replacement: 'Actuator', contactor_replacement: 'Contactor', tstat_replacement: 'T-stat',
+  name_components: 'Name components', read_electrical_diagram: 'Read diagram', find_component: 'Find component',
+  as_built_reading: 'As-built', pace_out: 'Pace-out', loto: 'LOTO',
+  belt_tension_sop: 'Belt tension', sheave_alignment_sop: 'Sheave alignment',
+  alignment_lab_rough: 'Alignment rough', alignment_lab_precise: 'Alignment precise',
+  refrigeration_cycle_sop: 'Refrig. cycle', backflow_rebuild: 'Backflow rebuild', motor_rebuild: 'Motor rebuild', pump_rebuild: 'Pump rebuild',
+  building_knowledge_lab: 'Building knowledge', control_lab: 'Control', start_sequence_lab: 'Start sequence', bms_network_lab: 'BMS network',
+  cooling_tower_cleaning: 'Tower cleaning', chiller_open_close: 'Chiller open/close', boiler_open_close: 'Boiler open/close',
+  water_treatment: 'Water treatment', generator_test: 'Generator test',
+  pneumatic_knowledge: 'Pneu. knowledge', pneumatic_experience: 'Pneu. experience',
 };
-const stickyTh: React.CSSProperties = {
-  position: 'sticky', left: 0, zIndex: 2, background: 'var(--color-card)', textAlign: 'left',
-  padding: '3px 8px 3px 4px', whiteSpace: 'nowrap', borderRight: '1px solid var(--color-border)',
+const GROUP_SHORT: Record<string, string> = {
+  'Components & electrical': 'Components', 'Reading & safety': 'Reading & safety', 'Belts, sheaves & alignment': 'Belts & alignment',
+  'Refrigeration & rebuilds': 'Refrigeration & rebuilds', 'Labs': 'Labs', 'Plant operations': 'Plant', 'Pneumatics': 'Pneumatics',
 };
+
+const groupLabel: React.CSSProperties = { color: 'var(--color-text-muted)', fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, margin: '0 8px 0 6px' };
+const itemStyle: React.CSSProperties = { whiteSpace: 'nowrap', marginRight: 10 };
+
+function Choices({ options, picked, onPick, title, disabled }: {
+  options: string[]; picked: number; onPick: (i: number) => void; title: string; disabled: boolean;
+}) {
+  return (
+    <span className="t-mono" title={title} style={{ display: 'inline-flex', fontSize: 11, marginLeft: 4 }}>
+      {options.map((o, i) => {
+        const on = i === picked;
+        return (
+          <button
+            key={o}
+            type="button"
+            disabled={disabled}
+            aria-pressed={on}
+            onClick={() => onPick(i)}
+            style={{
+              font: 'inherit', background: 'none', border: 0, padding: '0 2px', lineHeight: '15px',
+              color: on ? 'var(--color-text)' : 'var(--color-text-muted)', fontWeight: on ? 700 : 400,
+              borderBottom: `2px solid ${on ? 'var(--color-accent)' : 'transparent'}`,
+              cursor: disabled ? 'default' : 'pointer',
+            }}
+          >{o}</button>
+        );
+      })}
+    </span>
+  );
+}
 
 export function TrackerMatrix({ engineers, canEdit, onOpen }: {
   engineers: EngineerRow[];
@@ -45,147 +86,99 @@ export function TrackerMatrix({ engineers, canEdit, onOpen }: {
   const upSkill = useUpsertTrackerSkill();
   const today = new Date().toLocaleDateString('en-CA');
 
-  const cols = useMemo(() => [...engineers].sort((a, b) => a.full_name.localeCompare(b.full_name)), [engineers]);
+  const rows = useMemo(() => [...engineers].sort((a, b) => a.full_name.localeCompare(b.full_name)), [engineers]);
   const loading = countsQ.isLoading || traitsQ.isLoading || skillsQ.isLoading;
   const err = countsQ.error ?? traitsQ.error ?? skillsQ.error ?? upTrait.error ?? upSkill.error;
 
-  const nameCell = (e: EngineerRow) => (
-    <th key={e.user_id} className="t-small" style={{ padding: '4px 2px', verticalAlign: 'bottom', fontWeight: 500, minWidth: 48 }}>
-      <button onClick={() => onOpen(e)} title={`${e.full_name} — open the full tracker (log, notes, SOPs)`} className="t-accent hover:underline" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {e.full_name}{e.is_lead ? ' ★' : ''}
-      </button>
-    </th>
-  );
-
   return (
-    <div className="t-card" style={{ padding: '0.5rem 0.75rem' }}>
-      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
-        <span className="t-small t-muted">
-          {cols.length} engineer{cols.length === 1 ? '' : 's'} · scores 1–4 · skills — / L learning / D done / V verified
-          {!canEdit && ' · view only'}
-        </span>
-        <span className="t-small t-muted">click a name for the log, notes and SOP write-ups</span>
+    <div className="t-card" style={{ padding: '0.4rem 0.9rem' }}>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap t-small t-muted" style={{ padding: '4px 0 2px' }}>
+        <span>{rows.length} engineer{rows.length === 1 ? '' : 's'}{!canEdit && ' · view only'}</span>
+        <span className="t-mono" style={{ fontSize: 11 }}>– not started · L learning · D done · V verified · traits 1–4 · click a name for the log, notes and SOPs</span>
       </div>
       {loading && <p className="t-small t-muted">Loading…</p>}
       {err && <p className="t-small t-danger">Error: {(err as Error).message}</p>}
-      {!loading && (
-        <div className="overflow-x-auto" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
-          <table className="border-collapse" style={{ fontSize: 11 }}>
-            <thead>
-              <tr>
-                <th style={{ ...stickyTh, zIndex: 3, top: 0 }} />
-                {cols.map(nameCell)}
-              </tr>
-            </thead>
-            <tbody>
-              {/* ── Log counts ── */}
-              <GroupRow label="Log" span={cols.length + 1} />
-              <tr>
-                <th style={stickyTh} className="t-small">Entries · helped / straight</th>
-                {cols.map((e) => {
-                  const c = countsQ.data?.get(e.user_id);
-                  return (
-                    <td key={e.user_id} style={{ textAlign: 'center', padding: '2px' }} title={c ? TRACK_KINDS.map((k) => `${TRACK_KIND_LABELS[k]} ${c.byKind[k] ?? 0}`).join(' · ') : 'no entries'}>
-                      {c ? <span>{c.total} <span className="t-muted">· {c.help}/{c.straight}</span></span> : <span className="t-muted">—</span>}
-                    </td>
-                  );
-                })}
-              </tr>
+      {!loading && rows.length === 0 && <p className="t-small t-muted italic">No engineers match.</p>}
+      {!loading && rows.map((e) => {
+        const c = countsQ.data?.get(e.user_id);
+        const traits = traitsQ.data?.get(e.user_id);
+        const skills = skillsQ.data?.get(e.user_id);
+        const done = SKILLS.filter((s) => ['done', 'verified'].includes(skills?.get(s.key)?.status ?? 'not_started')).length;
+        const verified = SKILLS.filter((s) => skills?.get(s.key)?.status === 'verified').length;
+        return (
+          <div
+            key={e.user_id}
+            style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '0 12px', alignItems: 'start', padding: '7px 0', borderTop: '1px solid var(--color-border)' }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <button onClick={() => onOpen(e)} className="t-accent hover:underline" style={{ font: 'inherit', fontSize: 13, fontWeight: 600, background: 'none', border: 0, padding: 0, textAlign: 'left' }} title="Open the full tracker — log, notes, SOP write-ups">
+                {e.full_name}{e.is_lead ? ' ★' : ''}
+              </button>
+              <div className="t-mono t-muted" style={{ fontSize: 10.5, lineHeight: 1.5 }}>
+                {c?.total ?? 0} entries · {done}/{SKILLS.length} done · {verified} verified
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', minWidth: 0, fontSize: 11.5, lineHeight: '19px' }}>
+              {/* log */}
+              <span style={{ ...groupLabel, marginLeft: 0 }}>Log</span>
               {TRACK_KINDS.map((k) => (
-                <tr key={k}>
-                  <th style={{ ...stickyTh, fontWeight: 400 }} className="t-small t-muted">{TRACK_KIND_LABELS[k]}</th>
-                  {cols.map((e) => {
-                    const n = countsQ.data?.get(e.user_id)?.byKind[k] ?? 0;
-                    return <td key={e.user_id} style={{ textAlign: 'center', padding: '2px' }} className={n ? '' : 't-muted'}>{n || '·'}</td>;
-                  })}
-                </tr>
+                <span key={k} style={itemStyle}>{TRACK_KIND_LABELS[k]}<span className="t-mono" style={{ marginLeft: 3, fontWeight: 600 }}>{c?.byKind[k] ?? 0}</span></span>
               ))}
+              <span style={itemStyle}>helped<span className="t-mono" style={{ marginLeft: 3, fontWeight: 600 }}>{c?.help ?? 0}</span> / straight<span className="t-mono" style={{ marginLeft: 3, fontWeight: 600 }}>{c?.straight ?? 0}</span></span>
 
-              {/* ── Professional ── */}
-              <GroupRow label="Professional — a licensed tech is a professional (1–4)" span={cols.length + 1} />
-              {TRAITS.map((t) => (
-                <tr key={t.key}>
-                  <th style={stickyTh} className="t-small" title={t.hint}>{t.label}</th>
-                  {cols.map((e) => {
-                    const row = traitsQ.data?.get(e.user_id)?.get(t.key);
-                    const score = row?.score ?? null;
+              {/* professional */}
+              <span style={groupLabel}>Professional</span>
+              {TRAITS.map((t) => {
+                const row = traits?.get(t.key);
+                const score = row?.score ?? null;
+                return (
+                  <span key={t.key} style={itemStyle}>
+                    {TRAIT_SHORT[t.key] ?? t.label}
+                    <Choices
+                      options={['1', '2', '3', '4']}
+                      picked={score ? score - 1 : -1}
+                      disabled={!canEdit}
+                      title={`${t.label} — ${t.hint}${score ? ` · ${SCORE_LABELS[score]}` : ''}${row?.note ? ` — ${row.note}` : ''}`}
+                      onPick={(i) => upTrait.mutate({ user_id: e.user_id, trait: t.key, score: score === i + 1 ? null : i + 1, note: row?.note ?? null })}
+                    />
+                  </span>
+                );
+              })}
+
+              {/* skills by group */}
+              {SKILL_GROUPS.map((g) => (
+                <span key={g} style={{ display: 'contents' }}>
+                  <span style={groupLabel}>{GROUP_SHORT[g] ?? g}</span>
+                  {SKILLS.filter((s) => s.group === g).map((s) => {
+                    const row = skills?.get(s.key);
+                    const status: SkillStatus = row?.status ?? 'not_started';
                     return (
-                      <td key={e.user_id} style={{ textAlign: 'center', padding: '2px' }}>
-                        <select
-                          value={score ?? ''}
+                      <span key={s.key} style={itemStyle}>
+                        {SKILL_SHORT[s.key] ?? s.label}
+                        {s.sop && <span className="t-muted" style={{ fontSize: 8.5, letterSpacing: '0.06em', marginLeft: 2 }} title={row?.sop_text ? 'SOP written' : 'SOP not written yet'}>SOP{row?.sop_text ? '✓' : ''}</span>}
+                        <Choices
+                          options={SKILL_STATUSES.map((x) => STATUS_LETTER[x])}
+                          picked={SKILL_STATUSES.indexOf(status)}
                           disabled={!canEdit}
-                          onChange={(ev) => upTrait.mutate({ user_id: e.user_id, trait: t.key, score: ev.target.value === '' ? null : Number(ev.target.value), note: row?.note ?? null })}
-                          title={`${t.label}: ${score !== null ? SCORE_LABELS[score] : 'not scored'}${row?.note ? ` — ${row.note}` : ''}`}
-                          style={{ ...cellSel, background: score ? `rgba(94,106,210,${0.08 + score * 0.08})` : 'transparent' }}
-                        >
-                          <option value="">—</option>
-                          {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                      </td>
+                          title={`${s.label}${s.hint ? ` — ${s.hint}` : ''} · ${SKILL_STATUS_LABELS[status]}${row?.done_on ? ` · ${row.done_on}` : ''}${row?.note ? ` — ${row.note}` : ''}`}
+                          onPick={(i) => {
+                            const next = SKILL_STATUSES[i];
+                            upSkill.mutate({
+                              user_id: e.user_id, skill: s.key, status: next,
+                              done_on: next === 'done' || next === 'verified' ? (row?.done_on ?? today) : (row?.done_on ?? null),
+                              sop_text: row?.sop_text ?? null, note: row?.note ?? null,
+                            });
+                          }}
+                        />
+                      </span>
                     );
                   })}
-                </tr>
+                </span>
               ))}
-
-              {/* ── Skills ── */}
-              {SKILL_GROUPS.map((g) => (
-                <GroupBlock key={g} label={g} span={cols.length + 1}>
-                  {SKILLS.filter((s) => s.group === g).map((s) => (
-                    <tr key={s.key}>
-                      <th style={stickyTh} className="t-small" title={s.hint}>
-                        {s.label}{s.sop && <span className="ml-1" style={{ fontSize: 9, fontWeight: 600, color: '#7e22ce' }}>SOP</span>}
-                      </th>
-                      {cols.map((e) => {
-                        const row = skillsQ.data?.get(e.user_id)?.get(s.key);
-                        const status: SkillStatus = row?.status ?? 'not_started';
-                        return (
-                          <td key={e.user_id} style={{ textAlign: 'center', padding: '2px' }}>
-                            <select
-                              value={status}
-                              disabled={!canEdit}
-                              onChange={(ev) => {
-                                const next = ev.target.value as SkillStatus;
-                                upSkill.mutate({
-                                  user_id: e.user_id, skill: s.key, status: next,
-                                  done_on: next === 'done' || next === 'verified' ? (row?.done_on ?? today) : (row?.done_on ?? null),
-                                  sop_text: row?.sop_text ?? null, note: row?.note ?? null,
-                                });
-                              }}
-                              title={`${s.label}: ${SKILL_STATUS_LABELS[status]}${row?.done_on ? ` · ${row.done_on}` : ''}${s.sop ? (row?.sop_text ? ' · SOP written' : ' · SOP not written') : ''}${row?.note ? ` — ${row.note}` : ''}`}
-                              style={{ ...cellSel, background: STATUS_BG[status] }}
-                            >
-                              {SKILL_STATUSES.map((x) => <option key={x} value={x}>{STATUS_SHORT[x]}</option>)}
-                            </select>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </GroupBlock>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+          </div>
+        );
+      })}
     </div>
-  );
-}
-
-function GroupRow({ label, span }: { label: string; span: number }) {
-  return (
-    <tr>
-      <td colSpan={span} className="t-small t-muted uppercase tracking-wider" style={{ fontSize: 10, padding: '8px 4px 2px', borderBottom: '1px solid var(--color-border)', position: 'sticky', left: 0 }}>
-        {label}
-      </td>
-    </tr>
-  );
-}
-
-function GroupBlock({ label, span, children }: { label: string; span: number; children: React.ReactNode }) {
-  return (
-    <>
-      <GroupRow label={label} span={span} />
-      {children}
-    </>
   );
 }
