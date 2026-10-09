@@ -169,6 +169,11 @@ export default function ManagerPc() {
                 Admin
               </Link>
             )}
+            {/* Training (user 2026-10-09): the online handouts + the baseline
+                (new-hire) program in print-station format. */}
+            <Link to="/engineer/training" className="t-small t-accent hover:underline">
+              Training
+            </Link>
             {/* Buildings KB (UPark) — equipment / issues behind §10.1. Back in
                 this header per user 2026-09-29 (hidden 09-23, briefly on the
                 admin header). Training / Manual stay hidden. */}

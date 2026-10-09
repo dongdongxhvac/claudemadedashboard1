@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { TrackerDrawer } from '../../components/tracker/TrackerDrawer';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useAllUsers, useUpdateEngineerProfile, useUpdateUser, useAddEngineer, useDeleteUser,
@@ -115,6 +116,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   const addEngineer = useAddEngineer();
   const deleteUser = useDeleteUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
+  const [trackerFor, setTrackerFor] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
   // Training-program enrolments (tiny table, one fetch) still drive the
   // "New hires" roster filter. The per-program pills, the Training button and
@@ -371,6 +373,16 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                       >
                         {canEditRow(r) ? 'Edit' : 'View'}
                       </button>
+                      {r.role === 'engineer' && (
+                        <button
+                          onClick={() => setTrackerFor(r)}
+                          className="t-small px-2 py-0.5 rounded border mr-1"
+                          style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                          title="Log · professional scorecard · skills checklist"
+                        >
+                          Tracker
+                        </button>
+                      )}
                       {/* "Profile →" and "Training" row actions removed (user 2026-10-09)
                           — the Tracker tab replaces both. */}
                     </td>
@@ -392,6 +404,8 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
           the roster point here. Anyone who can edit engineers can assign;
           leads see it read-only. */}
       <CoveIdFinder roster={allRows} readOnly={!canManageAny} />
+
+      {trackerFor && <TrackerDrawer person={trackerFor} onClose={() => setTrackerFor(null)} />}
 
       {editing && (
         <EditDrawer

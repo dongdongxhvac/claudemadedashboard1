@@ -1,6 +1,7 @@
 // Binney St User Profiles — duplicated from web/src/routes/admin/
 // UserProfilesTab.tsx per the isolate-new-features rule: the UPark admin tab
 // stays untouched. Only the roster hooks import differs — useBinneyEngineers
+import { TrackerDrawer } from '../../components/tracker/TrackerDrawer';
 // scopes every read to engineer_profiles.home_site_id = Binney and stamps new
 // users with the Binney site.
 import { useMemo, useState } from 'react';
@@ -126,6 +127,7 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
   const addEngineer = useAddEngineer();
   const deleteUser = useDeleteUser();
   const [editing, setEditing] = useState<EngineerRow | null>(null);
+  const [trackerFor, setTrackerFor] = useState<EngineerRow | null>(null);
   const [adding, setAdding] = useState(false);
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
@@ -336,6 +338,16 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
                       >
                         {canEditRow(r) ? 'Edit' : 'View'}
                       </button>
+                      {r.role === 'engineer' && (
+                        <button
+                          onClick={() => setTrackerFor(r)}
+                          className="t-small px-2 py-0.5 rounded border mr-1"
+                          style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+                          title="Log · professional scorecard · skills checklist"
+                        >
+                          Tracker
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -348,6 +360,8 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
       {canCredential && (
         <AccountActivityFeed userIds={new Set(allRows.map((r) => r.user_id))} />
       )}
+
+      {trackerFor && <TrackerDrawer person={trackerFor} onClose={() => setTrackerFor(null)} />}
 
       {editing && (
         <EditDrawer
