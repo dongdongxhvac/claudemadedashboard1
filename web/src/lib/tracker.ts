@@ -94,9 +94,18 @@ export const SKILLS: SkillDef[] = [
   { key: 'boiler_open_close',      label: 'Boiler open / close',                    group: 'Plant operations' },
   { key: 'water_treatment',        label: 'Water treatment',                        group: 'Plant operations' },
   { key: 'generator_test',         label: 'Generator test',                         group: 'Plant operations' },
+  // Preventive maintenance
+  { key: 'pm_ahu_freeze_stat',     label: 'AHU PM — freeze stat',                   group: 'Preventive maintenance', hint: 'test and reset the freeze stat as part of the AHU PM' },
+  { key: 'pm_pump',                label: 'Pump PM',                                group: 'Preventive maintenance' },
+  { key: 'pm_motor',               label: 'Motor PM',                               group: 'Preventive maintenance' },
   // Pneumatics
   { key: 'pneumatic_knowledge',    label: 'Pneumatic knowledge',                    group: 'Pneumatics' },
   { key: 'pneumatic_experience',   label: 'Pneumatic experience',                   group: 'Pneumatics' },
+  // Upkeep
+  { key: 'upkeep_space',           label: 'Space organizing',                       group: 'Upkeep' },
+  { key: 'upkeep_cleaning',        label: 'Cleaning',                               group: 'Upkeep' },
+  { key: 'upkeep_parts_inventory', label: 'Parts inventory',                        group: 'Upkeep' },
+  { key: 'upkeep_material_inventory', label: 'Material inventory',                  group: 'Upkeep' },
 ];
 export const SKILL_BY_KEY: Record<string, SkillDef> = Object.fromEntries(SKILLS.map((s) => [s.key, s]));
 export const SKILL_GROUPS: string[] = Array.from(new Set(SKILLS.map((s) => s.group)));

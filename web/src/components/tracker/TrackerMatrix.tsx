@@ -39,7 +39,9 @@ const SKILL_SHORT: Record<string, string> = {
   building_knowledge_lab: 'Building knowledge lab',
   cooling_tower_cleaning: 'Cooling tower cleaning', chiller_open_close: 'Chiller open/close', boiler_open_close: 'Boiler open/close',
   water_treatment: 'Water treatment', generator_test: 'Generator test',
+  pm_ahu_freeze_stat: 'AHU PM freeze stat', pm_pump: 'Pump PM', pm_motor: 'Motor PM',
   pneumatic_knowledge: 'Pneumatic knowledge', pneumatic_experience: 'Pneumatic experience',
+  upkeep_space: 'Space organizing', upkeep_cleaning: 'Cleaning', upkeep_parts_inventory: 'Parts inventory', upkeep_material_inventory: 'Material inventory',
 };
 const GROUP_SHORT: Record<string, string> = {};
 
