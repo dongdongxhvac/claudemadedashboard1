@@ -74,11 +74,12 @@ export const SKILLS: SkillDef[] = [
   { key: 'sheave_alignment_sop',   label: 'Sheave alignment',                       group: 'Belts, sheaves & alignment', sop: true, hint: 'write down the SOP' },
   { key: 'alignment_lab_rough',    label: 'Pump & motor alignment lab — rough',     group: 'Belts, sheaves & alignment' },
   { key: 'alignment_lab_precise',  label: 'Pump & motor alignment lab — precise',   group: 'Belts, sheaves & alignment' },
-  // Refrigeration & rebuilds
-  { key: 'refrigeration_cycle_sop', label: 'Refrigeration',                         group: 'Refrigeration & rebuilds', sop: true, hint: 'write down the refrigeration cycle' },
-  { key: 'backflow_rebuild',       label: 'Backflow rebuild',                       group: 'Refrigeration & rebuilds' },
-  { key: 'motor_rebuild',          label: 'Motor rebuild',                          group: 'Refrigeration & rebuilds' },
-  { key: 'pump_rebuild',           label: 'Pump rebuild',                           group: 'Refrigeration & rebuilds' },
+  // Refrigeration
+  { key: 'refrigeration_cycle_sop', label: 'Refrigeration',                         group: 'Refrigeration', sop: true, hint: 'write down the refrigeration cycle' },
+  // Rebuilds
+  { key: 'backflow_rebuild',       label: 'Backflow rebuild',                       group: 'Rebuilds' },
+  { key: 'motor_rebuild',          label: 'Motor rebuild',                          group: 'Rebuilds' },
+  { key: 'pump_rebuild',           label: 'Pump rebuild',                           group: 'Rebuilds' },
   // Labs
   { key: 'building_knowledge_lab', label: 'Building knowledge lab',                 group: 'Labs', hint: 'mechanical set-up, specify the equipment' },
   { key: 'control_lab',            label: 'Control lab',                            group: 'Labs' },

@@ -42,10 +42,10 @@ const SKILL_SHORT: Record<string, string> = {
 };
 const GROUP_SHORT: Record<string, string> = {
   'Components & electrical': 'Components', 'Reading & safety': 'Reading & safety', 'Belts, sheaves & alignment': 'Belts & alignment',
-  'Refrigeration & rebuilds': 'Refrigeration & rebuilds', 'Labs': 'Labs', 'Plant operations': 'Plant', 'Pneumatics': 'Pneumatics',
+  'Refrigeration': 'Refrigeration', 'Rebuilds': 'Rebuilds', 'Labs': 'Labs', 'Plant operations': 'Plant', 'Pneumatics': 'Pneumatics',
 };
 
-const catLabel: React.CSSProperties = { color: 'var(--color-text-muted)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, paddingTop: 3, whiteSpace: 'nowrap' };
+const catLabel: React.CSSProperties = { color: 'var(--color-text-muted)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, paddingTop: 3, lineHeight: '16px', minWidth: 0, overflowWrap: 'anywhere' };
 const catRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: '150px 1fr', gap: '0 12px', alignItems: 'start', padding: '3px 0' };
 const flow: React.CSSProperties = { display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', minWidth: 0, fontSize: 12, lineHeight: '22px', columnGap: 18 };
 const itemStyle: React.CSSProperties = { whiteSpace: 'nowrap' };
