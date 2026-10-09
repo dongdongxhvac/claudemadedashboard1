@@ -111,19 +111,3 @@ export const SKILL_STATUS_LABELS: Record<SkillStatus, string> = {
 export const TRACKER_TEST_EMAILS = ['bmrupark55@gmail.com'];
 export const canSeeTrackerLink = (email: string | null | undefined): boolean =>
   !!email && TRACKER_TEST_EMAILS.includes(email.toLowerCase());
-
-/** The online training handouts: 5 categories + 4 equipment (web/public). */
-export type TrainingDoc = { key: string; title: string; path: string };
-export const TRAINING_CATEGORIES: TrainingDoc[] = [
-  { key: 'hvac',        title: 'HVAC',        path: '/training/new-hire/overviews/new_hire_hvac_overview.html' },
-  { key: 'electrical',  title: 'Electrical',  path: '/training/new-hire/overviews/new_hire_electrical_overview.html' },
-  { key: 'bms',         title: 'BMS',         path: '/training/new-hire/overviews/new_hire_bms_overview.html' },
-  { key: 'plumbing',    title: 'Plumbing',    path: '/training/new-hire/overviews/new_hire_plumbing_overview.html' },
-  { key: 'life_safety', title: 'Life safety', path: '/training/new-hire/overviews/new_hire_life_safety_overview.html' },
-];
-export const TRAINING_EQUIPMENT: TrainingDoc[] = [
-  { key: 'ahu',           title: 'Air handling unit', path: '/training/new-hire/equipment/new_hire_ahu.html' },
-  { key: 'chiller_plant', title: 'Chiller plant',     path: '/training/new-hire/equipment/new_hire_chiller_plant.html' },
-  { key: 'boiler_plant',  title: 'Boiler plant',      path: '/training/new-hire/equipment/new_hire_boiler_plant.html' },
-  { key: 'cooling_tower', title: 'Cooling tower',     path: '/training/new-hire/equipment/new_hire_cooling_tower.html' },
-];
