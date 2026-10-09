@@ -30,20 +30,18 @@ const TRAIT_SHORT: Record<string, string> = {
 };
 const SKILL_SHORT: Record<string, string> = {
   actuator_replacement: 'Actuator', contactor_replacement: 'Contactor', tstat_replacement: 'T-stat',
-  name_components: 'Name components', read_electrical_diagram: 'Read diagram', find_component: 'Find component',
-  as_built_reading: 'As-built', pace_out: 'Pace-out', loto: 'LOTO',
+  read_electrical_diagram: 'Read electrical diagram', name_components: 'Name components', find_component: 'Find a component',
+  as_built_reading: 'As-built reading', pace_out: 'Pace-out', loto: 'LOTO',
   belt_tension_sop: 'Belt tension', sheave_alignment_sop: 'Sheave alignment',
-  alignment_lab_rough: 'Alignment rough', alignment_lab_precise: 'Alignment precise',
-  refrigeration_cycle_sop: 'Refrig. cycle', backflow_rebuild: 'Backflow rebuild', motor_rebuild: 'Motor rebuild', pump_rebuild: 'Pump rebuild',
-  building_knowledge_lab: 'Building knowledge', control_lab: 'Control', start_sequence_lab: 'Start sequence', bms_network_lab: 'BMS network',
-  cooling_tower_cleaning: 'Tower cleaning', chiller_open_close: 'Chiller open/close', boiler_open_close: 'Boiler open/close',
+  alignment_lab_rough: 'Pump & motor alignment rough', alignment_lab_precise: 'Pump & motor alignment precise',
+  refrigeration_cycle_sop: 'Refrigeration cycle', backflow_rebuild: 'Backflow rebuild', motor_rebuild: 'Motor rebuild', pump_rebuild: 'Pump rebuild',
+  control_lab: 'Control lab', start_sequence_lab: 'Start sequence lab', bms_network_lab: 'BMS network lab',
+  building_knowledge_lab: 'Building knowledge lab',
+  cooling_tower_cleaning: 'Cooling tower cleaning', chiller_open_close: 'Chiller open/close', boiler_open_close: 'Boiler open/close',
   water_treatment: 'Water treatment', generator_test: 'Generator test',
-  pneumatic_knowledge: 'Pneu. knowledge', pneumatic_experience: 'Pneu. experience',
+  pneumatic_knowledge: 'Pneumatic knowledge', pneumatic_experience: 'Pneumatic experience',
 };
-const GROUP_SHORT: Record<string, string> = {
-  'Components & electrical': 'Components', 'Reading & safety': 'Reading & safety', 'Belts, sheaves & alignment': 'Belts & alignment',
-  'Refrigeration': 'Refrigeration', 'Rebuilds': 'Rebuilds', 'Labs': 'Labs', 'Plant operations': 'Plant', 'Pneumatics': 'Pneumatics',
-};
+const GROUP_SHORT: Record<string, string> = {};
 
 const catLabel: React.CSSProperties = { color: 'var(--color-text-muted)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, paddingTop: 3, lineHeight: '16px', minWidth: 0, overflowWrap: 'anywhere' };
 const catRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: '150px 1fr', gap: '0 12px', alignItems: 'start', padding: '3px 0' };

@@ -58,33 +58,36 @@ export const SCORE_LABELS = ['—', 'Needs work', 'Developing', 'Solid', 'Strong
 /** The skills checklist. `sop` = the item asks for a written SOP. */
 export type SkillDef = { key: string; label: string; group: string; sop?: boolean; hint?: string };
 export const SKILLS: SkillDef[] = [
-  // Components & electrical
-  { key: 'actuator_replacement',   label: 'Actuator replacement',                   group: 'Components & electrical' },
-  { key: 'contactor_replacement',  label: 'Contactor replacement',                  group: 'Components & electrical' },
-  { key: 'tstat_replacement',      label: 'T-stat replacement',                     group: 'Components & electrical' },
-  { key: 'name_components',        label: 'Name all the components and what they do', group: 'Components & electrical' },
-  { key: 'read_electrical_diagram', label: 'Read an electrical diagram to solve a problem', group: 'Components & electrical' },
-  { key: 'find_component',         label: 'Find a particular component',            group: 'Components & electrical' },
-  // Reading & safety
-  { key: 'as_built_reading',       label: 'As-built reading experience',            group: 'Reading & safety' },
-  { key: 'pace_out',               label: 'Pace-out skill',                         group: 'Reading & safety' },
-  { key: 'loto',                   label: 'LOTO experience',                        group: 'Reading & safety' },
-  // Belts, sheaves, alignment
-  { key: 'belt_tension_sop',       label: 'Belt tension',                           group: 'Belts, sheaves & alignment', sop: true, hint: 'write down the SOP' },
-  { key: 'sheave_alignment_sop',   label: 'Sheave alignment',                       group: 'Belts, sheaves & alignment', sop: true, hint: 'write down the SOP' },
-  { key: 'alignment_lab_rough',    label: 'Pump & motor alignment lab — rough',     group: 'Belts, sheaves & alignment' },
-  { key: 'alignment_lab_precise',  label: 'Pump & motor alignment lab — precise',   group: 'Belts, sheaves & alignment' },
+  // Component replacement
+  { key: 'actuator_replacement',   label: 'Actuator replacement',                   group: 'Component replacement' },
+  { key: 'contactor_replacement',  label: 'Contactor replacement',                  group: 'Component replacement' },
+  { key: 'tstat_replacement',      label: 'T-stat replacement',                     group: 'Component replacement' },
+  // Electrical troubleshooting
+  { key: 'read_electrical_diagram', label: 'Read an electrical diagram to solve a problem', group: 'Electrical troubleshooting' },
+  { key: 'name_components',        label: 'Name all the components and what they do', group: 'Electrical troubleshooting' },
+  { key: 'find_component',         label: 'Find a particular component',            group: 'Electrical troubleshooting' },
+  // Drawings & layout
+  { key: 'as_built_reading',       label: 'As-built reading experience',            group: 'Drawings & layout' },
+  { key: 'pace_out',               label: 'Pace-out skill',                         group: 'Drawings & layout' },
+  // Safety
+  { key: 'loto',                   label: 'LOTO experience',                        group: 'Safety' },
+  // Belts & alignment
+  { key: 'belt_tension_sop',       label: 'Belt tension',                           group: 'Belts & alignment', sop: true, hint: 'write down the SOP' },
+  { key: 'sheave_alignment_sop',   label: 'Sheave alignment',                       group: 'Belts & alignment', sop: true, hint: 'write down the SOP' },
+  { key: 'alignment_lab_rough',    label: 'Pump & motor alignment lab — rough',     group: 'Belts & alignment' },
+  { key: 'alignment_lab_precise',  label: 'Pump & motor alignment lab — precise',   group: 'Belts & alignment' },
   // Refrigeration
-  { key: 'refrigeration_cycle_sop', label: 'Refrigeration',                         group: 'Refrigeration', sop: true, hint: 'write down the refrigeration cycle' },
+  { key: 'refrigeration_cycle_sop', label: 'Refrigeration cycle',                   group: 'Refrigeration', sop: true, hint: 'write down the refrigeration cycle' },
   // Rebuilds
   { key: 'backflow_rebuild',       label: 'Backflow rebuild',                       group: 'Rebuilds' },
   { key: 'motor_rebuild',          label: 'Motor rebuild',                          group: 'Rebuilds' },
   { key: 'pump_rebuild',           label: 'Pump rebuild',                           group: 'Rebuilds' },
-  // Labs
-  { key: 'building_knowledge_lab', label: 'Building knowledge lab',                 group: 'Labs', hint: 'mechanical set-up, specify the equipment' },
-  { key: 'control_lab',            label: 'Control lab',                            group: 'Labs' },
-  { key: 'start_sequence_lab',     label: 'Equipment start sequence lab',           group: 'Labs' },
-  { key: 'bms_network_lab',        label: 'BMS network infrastructure lab',         group: 'Labs', hint: 'Siemens · JCI · Delta · Schneider' },
+  // Controls & BMS
+  { key: 'control_lab',            label: 'Control lab',                            group: 'Controls & BMS' },
+  { key: 'start_sequence_lab',     label: 'Equipment start sequence lab',           group: 'Controls & BMS' },
+  { key: 'bms_network_lab',        label: 'BMS network infrastructure lab',         group: 'Controls & BMS', hint: 'Siemens · JCI · Delta · Schneider' },
+  // Building knowledge
+  { key: 'building_knowledge_lab', label: 'Building knowledge lab',                 group: 'Building knowledge', hint: 'mechanical set-up, specify the equipment' },
   // Plant operations
   { key: 'cooling_tower_cleaning', label: 'Cooling tower cleaning support',         group: 'Plant operations' },
   { key: 'chiller_open_close',     label: 'Chiller open / close',                   group: 'Plant operations' },
