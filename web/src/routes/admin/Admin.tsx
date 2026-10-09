@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/auth';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { useMySiteAccess } from '../../hooks/useSiteScope';
 import { UserProfilesTab } from './UserProfilesTab';
+import { TrackerTab } from './TrackerTab';
 import { ShopTvLayoutCard } from '../../components/ShopTvLayoutCard';
 import { OncallTab } from './OncallTab';
 import { OncallExperimentTab } from './OncallExperimentTab';
@@ -14,7 +15,7 @@ import { WaterBillingTab } from './WaterBillingTab';
 import { MroBillingTab } from './MroBillingTab';
 import { UkgReconcileTab } from './UkgReconcileTab';
 
-type Tab = 'users' | 'ukg' | 'oncall' | 'buildings' | 'rounds' | 'more';
+type Tab = 'users' | 'tracker' | 'ukg' | 'oncall' | 'buildings' | 'rounds' | 'more';
 // Low-traffic tools tucked under one right-aligned "More" tab (user
 // 2026-09-22) so the day-to-day tabs stay front and centre. The sub-tab
 // row only renders while "More" is selected.
@@ -70,12 +71,7 @@ export default function Admin() {
             <Link to={isAdmin ? '/upark/manager' : '/engineer/me'} className="t-small t-accent hover:underline">
               ← {isAdmin ? 'Dashboard' : 'My view'}
             </Link>
-            {/* Static demo of profile layout A (mock-up for discussion; the
-                real page is /engineer/:id/profile). Moved here from the
-                dashboard header per user 2026-09-29. */}
-            <a href="/demo/profile-a.html" target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">
-              Profile demo
-            </a>
+            {/* "Profile demo" link removed with the profile pages (user 2026-10-09). */}
             <span className="t-small t-muted">{session?.user.email}</span>
             <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
           </div>
@@ -96,6 +92,9 @@ export default function Admin() {
             <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
                 User Profiles {manageScope === 'none' && <span className="t-small" style={{ opacity: 0.7 }}>(view)</span>}
+              </TabButton>
+              <TabButton active={tab === 'tracker'} onClick={() => setTab('tracker')} title="Log · professional scorecard · skills checklist">
+                Tracker
               </TabButton>
               <TabButton active={tab === 'ukg'} onClick={() => setTab('ukg')}>
                 PTO vs UKG
@@ -133,6 +132,7 @@ export default function Admin() {
               </div>
             )}
             {tab === 'users'     && <UserProfilesTab manageScope={manageScope} />}
+            {tab === 'tracker'   && <TrackerTab />}
             {tab === 'ukg'       && <UkgReconcileTab site="upark" />}
             {tab === 'oncall'    && <OncallTab />}
             {tab === 'buildings' && <BuildingsTab />}

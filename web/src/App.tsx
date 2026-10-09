@@ -16,6 +16,8 @@ import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
 import NewHireTraining from './routes/engineer/NewHireTraining';
+import EngineerTracker from './routes/engineer/Tracker';
+import TrainingOnline from './routes/engineer/TrainingOnline';
 import Manual from './routes/manual/Manual';
 import BinneyManager from './routes/binney/Manager';
 import BinneyAdmin from './routes/binney/Admin';
@@ -188,6 +190,12 @@ export default function App() {
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         {/* Engineer's own building set-up sheets + system sign-offs (2026-09-23). */}
         <Route path="/engineer/buildings" element={<Protected><EngineerBuildings /></Protected>} />
+        {/* Tracker (2026-10-09): the engineer's own log / scorecard / skills.
+            Header link is test-account-only for now (lib/tracker.ts). */}
+        <Route path="/engineer/tracker" element={<Protected><EngineerTracker /></Protected>} />
+        {/* Training, online version: 5 category overviews + 4 equipment
+            handouts, every engineer, both sites (course material, no gate). */}
+        <Route path="/engineer/training" element={<Protected><TrainingOnline /></Protected>} />
         <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv"><TvView /></TvLayoutGate></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
         {/* Second wall screen — PTO, equipment/LOTO, on-call, OT posts. */}
