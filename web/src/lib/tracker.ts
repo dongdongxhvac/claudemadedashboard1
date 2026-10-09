@@ -110,6 +110,8 @@ export const SKILLS: SkillDef[] = [
   { key: 'pm_ahu_freeze_stat',     label: 'AHU PM — freeze stat',                   group: 'Preventive maintenance', hint: 'test and reset the freeze stat as part of the AHU PM' },
   { key: 'pm_pump',                label: 'Pump PM',                                group: 'Preventive maintenance' },
   { key: 'pm_motor',               label: 'Motor PM',                               group: 'Preventive maintenance' },
+  { key: 'pm_cooling_tower',       label: 'Cooling tower PM',                       group: 'Preventive maintenance' },
+  { key: 'pm_boiler',              label: 'Boiler PM',                              group: 'Preventive maintenance' },
   // Pneumatics
   { key: 'pneumatic_knowledge',    label: 'Pneumatic knowledge',                    group: 'Pneumatics' },
   { key: 'pneumatic_experience',   label: 'Pneumatic experience',                   group: 'Pneumatics' },
