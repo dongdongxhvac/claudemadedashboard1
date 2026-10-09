@@ -1774,6 +1774,10 @@ function tvBuildingLabel(p: OvertimePost): string {
 // with nothing open it's a one-line strip.
 const OT_TV_MAX_ROWS = 5;
 const OT_TV2_MAX_ROWS = 10;
+/** TV3 gives OT a full-height column, so the cap is generous; the column's
+ *  overflow:hidden clips anything past the bottom before "+N more" is
+ *  reached in practice. */
+const OT_TV3_MAX_ROWS = 12;
 
 /** One row on the wall, whichever system the shift came from: the
  *  dashboard's own OT posts (§11, overtime_posts) and the OT viewer's
@@ -1879,8 +1883,13 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
     [open, apiJobs],
   );
-  const visibleOt = sortedOt.slice(0, maxRows);
-  const overflowOt = sortedOt.length - visibleOt.length;
+  // Rows past the cap are dropped; rows past what the list box can show
+  // are hidden by useFittingRows (TV3's full-height column is the only
+  // place the box, not the cap, is the limit — on TV1/TV2 the panel is
+  // content-sized so every capped row fits). "+N more" counts both.
+  const visibleOt = useMemo(() => sortedOt.slice(0, maxRows), [sortedOt, maxRows]);
+  const { ref: otListRef, fit: otFit } = useFittingRows<HTMLUListElement>(visibleOt);
+  const overflowOt = sortedOt.length - otFit;
 
   const catTotals = useMemo(() => {
     const map: Record<OvertimeCategory, number> = {
@@ -1936,8 +1945,8 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
                 </span>
               )}
             </div>
-            <ul className="tv-ot-list">
-              {visibleOt.map((r) => {
+            <ul className="tv-ot-list" ref={otListRef}>
+              {visibleOt.map((r, i) => {
                 const isFull   = r.filled >= r.needed;
                 const urgency  = urgencyTag(r.startsAt, now);
                 const cls = [
@@ -1947,7 +1956,7 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
                 ].filter(Boolean).join(' ');
                 const openSlots = Math.max(0, r.needed - r.filled);
                 return (
-                  <li key={r.key} className={cls}>
+                  <li key={r.key} className={cls} style={i >= otFit ? { visibility: 'hidden' } : undefined}>
                     <span className="tv-ot-dot" style={{ background: r.dot }} />
                     <div className="tv-ot-main">
                       {/* Line 1 — the facts in fixed lanes so rows line up:
@@ -2000,10 +2009,11 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
                   </li>
                 );
               })}
-              {overflowOt > 0 && (
-                <li className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</li>
-              )}
             </ul>
+            {/* Outside the list so it can't be clipped with the rows it counts. */}
+            {overflowOt > 0 && (
+              <div className="tv-ot-overflow">+{overflowOt} more on the manager dashboard</div>
+            )}
           </>
         )}
       </div>
@@ -2272,6 +2282,76 @@ function Tv2ViewInner() {
   );
 }
 
+// ── TV3 — the wide-right coverage board (user 2026-10-09) ─────────────────
+//
+// TV2's panels in three side-by-side sections instead of TV2's strip-over-
+// two-columns — 25% / 50% / 25% of the screen (user, same day): col 1 = PTO
+// heat map (month spelled in each week's date label) over 7-day Coverage;
+// col 2 = Overtime coverage posts as a full-height, full-lane column; col 3
+// = On-call schedule over LOTO · Equipment, both squeezed for a quarter
+// width (see .tv3-right-col rules).
+export function Tv3View() {
+  return (
+    <QueryClientProvider client={kioskClient}>
+      <Tv3ViewInner />
+    </QueryClientProvider>
+  );
+}
+
+function Tv3ViewInner() {
+  useOncallRealtime();
+  useOncallNotesRealtime();
+  useFocusBoardRealtime();
+  usePtoRealtime();
+  useBuildingEquipmentDownRealtime();
+
+  const oncallQ         = useUpcomingOncall(12);
+  const participantsQ   = useOncallParticipants();
+  const oncallSettingsQ = useOncallSettings();
+  const oncallNotesQ    = useOncallNotes();
+  const weatherQ        = useWeather();
+  const eqDownQ         = useBuildingEquipmentDown();
+  const { engineers, ptoRows, focusItems } = useUparkTvPeople();
+
+  const now = useMinuteClock();
+  useKioskCursorHide();
+  useKioskAutoReload();
+
+  return (
+    <div className="tv-root">
+      <TvStyles />
+      <Tv2Styles />
+      <Tv3Styles />
+      <Header
+        now={now}
+        oncall={oncallQ.data ?? []}
+        weather={weatherQ.data ?? null}
+        focusItems={focusItems}
+      />
+      <main className="tv3-grid">
+        {/* Section 1 (25%) — PTO: the long view over the short view. */}
+        <div className="tv2-pto-col">
+          <PtoHeatmapTvPanel pto={ptoRows} now={now} monthInDate />
+          <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
+        </div>
+        {/* Section 2 (50%) — OT posts, full height. */}
+        <OvertimeTvPanel now={now} maxRows={OT_TV3_MAX_ROWS} />
+        {/* Section 3 (25%) — on-call grid (content-sized) over equipment
+            (takes the rest). */}
+        <div className="tv3-right-col">
+          <OncallPanel
+            participants={participantsQ.data ?? []}
+            settings={oncallSettingsQ.data ?? null}
+            notes={oncallNotesQ.data ?? []}
+            now={now}
+          />
+          <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
 // ── PTO heat map ──────────────────────────────────────────────────────────
 //
 // The manager dashboard's vacation-cap heat map (CapHeatmap in
@@ -2302,6 +2382,7 @@ type HeatCell = {
 type HeatWeek = {
   key: string;
   label: string;            // the week's Monday as m/d
+  labelLong: string;        // the same Monday as "Oct 13" (TV3: month in the date)
   monthTag: string | null;  // "OCT" on the first row and wherever a month starts
   banded: boolean;          // odd months sit on a faint band
   isCurrent: boolean;
@@ -2356,6 +2437,7 @@ function buildPtoHeatWeeks(pto: PtoRequest[], todayIso: string, weeks: number): 
     out.push({
       key: cells[0].iso,
       label: `${monday.getMonth() + 1}/${monday.getDate()}`,
+      labelLong: monday.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       monthTag: startsMonth
         ? tue.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()
         : null,
@@ -2398,7 +2480,14 @@ function heatCellParts(c: HeatCell): HeatPart[] {
 
 const HEAT_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function PtoHeatmapTvPanel({ pto, now }: { pto: PtoRequest[]; now: Date }) {
+/** monthInDate (TV3, user 2026-10-09): spell the month inside each week's
+ *  date label ("Oct 13") and drop the separate month-tag column — the
+ *  narrower 25% column gets that width back for the day cells. */
+function PtoHeatmapTvPanel({ pto, now, monthInDate = false }: {
+  pto: PtoRequest[];
+  now: Date;
+  monthInDate?: boolean;
+}) {
   // Keyed on the date, not the minute clock, so the grid rebuilds once a day.
   const todayIso = localISODate(now);
   const weeks = useMemo(
@@ -2407,12 +2496,15 @@ function PtoHeatmapTvPanel({ pto, now }: { pto: PtoRequest[]; now: Date }) {
   );
   const lastDay = weeks[weeks.length - 1].cells[6].iso;
   const [, lastM, lastD] = lastDay.split('-').map(Number);
+  const lastLong = new Date(lastDay + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   return (
-    <section className="tv-panel tv-heat-panel" style={{ borderTopColor: '#fbbf24' }}>
+    <section className={`tv-panel tv-heat-panel${monthInDate ? ' tv-heat-md' : ''}`} style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">PTO heat map · {HEAT_TV_WEEKS} weeks</h2>
-        <div className="tv-panel-meta">{weeks[0].label} – {lastM}/{lastD}</div>
+        <div className="tv-panel-meta">
+          {monthInDate ? `${weeks[0].labelLong} – ${lastLong}` : `${weeks[0].label} – ${lastM}/${lastD}`}
+        </div>
       </div>
       <div className="tv-panel-body tv-heat-body">
         <div className="tv-heat-legend">
@@ -2426,7 +2518,7 @@ function PtoHeatmapTvPanel({ pto, now }: { pto: PtoRequest[]; now: Date }) {
           <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-holiday" />holiday</span>
         </div>
         <div className="tv-heat-dow">
-          <span />
+          {!monthInDate && <span />}
           <span />
           {HEAT_DOW.map((d) => <span key={d}>{d}</span>)}
         </div>
@@ -2443,8 +2535,8 @@ function PtoHeatmapTvPanel({ pto, now }: { pto: PtoRequest[]; now: Date }) {
                 wk.isCurrent && 'tv-heat-week-current',
               ].filter(Boolean).join(' ')}
             >
-              <span className="tv-heat-month">{wk.monthTag}</span>
-              <span className="tv-heat-date">{wk.label}</span>
+              {!monthInDate && <span className="tv-heat-month">{wk.monthTag}</span>}
+              <span className="tv-heat-date">{monthInDate ? wk.labelLong : wk.label}</span>
               {wk.cells.map((c) => (
                 <span
                   key={c.iso}
@@ -2541,6 +2633,50 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
 // ============================================================================
 // Styles
 // ============================================================================
+
+/** TV3 grid: three side-by-side sections, 25% / 50% / 25% of the screen.
+ *  Heat-map and equipment CSS come from Tv2Styles, which TV3 also mounts. */
+function Tv3Styles() {
+  return (
+    <style>{`
+      .tv3-grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 25fr 50fr 25fr;
+        gap: 0.6vw;
+        min-height: 0;
+        min-width: 0;
+      }
+      .tv3-grid > * { min-width: 0; min-height: 0; }
+      /* Right section: the on-call grid is content-sized (N engineer rows);
+         equipment takes everything left and trims rows via useFittingRows. */
+      .tv3-right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6vw;
+        min-height: 0;
+      }
+      .tv3-right-col > .tv-panel:first-child { flex: 0 0 auto; }
+      .tv3-right-col > .tv2-eq-panel { flex: 1 1 auto; min-height: 0; }
+
+      /* Right quarter: the on-call grid's "m/d-m/d" ranges don't fit seven
+         columns in 25% of the screen, so the cells may break at the hyphen
+         onto a second line and the type steps down a notch. */
+      .tv3-right-col .tv-oncall-grid { font-size: 0.6vw; }
+      .tv3-right-col .tv-oncall-grid thead th { font-size: 0.52vw; letter-spacing: 0.06em; padding: 0 0.15vw 0.2vw; }
+      .tv3-right-col .tv-oncall-grid tbody td { white-space: normal; padding: 0.1vw 0.15vw; line-height: 1.15; }
+      .tv3-right-col .tv-oncall-grid .tv-oncall-eng-th { width: 4.4vw; }
+      .tv3-right-col .tv-oncall-eng-td { font-size: 0.68vw; }
+      /* Title row: keep "On-call schedule" whole and let the roster summary
+         drop under it; sticky notes stack one per line instead of sharing a
+         row — two notes in a quarter of the screen ellipsize to nothing. */
+      .tv3-right-col > .tv-panel:first-child .tv-panel-titlerow { flex-wrap: wrap; row-gap: 0.05vw; }
+      .tv3-right-col > .tv-panel:first-child .tv-panel-title { white-space: nowrap; }
+      .tv3-right-col .tv-oncall-notes { flex-direction: column; gap: 0.08vw; }
+      .tv3-right-col .tv-oncall-note { flex: 0 0 auto; }
+    `}</style>
+  );
+}
 
 function TvStyles() {
   return (
@@ -3591,7 +3727,7 @@ function TvStyles() {
       .tv-ot-list {
         list-style: none; padding: 0; margin: 0;
         display: flex; flex-direction: column; gap: 0.18vw;
-        min-height: 0; overflow: hidden;
+        flex: 1 1 auto; min-height: 0; overflow: hidden;
       }
       /* OT row (2-col-wide tile, user 2026-09-14): category dot + a
          two-line block. Line 1 = fixed lanes so rows line up (when ·
@@ -3827,6 +3963,11 @@ function Tv2Styles() {
         grid-template-columns: 1.9vw 2.3vw repeat(7, minmax(0, 1fr));
         gap: 0.16vw;
       }
+      /* Month-in-date variant (TV3): one label column, "Oct 13" wide. */
+      .tv-heat-md .tv-heat-dow, .tv-heat-md .tv-heat-week {
+        grid-template-columns: 3.1vw repeat(7, minmax(0, 1fr));
+      }
+      .tv-heat-md .tv-heat-date { color: #94a3b8; }
       .tv-heat-dow {
         flex: 0 0 auto;
         font-size: 0.56vw;

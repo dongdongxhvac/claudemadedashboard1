@@ -1,7 +1,8 @@
 // Wall-screen layout switch (0138).
 //
 // A kiosk account's users.preferences.tv_layout decides which board the
-// screen shows: 'tv' (operations), 'tv2' (coverage) or 'rotate' (alternate
+// screen shows: 'tv' (operations), 'tv2' (coverage), 'tv3' (coverage in
+// three sections, 25/50/25 — 2026-10-09) or 'rotate' (alternate tv/tv2
 // every ROTATE_MINUTES). App.tsx's TvLayoutGate resolves it; the Admin
 // page's Shop TV card sets it through the set_tv_layout RPC; and the kiosk
 // follows its own users row over realtime, so a flip on a phone reaches
@@ -10,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
-export type TvLayout = 'tv' | 'tv2';
+export type TvLayout = 'tv' | 'tv2' | 'tv3';
 export type TvLayoutSetting = TvLayout | 'rotate';
 
 export const ROTATE_MINUTES = 5;
@@ -18,12 +19,14 @@ export const ROTATE_MINUTES = 5;
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
   { value: 'tv',     label: 'TV1 · Operations', hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
   { value: 'tv2',    label: 'TV2 · Coverage',   hint: 'PTO heat map, 7-day coverage, overtime, on-call, LOTO' },
+  { value: 'tv3',    label: 'TV3 · Coverage 25/50/25', hint: 'same panels in three sections — PTO 25%, overtime 50%, on-call + LOTO 25%' },
   { value: 'rotate', label: `Rotate · ${ROTATE_MINUTES} min`, hint: 'alternate between the two boards' },
 ];
 
 export const TV_LAYOUT_PATHS: Record<TvLayout, string> = {
   tv:  '/upark/tv',
   tv2: '/upark/tv2',
+  tv3: '/upark/tv3',
 };
 
 /** The board a setting means right now. 'rotate' alternates on fixed
@@ -31,6 +34,7 @@ export const TV_LAYOUT_PATHS: Record<TvLayout, string> = {
  *  same time; anything unknown is the operations board. */
 export function resolveTvLayout(setting: unknown, now: Date = new Date()): TvLayout {
   if (setting === 'tv2') return 'tv2';
+  if (setting === 'tv3') return 'tv3';
   if (setting === 'rotate') {
     const slot = Math.floor(now.getTime() / (ROTATE_MINUTES * 60_000));
     return slot % 2 === 0 ? 'tv' : 'tv2';
@@ -61,7 +65,7 @@ export function useTvKiosks() {
       if (error) throw error;
       return (data ?? []).map((r) => {
         const raw = (r.preferences as Record<string, unknown> | null)?.tv_layout;
-        const layout: TvLayoutSetting = raw === 'tv2' || raw === 'rotate' ? raw : 'tv';
+        const layout: TvLayoutSetting = raw === 'tv2' || raw === 'tv3' || raw === 'rotate' ? raw : 'tv';
         return { id: r.id, full_name: r.full_name, email: r.email, active: r.active, layout };
       });
     },
