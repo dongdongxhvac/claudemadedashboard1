@@ -58,6 +58,18 @@ export const SCORE_LABELS = ['—', 'Needs work', 'Developing', 'Solid', 'Strong
 /** The skills checklist. `sop` = the item asks for a written SOP. */
 export type SkillDef = { key: string; label: string; group: string; sop?: boolean; hint?: string };
 export const SKILLS: SkillDef[] = [
+  // Training — the Fundamentals handouts (print station) and the programs
+  { key: 'tr_hvac',                label: 'HVAC overview',                          group: 'Training' },
+  { key: 'tr_electrical',          label: 'Electrical overview',                    group: 'Training' },
+  { key: 'tr_bms',                 label: 'BMS overview',                           group: 'Training' },
+  { key: 'tr_plumbing',            label: 'Plumbing overview',                      group: 'Training' },
+  { key: 'tr_life_safety',         label: 'Life safety overview',                   group: 'Training' },
+  { key: 'tr_ahu',                 label: 'AHU handout',                            group: 'Training' },
+  { key: 'tr_chiller_plant',       label: 'Chiller plant handout',                  group: 'Training' },
+  { key: 'tr_boiler_plant',        label: 'Boiler plant handout',                   group: 'Training' },
+  { key: 'tr_cooling_tower',       label: 'Cooling tower handout',                  group: 'Training' },
+  { key: 'tr_new_hire_8wk',        label: 'New-hire 8-week program',                group: 'Training' },
+  { key: 'tr_hvac_license_dev',    label: 'Licensed HVAC development program',      group: 'Training' },
   // Component replacement
   { key: 'actuator_replacement',   label: 'Actuator replacement',                   group: 'Component replacement' },
   { key: 'contactor_replacement',  label: 'Contactor replacement',                  group: 'Component replacement' },

@@ -29,6 +29,9 @@ const TRAIT_SHORT: Record<string, string> = {
   responsibility: 'Responsibility', skills: 'Skills', experience: 'Experience', knowledge: 'Knowledge',
 };
 const SKILL_SHORT: Record<string, string> = {
+  tr_hvac: 'HVAC', tr_electrical: 'Electrical', tr_bms: 'BMS', tr_plumbing: 'Plumbing', tr_life_safety: 'Life safety',
+  tr_ahu: 'AHU', tr_chiller_plant: 'Chiller plant', tr_boiler_plant: 'Boiler plant', tr_cooling_tower: 'Cooling tower',
+  tr_new_hire_8wk: 'New-hire 8-week', tr_hvac_license_dev: 'Licensed HVAC program',
   actuator_replacement: 'Actuator', contactor_replacement: 'Contactor', tstat_replacement: 'T-stat',
   read_electrical_diagram: 'Read electrical diagram', name_components: 'Name components', find_component: 'Find a component',
   as_built_reading: 'As-built reading', pace_out: 'Pace-out', loto: 'LOTO',
