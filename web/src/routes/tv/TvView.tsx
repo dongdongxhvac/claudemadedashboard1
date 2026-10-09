@@ -1774,10 +1774,6 @@ function tvBuildingLabel(p: OvertimePost): string {
 // with nothing open it's a one-line strip.
 const OT_TV_MAX_ROWS = 5;
 const OT_TV2_MAX_ROWS = 10;
-/** TV3 gives OT a full-height column, so the cap is generous; the column's
- *  overflow:hidden clips anything past the bottom before "+N more" is
- *  reached in practice. */
-const OT_TV3_MAX_ROWS = 12;
 
 /** One row on the wall, whichever system the shift came from: the
  *  dashboard's own OT posts (§11, overtime_posts) and the OT viewer's
@@ -1851,7 +1847,15 @@ function apiJobToTvRow(j: OtApiJob): TvOtRow {
   };
 }
 
-function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows?: number }) {
+/** compact (TV3, user 2026-10-09): every post listed (pass maxRows=Infinity),
+ *  no source lane ("Outlook" / "OT viewer") and no "Outlook calendar"
+ *  footer, and the second line only when there is scope/notes to show —
+ *  most synced jobs have none, so they become one-liners. */
+function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS, compact = false }: {
+  now: Date;
+  maxRows?: number;
+  compact?: boolean;
+}) {
   useOvertimeRealtime();
   const postsQ = useOvertimePosts();
   // The OT viewer mirror (0136) is followed over realtime too, so a sign-up
@@ -1903,7 +1907,7 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
   const totalRows = sortedOt.length;
 
   return (
-    <section className="tv-panel tv-ot-panel" style={{ borderTopColor: '#fbbf24' }}>
+    <section className={`tv-panel tv-ot-panel${compact ? ' tv-ot-panel-compact' : ''}`} style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">Overtime coverage posts</h2>
         {/* Sign-up prompt lives in the title row between the title and the
@@ -1975,9 +1979,11 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
                         <span className="tv-ot-bld" title={r.whereTitle}>
                           {r.where}
                         </span>
-                        <span className="tv-ot-cat" style={{ color: r.laneColor }}>
-                          {r.lane}
-                        </span>
+                        {!compact && (
+                          <span className="tv-ot-cat" style={{ color: r.laneColor }}>
+                            {r.lane}
+                          </span>
+                        )}
                         <span className="tv-ot-filled">
                           <span style={{ color: isFull ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
                             {r.filled}/{r.needed}
@@ -1997,14 +2003,17 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS }: { now: Date; maxRows
                           )}
                         </span>
                       </div>
-                      {/* Line 2 — scope, notes, who posted it. */}
-                      <div className="tv-ot-l2">
-                        <span className="tv-ot-scope" title={r.scope}>
-                          {r.scope}
-                          {r.notes && <span className="tv-ot-notes"> — {r.notes}</span>}
-                        </span>
-                        <span className="tv-ot-posted">{r.footer}</span>
-                      </div>
+                      {/* Line 2 — scope, notes, who posted it. Compact rows
+                          drop the footer and skip the line when empty. */}
+                      {(!compact || r.scope || r.notes) && (
+                        <div className="tv-ot-l2">
+                          <span className="tv-ot-scope" title={r.scope}>
+                            {r.scope}
+                            {r.notes && <span className="tv-ot-notes"> — {r.notes}</span>}
+                          </span>
+                          {!compact && <span className="tv-ot-posted">{r.footer}</span>}
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
@@ -2285,11 +2294,11 @@ function Tv2ViewInner() {
 // ── TV3 — the wide-right coverage board (user 2026-10-09) ─────────────────
 //
 // TV2's panels in three side-by-side sections instead of TV2's strip-over-
-// two-columns — 25% / 50% / 25% of the screen (user, same day): col 1 = PTO
+// two-columns — 25% / 40% / 35% of the screen (user, same day): col 1 = PTO
 // heat map (month spelled in each week's date label) over 7-day Coverage;
-// col 2 = Overtime coverage posts as a full-height, full-lane column; col 3
-// = On-call schedule over LOTO · Equipment, both squeezed for a quarter
-// width (see .tv3-right-col rules).
+// col 2 = EVERY overtime coverage post, compact rows (no source lane or
+// footer); col 3 = On-call schedule over LOTO · Equipment, with the narrow-
+// column rules in .tv3-right-col.
 export function Tv3View() {
   return (
     <QueryClientProvider client={kioskClient}>
@@ -2334,9 +2343,10 @@ function Tv3ViewInner() {
           <PtoHeatmapTvPanel pto={ptoRows} now={now} monthInDate />
           <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
         </div>
-        {/* Section 2 (50%) — OT posts, full height. */}
-        <OvertimeTvPanel now={now} maxRows={OT_TV3_MAX_ROWS} />
-        {/* Section 3 (25%) — on-call grid (content-sized) over equipment
+        {/* Section 2 (40%) — every OT post, compact rows; useFittingRows
+            still hides whatever can't fit and counts it in "+N more". */}
+        <OvertimeTvPanel now={now} maxRows={Infinity} compact />
+        {/* Section 3 (35%) — on-call grid (content-sized) over equipment
             (takes the rest). */}
         <div className="tv3-right-col">
           <OncallPanel
@@ -2634,7 +2644,7 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
 // Styles
 // ============================================================================
 
-/** TV3 grid: three side-by-side sections, 25% / 50% / 25% of the screen.
+/** TV3 grid: three side-by-side sections, 25% / 40% / 35% of the screen.
  *  Heat-map and equipment CSS come from Tv2Styles, which TV3 also mounts. */
 function Tv3Styles() {
   return (
@@ -2642,7 +2652,7 @@ function Tv3Styles() {
       .tv3-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 25fr 50fr 25fr;
+        grid-template-columns: 25fr 40fr 35fr;
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
@@ -2659,9 +2669,17 @@ function Tv3Styles() {
       .tv3-right-col > .tv-panel:first-child { flex: 0 0 auto; }
       .tv3-right-col > .tv2-eq-panel { flex: 1 1 auto; min-height: 0; }
 
-      /* Right quarter: the on-call grid's "m/d-m/d" ranges don't fit seven
-         columns in 25% of the screen, so the cells may break at the hyphen
-         onto a second line and the type steps down a notch. */
+      /* Compact OT rows (every post listed): four lanes — when · building ·
+         x/y · names — one notch smaller, tighter spacing. */
+      .tv-ot-panel-compact .tv-ot-l1 { grid-template-columns: 12.5vw 9vw 2.2vw minmax(0, 1fr); }
+      .tv-ot-panel-compact .tv-ot-row { font-size: 0.74vw; line-height: 1.2; padding: 0.1vw 0.3vw; }
+      .tv-ot-panel-compact .tv-ot-row > .tv-ot-dot { margin-top: 0.3vw; }
+      .tv-ot-panel-compact .tv-ot-l2 { font-size: 0.68vw; }
+      .tv-ot-panel-compact .tv-ot-list { gap: 0.1vw; }
+
+      /* Right 35%: the on-call grid's "m/d-m/d" ranges may still not fit
+         seven columns, so the cells may break at the hyphen onto a second
+         line and the type steps down a notch. */
       .tv3-right-col .tv-oncall-grid { font-size: 0.6vw; }
       .tv3-right-col .tv-oncall-grid thead th { font-size: 0.52vw; letter-spacing: 0.06em; padding: 0 0.15vw 0.2vw; }
       .tv3-right-col .tv-oncall-grid tbody td { white-space: normal; padding: 0.1vw 0.15vw; line-height: 1.15; }

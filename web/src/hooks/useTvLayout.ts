@@ -2,7 +2,7 @@
 //
 // A kiosk account's users.preferences.tv_layout decides which board the
 // screen shows: 'tv' (operations), 'tv2' (coverage), 'tv3' (coverage in
-// three sections, 25/50/25 — 2026-10-09) or 'rotate' (alternate tv/tv2
+// three sections, 25/40/35 — 2026-10-09) or 'rotate' (alternate tv/tv2
 // every ROTATE_MINUTES). App.tsx's TvLayoutGate resolves it; the Admin
 // page's Shop TV card sets it through the set_tv_layout RPC; and the kiosk
 // follows its own users row over realtime, so a flip on a phone reaches
@@ -19,7 +19,7 @@ export const ROTATE_MINUTES = 5;
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
   { value: 'tv',     label: 'TV1 · Operations', hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
   { value: 'tv2',    label: 'TV2 · Coverage',   hint: 'PTO heat map, 7-day coverage, overtime, on-call, LOTO' },
-  { value: 'tv3',    label: 'TV3 · Coverage 25/50/25', hint: 'same panels in three sections — PTO 25%, overtime 50%, on-call + LOTO 25%' },
+  { value: 'tv3',    label: 'TV3 · Coverage 25/40/35', hint: 'same panels in three sections — PTO 25%, every overtime post 40%, on-call + LOTO 35%' },
   { value: 'rotate', label: `Rotate · ${ROTATE_MINUTES} min`, hint: 'alternate between the two boards' },
 ];
 

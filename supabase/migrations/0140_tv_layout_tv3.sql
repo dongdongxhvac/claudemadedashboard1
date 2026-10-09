@@ -1,7 +1,7 @@
 -- Migration 0140 — set_tv_layout accepts 'tv3'.
 --
 -- Third wall layout (user 2026-10-09): /upark/tv3 = TV2's panels in three
--- side-by-side sections (PTO 25% · overtime 50% · on-call + LOTO 25%).
+-- side-by-side sections (PTO 25% · overtime 40% · on-call + LOTO 35%).
 -- The gate (App.tsx TvLayoutGate / resolveTvLayout) and the Admin "Shop
 -- TV" card already know the value; this just widens the RPC's allow-list
 -- from 0138. 'rotate' keeps alternating tv/tv2 — unchanged. Body otherwise
