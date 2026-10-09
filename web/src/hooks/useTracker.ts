@@ -117,7 +117,7 @@ export function useUpsertTrackerEntry() {
         if (error) throw error;
       }
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_ENTRIES(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_entries'] }); },
   });
 }
 
@@ -128,7 +128,7 @@ export function useSetEntrySpirit() {
       const { error } = await supabase.from('tracker_entries').update({ spirit: e.spirit }).eq('id', e.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_ENTRIES(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_entries'] }); },
   });
 }
 
@@ -143,7 +143,7 @@ export function useVerifyTrackerEntry() {
       const { error } = await supabase.from('tracker_entries').update(patch).eq('id', e.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_ENTRIES(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_entries'] }); },
   });
 }
 
@@ -154,7 +154,7 @@ export function useDeleteTrackerEntry() {
       const { error } = await supabase.from('tracker_entries').delete().eq('id', e.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_ENTRIES(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_entries'] }); },
   });
 }
 
@@ -181,7 +181,7 @@ export function useUpsertTrackerTrait() {
         .upsert({ user_id: t.user_id, trait: t.trait, score: t.score, note: t.note?.trim() || null, updated_by: me }, { onConflict: 'user_id,trait' });
       if (error) throw error;
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_TRAITS(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_traits'] }); },
   });
 }
 
@@ -211,6 +211,68 @@ export function useUpsertTrackerSkill() {
         }, { onConflict: 'user_id,skill' });
       if (error) throw error;
     },
-    onSuccess: (_d, v) => { void qc.invalidateQueries({ queryKey: K_SKILLS(v.user_id) }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tracker_skills'] }); },
+  });
+}
+
+// ── Roster-wide reads for the admin matrix (every engineer × every item).
+// RLS trims the rows to what the viewer may see; one fetch per table.
+
+export type EntryCounts = { total: number; byKind: Record<string, number>; straight: number; help: number };
+
+export function useAllTrackerEntryCounts() {
+  return useQuery({
+    queryKey: ['tracker_entries', 'all_counts'],
+    queryFn: async (): Promise<Map<string, EntryCounts>> => {
+      const { data, error } = await supabase.from('tracker_entries').select('user_id, kind, spirit');
+      if (error) throw error;
+      const m = new Map<string, EntryCounts>();
+      for (const r of (data ?? []) as { user_id: string; kind: string; spirit: string | null }[]) {
+        const c = m.get(r.user_id) ?? { total: 0, byKind: {}, straight: 0, help: 0 };
+        c.total++;
+        c.byKind[r.kind] = (c.byKind[r.kind] ?? 0) + 1;
+        if (r.spirit === 'straight') c.straight++;
+        if (r.spirit === 'help_team') c.help++;
+        m.set(r.user_id, c);
+      }
+      return m;
+    },
+    staleTime: 15_000,
+  });
+}
+
+/** user_id → trait → row */
+export function useAllTrackerTraits() {
+  return useQuery({
+    queryKey: ['tracker_traits', 'all'],
+    queryFn: async (): Promise<Map<string, Map<string, TrackerTrait>>> => {
+      const { data, error } = await supabase.from('tracker_traits').select('*');
+      if (error) throw error;
+      const m = new Map<string, Map<string, TrackerTrait>>();
+      for (const t of (data ?? []) as TrackerTrait[]) {
+        if (!m.has(t.user_id)) m.set(t.user_id, new Map());
+        m.get(t.user_id)!.set(t.trait, t);
+      }
+      return m;
+    },
+    staleTime: 15_000,
+  });
+}
+
+/** user_id → skill → row */
+export function useAllTrackerSkills() {
+  return useQuery({
+    queryKey: ['tracker_skills', 'all'],
+    queryFn: async (): Promise<Map<string, Map<string, TrackerSkill>>> => {
+      const { data, error } = await supabase.from('tracker_skills').select('*');
+      if (error) throw error;
+      const m = new Map<string, Map<string, TrackerSkill>>();
+      for (const r of (data ?? []) as TrackerSkill[]) {
+        if (!m.has(r.user_id)) m.set(r.user_id, new Map());
+        m.get(r.user_id)!.set(r.skill, r);
+      }
+      return m;
+    },
+    staleTime: 15_000,
   });
 }
