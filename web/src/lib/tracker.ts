@@ -107,6 +107,7 @@ export const SKILLS: SkillDef[] = [
   { key: 'water_treatment',        label: 'Water treatment',                        group: 'Plant operations' },
   { key: 'generator_test',         label: 'Generator test',                         group: 'Plant operations' },
   // Preventive maintenance
+  { key: 'pm_ahu',                 label: 'AHU PM',                                 group: 'Preventive maintenance' },
   { key: 'pm_ahu_freeze_stat',     label: 'AHU PM — freeze stat',                   group: 'Preventive maintenance', hint: 'test and reset the freeze stat as part of the AHU PM' },
   { key: 'pm_pump',                label: 'Pump PM',                                group: 'Preventive maintenance' },
   { key: 'pm_motor',               label: 'Motor PM',                               group: 'Preventive maintenance' },
