@@ -3,6 +3,7 @@
 // (PMs/WOs, plantlog, BMS alarms, overtime, meters) is deferred until Binney
 // has those data sources.
 import { Link } from 'react-router-dom';
+import { DEFAULT_PROGRAM } from '../../lib/programs';
 import { useAuth } from '../../lib/auth';
 import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
@@ -43,11 +44,12 @@ export default function BinneyManager() {
                 Admin
               </Link>
             )}
-            {/* Training (user 2026-10-09): the online Fundamentals handouts — same
-                page as UPark's header. */}
-            <Link to="/engineer/training" className="t-small t-accent hover:underline">
+            {/* Training (user 2026-10-09): managers get the PRINT STATION — every
+                document of the program, printable — in a new tab. Engineers get
+                the online Fundamentals page from their own header. */}
+            <a href={encodeURI(DEFAULT_PROGRAM.printStation)} target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">
               Training
-            </Link>
+            </a>
             {/* Manual header link hidden (user 2026-09-23), same as UPark's
                 dashboard — /binney/manual still routes, just not surfaced here.
                 Binney's header never had a Buildings link. */}

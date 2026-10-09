@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { DEFAULT_PROGRAM } from '../../lib/programs';
 import { useAuth } from '../../lib/auth';
 import { useCurrentPmRows, useCurrentWoRows, type PmRow } from '../../hooks/useCurrentSnapshots';
 import { isNpm, type Period } from '../../lib/dashboard';
@@ -169,11 +170,12 @@ export default function ManagerPc() {
                 Admin
               </Link>
             )}
-            {/* Training (user 2026-10-09): the online Fundamentals handouts
-                (5 categories + 4 equipment). */}
-            <Link to="/engineer/training" className="t-small t-accent hover:underline">
+            {/* Training (user 2026-10-09): managers get the PRINT STATION — every
+                document of the program, printable — in a new tab. Engineers get
+                the online Fundamentals page from their own header. */}
+            <a href={encodeURI(DEFAULT_PROGRAM.printStation)} target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">
               Training
-            </Link>
+            </a>
             {/* Buildings KB (UPark) — equipment / issues behind §10.1. Back in
                 this header per user 2026-09-29 (hidden 09-23, briefly on the
                 admin header). Training / Manual stay hidden. */}
