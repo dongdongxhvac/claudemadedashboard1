@@ -112,6 +112,7 @@ export const SKILLS: SkillDef[] = [
   { key: 'pm_motor',               label: 'Motor PM',                               group: 'Preventive maintenance' },
   { key: 'pm_cooling_tower',       label: 'Cooling tower PM',                       group: 'Preventive maintenance' },
   { key: 'pm_boiler',              label: 'Boiler PM',                              group: 'Preventive maintenance' },
+  { key: 'pm_chiller',             label: 'Chiller PM',                             group: 'Preventive maintenance' },
   // Pneumatics
   { key: 'pneumatic_knowledge',    label: 'Pneumatic knowledge',                    group: 'Pneumatics' },
   { key: 'pneumatic_experience',   label: 'Pneumatic experience',                   group: 'Pneumatics' },
