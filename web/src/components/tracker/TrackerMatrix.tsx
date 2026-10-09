@@ -34,7 +34,7 @@ const SKILL_SHORT: Record<string, string> = {
   tr_new_hire_8wk: 'New-hire 8-week', tr_hvac_license_dev: 'Licensed HVAC program',
   actuator_replacement: 'Actuator', contactor_replacement: 'Contactor', tstat_replacement: 'T-stat',
   read_electrical_diagram: 'Read electrical diagram', name_components: 'Name components', find_component: 'Find a component',
-  as_built_reading: 'As-built reading', pace_out: 'Pace-out', loto: 'LOTO',
+  as_built_reading: 'As-built reading', pace_out: 'Pace-out', loto: 'LOTO', ppe_gloves: 'PPE gloves', ppe_safety_glasses: 'PPE safety glasses',
   belt_tension_sop: 'Belt tension', sheave_alignment_sop: 'Sheave alignment',
   alignment_lab_rough: 'Pump & motor alignment rough', alignment_lab_precise: 'Pump & motor alignment precise',
   refrigeration_cycle_sop: 'Refrigeration cycle', refrigeration_gauges: 'Hook up gauges', backflow_rebuild: 'Backflow rebuild', motor_rebuild: 'Motor rebuild', pump_rebuild: 'Pump rebuild',

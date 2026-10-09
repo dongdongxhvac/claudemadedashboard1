@@ -83,6 +83,8 @@ export const SKILLS: SkillDef[] = [
   { key: 'pace_out',               label: 'Pace-out skill',                         group: 'Drawings & layout' },
   // Safety
   { key: 'loto',                   label: 'LOTO experience',                        group: 'Safety' },
+  { key: 'ppe_gloves',             label: 'PPE — gloves',                           group: 'Safety', hint: 'right glove for the job, worn every time' },
+  { key: 'ppe_safety_glasses',     label: 'PPE — safety glasses',                   group: 'Safety' },
   // Belts & alignment
   { key: 'belt_tension_sop',       label: 'Belt tension',                           group: 'Belts & alignment', sop: true, hint: 'write down the SOP' },
   { key: 'sheave_alignment_sop',   label: 'Sheave alignment',                       group: 'Belts & alignment', sop: true, hint: 'write down the SOP' },
