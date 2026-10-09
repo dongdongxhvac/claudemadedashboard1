@@ -169,8 +169,8 @@ export default function ManagerPc() {
                 Admin
               </Link>
             )}
-            {/* Training (user 2026-10-09): the online handouts + the baseline
-                (new-hire) program in print-station format. */}
+            {/* Training (user 2026-10-09): the online Fundamentals handouts
+                (5 categories + 4 equipment). */}
             <Link to="/engineer/training" className="t-small t-accent hover:underline">
               Training
             </Link>

@@ -43,8 +43,8 @@ export default function BinneyManager() {
                 Admin
               </Link>
             )}
-            {/* Training (user 2026-10-09): the online handouts + the baseline
-                program in print-station format — same page as UPark's header. */}
+            {/* Training (user 2026-10-09): the online Fundamentals handouts — same
+                page as UPark's header. */}
             <Link to="/engineer/training" className="t-small t-accent hover:underline">
               Training
             </Link>

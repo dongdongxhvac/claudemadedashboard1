@@ -22,9 +22,8 @@ export type TrainingProgram = {
 export const PROGRAMS: TrainingProgram[] = [
   {
     key: 'upark_l1_plan_b',
-    // Renamed "Baseline training" 2026-10-09 (was New-Hire 8-Week); key unchanged.
-    title: 'UPark Baseline Training — 8-Week Program (Level 1)',
-    short: 'Baseline training',
+    title: 'UPark New-Hire — 8-Week Program (Plan B · Level 1)',
+    short: 'New-hire 8-week',
     printStation: '/training/new hire 8 weeks training package/new_hire_print_station.html',
     available: true,
   },

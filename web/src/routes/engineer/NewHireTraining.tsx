@@ -51,7 +51,7 @@ export default function NewHireTraining() {
     <div className="min-h-screen t-bg" style={{ fontFamily: 'var(--font-body)' }}>
       <header className="border-b" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
         <div className="max-w-6xl mx-auto px-4 pt-3 flex items-start justify-between gap-3 flex-wrap">
-          <h1 className="t-section-title" style={{ fontSize: isMobile ? '1.05rem' : undefined, marginBottom: 0 }}>Baseline training</h1>
+          <h1 className="t-section-title" style={{ fontSize: isMobile ? '1.05rem' : undefined, marginBottom: 0 }}>New-hire training</h1>
           <div className="flex items-center gap-3 whitespace-nowrap t-small">
             <Link to="/upark/engineer" className="t-accent hover:underline">← My day</Link>
             {!isMobile && <button onClick={signOut} className="t-accent hover:underline">Sign out</button>}
