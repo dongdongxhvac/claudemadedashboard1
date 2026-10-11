@@ -9,6 +9,13 @@
 // id, delete the rest (an id changes when the Outlook event moves), log one
 // syncs row per run (ok or error, with the raw payload).
 //
+// v2 (2026-10-11, migration 0141): also upserts every job into
+// ot_api_jobs_log and never deletes from it — the API is forward-only, so
+// the mirror alone loses a job the moment its day passes. Ids missing from
+// this run get gone_at stamped (an id reappearing clears it). TV3 reads
+// yesterday's coverage from the log. (watcher/ot_api_poller.py, the VM
+// twin, is NOT deployed anywhere and does not write the log.)
+//
 // Request:  POST {}            (body ignored)
 // Auth:     verify_jwt — the cron job sends the anon key, like
 //           flush-pto-notify-queue (0109). The key may read the board once
@@ -184,6 +191,21 @@ Deno.serve(async (req) => {
     const { error } = await admin.from("ot_api_jobs").upsert(jobs.slice(i, i + 200), { onConflict: "id" });
     if (error) return fail(`upsert ot_api_jobs: ${error.message}`);
   }
+
+  // Permanent log (0141): upsert what this run saw (first_seen_at is left
+  // to its default on insert and untouched on conflict — it is not in the
+  // body), then stamp gone_at on every logged id this run did NOT see.
+  const logRows = jobs.map((j) => ({ ...j!, last_seen_at: fetchedAt, gone_at: null }));
+  for (let i = 0; i < logRows.length; i += 200) {
+    const { error } = await admin.from("ot_api_jobs_log").upsert(logRows.slice(i, i + 200), { onConflict: "id" });
+    if (error) return fail(`upsert ot_api_jobs_log: ${error.message}`);
+  }
+  const gone = ids.length
+    ? await admin.from("ot_api_jobs_log").update({ gone_at: fetchedAt }).is("gone_at", null)
+        .not("id", "in", `(${ids.map((id) => `"${id.replace(/"/g, '""')}"`).join(",")})`)
+    : await admin.from("ot_api_jobs_log").update({ gone_at: fetchedAt }).is("gone_at", null);
+  if (gone.error) return fail(`mark gone ot_api_jobs_log: ${gone.error.message}`);
+
   const del = ids.length
     ? await admin.from("ot_api_jobs").delete().not("id", "in", `(${ids.map((id) => `"${id.replace(/"/g, '""')}"`).join(",")})`)
     : await admin.from("ot_api_jobs").delete().neq("id", "");

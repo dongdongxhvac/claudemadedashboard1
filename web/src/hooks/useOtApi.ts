@@ -57,6 +57,46 @@ export type OtApiSync = {
 
 const JOBS_KEY = ['ot_api_jobs'];
 const SYNC_KEY = ['ot_api_sync_latest'];
+const LOG_KEY  = ['ot_api_jobs_log'];
+
+/** A row of the permanent log (0141): the job as last seen, plus when the
+ *  sync first/last saw it and when it dropped off the API (null = still
+ *  scheduled). */
+export type OtApiJobLogRow = OtApiJob & {
+  first_seen_at: string;
+  last_seen_at: string;
+  gone_at: string | null;
+};
+
+/** Logged jobs that start on or after `sinceIso` (null disables the
+ *  query). The log is the only place a past job survives — the API is
+ *  forward-only and the mirror drops what it no longer returns. */
+export function useOtApiJobsLog(sinceIso: string | null) {
+  return useQuery({
+    queryKey: [...LOG_KEY, sinceIso],
+    enabled: !!sinceIso,
+    queryFn: async (): Promise<OtApiJobLogRow[]> => {
+      const { data, error } = await supabase
+        .from('ot_api_jobs_log')
+        .select('*')
+        .gte('start_at', sinceIso!)
+        .order('start_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...(r as OtApiJobLogRow),
+        volunteers: Array.isArray((r as OtApiJobLogRow).volunteers) ? (r as OtApiJobLogRow).volunteers : [],
+      }));
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** A logged job that actually happened: it was still on the schedule when
+ *  it started. An id that vanished BEFORE its start was cancelled or moved
+ *  (a moved Outlook event gets a new id, so the old one is a ghost). */
+export function otApiJobHappened(j: OtApiJobLogRow): boolean {
+  return j.gone_at === null || j.gone_at >= j.start_at;
+}
 
 /** Every mirrored job, soonest first. The poller already bounds the window
  *  (UPARK_OT_API_DAYS, default 14) and drops jobs it no longer sees, so the
@@ -117,6 +157,7 @@ export function useOtApiRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ot_api_syncs' }, () => {
         qc.invalidateQueries({ queryKey: JOBS_KEY });
         qc.invalidateQueries({ queryKey: SYNC_KEY });
+        qc.invalidateQueries({ queryKey: LOG_KEY });   // the log is written in the same poll
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
