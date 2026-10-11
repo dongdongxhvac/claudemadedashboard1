@@ -10,6 +10,8 @@ import {
   useTvKiosks,
   useSetTvLayout,
   useSetTvLayoutEnabled,
+  useSetTvRotateMinutes,
+  ROTATE_MINUTE_OPTIONS,
   TV_LAYOUT_OPTIONS,
   TV_LAYOUT_LABELS,
   TV_ROTATION_ORDER,
@@ -21,8 +23,9 @@ import {
 function KioskRow({ kiosk }: { kiosk: TvKiosk }) {
   const setLayout = useSetTvLayout();
   const setEnabled = useSetTvLayoutEnabled();
+  const setMinutes = useSetTvRotateMinutes();
   const [err, setErr] = useState<string | null>(null);
-  const busy = setLayout.isPending || setEnabled.isPending;
+  const busy = setLayout.isPending || setEnabled.isPending || setMinutes.isPending;
   const isOff = (l: TvLayoutSetting) => l !== 'rotate' && kiosk.off.includes(l);
   const enabledCount = TV_ROTATION_ORDER.length - kiosk.off.length;
   const choose = (layout: TvLayoutSetting) => {
@@ -76,6 +79,23 @@ function KioskRow({ kiosk }: { kiosk: TvKiosk }) {
           );
         })}
       </div>
+      {/* Rotate interval (0143) — a dropdown, 2..10 min. Only matters
+          while the screen is on Rotate, so it's dimmed otherwise. */}
+      <label className="flex items-center gap-1 t-small" style={{ opacity: kiosk.layout === 'rotate' ? 1 : 0.55 }} title="how long each board stays up while rotating">
+        <span className="t-muted">every</span>
+        <select
+          value={kiosk.rotateMinutes}
+          disabled={busy}
+          onChange={(e) => {
+            setErr(null);
+            setMinutes.mutate({ user_id: kiosk.id, minutes: Number(e.target.value) }, { onError: (er) => setErr((er as Error).message) });
+          }}
+          className="border rounded px-1.5 py-0.5 t-small"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', cursor: busy ? 'wait' : 'pointer' }}
+        >
+          {ROTATE_MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{m} min</option>)}
+        </select>
+      </label>
       {/* Per-board on/off (0142). Rotate cycles only the boards that are
           on; the last board on can't be switched off. */}
       <div className="flex items-center gap-1 flex-wrap">
@@ -122,7 +142,7 @@ export function ShopTvLayoutCard() {
       <div className="flex items-baseline justify-between mb-1 gap-3">
         <h2 className="t-section-title">Shop TV</h2>
         <span className="t-small t-muted">
-          the screen switches within seconds · rotate cycles the boards that are on, {5} min each, on the clock
+          the screen switches within seconds · rotate cycles the boards that are on, at each screen's own interval, on the clock
         </span>
       </div>
       {kiosks.map((k) => <KioskRow key={k.id} kiosk={k} />)}

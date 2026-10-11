@@ -68,7 +68,7 @@ import {
 } from '../../hooks/usePto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
-import { TV_LAYOUT_LABELS, parseTvLayoutsOff, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
+import { TV_LAYOUT_LABELS, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
 import { useMe } from '../../hooks/useMe';
 import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
@@ -353,7 +353,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   }
   const at = new Date(tick);
   const next = nextRotateLayout(layout, parseTvLayoutsOff(prefs.tv_layouts_off));
-  const left = msToNextRotateFlip(at);
+  const left = msToNextRotateFlip(at, parseRotateMinutes(prefs.tv_rotate_minutes));
   const mm = Math.floor(left / 60_000);
   const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
   return (

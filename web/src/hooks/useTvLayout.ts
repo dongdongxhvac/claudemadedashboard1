@@ -19,7 +19,17 @@ import { supabase } from '../lib/supabase';
 export type TvLayout = 'tv' | 'tv2' | 'tv3';
 export type TvLayoutSetting = TvLayout | 'rotate';
 
+/** Default rotate interval; each kiosk may override it with
+ *  preferences.tv_rotate_minutes (2..10, migration 0143). */
 export const ROTATE_MINUTES = 5;
+export const ROTATE_MINUTE_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/** preferences.tv_rotate_minutes → a valid interval (default when absent
+ *  or out of range). */
+export function parseRotateMinutes(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isInteger(n) && n >= 2 && n <= 10 ? n : ROTATE_MINUTES;
+}
 
 /** Display names (user 2026-10-11): the keys and URLs are unchanged. */
 export const TV_LAYOUT_LABELS: Record<TvLayout, string> = {
@@ -35,7 +45,7 @@ export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: s
   { value: 'tv',     label: `${TV_LAYOUT_LABELS.tv} · Operations`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
   { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · Coverage`,   hint: 'PTO heat map, 7-day coverage, overtime, on-call, LOTO' },
   { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · Coverage 20/45/35`, hint: 'same panels in three sections — PTO 20%, every overtime post incl. yesterday 45%, on-call + LOTO 35%' },
-  { value: 'rotate', label: `Rotate · ${ROTATE_MINUTES} min`, hint: 'cycle the enabled boards on the clock' },
+  { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
 
 /** preferences.tv_layouts_off → the boards this account may not show. */
@@ -53,8 +63,8 @@ export function enabledTvLayouts(off: TvLayout[]): TvLayout[] {
 }
 
 /** Milliseconds until the next rotate slot boundary. */
-export function msToNextRotateFlip(now: Date = new Date()): number {
-  const slotMs = ROTATE_MINUTES * 60_000;
+export function msToNextRotateFlip(now: Date = new Date(), minutes: number = ROTATE_MINUTES): number {
+  const slotMs = minutes * 60_000;
   return slotMs - (now.getTime() % slotMs);
 }
 
@@ -68,10 +78,15 @@ export const TV_LAYOUT_PATHS: Record<TvLayout, string> = {
  *  on fixed wall-clock slots so every screen on 'rotate' shows the same
  *  board at the same time; a fixed choice that is disabled falls back to
  *  the first enabled board; anything unknown is the operations board. */
-export function resolveTvLayout(setting: unknown, now: Date = new Date(), off: TvLayout[] = []): TvLayout {
+export function resolveTvLayout(
+  setting: unknown,
+  now: Date = new Date(),
+  off: TvLayout[] = [],
+  minutes: number = ROTATE_MINUTES,
+): TvLayout {
   const enabled = enabledTvLayouts(off);
   if (setting === 'rotate') {
-    const slot = Math.floor(now.getTime() / (ROTATE_MINUTES * 60_000));
+    const slot = Math.floor(now.getTime() / (minutes * 60_000));
     return enabled[slot % enabled.length];
   }
   const fixed: TvLayout = setting === 'tv2' ? 'tv2' : setting === 'tv3' ? 'tv3' : 'tv';
@@ -96,6 +111,8 @@ export type TvKiosk = {
   layout: TvLayoutSetting;
   /** Boards this account may not show (0142). */
   off: TvLayout[];
+  /** Rotate interval in minutes, 2..10 (0143). */
+  rotateMinutes: number;
 };
 
 const KIOSKS_KEY = ['tv_kiosks'];
@@ -115,7 +132,11 @@ export function useTvKiosks() {
         const prefs = r.preferences as Record<string, unknown> | null;
         const raw = prefs?.tv_layout;
         const layout: TvLayoutSetting = raw === 'tv2' || raw === 'tv3' || raw === 'rotate' ? raw : 'tv';
-        return { id: r.id, full_name: r.full_name, email: r.email, active: r.active, layout, off: parseTvLayoutsOff(prefs?.tv_layouts_off) };
+        return {
+          id: r.id, full_name: r.full_name, email: r.email, active: r.active, layout,
+          off: parseTvLayoutsOff(prefs?.tv_layouts_off),
+          rotateMinutes: parseRotateMinutes(prefs?.tv_rotate_minutes),
+        };
       });
     },
     staleTime: 30_000,
@@ -152,6 +173,21 @@ export function useSetTvLayoutEnabled() {
   });
 }
 
+/** Set a kiosk account's rotate interval, 2..10 minutes (0143). */
+export function useSetTvRotateMinutes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { user_id: string; minutes: number }) => {
+      const { error } = await supabase.rpc('set_tv_rotate_minutes', {
+        p_user_id: input.user_id,
+        p_minutes: input.minutes,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KIOSKS_KEY }),
+  });
+}
+
 /** Kiosk side: re-read `me` when this account's users row changes, so a
  *  layout flip from the admin page lands on the wall without a reload. */
 export function useTvLayoutLive(userId: string | null | undefined) {
@@ -170,7 +206,9 @@ export function useTvLayoutLive(userId: string | null | undefined) {
   }, [qc, userId]);
 }
 
-/** Ticks once a minute — enough for the rotate slots to flip on time. */
+/** Ticks once a minute — enough for the rotate slots to flip on time (every
+ *  interval is a whole number of minutes, so slot boundaries fall on minute
+ *  boundaries). */
 export function useMinuteTick(): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
