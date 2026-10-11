@@ -68,6 +68,8 @@ import {
 } from '../../hooks/usePto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
+import { TV_LAYOUT_LABELS, parseTvLayoutsOff, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
+import { useMe } from '../../hooks/useMe';
 import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
 import { daysWorkedByName, workdaysInWindow, type PtoDayRow } from '../../lib/daysWorked';
@@ -274,6 +276,7 @@ function TvViewInner() {
     <div className="tv-root">
       <TvStyles />
       <Header
+        layout="tv"
         now={now}
         oncall={oncallQ.data ?? []}
         weather={weatherQ.data ?? null}
@@ -332,11 +335,41 @@ function TvViewInner() {
 // Header
 // ============================================================================
 
-function Header({ now, oncall, weather, focusItems }: {
+/** Which board this is, and — for a kiosk account on rotate — the next
+ *  board and a live countdown to the flip (user 2026-10-11). Ticks once a
+ *  second only while rotating. Admins previewing a board see the name. */
+function TvLayoutBadge({ layout }: { layout: TvLayout }) {
+  const me = useMe().data;
+  const prefs = (me?.preferences ?? {}) as Record<string, unknown>;
+  const rotating = me?.role === 'tv' && prefs.tv_layout === 'rotate';
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!rotating) return;
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [rotating]);
+  if (!rotating) {
+    return <div className="tv-h-layout" title="Wall layout">{TV_LAYOUT_LABELS[layout]}</div>;
+  }
+  const at = new Date(tick);
+  const next = nextRotateLayout(layout, parseTvLayoutsOff(prefs.tv_layouts_off));
+  const left = msToNextRotateFlip(at);
+  const mm = Math.floor(left / 60_000);
+  const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
+  return (
+    <div className="tv-h-layout tv-h-layout-rotate" title="Rotating — next board and time to the flip">
+      {TV_LAYOUT_LABELS[layout]}
+      <span className="tv-h-layout-next">→ {TV_LAYOUT_LABELS[next]} in {mm}:{ss}</span>
+    </div>
+  );
+}
+
+function Header({ now, oncall, weather, focusItems, layout }: {
   now: Date;
   oncall: ReturnType<typeof useUpcomingOncall>['data'] extends infer T ? T : never;
   weather: ReturnType<typeof useWeather>['data'];
   focusItems: ReturnType<typeof useActiveFocusItems>['data'];
+  layout: TvLayout;
 }) {
   // "Tue, May 20, 8:42 AM"
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -393,6 +426,7 @@ function Header({ now, oncall, weather, focusItems }: {
       </div>
 
       <div className="tv-h-right-cluster">
+        <TvLayoutBadge layout={layout} />
         {weather && wx && (
           <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
             <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
@@ -2308,6 +2342,7 @@ function Tv2ViewInner() {
       <TvStyles />
       <Tv2Styles />
       <Header
+        layout="tv2"
         now={now}
         oncall={oncallQ.data ?? []}
         weather={weatherQ.data ?? null}
@@ -2379,6 +2414,7 @@ function Tv3ViewInner() {
       <Tv2Styles />
       <Tv3Styles />
       <Header
+        layout="tv3"
         now={now}
         oncall={oncallQ.data ?? []}
         weather={weatherQ.data ?? null}
@@ -2559,9 +2595,11 @@ function PtoHeatmapTvPanel({ pto, now, monthInDate = false }: {
   return (
     <section className={`tv-panel tv-heat-panel${monthInDate ? ' tv-heat-md' : ''}`} style={{ borderTopColor: '#fbbf24' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">PTO heat map · {HEAT_TV_WEEKS} weeks</h2>
+        {/* The narrow TV3 column keeps the title to one line: the week count
+            joins the range in the meta instead. */}
+        <h2 className="tv-panel-title">{monthInDate ? 'PTO heat map' : `PTO heat map · ${HEAT_TV_WEEKS} weeks`}</h2>
         <div className="tv-panel-meta">
-          {monthInDate ? `${weeks[0].labelLong} – ${lastLong}` : `${weeks[0].label} – ${lastM}/${lastD}`}
+          {monthInDate ? `${HEAT_TV_WEEKS} wk · ${weeks[0].labelLong} – ${lastLong}` : `${weeks[0].label} – ${lastM}/${lastD}`}
         </div>
       </div>
       <div className="tv-panel-body tv-heat-body">
@@ -2811,6 +2849,19 @@ function TvStyles() {
         text-decoration-thickness: 0.12vw;
       }
       .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
+
+      /* Board name badge (+ rotate countdown) at the left of the right cluster */
+      .tv-h-layout {
+        display: inline-flex; align-items: baseline; gap: 0.4vw;
+        font-size: 0.72vw; font-weight: 700; letter-spacing: 0.12em;
+        color: #94a3b8;
+        border: 1px solid #334155; border-radius: 3px;
+        padding: 0.12vw 0.5vw;
+        flex: 0 0 auto;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-h-layout-rotate { color: #e2e8f0; border-color: #475569; }
+      .tv-h-layout-next { font-weight: 500; letter-spacing: 0.04em; color: #94a3b8; }
 
       /* Center: top-2 announcements pulled from the focus board */
       .tv-h-center {

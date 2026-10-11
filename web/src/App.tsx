@@ -26,7 +26,7 @@ import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
-import { resolveTvLayout, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
+import { resolveTvLayout, parseTvLayoutsOff, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
 
 /** Reset scroll to the top on every route change. Without this, navigating
  *  from a long page (e.g. the manager dashboard) to another route leaves the
@@ -66,7 +66,7 @@ function Protected({ children }: { children: React.ReactNode }) {
  *  slots — see resolveTvLayout); an account without one gets the
  *  operations board. The Admin page's Shop TV card sets it (0138). */
 function tvLayoutPath(me: Me | null | undefined, now: Date = new Date()): string {
-  return TV_LAYOUT_PATHS[resolveTvLayout(me?.preferences?.tv_layout, now)];
+  return TV_LAYOUT_PATHS[resolveTvLayout(me?.preferences?.tv_layout, now, parseTvLayoutsOff(me?.preferences?.tv_layouts_off))];
 }
 
 /** Wraps each wall-layout route. A tv-role account is always sent to its own
