@@ -41,6 +41,26 @@ export type OtApiJob = {
   status: OtApiJobStatus | string;
   volunteers: OtApiVolunteer[];
   fetched_at: string;
+  /** When the sync first / last saw the job in the API (0139). */
+  first_seen_at: string;
+  last_seen_at: string;
+  /** Set when a poll no longer lists the job: cancelled, or moved in Outlook
+   *  (it then comes back under a new id). Never deleted. */
+  removed_at: string | null;
+};
+
+export type OtApiJobEventKind =
+  | 'added' | 'removed' | 'restored' | 'rescheduled'
+  | 'spaces_changed' | 'volunteer_added' | 'volunteer_removed' | 'retitled';
+
+export type OtApiJobEvent = {
+  id: number;
+  job_id: string;
+  at: string;
+  kind: OtApiJobEventKind | string;
+  detail: Record<string, unknown>;
+  title: string | null;
+  start_at: string | null;
 };
 
 export type OtApiSync = {
@@ -57,10 +77,11 @@ export type OtApiSync = {
 
 const JOBS_KEY = ['ot_api_jobs'];
 const SYNC_KEY = ['ot_api_sync_latest'];
+const EVENTS_KEY = ['ot_api_job_events'];
 
-/** Every mirrored job, soonest first. The poller already bounds the window
- *  (UPARK_OT_API_DAYS, default 14) and drops jobs it no longer sees, so the
- *  table IS the current schedule. */
+/** Every job the mirror has ever seen, soonest first — including past ones
+ *  and the cancelled (removed_at set). Callers filter: the TV and the
+ *  upcoming table want current, un-removed jobs (isOtApiJobCurrent). */
 export function useOtApiJobs() {
   return useQuery({
     queryKey: JOBS_KEY,
@@ -104,8 +125,29 @@ export function useOtApiLatestSync() {
   });
 }
 
+/** The change log (0139): newest first, capped. */
+export function useOtApiJobEvents(limit = 300) {
+  return useQuery({
+    queryKey: [...EVENTS_KEY, limit],
+    queryFn: async (): Promise<OtApiJobEvent[]> => {
+      const { data, error } = await supabase
+        .from('ot_api_job_events')
+        .select('id, job_id, at, kind, detail, title, start_at')
+        .order('at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...(r as OtApiJobEvent),
+        detail: (r as OtApiJobEvent).detail && typeof (r as OtApiJobEvent).detail === 'object' ? (r as OtApiJobEvent).detail : {},
+      }));
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Realtime: a poll rewrites jobs row by row and ends with one syncs row;
- *  any of those invalidates both queries. */
+ *  any of those invalidates every query here. */
 export function useOtApiRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
@@ -117,15 +159,18 @@ export function useOtApiRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ot_api_syncs' }, () => {
         qc.invalidateQueries({ queryKey: JOBS_KEY });
         qc.invalidateQueries({ queryKey: SYNC_KEY });
+        qc.invalidateQueries({ queryKey: EVENTS_KEY });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [qc]);
 }
 
-/** Jobs still worth showing: not yet over (end, or start when there is no
- *  end; all-day jobs run to the end of their start day). */
+/** Jobs still worth showing: still listed by the API (not removed) and not
+ *  yet over (end, or start when there is no end; all-day jobs run to the
+ *  end of their start day). */
 export function isOtApiJobCurrent(j: OtApiJob, now: Date): boolean {
+  if (j.removed_at) return false;
   const nowMs = now.getTime();
   if (j.end_at) return new Date(j.end_at).getTime() >= nowMs;
   const s = new Date(j.start_at);

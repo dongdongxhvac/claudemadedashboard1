@@ -9,22 +9,93 @@
 //
 // Volunteering happens in the OT viewer / its email invites — the API's
 // write endpoints are not wired up (confirm before using them).
+//
+// History (0139, user 2026-10-12): nothing is ever dropped. Below the
+// upcoming table, "All jobs" lists every job the mirror has seen — done,
+// cancelled (the API stopped listing it) or upcoming — and "Activity" is
+// the change log the sync writes between polls: sign-ups, withdrawals,
+// reschedules, added and cancelled jobs.
 import { useEffect, useMemo, useState } from 'react';
 import {
   useOtApiJobs,
+  useOtApiJobEvents,
   useOtApiLatestSync,
   useOtApiRealtime,
   isOtApiJobCurrent,
   otApiFreshness,
   type OtApiJob,
+  type OtApiJobEvent,
 } from '../hooks/useOtApi';
 import { Section } from './Section';
 
 const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
-  unfilled: { bg: 'rgba(220, 38, 38, 0.14)',  fg: 'var(--color-danger)',        label: 'Unfilled' },
-  partial:  { bg: 'rgba(217, 119, 6, 0.16)',  fg: 'var(--color-warn, #d97706)', label: 'Partial' },
-  full:     { bg: 'rgba(16, 185, 129, 0.16)', fg: 'var(--color-ok, #10b981)',   label: 'Full' },
+  unfilled:  { bg: 'rgba(220, 38, 38, 0.14)',  fg: 'var(--color-danger)',        label: 'Unfilled' },
+  partial:   { bg: 'rgba(217, 119, 6, 0.16)',  fg: 'var(--color-warn, #d97706)', label: 'Partial' },
+  full:      { bg: 'rgba(16, 185, 129, 0.16)', fg: 'var(--color-ok, #10b981)',   label: 'Full' },
+  cancelled: { bg: 'var(--color-border-soft)', fg: 'var(--color-text-muted)',    label: 'Cancelled' },
+  done:      { bg: 'rgba(94, 106, 210, 0.12)', fg: 'var(--color-accent)',        label: 'Done' },
 };
+
+/** What a job's row should say once it is out of the upcoming list. */
+function historyStatus(j: OtApiJob, now: Date): 'cancelled' | 'done' | string {
+  if (j.removed_at) return 'cancelled';
+  const tail = j.end_at ? new Date(j.end_at) : new Date(j.start_at);
+  if (tail.getTime() < now.getTime()) return 'done';
+  return j.status;
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  added:             'New job',
+  removed:           'Cancelled',
+  restored:          'Back on the board',
+  rescheduled:       'Rescheduled',
+  spaces_changed:    'Spaces changed',
+  volunteer_added:   'Signed up',
+  volunteer_removed: 'Withdrew',
+  retitled:          'Renamed',
+};
+const EVENT_COLOR: Record<string, string> = {
+  added:             'var(--color-accent)',
+  removed:           'var(--color-danger)',
+  restored:          'var(--color-accent)',
+  rescheduled:       'var(--color-warn, #d97706)',
+  spaces_changed:    'var(--color-warn, #d97706)',
+  volunteer_added:   'var(--color-ok, #10b981)',
+  volunteer_removed: 'var(--color-danger)',
+  retitled:          'var(--color-text-muted)',
+};
+
+function fmtStamp(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+/** One line of detail per event kind, from the sync's detail jsonb. */
+function eventDetail(e: OtApiJobEvent): string {
+  const d = e.detail ?? {};
+  const who = (d.name as string | null) ?? (d.email as string | null) ?? '';
+  switch (e.kind) {
+    case 'volunteer_added':
+    case 'volunteer_removed':
+      return who;
+    case 'rescheduled': {
+      const from = d.from_start ? fmtOtApiWhen({ start_at: d.from_start as string, end_at: (d.from_end as string | null) ?? null, all_day: false, when_text: null }) : '?';
+      const to   = d.to_start   ? fmtOtApiWhen({ start_at: d.to_start as string,   end_at: (d.to_end as string | null) ?? null,   all_day: false, when_text: null }) : '?';
+      return `${from} → ${to}`;
+    }
+    case 'spaces_changed':
+      return `${d.from ?? '?'} → ${d.to ?? '?'} spaces`;
+    case 'retitled':
+      return `"${d.from ?? ''}" → "${d.to ?? ''}"`;
+    case 'added':
+      return `${d.spaces ?? '?'} space${d.spaces === 1 ? '' : 's'}`;
+    case 'removed': {
+      const vols = Array.isArray(d.volunteers) ? (d.volunteers as string[]).filter(Boolean) : [];
+      return vols.length ? `had ${vols.join(', ')}` : '';
+    }
+    default:
+      return '';
+  }
+}
 
 function statusStyle(s: string) {
   return STATUS_STYLE[s] ?? { bg: 'var(--color-border-soft)', fg: 'var(--color-text-muted)', label: s || '—' };
@@ -57,8 +128,8 @@ function useMinuteNow(): Date {
   return now;
 }
 
-function JobRow({ job, past }: { job: OtApiJob; past: boolean }) {
-  const st = statusStyle(job.status);
+function JobRow({ job, past, status }: { job: OtApiJob; past: boolean; status?: string }) {
+  const st = statusStyle(status ?? job.status);
   const names = job.volunteers.map((v) => v.name ?? v.email ?? '—');
   return (
     <tr className="t-row-divider t-row-hover align-top" style={{ opacity: past ? 0.55 : 1 }}>
@@ -98,17 +169,24 @@ export function OtApiJobsPanel() {
   useOtApiRealtime();
   const jobsQ = useOtApiJobs();
   const syncQ = useOtApiLatestSync();
+  const eventsQ = useOtApiJobEvents();
   const now = useMinuteNow();
   const [showPast, setShowPast] = useState(false);
+  const [showLog, setShowLog] = useState(false);
 
   const jobs = useMemo(() => jobsQ.data ?? [], [jobsQ.data]);
+  // upcoming — still listed by the API and not yet over (the live board)
+  // past     — everything else the mirror has ever seen: done or cancelled,
+  //            most recent first
   const { upcoming, past } = useMemo(() => {
     const upcoming: OtApiJob[] = [];
     const past: OtApiJob[] = [];
     for (const j of jobs) (isOtApiJobCurrent(j, now) ? upcoming : past).push(j);
-    past.reverse(); // most recent first
+    past.reverse();
     return { upcoming, past };
   }, [jobs, now]);
+  const cancelledCount = past.filter((j) => j.removed_at).length;
+  const events = eventsQ.data ?? [];
 
   const openSpaces = upcoming.reduce((s, j) => s + j.open_spaces, 0);
   const unfilled   = upcoming.filter((j) => j.status === 'unfilled').length;
@@ -206,20 +284,76 @@ export function OtApiJobsPanel() {
                 onClick={() => setShowPast((v) => !v)}
                 className="t-small t-accent hover:underline"
               >
-                {showPast ? '▾' : '▸'} Already happened · {past.length} in the window
+                {showPast ? '▾' : '▸'} All jobs · {past.length} done or cancelled
+                {cancelledCount > 0 && <span className="t-muted"> · {cancelledCount} cancelled</span>}
               </button>
               {showPast && (
                 <table className="t-mono t-small w-full mt-2" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="t-muted">
+                      <th className="text-left pb-1 pr-3">When</th>
+                      <th className="text-left pb-1 pr-3">Job</th>
+                      <th className="text-left pb-1 pr-3">Location</th>
+                      <th className="text-right pb-1 pr-3">Filled</th>
+                      <th className="text-left pb-1 pr-3">Outcome</th>
+                      <th className="text-left pb-1 pr-3">Volunteers</th>
+                      <th className="text-left pb-1">Source</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {past.map((j) => <JobRow key={j.id} job={j} past />)}
+                    {past.map((j) => <JobRow key={j.id} job={j} past status={historyStatus(j, now)} />)}
                   </tbody>
                 </table>
               )}
             </div>
           )}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowLog((v) => !v)}
+              className="t-small t-accent hover:underline"
+            >
+              {showLog ? '▾' : '▸'} Activity · {events.length} change{events.length === 1 ? '' : 's'} logged
+            </button>
+            {showLog && (
+              events.length === 0 ? (
+                <p className="t-small t-muted mt-2">Nothing logged yet — changes are recorded from the next sync on.</p>
+              ) : (
+                <table className="t-mono t-small w-full mt-2" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="t-muted">
+                      <th className="text-left pb-1 pr-3">Noticed</th>
+                      <th className="text-left pb-1 pr-3">What</th>
+                      <th className="text-left pb-1 pr-3">Job</th>
+                      <th className="text-left pb-1">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((e) => (
+                      <tr key={e.id} className="t-row-divider align-top">
+                        <td className="py-1 pr-3 whitespace-nowrap t-muted">{fmtStamp(e.at)}</td>
+                        <td className="py-1 pr-3 whitespace-nowrap" style={{ color: EVENT_COLOR[e.kind] ?? 'inherit', fontWeight: 600 }}>
+                          {EVENT_LABEL[e.kind] ?? e.kind}
+                        </td>
+                        <td className="py-1 pr-3" style={{ fontFamily: 'var(--font-body)' }}>
+                          {e.title || '—'}
+                          {e.start_at && (
+                            <span className="t-muted"> · {new Date(e.start_at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                          )}
+                        </td>
+                        <td className="py-1" style={{ fontFamily: 'var(--font-body)' }}>{eventDetail(e)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            )}
+          </div>
           <p className="t-small t-muted mt-3" style={{ fontSize: '0.72rem' }}>
             Engineers volunteer through the OT viewer's calendar invites and editor — this panel
-            only mirrors it. Job ids change when an Outlook event is moved; the next poll follows.
+            only mirrors it. Nothing is deleted: a job the OT viewer stops listing is kept as
+            cancelled, and every sign-up, withdrawal, reschedule, add and cancel the sync notices
+            between polls goes in the activity log.
           </p>
         </>
       )}
