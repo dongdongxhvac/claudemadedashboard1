@@ -30,7 +30,8 @@ import { useCurrentBuildingAssignments, type BuildingAssignment } from '../hooks
 import { useBuildings, type Building } from '../hooks/useBuildings';
 import { useRounds, type Round } from '../hooks/useRounds';
 import { useUparkUserIds } from '../hooks/useSiteScope';
-import { BMR_HOLIDAYS } from '../lib/bmrHolidays';
+import { BMR_HOLIDAYS, chargeableWeekdays } from '../lib/bmrHolidays';
+import { BmrHolidayNote } from './BmrHolidayNote';
 import { Section } from './Section';
 import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
@@ -2800,14 +2801,8 @@ function AddPtoModal({
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
     if (days <= 0) return 0;
-    let weekdays = 0;
-    const cur = new Date(startsOn + 'T00:00:00');
-    for (let i = 0; i < days; i++) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) weekdays++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return weekdays * dailyHours;
+    // Mon–Fri minus BMR holidays — a holiday is already a paid day off.
+    return chargeableWeekdays(startsOn, endsOn) * dailyHours;
   }, [startsOn, endsOn, dailyHours]);
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
@@ -3005,10 +3000,13 @@ function AddPtoModal({
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
+          <div className="col-span-2" style={{ marginTop: -6 }}>
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={true} />
+          </div>
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">
-              Hours <span className="t-muted">(auto: {computedHours}h — {dailyHours}h × weekdays. Override below to change)</span>
+              Hours <span className="t-muted">(auto: {computedHours}h — {dailyHours}h × weekdays, BMR holidays skipped. Override below to change)</span>
             </span>
             <input
               type="number" min={0.5} step={0.5}
@@ -3184,14 +3182,8 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
     if (days <= 0) return 0;
-    let weekdays = 0;
-    const cur = new Date(startsOn + 'T00:00:00');
-    for (let i = 0; i < days; i++) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) weekdays++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return weekdays * dailyHours;
+    // Mon–Fri minus BMR holidays — a holiday is already a paid day off.
+    return chargeableWeekdays(startsOn, endsOn) * dailyHours;
   }, [startsOn, endsOn, dailyHours]);
   const datesChanged = startsOn !== request.starts_on || endsOn !== request.ends_on;
   useEffect(() => {
@@ -3362,6 +3354,9 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
+          <div className="col-span-2" style={{ marginTop: -6 }}>
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={true} />
+          </div>
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">

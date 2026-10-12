@@ -10,20 +10,23 @@
 // Volunteering happens in the OT viewer / its email invites — the API's
 // write endpoints are not wired up (confirm before using them).
 //
-// History (0139, user 2026-10-12): nothing is ever dropped. Below the
-// upcoming table, "All jobs" lists every job the mirror has seen — done,
-// cancelled (the API stopped listing it) or upcoming — and "Activity" is
-// the change log the sync writes between polls: sign-ups, withdrawals,
-// reschedules, added and cancelled jobs.
+// History (user 2026-10-12): below the upcoming table, "All jobs" lists
+// every job the sync has ever seen from the permanent log (0141) — done, or
+// cancelled when the API stopped listing it before it started — and
+// "Activity" is the change log (0144) the sync writes between polls:
+// sign-ups, withdrawals, reschedules, added and cancelled jobs.
 import { useEffect, useMemo, useState } from 'react';
 import {
   useOtApiJobs,
+  useOtApiJobsLog,
   useOtApiJobEvents,
   useOtApiLatestSync,
   useOtApiRealtime,
   isOtApiJobCurrent,
+  otApiJobHappened,
   otApiFreshness,
   type OtApiJob,
+  type OtApiJobLogRow,
   type OtApiJobEvent,
 } from '../hooks/useOtApi';
 import { Section } from './Section';
@@ -36,13 +39,19 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = 
   done:      { bg: 'rgba(94, 106, 210, 0.12)', fg: 'var(--color-accent)',        label: 'Done' },
 };
 
-/** What a job's row should say once it is out of the upcoming list. */
-function historyStatus(j: OtApiJob, now: Date): 'cancelled' | 'done' | string {
-  if (j.removed_at) return 'cancelled';
+/** What a logged job's row should say once it is out of the upcoming list:
+ *  dropped off the API before it started → cancelled (or moved: a moved
+ *  Outlook event comes back under a new id); otherwise, once its time has
+ *  passed → done. */
+function historyStatus(j: OtApiJobLogRow, now: Date): 'cancelled' | 'done' | string {
+  if (!otApiJobHappened(j)) return 'cancelled';
   const tail = j.end_at ? new Date(j.end_at) : new Date(j.start_at);
   if (tail.getTime() < now.getTime()) return 'done';
   return j.status;
 }
+
+/** How far back the "All jobs" drawer reaches. */
+const HISTORY_DAYS = 365;
 
 const EVENT_LABEL: Record<string, string> = {
   added:             'New job',
@@ -174,18 +183,22 @@ export function OtApiJobsPanel() {
   const [showPast, setShowPast] = useState(false);
   const [showLog, setShowLog] = useState(false);
 
+  const historySince = useMemo(
+    () => new Date(now.getTime() - HISTORY_DAYS * 86_400_000).toISOString(),
+    [now],
+  );
+  const logQ = useOtApiJobsLog(historySince);
+
   const jobs = useMemo(() => jobsQ.data ?? [], [jobsQ.data]);
-  // upcoming — still listed by the API and not yet over (the live board)
-  // past     — everything else the mirror has ever seen: done or cancelled,
+  // upcoming — on the mirror and not yet over (the live board)
+  // past     — every logged job that is not upcoming: done or cancelled,
   //            most recent first
-  const { upcoming, past } = useMemo(() => {
-    const upcoming: OtApiJob[] = [];
-    const past: OtApiJob[] = [];
-    for (const j of jobs) (isOtApiJobCurrent(j, now) ? upcoming : past).push(j);
-    past.reverse();
-    return { upcoming, past };
-  }, [jobs, now]);
-  const cancelledCount = past.filter((j) => j.removed_at).length;
+  const upcoming = useMemo(() => jobs.filter((j) => isOtApiJobCurrent(j, now)), [jobs, now]);
+  const past = useMemo(() => {
+    const live = new Set(upcoming.map((j) => j.id));
+    return (logQ.data ?? []).filter((j) => !live.has(j.id)).sort((a, b) => b.start_at.localeCompare(a.start_at));
+  }, [logQ.data, upcoming]);
+  const cancelledCount = past.filter((j) => !otApiJobHappened(j)).length;
   const events = eventsQ.data ?? [];
 
   const openSpaces = upcoming.reduce((s, j) => s + j.open_spaces, 0);
@@ -284,7 +297,7 @@ export function OtApiJobsPanel() {
                 onClick={() => setShowPast((v) => !v)}
                 className="t-small t-accent hover:underline"
               >
-                {showPast ? '▾' : '▸'} All jobs · {past.length} done or cancelled
+                {showPast ? '▾' : '▸'} All jobs · {past.length} done or cancelled in the last {HISTORY_DAYS} days
                 {cancelledCount > 0 && <span className="t-muted"> · {cancelledCount} cancelled</span>}
               </button>
               {showPast && (
@@ -351,9 +364,9 @@ export function OtApiJobsPanel() {
           </div>
           <p className="t-small t-muted mt-3" style={{ fontSize: '0.72rem' }}>
             Engineers volunteer through the OT viewer's calendar invites and editor — this panel
-            only mirrors it. Nothing is deleted: a job the OT viewer stops listing is kept as
-            cancelled, and every sign-up, withdrawal, reschedule, add and cancel the sync notices
-            between polls goes in the activity log.
+            only mirrors it. Every job is kept in the log: one the OT viewer stops listing before
+            it starts reads as cancelled, and every sign-up, withdrawal, reschedule, add and
+            cancel the sync notices between polls goes in the activity log.
           </p>
         </>
       )}

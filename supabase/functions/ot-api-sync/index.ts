@@ -5,14 +5,22 @@
 // watcher/ot_api_poller.py for when the API is reachable from the public
 // internet (https://uparkot.rai-zenith.com) — then nothing has to run on a
 // VM or workstation: pg_cron POSTs here every minute (migration 0137).
-// Writes (0136 + 0139): upsert this run's jobs on the API's id; soft-delete
-// the rest (removed_at — an id changes when the Outlook event moves, so
-// the old one reads as cancelled and the new one as added); diff against
-// the previous mirror and log one ot_api_job_events row per change
-// (added / removed / restored / rescheduled / spaces_changed /
-// volunteer_added / volunteer_removed / retitled); log one syncs row per
-// run (ok or error, with the raw payload). Nothing is ever deleted, so §11b
-// keeps the full history.
+// Same write semantics as the poller: upsert this run's jobs on the API's
+// id, delete the rest (an id changes when the Outlook event moves), log one
+// syncs row per run (ok or error, with the raw payload).
+//
+// v2 (2026-10-11, migration 0141): also upserts every job into
+// ot_api_jobs_log and never deletes from it — the API is forward-only, so
+// the mirror alone loses a job the moment its day passes. Ids missing from
+// this run get gone_at stamped (an id reappearing clears it). TV3 reads
+// yesterday's coverage from the log. (watcher/ot_api_poller.py, the VM
+// twin, is NOT deployed anywhere and does not write the log.)
+//
+// v3 (2026-10-12, migration 0144): diffs each poll against the log and
+// writes ot_api_job_events — added / removed / restored / rescheduled /
+// spaces_changed / volunteer_added / volunteer_removed / retitled — so §11b
+// can show who signed up or withdrew and what moved. Ids the log has but
+// this run did not see are "removed" (and get gone_at as before).
 //
 // Request:  POST {}            (body ignored)
 // Auth:     verify_jwt — the cron job sends the anon key, like
@@ -108,14 +116,12 @@ function mapJob(j: ApiJob, fetchedAt: string) {
     volunteers:  vols.map((v) => ({ name: str(v.name), email: str(v.email), signed_up: ts(v.signed_up) })),
     raw:         j,
     fetched_at:  fetchedAt,
-    last_seen_at: fetchedAt,
-    removed_at:  null as string | null,
   };
 }
 
 type PrevJob = {
   id: string; title: string; start_at: string; end_at: string | null; spaces: number;
-  volunteers: { name: string | null; email: string | null }[] | null; removed_at: string | null;
+  volunteers: { name: string | null; email: string | null }[] | null; gone_at: string | null;
 };
 type JobEvent = { job_id: string; at: string; kind: string; detail: Record<string, unknown>; title: string; start_at: string };
 
@@ -123,7 +129,7 @@ type JobEvent = { job_id: string; at: string; kind: string; detail: Record<strin
 const volKey = (v: { name: string | null; email: string | null }) =>
   (v.email ?? "").toLowerCase() || (v.name ?? "").toLowerCase();
 
-/** Compare one job against its previous mirror row and name every change. */
+/** Compare one job against its last logged state and name every change. */
 function diffJob(prev: PrevJob | undefined, next: NonNullable<ReturnType<typeof mapJob>>, at: string): JobEvent[] {
   const ev = (kind: string, detail: Record<string, unknown> = {}): JobEvent =>
     ({ job_id: next.id, at, kind, detail, title: next.title, start_at: next.start_at });
@@ -131,7 +137,7 @@ function diffJob(prev: PrevJob | undefined, next: NonNullable<ReturnType<typeof 
     return [ev("added", { spaces: next.spaces, volunteers: next.volunteers.map((v) => v.name ?? v.email) })];
   }
   const out: JobEvent[] = [];
-  if (prev.removed_at) out.push(ev("restored"));
+  if (prev.gone_at) out.push(ev("restored"));
   const sameTs = (a: string | null, b: string | null) =>
     (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
   if (!sameTs(prev.start_at, next.start_at) || !sameTs(prev.end_at, next.end_at)) {
@@ -218,19 +224,20 @@ Deno.serve(async (req) => {
 
   const jobs = (payload.jobs as ApiJob[]).map((j) => mapJob(j, fetchedAt)).filter((j) => j !== null);
   const skipped = payload.jobs.length - jobs.length;
-  const seen = new Set(jobs.map((j) => j!.id));
+  const ids = jobs.map((j) => j!.id);
 
-  // Previous mirror, for the change log and the soft-delete.
+  // Change log (0144): what differs between the log's last state and this
+  // run. Read before the upserts below overwrite it.
   const { data: prevRows, error: prevErr } = await admin
-    .from("ot_api_jobs")
-    .select("id, title, start_at, end_at, spaces, volunteers, removed_at");
-  if (prevErr) return fail(`read ot_api_jobs: ${prevErr.message}`);
+    .from("ot_api_jobs_log")
+    .select("id, title, start_at, end_at, spaces, volunteers, gone_at");
+  if (prevErr) return fail(`read ot_api_jobs_log: ${prevErr.message}`);
   const prev = new Map((prevRows ?? []).map((r) => [r.id as string, r as PrevJob]));
-
+  const seen = new Set(ids);
   const events: JobEvent[] = [];
   for (const j of jobs) events.push(...diffJob(prev.get(j!.id), j!, fetchedAt));
-  const gone = [...prev.values()].filter((r) => !seen.has(r.id) && !r.removed_at);
-  for (const r of gone) {
+  for (const r of prev.values()) {
+    if (seen.has(r.id) || r.gone_at) continue;
     events.push({ job_id: r.id, at: fetchedAt, kind: "removed", detail: { volunteers: (r.volunteers ?? []).map((v) => v.name ?? v.email) }, title: r.title, start_at: r.start_at });
   }
 
@@ -238,14 +245,29 @@ Deno.serve(async (req) => {
     const { error } = await admin.from("ot_api_jobs").upsert(jobs.slice(i, i + 200), { onConflict: "id" });
     if (error) return fail(`upsert ot_api_jobs: ${error.message}`);
   }
-  if (gone.length) {
-    const { error } = await admin.from("ot_api_jobs").update({ removed_at: fetchedAt }).in("id", gone.map((r) => r.id));
-    if (error) return fail(`soft-delete ot_api_jobs: ${error.message}`);
+
+  // Permanent log (0141): upsert what this run saw (first_seen_at is left
+  // to its default on insert and untouched on conflict — it is not in the
+  // body), then stamp gone_at on every logged id this run did NOT see.
+  const logRows = jobs.map((j) => ({ ...j!, last_seen_at: fetchedAt, gone_at: null }));
+  for (let i = 0; i < logRows.length; i += 200) {
+    const { error } = await admin.from("ot_api_jobs_log").upsert(logRows.slice(i, i + 200), { onConflict: "id" });
+    if (error) return fail(`upsert ot_api_jobs_log: ${error.message}`);
   }
+  const gone = ids.length
+    ? await admin.from("ot_api_jobs_log").update({ gone_at: fetchedAt }).is("gone_at", null)
+        .not("id", "in", `(${ids.map((id) => `"${id.replace(/"/g, '""')}"`).join(",")})`)
+    : await admin.from("ot_api_jobs_log").update({ gone_at: fetchedAt }).is("gone_at", null);
+  if (gone.error) return fail(`mark gone ot_api_jobs_log: ${gone.error.message}`);
   if (events.length) {
     const { error } = await admin.from("ot_api_job_events").insert(events);
     if (error) return fail(`log ot_api_job_events: ${error.message}`);
   }
+
+  const del = ids.length
+    ? await admin.from("ot_api_jobs").delete().not("id", "in", `(${ids.map((id) => `"${id.replace(/"/g, '""')}"`).join(",")})`)
+    : await admin.from("ot_api_jobs").delete().neq("id", "");
+  if (del.error) return fail(`prune ot_api_jobs: ${del.error.message}`);
 
   const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
   const team     = Array.isArray(payload.team) ? payload.team : [];
@@ -266,5 +288,5 @@ Deno.serve(async (req) => {
   await admin.from("ot_api_syncs").delete().lt("fetched_at", new Date(Date.now() - 7 * 86_400_000).toISOString());
 
   const openSpaces = jobs.reduce((s, j) => s + j!.open_spaces, 0);
-  return json(200, { ok: true, jobs: jobs.length, open_spaces: openSpaces, skipped_rows: skipped, changes: events.length, removed: gone.length, warnings });
+  return json(200, { ok: true, jobs: jobs.length, open_spaces: openSpaces, skipped_rows: skipped, changes: events.length, warnings });
 });

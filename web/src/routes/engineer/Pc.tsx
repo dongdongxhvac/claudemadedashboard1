@@ -17,6 +17,7 @@ import {
 } from '../../hooks/useMyAssignedData';
 import { MyPtoSection } from '../../components/MyPtoSection';
 import { MyWorkRecordSection } from '../../components/profile/MyWorkRecordSection';
+import { canSeeTrackerLink } from '../../lib/tracker';
 import type { PmRow } from '../../hooks/useCurrentSnapshots';
 import {
   isClosed, localISODate, fmtMd, mondayOf, addDays,
@@ -106,7 +107,6 @@ export default function EngineerPc() {
   const dueNowTotal = stats.overdue.length + stats.today.length;
   const dueNowAccent: 'red' | 'amber' | undefined =
     stats.overdue.length > 0 ? 'red' : stats.today.length > 0 ? 'amber' : undefined;
-  const profileAllowed = ctx.data.visible_to_self;
   // Binney St engineers have no CMMS feed (PMs/WOs/labor are UPark-only), so
   // their dashboard is PTO-only. Everything else would just render empty.
   const binneyOnly = siteAccess.homeSite === 'binney';
@@ -125,17 +125,17 @@ export default function EngineerPc() {
           </div>
           <div className="flex items-center gap-4">
             <OncallBadge />
-            {profileAllowed && (
-              <Link to={`/engineer/${ctx.data.user_id}/profile`} className="t-small t-accent hover:underline">
-                View profile →
+            {/* "View profile" / "Career tracker" are gone (user 2026-10-08/09);
+                in their place: Tracker (testing — TRACKER_TEST_EMAILS only)
+                and Training (the online handouts, every engineer, both sites). */}
+            {canSeeTrackerLink(session?.user.email) && (
+              <Link to="/engineer/tracker" className="t-small t-accent hover:underline">
+                Tracker
               </Link>
             )}
-            {/* New-hire training handouts + quizzes (UPark program). */}
-            {!binneyOnly && (
-              <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
-                Career tracker
-              </Link>
-            )}
+            <Link to="/engineer/training" className="t-small t-accent hover:underline">
+              Training
+            </Link>
             {/* Buildings (2026-09-23): the engineer's own set-up sheets +
                 system sign-offs — a separate tab, not on this page. (The KB
                 index link was removed 2026-09-08; this is a different page.) */}

@@ -25,6 +25,7 @@ import {
 import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
+import { BmrHolidayNote } from '../../components/BmrHolidayNote';
 import { useShifts } from '../../hooks/useShifts';
 import {
   useOncallParticipants, useOncallSettings,
@@ -3138,6 +3139,9 @@ function AddPtoModal({
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
+          <div className="col-span-2" style={{ marginTop: -6 }}>
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={false} />
+          </div>
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">
@@ -3487,6 +3491,9 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
             />
           </label>
+          <div className="col-span-2" style={{ marginTop: -6 }}>
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={false} />
+          </div>
 
           <label className="block col-span-2">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">

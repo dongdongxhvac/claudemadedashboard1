@@ -186,20 +186,15 @@ def main() -> int:
     skipped = len(data["jobs"]) - len(rows)
     seen_ids = [r["id"] for r in rows]
 
-    # Upsert this run's set, then soft-delete every job the run didn't see
-    # (cancelled, moved in Outlook → new id, or fell out of the window):
-    # removed_at marks it, nothing is deleted (0139). The change log
-    # (ot_api_job_events) is written by the edge function only.
-    for r in rows:
-        r["last_seen_at"] = fetched_at
-        r["removed_at"] = None
+    # Upsert this run's set, then drop every job the run didn't see (closed,
+    # cancelled, moved in Outlook → new id, or fell out of the window).
     CHUNK = 200
     for i in range(0, len(rows), CHUNK):
         client.table("ot_api_jobs").upsert(rows[i:i + CHUNK], on_conflict="id").execute()
-    q = client.table("ot_api_jobs").update({"removed_at": fetched_at}).is_("removed_at", "null")
     if seen_ids:
-        q = q.not_.in_("id", seen_ids)
-    q.execute()
+        client.table("ot_api_jobs").delete().not_.in_("id", seen_ids).execute()
+    else:
+        client.table("ot_api_jobs").delete().neq("id", "").execute()
 
     warnings = data.get("warnings") if isinstance(data.get("warnings"), list) else []
     team = data.get("team") if isinstance(data.get("team"), list) else []

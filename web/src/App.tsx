@@ -11,11 +11,13 @@ import EngineerProfile from './routes/engineer/Profile';
 import EngineerMe from './routes/engineer/Me';
 import EngineerBuildings from './routes/engineer/Buildings';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
-import TvView, { Tv2View } from './routes/tv/TvView';
+import TvView, { Tv2View, Tv3View } from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
 import NewHireTraining from './routes/engineer/NewHireTraining';
+import EngineerTracker from './routes/engineer/Tracker';
+import TrainingOnline from './routes/engineer/TrainingOnline';
 import Manual from './routes/manual/Manual';
 import BinneyManager from './routes/binney/Manager';
 import BinneyAdmin from './routes/binney/Admin';
@@ -24,7 +26,7 @@ import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
-import { resolveTvLayout, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
+import { resolveTvLayout, parseTvLayoutsOff, parseRotateMinutes, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
 
 /** Reset scroll to the top on every route change. Without this, navigating
  *  from a long page (e.g. the manager dashboard) to another route leaves the
@@ -64,7 +66,10 @@ function Protected({ children }: { children: React.ReactNode }) {
  *  slots — see resolveTvLayout); an account without one gets the
  *  operations board. The Admin page's Shop TV card sets it (0138). */
 function tvLayoutPath(me: Me | null | undefined, now: Date = new Date()): string {
-  return TV_LAYOUT_PATHS[resolveTvLayout(me?.preferences?.tv_layout, now)];
+  const prefs = me?.preferences;
+  return TV_LAYOUT_PATHS[resolveTvLayout(
+    prefs?.tv_layout, now, parseTvLayoutsOff(prefs?.tv_layouts_off), parseRotateMinutes(prefs?.tv_rotate_minutes),
+  )];
 }
 
 /** Wraps each wall-layout route. A tv-role account is always sent to its own
@@ -188,10 +193,19 @@ export default function App() {
         <Route path="/engineer/:id/profile" element={<Protected><EngineerProfile /></Protected>} />
         {/* Engineer's own building set-up sheets + system sign-offs (2026-09-23). */}
         <Route path="/engineer/buildings" element={<Protected><EngineerBuildings /></Protected>} />
+        {/* Tracker (2026-10-09): the engineer's own log / scorecard / skills.
+            Header link is test-account-only for now (lib/tracker.ts). */}
+        <Route path="/engineer/tracker" element={<Protected><EngineerTracker /></Protected>} />
+        {/* Training, online version: 5 category overviews + 4 equipment
+            handouts, every engineer, both sites (course material, no gate). */}
+        <Route path="/engineer/training" element={<Protected><TrainingOnline /></Protected>} />
         <Route path="/upark/tv" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv"><TvView /></TvLayoutGate></RequireSite></Protected>} />
         <Route path="/tv" element={<Navigate to="/upark/tv" replace />} />
         {/* Second wall screen — PTO, equipment/LOTO, on-call, OT posts. */}
         <Route path="/upark/tv2" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv2"><Tv2View /></TvLayoutGate></RequireSite></Protected>} />
+        {/* Third layout — TV2's panels in three side-by-side sections with a
+            wide on-call + LOTO column (2026-10-09). */}
+        <Route path="/upark/tv3" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv3"><Tv3View /></TvLayoutGate></RequireSite></Protected>} />
         {/* Buildings KB is UPark-only content (Index filters via
             useUparkBuildingIds), so fence it like the other UPark surfaces —
             otherwise Binney staff land in UPark's building list. */}

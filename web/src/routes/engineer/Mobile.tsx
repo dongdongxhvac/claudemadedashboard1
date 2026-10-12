@@ -30,10 +30,11 @@ import { isClosed, localISODate, fmtMd, mondayOf, addDays } from '../../lib/dash
 import { OncallBadge } from '../../components/OncallBadge';
 import { MyPtoSection } from '../../components/MyPtoSection';
 import { MyWorkRecordSection } from '../../components/profile/MyWorkRecordSection';
+import { canSeeTrackerLink } from '../../lib/tracker';
 
 
 export default function EngineerMobile() {
-  const { signOut } = useAuth();
+  const { session, signOut } = useAuth();
   const me = useMe();
   const ctx = useMyEngineerContext();
   const siteAccess = useMySiteAccess();
@@ -67,8 +68,6 @@ export default function EngineerMobile() {
     );
   }
 
-  const profileAllowed = ctx.data.visible_to_self;
-
   // Binney St engineers have no CMMS feed (PMs/WOs/labor are UPark-only), so
   // their phone surface is PTO-only: header + PTO, no tab nav.
   if (siteAccess.homeSite === 'binney') {
@@ -79,7 +78,13 @@ export default function EngineerMobile() {
             <h1 className="t-section-title">My PTO</h1>
             <p className="t-small t-muted">{ctx.data.cmms_assignee_name}</p>
           </div>
-          <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
+          <div className="flex items-center gap-3">
+            {canSeeTrackerLink(session?.user.email) && (
+              <Link to="/engineer/tracker" className="t-small t-accent hover:underline">Tracker</Link>
+            )}
+            <Link to="/engineer/training" className="t-small t-accent hover:underline">Training</Link>
+            <button onClick={signOut} className="t-small t-accent hover:underline">Sign out</button>
+          </div>
         </header>
         <main className="p-4 space-y-4 pb-8">
           <MyPtoSection userId={ctx.data.user_id} compact />
@@ -99,15 +104,13 @@ export default function EngineerMobile() {
         </div>
         <div className="flex items-center gap-3">
           <OncallBadge />
-          {profileAllowed && (
-            <Link to={`/engineer/${ctx.data.user_id}/profile`} className="t-small t-accent hover:underline">
-              Profile
-            </Link>
+          {/* "Profile" / "Career tracker" are gone (user 2026-10-08/09); in
+              their place: Tracker (testing — TRACKER_TEST_EMAILS only) and
+              Training (the online handouts, every engineer). */}
+          {canSeeTrackerLink(session?.user.email) && (
+            <Link to="/engineer/tracker" className="t-small t-accent hover:underline">Tracker</Link>
           )}
-          {/* New-hire training handouts + quizzes (UPark program). */}
-          <Link to="/upark/training/new-hire" className="t-small t-accent hover:underline">
-            Career tracker
-          </Link>
+          <Link to="/engineer/training" className="t-small t-accent hover:underline">Training</Link>
           {/* Set-up sheets + system sign-offs — separate tab (2026-09-23). */}
           <Link to="/engineer/buildings" className="t-small t-accent hover:underline">
             Buildings

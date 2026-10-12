@@ -29,6 +29,8 @@ import {
 } from '../hooks/usePto';
 import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
+import { BmrHolidayNote } from './BmrHolidayNote';
+import { chargeableWeekdays } from '../lib/bmrHolidays';
 import { cbaAllotment, sickCloseoutPreview } from '../lib/ptoYearEnd';
 
 /** user_ids homed at the given site — scopes the vacation-cap warning to the
@@ -396,14 +398,8 @@ function RequestForm({
     // Binney (7-day schedule) counts every day in the range; UPark counts
     // weekdays only. The per-day rate is the engineer's dailyHours.
     if (countAllDays) return days * dailyHours;
-    let weekdays = 0;
-    const cur = new Date(startsOn + 'T00:00:00');
-    for (let i = 0; i < days; i++) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) weekdays++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return weekdays * dailyHours;
+    // Mon–Fri minus BMR holidays — a holiday is already a paid day off.
+    return chargeableWeekdays(startsOn, endsOn) * dailyHours;
   }, [startsOn, endsOn, countAllDays, dailyHours]);
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
@@ -476,6 +472,7 @@ function RequestForm({
           />
         </Field>
       </div>
+      <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={!countAllDays} />
       <Field label="Reason (optional)">
         <input
           type="text" value={reason} onChange={(e) => setReason(e.target.value)}
