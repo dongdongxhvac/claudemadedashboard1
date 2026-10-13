@@ -35,7 +35,7 @@ import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import { usePlantlogTodayCompliance, usePlantlogWeeklyTests, usePlantlogUserMap, type PlantlogWeeklyTest } from '../../hooks/usePlantlog';
-import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterized, winterizationTone, WINTERIZATION_STATUS_LABEL } from '../../hooks/useWinterization';
+import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterAction, WINTERIZATION_ACTION_LABEL } from '../../hooks/useWinterization';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -2615,21 +2615,22 @@ function WeeklyTestsTvPanel({ kind, now }: { kind: 'water' | 'generator'; now: D
   );
 }
 
-/** Winterization — the "Cold Weather Prep" whiteboard (0145–0147),
- *  current season. Each task shows its status — To do (amber) → Drained /
- *  Winter (green, winterized) → Filled / Summer (blue, back for spring) —
- *  with the date and who set it. */
+/** Winterization — the "Cold Weather Prep" whiteboard (0145–0148),
+ *  current season. The to-do is the action: a task shows "TO DO · DRAIN"
+ *  (amber) until someone marks it done, then "DRAINED 10/14 · SM" — green
+ *  for the fall actions (drain / winter mode), blue once a spring action
+ *  (fill / summer mode) is done. */
 function WinterizationTvPanel({ now }: { now: Date }) {
   const season = currentWinterSeason(now);
   const q = useWinterizationTasks(season);
   const rows = q.data ?? [];
-  const done = rows.filter((r) => isWinterized(r.status)).length;
+  const done = rows.filter((r) => r.done_at).length;
   return (
     <section className="tv-panel tv2-fit" style={{ borderTopColor: '#38bdf8' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">Winterization</h2>
         <div className="tv-panel-meta">
-          cold weather prep · <span style={{ color: rows.length > 0 && done === rows.length ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{done}/{rows.length}</span> winterized · {season}
+          cold weather prep · <span style={{ color: rows.length > 0 && done === rows.length ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{done}/{rows.length}</span> done · {season}
         </div>
       </div>
       <div className="tv-panel-body">
@@ -2638,17 +2639,19 @@ function WinterizationTvPanel({ now }: { now: Date }) {
         ) : (
           <ul className="tv-wz-list">
             {rows.map((r) => {
-              const good = isWinterized(r.status);
+              const isDone = !!r.done_at;
+              const tone = !isDone ? 'wait' : isWinterAction(r.action) ? 'good' : 'off';
+              const label = WINTERIZATION_ACTION_LABEL[r.action];
               return (
-                <li key={r.id} className={`tv-wz-row${good ? ' tv-wz-done' : ''}`}>
-                  <span className={`tv-wz-status tv-wz-status-${winterizationTone(r.status)}`}>
-                    {WINTERIZATION_STATUS_LABEL[r.status].replace(' mode', '')}
+                <li key={r.id} className={`tv-wz-row${isDone ? ' tv-wz-done' : ''}`}>
+                  <span className={`tv-wz-status tv-wz-status-${tone}`}>
+                    {isDone ? label.done.replace(' mode', '') : `To do · ${label.todo.replace(' mode', '')}`}
                   </span>
                   <span className="tv-wz-code">{r.building_code}</span>
                   <span className="tv-wz-task">{r.task}</span>
                   <span className="tv-wz-meta">
-                    {r.status_at
-                      ? `${new Date(r.status_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.status_by_name ? ` · ${shortName(r.status_by_name)}` : ''}`
+                    {r.done_at
+                      ? `${new Date(r.done_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.done_by_name ? ` · ${shortName(r.done_by_name)}` : ''}`
                       : ''}
                   </span>
                 </li>
@@ -4323,14 +4326,14 @@ function TvStyles() {
 function Tv2Styles() {
   return (
     <style>{`
-      /* TV2 — 3 × 3 (user 2026-10-13): three columns (33 / 39 / 28), each a
+      /* TV2 — 3 × 3 (user 2026-10-13): three columns (30 / 42 / 28), each a
          flex stack of tiles that share the column's height by content. The
          sketch's bottom-right cell is empty, so the test boards share the
          whole third column. */
       .tv2-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 33fr 39fr 28fr;   /* user 2026-10-13: left as-is, right 28%, middle takes the rest */
+        grid-template-columns: 30fr 42fr 28fr;   /* user 2026-10-13: right 28%, left trimmed to 30, middle takes the rest */
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
@@ -4390,7 +4393,7 @@ function Tv2Styles() {
       }
       .tv-wz-row {
         display: grid;
-        grid-template-columns: 4.2vw 3.2vw minmax(0, 1fr) auto;
+        grid-template-columns: 5.6vw 3.2vw minmax(0, 1fr) auto;
         gap: 0.45vw;
         align-items: baseline;
         font-size: 0.84vw;
