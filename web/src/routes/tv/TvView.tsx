@@ -2571,7 +2571,9 @@ function WeeklyTestsTvPanel({ kind, now }: { kind: 'water' | 'generator'; now: D
   );
   const fresh = rows.filter((r) => r.status === 'fresh').length;
   const overdue = rows.filter((r) => r.status === 'overdue').length;
-  const title = kind === 'water' ? 'Water treatment · weekly' : 'Generator test · weekly';
+  // Short titles: at TV2's 28% column the "· weekly" wrapped; "this week" in
+  // the meta already says the cadence.
+  const title = kind === 'water' ? 'Water treatment' : 'Generator test';
   return (
     <section className="tv-panel" style={{ borderTopColor: kind === 'water' ? '#eab308' : '#f97316' }}>
       <div className="tv-panel-titlerow">
