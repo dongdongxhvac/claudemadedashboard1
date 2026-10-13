@@ -4386,14 +4386,14 @@ function TvStyles() {
 function Tv2Styles() {
   return (
     <style>{`
-      /* TV2 — 3 × 3 (user 2026-10-13): three columns (30 / 45 / 25), each a
+      /* TV2 — 3 × 3 (user 2026-10-13): three columns (30 / 42 / 28), each a
          flex stack of tiles that share the column's height by content. The
          sketch's bottom-right cell is empty, so the test boards share the
          whole third column. */
       .tv2-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 30fr 45fr 25fr;   /* user 2026-10-13: left 30, right 25, middle takes the rest */
+        grid-template-columns: 30fr 42fr 28fr;   /* user 2026-10-13: left 30, right 28, middle takes the rest */
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
