@@ -35,7 +35,7 @@ import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import { usePlantlogTodayCompliance, usePlantlogWeeklyTests, usePlantlogUserMap, type PlantlogWeeklyTest } from '../../hooks/usePlantlog';
-import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason } from '../../hooks/useWinterization';
+import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterized, WINTERIZATION_STATUS_LABEL } from '../../hooks/useWinterization';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -2607,19 +2607,21 @@ function WeeklyTestsTvPanel({ kind, now }: { kind: 'water' | 'generator'; now: D
   );
 }
 
-/** Winterization — the "Cold Weather Prep" whiteboard (0145), current
- *  season, ticked rows dimmed with the date + who. */
+/** Winterization — the "Cold Weather Prep" whiteboard (0145 / 0146),
+ *  current season. Each task shows its status (Filled → Drained, or Summer
+ *  → Winter mode for 88's float) with the date and who set it; winterized
+ *  rows go green. */
 function WinterizationTvPanel({ now }: { now: Date }) {
   const season = currentWinterSeason(now);
   const q = useWinterizationTasks(season);
   const rows = q.data ?? [];
-  const done = rows.filter((r) => r.done_at).length;
+  const done = rows.filter((r) => isWinterized(r.status)).length;
   return (
     <section className="tv-panel" style={{ borderTopColor: '#38bdf8' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">Winterization</h2>
         <div className="tv-panel-meta">
-          cold weather prep · <span style={{ color: rows.length > 0 && done === rows.length ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{done}/{rows.length}</span> done · {season}
+          cold weather prep · <span style={{ color: rows.length > 0 && done === rows.length ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{done}/{rows.length}</span> winterized · {season}
         </div>
       </div>
       <div className="tv-panel-body">
@@ -2627,18 +2629,23 @@ function WinterizationTvPanel({ now }: { now: Date }) {
           <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No tasks listed for {season}.</p>
         ) : (
           <ul className="tv-wz-list">
-            {rows.map((r) => (
-              <li key={r.id} className={`tv-wz-row${r.done_at ? ' tv-wz-done' : ''}`}>
-                <span className="tv-wz-box">{r.done_at ? '✓' : '○'}</span>
-                <span className="tv-wz-code">{r.building_code}</span>
-                <span className="tv-wz-task">{r.task}</span>
-                <span className="tv-wz-meta">
-                  {r.done_at
-                    ? `${new Date(r.done_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.done_by_name ? ` · ${heatInitials(r.done_by_name)}` : ''}`
-                    : ''}
-                </span>
-              </li>
-            ))}
+            {rows.map((r) => {
+              const good = isWinterized(r.status);
+              return (
+                <li key={r.id} className={`tv-wz-row${good ? ' tv-wz-done' : ''}`}>
+                  <span className={`tv-wz-status ${good ? 'tv-wz-status-good' : 'tv-wz-status-wait'}`}>
+                    {WINTERIZATION_STATUS_LABEL[r.status].replace(' mode', '')}
+                  </span>
+                  <span className="tv-wz-code">{r.building_code}</span>
+                  <span className="tv-wz-task">{r.task}</span>
+                  <span className="tv-wz-meta">
+                    {r.status_at
+                      ? `${new Date(r.status_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.status_by_name ? ` · ${shortName(r.status_by_name)}` : ''}`
+                      : ''}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -4308,14 +4315,14 @@ function TvStyles() {
 function Tv2Styles() {
   return (
     <style>{`
-      /* TV2 — 3 × 3 (user 2026-10-13): three equal columns, each a flex
-         stack of tiles that share the column's height by content. The
+      /* TV2 — 3 × 3 (user 2026-10-13): three columns (33 / 39 / 28), each a
+         flex stack of tiles that share the column's height by content. The
          sketch's bottom-right cell is empty, so the test boards share the
          whole third column. */
       .tv2-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 33fr 39fr 28fr;   /* user 2026-10-13: left as-is, right 28%, middle takes the rest */
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
@@ -4366,7 +4373,7 @@ function Tv2Styles() {
       .tv-wt-overdue { background: rgba(239, 68, 68, 0.10); }
       .tv-wt-overdue .tv-wt-status, .tv-wt-overdue .tv-wt-date { color: #fca5a5; }
 
-      /* Winterization checklist — ✓/○ · bldg · task (wraps) · done meta */
+      /* Winterization list — status chip · bldg · task (wraps) · date · who */
       .tv-wz-list {
         list-style: none; padding: 0; margin: 0;
         display: flex; flex-direction: column; gap: 0.15vw;
@@ -4374,22 +4381,26 @@ function Tv2Styles() {
       }
       .tv-wz-row {
         display: grid;
-        grid-template-columns: 1.2vw 3.2vw minmax(0, 1fr) auto;
+        grid-template-columns: 4.2vw 3.2vw minmax(0, 1fr) auto;
         gap: 0.45vw;
         align-items: baseline;
         font-size: 0.84vw;
         line-height: 1.25;
-        padding: 0.1vw 0.35vw;
+        padding: 0.12vw 0.35vw;
         border-radius: 2px;
       }
       .tv-wz-row > span { min-width: 0; }
-      .tv-wz-box { font-weight: 800; color: #64748b; }
+      .tv-wz-status {
+        font-size: 0.6vw; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+        padding: 0.05vw 0.35vw; border-radius: 3px; text-align: center; white-space: nowrap;
+      }
+      .tv-wz-status-wait { color: #fbbf24; background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.4); }
+      .tv-wz-status-good { color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); }
       .tv-wz-code { font-weight: 700; color: #fde68a; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .tv-wz-task { color: #e2e8f0; }
-      .tv-wz-meta { color: #64748b; font-size: 0.66vw; white-space: nowrap; }
-      .tv-wz-done { opacity: 0.55; background: rgba(34, 197, 94, 0.06); }
-      .tv-wz-done .tv-wz-box { color: #34d399; }
-      .tv-wz-done .tv-wz-task { text-decoration: line-through; }
+      .tv-wz-meta { color: #94a3b8; font-size: 0.7vw; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .tv-wz-done { background: rgba(34, 197, 94, 0.07); }
+      .tv-wz-done .tv-wz-task { color: #94a3b8; }
 
       /* PTO column (used by TV3). Coverage is content-sized; the heat map
          takes the rest and its week rows stretch to fill it. The heat

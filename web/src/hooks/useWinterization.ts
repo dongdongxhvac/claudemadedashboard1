@@ -1,7 +1,11 @@
 // Winterization — the shop's "Cold Weather Prep" whiteboard as data
-// (migration 0145). One row per building task per season; done_at /
-// done_by record the tick. TV2's Winterization tile reads the current
-// season; the UPark manager page's card ticks / adds / removes tasks.
+// (migrations 0145 / 0146). One row per building task per season; each
+// task has a KIND and a STATUS:
+//   drain  — filled → drained          (a drain-down)
+//   mode   — summer → winter           (88's cooling-tower make-up float)
+// status_at / status_by record the last change. TV2's Winterization tile
+// reads the current season; the UPark manager page's card sets statuses
+// and adds / removes tasks.
 //
 // Separate from every other hook on purpose (isolate-new-features rule):
 // its own query key, its own realtime channel.
@@ -10,15 +14,32 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 
+export type WinterizationKind = 'drain' | 'mode';
+export type WinterizationStatus = 'filled' | 'drained' | 'summer' | 'winter';
+
+export const WINTERIZATION_STATUSES: Record<WinterizationKind, WinterizationStatus[]> = {
+  drain: ['filled', 'drained'],
+  mode:  ['summer', 'winter'],
+};
+export const WINTERIZATION_STATUS_LABEL: Record<WinterizationStatus, string> = {
+  filled: 'Filled', drained: 'Drained', summer: 'Summer mode', winter: 'Winter mode',
+};
+/** The winterized states — what the wall counts as done. */
+export function isWinterized(status: WinterizationStatus): boolean {
+  return status === 'drained' || status === 'winter';
+}
+
 export type WinterizationTask = {
   id: string;
   season: string;
   building_code: string;
   task: string;
   sort_order: number;
-  done_at: string | null;
-  done_by: string | null;
-  done_by_name: string | null;
+  kind: WinterizationKind;
+  status: WinterizationStatus;
+  status_at: string | null;
+  status_by: string | null;
+  status_by_name: string | null;
   note: string | null;
   created_at: string;
   updated_at: string;
@@ -41,25 +62,25 @@ export function useWinterizationTasks(season: string) {
     queryFn: async (): Promise<WinterizationTask[]> => {
       const { data, error } = await supabase
         .from('winterization_tasks')
-        .select('id, season, building_code, task, sort_order, done_at, done_by, note, created_at, updated_at, done_by_user:done_by(full_name)')
+        .select('id, season, building_code, task, sort_order, kind, status, status_at, status_by, note, created_at, updated_at, status_by_user:status_by(full_name)')
         .eq('season', season)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      type Row = Omit<WinterizationTask, 'done_by_name'> & {
-        done_by_user: { full_name: string } | { full_name: string }[] | null;
+      type Row = Omit<WinterizationTask, 'status_by_name'> & {
+        status_by_user: { full_name: string } | { full_name: string }[] | null;
       };
       return ((data ?? []) as unknown as Row[]).map((r) => {
-        const u = Array.isArray(r.done_by_user) ? r.done_by_user[0] : r.done_by_user;
-        const { done_by_user: _drop, ...rest } = r;
+        const u = Array.isArray(r.status_by_user) ? r.status_by_user[0] : r.status_by_user;
+        const { status_by_user: _drop, ...rest } = r;
         void _drop;
-        return { ...rest, done_by_name: u?.full_name ?? null };
+        return { ...rest, status_by_name: u?.full_name ?? null };
       });
     },
     staleTime: 30_000,
   });
 }
 
-/** Follow ticks live (the wall and the manager page both). */
+/** Follow status changes live (the wall and the manager page both). */
 export function useWinterizationRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
@@ -78,18 +99,17 @@ function useInvalidate() {
   return () => qc.invalidateQueries({ queryKey: KEY });
 }
 
-/** Tick / un-tick. A filtered-out update (RLS) returns 0 rows → error, so
- *  the UI never reports success on a no-op. */
-export function useSetWinterizationDone() {
+/** Set a task's status; stamps the date and the signed-in engineer. A
+ *  filtered-out update (RLS) returns 0 rows → error, so the UI never
+ *  reports success on a no-op. */
+export function useSetWinterizationStatus() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { id: string; done: boolean }) => {
+    mutationFn: async (input: { id: string; status: WinterizationStatus }) => {
       const { data, error } = await supabase
         .from('winterization_tasks')
-        .update(input.done
-          ? { done_at: new Date().toISOString(), done_by: me?.id ?? null }
-          : { done_at: null, done_by: null })
+        .update({ status: input.status, status_at: new Date().toISOString(), status_by: me?.id ?? null })
         .eq('id', input.id)
         .select('id');
       if (error) throw error;
@@ -104,10 +124,14 @@ export function useAddWinterizationTask() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { season: string; building_code: string; task: string; sort_order: number }) => {
+    mutationFn: async (input: { season: string; building_code: string; task: string; sort_order: number; kind: WinterizationKind }) => {
       const { data, error } = await supabase
         .from('winterization_tasks')
-        .insert({ ...input, created_by: me?.id ?? null })
+        .insert({
+          ...input,
+          status: input.kind === 'mode' ? 'summer' : 'filled',
+          created_by: me?.id ?? null,
+        })
         .select('id');
       if (error) throw error;
       if (!data?.length) throw new Error('Not permitted to add tasks.');
