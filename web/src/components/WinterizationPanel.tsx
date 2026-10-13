@@ -1,8 +1,9 @@
 // §13 — Winterization · cold weather prep (UPark manager page).
 //
-// The whiteboard list (migrations 0145 / 0146) with a status per task:
-// drain-downs are Filled → Drained, 88's cooling-tower float is Summer →
-// Winter mode. Every change records the date and the engineer who set it,
+// The whiteboard list (migrations 0145–0147) with a status per task that
+// follows the season: drain-downs To do → Drained → Filled, 88's cooling-
+// tower float To do → Winter mode → Summer mode. Every change records the
+// date and the engineer who set it,
 // and reaches TV2's Winterization tile within seconds over realtime.
 // Admin / manager / lead may edit; everyone else sees it read-only.
 import { useMemo, useState } from 'react';
@@ -11,7 +12,7 @@ import { useMe } from '../hooks/useMe';
 import {
   useWinterizationTasks, useWinterizationRealtime,
   useSetWinterizationStatus, useAddWinterizationTask, useDeleteWinterizationTask,
-  currentWinterSeason, isWinterized,
+  currentWinterSeason, isWinterized, winterizationTone,
   WINTERIZATION_STATUSES, WINTERIZATION_STATUS_LABEL,
   type WinterizationKind, type WinterizationStatus,
 } from '../hooks/useWinterization';
@@ -63,11 +64,12 @@ export function WinterizationPanel() {
                 <td className="py-1 pr-3 t-mono" style={{ fontWeight: 600 }}>{r.building_code}</td>
                 <td className="py-1 pr-3" style={{ opacity: winterized ? 0.7 : 1 }}>{r.task}</td>
                 <td className="py-1 pr-3">
-                  {/* One segmented control per task, its two states from the task's kind. */}
+                  {/* One segmented control per task, its states (in season order) from the task's kind. */}
                   <div className="inline-flex rounded overflow-hidden" style={{ border: '1px solid var(--color-border)' }} role="radiogroup">
                     {WINTERIZATION_STATUSES[r.kind].map((s: WinterizationStatus) => {
                       const on = s === r.status;
-                      const good = isWinterized(s);
+                      const tone = winterizationTone(s);
+                      const onBg = tone === 'good' ? 'var(--color-ok)' : tone === 'wait' ? 'var(--color-warn)' : 'var(--color-accent)';
                       return (
                         <button
                           key={s}
@@ -81,7 +83,7 @@ export function WinterizationPanel() {
                           }}
                           className="t-small px-2 py-0.5"
                           style={{
-                            background: on ? (good ? 'var(--color-ok)' : 'var(--color-warn)') : 'var(--color-card)',
+                            background: on ? onBg : 'var(--color-card)',
                             color: on ? 'white' : 'var(--color-text-muted)',
                             fontWeight: on ? 600 : 400,
                             borderLeft: '1px solid var(--color-border)',
@@ -147,10 +149,10 @@ export function WinterizationPanel() {
             value={kind} onChange={(e) => setKind(e.target.value as WinterizationKind)}
             className="border rounded px-2 py-1 t-small"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-            title="Drain-down: Filled → Drained · Mode: Summer → Winter"
+            title="Drain-down: To do → Drained → Filled · Mode: To do → Winter → Summer"
           >
-            <option value="drain">drain-down (filled / drained)</option>
-            <option value="mode">mode (summer / winter)</option>
+            <option value="drain">drain-down (to do → drained → filled)</option>
+            <option value="mode">mode (to do → winter → summer)</option>
           </select>
           <button
             type="submit" disabled={busy || !code.trim() || !task.trim()}

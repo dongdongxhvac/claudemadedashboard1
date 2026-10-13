@@ -1,8 +1,8 @@
 // Winterization — the shop's "Cold Weather Prep" whiteboard as data
-// (migrations 0145 / 0146). One row per building task per season; each
-// task has a KIND and a STATUS:
-//   drain  — filled → drained          (a drain-down)
-//   mode   — summer → winter           (88's cooling-tower make-up float)
+// (migrations 0145 / 0146 / 0147). One row per building task per season;
+// each task has a KIND and a STATUS that follows the season:
+//   drain  — todo → drained (fall) → filled (spring)      a drain-down
+//   mode   — todo → winter  (fall) → summer (spring)      88's CT make-up float
 // status_at / status_by record the last change. TV2's Winterization tile
 // reads the current season; the UPark manager page's card sets statuses
 // and adds / removes tasks.
@@ -15,18 +15,25 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 
 export type WinterizationKind = 'drain' | 'mode';
-export type WinterizationStatus = 'filled' | 'drained' | 'summer' | 'winter';
+export type WinterizationStatus = 'todo' | 'filled' | 'drained' | 'summer' | 'winter';
 
+/** In season order: not started → fall state → spring state. */
 export const WINTERIZATION_STATUSES: Record<WinterizationKind, WinterizationStatus[]> = {
-  drain: ['filled', 'drained'],
-  mode:  ['summer', 'winter'],
+  drain: ['todo', 'drained', 'filled'],
+  mode:  ['todo', 'winter', 'summer'],
 };
 export const WINTERIZATION_STATUS_LABEL: Record<WinterizationStatus, string> = {
-  filled: 'Filled', drained: 'Drained', summer: 'Summer mode', winter: 'Winter mode',
+  todo: 'To do', filled: 'Filled', drained: 'Drained', summer: 'Summer mode', winter: 'Winter mode',
 };
-/** The winterized states — what the wall counts as done. */
+/** The winterized states — what the wall counts as done for the season. */
 export function isWinterized(status: WinterizationStatus): boolean {
   return status === 'drained' || status === 'winter';
+}
+/** Colour family for a status: 'wait' = still to do, 'good' = winterized,
+ *  'off' = back in its spring / summer state. */
+export function winterizationTone(status: WinterizationStatus): 'wait' | 'good' | 'off' {
+  if (status === 'todo') return 'wait';
+  return isWinterized(status) ? 'good' : 'off';
 }
 
 export type WinterizationTask = {
@@ -129,7 +136,7 @@ export function useAddWinterizationTask() {
         .from('winterization_tasks')
         .insert({
           ...input,
-          status: input.kind === 'mode' ? 'summer' : 'filled',
+          status: 'todo',
           created_by: me?.id ?? null,
         })
         .select('id');

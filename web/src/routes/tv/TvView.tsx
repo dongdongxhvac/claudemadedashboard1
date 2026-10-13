@@ -35,7 +35,7 @@ import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import { usePlantlogTodayCompliance, usePlantlogWeeklyTests, usePlantlogUserMap, type PlantlogWeeklyTest } from '../../hooks/usePlantlog';
-import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterized, WINTERIZATION_STATUS_LABEL } from '../../hooks/useWinterization';
+import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterized, winterizationTone, WINTERIZATION_STATUS_LABEL } from '../../hooks/useWinterization';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -2615,10 +2615,10 @@ function WeeklyTestsTvPanel({ kind, now }: { kind: 'water' | 'generator'; now: D
   );
 }
 
-/** Winterization — the "Cold Weather Prep" whiteboard (0145 / 0146),
- *  current season. Each task shows its status (Filled → Drained, or Summer
- *  → Winter mode for 88's float) with the date and who set it; winterized
- *  rows go green. */
+/** Winterization — the "Cold Weather Prep" whiteboard (0145–0147),
+ *  current season. Each task shows its status — To do (amber) → Drained /
+ *  Winter (green, winterized) → Filled / Summer (blue, back for spring) —
+ *  with the date and who set it. */
 function WinterizationTvPanel({ now }: { now: Date }) {
   const season = currentWinterSeason(now);
   const q = useWinterizationTasks(season);
@@ -2641,7 +2641,7 @@ function WinterizationTvPanel({ now }: { now: Date }) {
               const good = isWinterized(r.status);
               return (
                 <li key={r.id} className={`tv-wz-row${good ? ' tv-wz-done' : ''}`}>
-                  <span className={`tv-wz-status ${good ? 'tv-wz-status-good' : 'tv-wz-status-wait'}`}>
+                  <span className={`tv-wz-status tv-wz-status-${winterizationTone(r.status)}`}>
                     {WINTERIZATION_STATUS_LABEL[r.status].replace(' mode', '')}
                   </span>
                   <span className="tv-wz-code">{r.building_code}</span>
@@ -4405,6 +4405,7 @@ function Tv2Styles() {
       }
       .tv-wz-status-wait { color: #fbbf24; background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.4); }
       .tv-wz-status-good { color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); }
+      .tv-wz-status-off  { color: #7dd3fc; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); }
       .tv-wz-code { font-weight: 700; color: #fde68a; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .tv-wz-task { color: #e2e8f0; }
       .tv-wz-meta { color: #94a3b8; font-size: 0.7vw; white-space: nowrap; font-variant-numeric: tabular-nums; }
