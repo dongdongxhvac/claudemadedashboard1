@@ -2352,9 +2352,11 @@ function Tv2ViewInner() {
   useBuildingAssignmentsRealtime();
   usePtoRealtime();
   useWinterizationRealtime();
+  useBuildingEquipmentDownRealtime();
 
   const oncallQ      = useUpcomingOncall(12);
   const weatherQ     = useWeather();
+  const eqDownQ      = useBuildingEquipmentDown();
   const pmQ          = useCurrentPmRows();
   const closesQ      = useRecentPmCloses(14);
   const woQ          = useCurrentWoRows();
@@ -2402,6 +2404,10 @@ function Tv2ViewInner() {
         <div className="tv2-col">
           <HeartbeatTvPanel />
           <WinterizationTvPanel now={now} />
+          {/* The sketch left this cell empty; equipment attention (down /
+              LOTO) fills it (user 2026-10-13) — fit-based, so it takes
+              whatever height the two above leave. */}
+          <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
         </div>
         <div className="tv2-col">
           <WeeklyTestsTvPanel kind="water" now={now} />
@@ -2619,7 +2625,7 @@ function WinterizationTvPanel({ now }: { now: Date }) {
   const rows = q.data ?? [];
   const done = rows.filter((r) => isWinterized(r.status)).length;
   return (
-    <section className="tv-panel" style={{ borderTopColor: '#38bdf8' }}>
+    <section className="tv-panel tv2-fit" style={{ borderTopColor: '#38bdf8' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">Winterization</h2>
         <div className="tv-panel-meta">
@@ -4336,8 +4342,9 @@ function Tv2Styles() {
       /* The crew block carries its own section label from TV1's tall panel;
          inside a titled tile that's a duplicate row — hide it. */
       .tv2-crew-panel .tv-workload-section-label { display: none; }
-      /* Content-sized tiles (the heartbeat dot row) leave their height to
-         the column's other tiles. */
+      /* Content-sized tiles (the heartbeat dot row, the winterization list)
+         leave their height to the column's other tiles — on TV2 that is the
+         equipment list, which trims itself to whatever is left. */
       .tv2-col > .tv-panel.tv2-fit { flex: 0 0 auto; }
       .tv2-hb-list { gap: 0.35vw 1vw; }
       .tv2-hb-list li { font-size: 0.9vw; }
