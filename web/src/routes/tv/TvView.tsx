@@ -3228,13 +3228,18 @@ function TvStyles() {
       }
       .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
 
-      /* Rotate chip right after the title: "→ Coverage in 2:32" */
+      /* Rotate chip right after the title: "→ Perf & Status in 2:32".
+         Bigger and brighter than the rest of the header (user 2026-10-13:
+         "so everyone is aware") — amber text on an amber tint with a soft
+         glow, nearly title-sized. */
       .tv-h-layout {
-        display: inline-flex; align-items: baseline; gap: 0.4vw;
-        font-size: 0.72vw; font-weight: 600; letter-spacing: 0.06em;
-        color: #e2e8f0;
-        border: 1px solid #475569; border-radius: 3px;
-        padding: 0.12vw 0.5vw;
+        display: inline-flex; align-items: baseline; gap: 0.45vw;
+        font-size: 1.05vw; font-weight: 700; letter-spacing: 0.04em;
+        color: #fde68a;
+        background: rgba(251, 191, 36, 0.14);
+        border: 1px solid rgba(251, 191, 36, 0.6); border-radius: 4px;
+        box-shadow: 0 0 0.6vw rgba(251, 191, 36, 0.25);
+        padding: 0.15vw 0.7vw;
         flex: 0 0 auto;
         font-variant-numeric: tabular-nums;
         align-self: center;
