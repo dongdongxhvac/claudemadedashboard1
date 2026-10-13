@@ -70,7 +70,7 @@ import {
 } from '../../hooks/usePto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
-import { TV_LAYOUT_LABELS, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
+import { TV_LAYOUT_LABELS, TV_LAYOUT_SHORT, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
 import { useMe } from '../../hooks/useMe';
 import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
@@ -359,7 +359,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
   return (
     <div className="tv-h-layout tv-h-layout-rotate" title="Rotating — next board and time to the flip">
-      → {TV_LAYOUT_LABELS[next]} in {mm}:{ss}
+      → {TV_LAYOUT_SHORT[next]} in {mm}:{ss}
     </div>
   );
 }

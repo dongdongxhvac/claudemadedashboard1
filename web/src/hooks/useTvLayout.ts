@@ -1,7 +1,8 @@
 // Wall-screen layout switch (0138 / 0140 / 0142).
 //
 // A kiosk account's users.preferences.tv_layout decides which board the
-// screen shows: 'tv' (the original board, "TV0"), 'tv2' ("Operation"),
+// screen shows: 'tv' (the original board, "TV0"), 'tv2' ("Performance &
+// Status" — performance · scheduling · status · compliance),
 // 'tv3' (coverage in three sections 20/56/24, "Coverage" — display names
 // per user 2026-10-11 / 10-13) or 'rotate' (cycle the ENABLED boards every
 // ROTATE_MINUTES on wall-clock slots). preferences.tv_layouts_off lists the
@@ -32,10 +33,16 @@ export function parseRotateMinutes(raw: unknown): number {
 }
 
 /** Display names (user 2026-10-11, renamed 2026-10-13): the keys and
- *  URLs are unchanged. The wall header reads "UPark <name>". */
+ *  URLs are unchanged. The wall header reads "UPark <name>"; the short
+ *  form goes where space is tight — the rotate chip and the Shop TV card. */
 export const TV_LAYOUT_LABELS: Record<TvLayout, string> = {
   tv:  'TV0',
-  tv2: 'Operation',
+  tv2: 'Performance & Status',
+  tv3: 'Coverage',
+};
+export const TV_LAYOUT_SHORT: Record<TvLayout, string> = {
+  tv:  'TV0',
+  tv2: 'Perf & Status',
   tv3: 'Coverage',
 };
 
@@ -43,9 +50,9 @@ export const TV_LAYOUT_LABELS: Record<TvLayout, string> = {
 export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3'];
 
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
-  { value: 'tv',     label: `${TV_LAYOUT_LABELS.tv} · original board`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
-  { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · 3×3 grid`, hint: 'workload · PMs/labor · buildings (rounds + assignments) | heartbeats · winterization · chillers | weekly water-treatment + generator tests' },
-  { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · 20/56/24`, hint: 'PTO heat map + 7-day coverage 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
+  { value: 'tv',     label: `${TV_LAYOUT_SHORT.tv} · original board`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
+  { value: 'tv2',    label: `${TV_LAYOUT_SHORT.tv2} · 3×3 grid`, hint: 'performance · scheduling · status · compliance: workload, PMs/labor, buildings | heartbeats, winterization, chillers | weekly water-treatment + generator tests' },
+  { value: 'tv3',    label: `${TV_LAYOUT_SHORT.tv3} · 20/56/24`, hint: 'PTO heat map + 7-day coverage 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
   { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
 
