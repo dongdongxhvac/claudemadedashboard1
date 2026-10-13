@@ -2652,8 +2652,8 @@ function BuildingsTvPanel({ data }: { data: BuildingsRollup }) {
   return (
     <section className="tv-panel" style={{ borderTopColor: '#a78bfa' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Buildings · rounds + assignments</h2>
-        <div className="tv-panel-meta">by shift · ★ lead coverage</div>
+        <h2 className="tv-panel-title">Buildings</h2>
+        <div className="tv-panel-meta">rounds + assignments by shift · ★ lead coverage</div>
       </div>
       <div className="tv-panel-body">
         <BuildingsInner data={data} />
@@ -4321,8 +4321,12 @@ function Tv2Styles() {
         min-width: 0;
       }
       .tv2-grid > * { min-width: 0; min-height: 0; }
-      .tv2-col { display: flex; flex-direction: column; gap: 0.6vw; min-height: 0; }
-      .tv2-col > .tv-panel { flex: 1 1 auto; min-height: 0; }
+      .tv2-col { display: flex; flex-direction: column; gap: 0.5vw; min-height: 0; }
+      .tv2-col > .tv-panel { flex: 1 1 auto; min-height: 0; padding: 0.4vw 0.7vw 0.45vw; }
+      .tv2-col > .tv-panel .tv-panel-titlerow { margin-bottom: 0.25vw; }
+      /* The crew block carries its own section label from TV1's tall panel;
+         inside a titled tile that's a duplicate row — hide it. */
+      .tv2-crew-panel .tv-workload-section-label { display: none; }
       /* Content-sized tiles (the heartbeat dot row) leave their height to
          the column's other tiles. */
       .tv2-col > .tv-panel.tv2-fit { flex: 0 0 auto; }
