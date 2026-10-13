@@ -36,7 +36,7 @@ import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
 import { usePlantlogTodayCompliance, usePlantlogWeeklyTests, usePlantlogUserMap, type PlantlogWeeklyTest } from '../../hooks/usePlantlog';
 import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterAction, WINTERIZATION_ACTION_LABEL } from '../../hooks/useWinterization';
-import { useChillers, useChillersRealtime, CHILLER_STATUSES, CHILLER_STATUS_LABEL, type ChillerStatus } from '../../hooks/useChillers';
+import { useChillers, useChillersRealtime, sortChillers, CHILLER_STATUSES, CHILLER_STATUS_LABEL, type ChillerStatus } from '../../hooks/useChillers';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -2663,16 +2663,22 @@ function WinterizationTvPanel({ now }: { now: Date }) {
   );
 }
 
-/** Chillers — the chiller status board (0149): every chiller with its
- *  shop state (open · punching · rat race · closed) and the date + who
- *  set it. Header counts per state. */
+/** Chillers — the chiller status board (0149 / 0150): every chiller with
+ *  its shop state (open · punching · rat race = chemical run on a closed
+ *  chiller · closed) and the date + who set it. Sorted by state with
+ *  closed last and split into two columns (user 2026-10-13); header
+ *  counts per state. */
 const TV_CHILLER_TONE: Record<ChillerStatus, string> = {
   open: 'open', punching: 'punching', rat_race: 'ratrace', closed: 'closed',
 };
 function ChillersTvPanel() {
   const q = useChillers();
-  const rows = q.data ?? [];
+  const rows = useMemo(() => sortChillers(q.data ?? []), [q.data]);
   const counts = CHILLER_STATUSES.map((s) => ({ s, n: rows.filter((r) => r.status === s).length }));
+  // Two columns, first half left, second half right — reads top-down
+  // then across, so the sort stays obvious.
+  const half = Math.ceil(rows.length / 2);
+  const cols = [rows.slice(0, half), rows.slice(half)];
   return (
     <section className="tv-panel" style={{ borderTopColor: '#22d3ee' }}>
       <div className="tv-panel-titlerow">
@@ -2690,20 +2696,24 @@ function ChillersTvPanel() {
         {rows.length === 0 ? (
           <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No chillers listed.</p>
         ) : (
-          <ul className="tv-ch-list">
-            {rows.map((r) => (
-              <li key={r.id} className={`tv-ch-row tv-ch-row-${TV_CHILLER_TONE[r.status]}`}>
-                <span className="tv-ch-code">{r.building_code}</span>
-                <span className="tv-ch-name">{r.name ?? <span style={{ color: '#64748b' }}>chiller</span>}</span>
-                <span className={`tv-ch-status tv-ch-status-${TV_CHILLER_TONE[r.status]}`}>{CHILLER_STATUS_LABEL[r.status]}</span>
-                <span className="tv-ch-meta">
-                  {r.status_at
-                    ? `${new Date(r.status_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.status_by_name ? ` · ${shortName(r.status_by_name)}` : ''}`
-                    : ''}
-                </span>
-              </li>
+          <div className="tv-ch-cols">
+            {cols.map((col, i) => (
+              <ul key={i} className="tv-ch-list">
+                {col.map((r) => (
+                  <li key={r.id} className={`tv-ch-row tv-ch-row-${TV_CHILLER_TONE[r.status]}`}>
+                    <span className="tv-ch-code">{r.building_code}</span>
+                    <span className="tv-ch-name">{r.name ?? <span style={{ color: '#64748b' }}>chiller</span>}</span>
+                    <span className={`tv-ch-status tv-ch-status-${TV_CHILLER_TONE[r.status]}`}>{CHILLER_STATUS_LABEL[r.status]}</span>
+                    <span className="tv-ch-meta">
+                      {r.status_at
+                        ? `${new Date(r.status_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.status_by_name ? ` · ${shortName(r.status_by_name)}` : ''}`
+                        : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </section>
@@ -4461,21 +4471,23 @@ function Tv2Styles() {
       .tv-wz-done { background: rgba(34, 197, 94, 0.07); }
       .tv-wz-done .tv-wz-task { color: #94a3b8; }
 
-      /* Chiller board — bldg · name · status chip · date · who. Columns
-         fit the 42% middle column; rows tint faintly by state. */
+      /* Chiller board — two side-by-side lists; each row bldg · name ·
+         status chip · date · who, sized for half of the 42% column. Rows
+         tint faintly by state. */
+      .tv-ch-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.9vw; min-height: 0; overflow: hidden; }
       .tv-ch-list {
         list-style: none; padding: 0; margin: 0;
         display: flex; flex-direction: column; gap: 0.12vw;
-        min-height: 0; overflow: hidden;
+        min-height: 0; min-width: 0; overflow: hidden;
       }
       .tv-ch-row {
         display: grid;
-        grid-template-columns: 2.6vw minmax(0, 1fr) 5.2vw auto;
-        gap: 0.45vw;
+        grid-template-columns: 2.2vw minmax(0, 1fr) 4.8vw auto;
+        gap: 0.4vw;
         align-items: baseline;
-        font-size: 0.82vw;
+        font-size: 0.78vw;
         line-height: 1.25;
-        padding: 0.1vw 0.35vw;
+        padding: 0.1vw 0.3vw;
         border-radius: 2px;
       }
       .tv-ch-row > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4488,13 +4500,13 @@ function Tv2Styles() {
       }
       .tv-ch-status-open     { color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); }
       .tv-ch-status-punching { color: #fbbf24; background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.4); }
-      .tv-ch-status-ratrace  { color: #fca5a5; background: rgba(239, 68, 68, 0.14);  border: 1px solid rgba(239, 68, 68, 0.45); }
+      .tv-ch-status-ratrace  { color: #67e8f9; background: rgba(6, 182, 212, 0.14);  border: 1px solid rgba(6, 182, 212, 0.45); }
       .tv-ch-status-closed   { color: #94a3b8; background: rgba(100, 116, 139, 0.16); border: 1px solid rgba(100, 116, 139, 0.45); }
       .tv-ch-row-open     { background: rgba(16, 185, 129, 0.05); }
-      .tv-ch-row-ratrace  { background: rgba(239, 68, 68, 0.06); }
+      .tv-ch-row-ratrace  { background: rgba(6, 182, 212, 0.06); }
       .tv-ch-count { font-weight: 700; }
       .tv-ch-count-open { color: #34d399; } .tv-ch-count-punching { color: #fbbf24; }
-      .tv-ch-count-ratrace { color: #fca5a5; } .tv-ch-count-closed { color: #cbd5e1; }
+      .tv-ch-count-ratrace { color: #67e8f9; } .tv-ch-count-closed { color: #cbd5e1; }
 
       /* PTO column (used by TV3). Coverage is content-sized; the heat map
          takes the rest and its week rows stretch to fill it. The heat

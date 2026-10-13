@@ -10,13 +10,14 @@ import { Section } from './Section';
 import { useMe } from '../hooks/useMe';
 import {
   useChillers, useChillersRealtime, useSetChillerStatus, useAddChiller, useDeleteChiller,
-  CHILLER_STATUSES, CHILLER_STATUS_LABEL, type ChillerStatus,
+  CHILLER_STATUSES, CHILLER_STATUS_LABEL, CHILLER_STATUS_HINT, type ChillerStatus,
 } from '../hooks/useChillers';
 
-/** Button colour per state — open = running (green), closed = off (grey),
- *  punching / rat race = in work (amber / red). */
+/** Button colour per state — open = running (green), punching = in work
+ *  (amber), rat race = chemical run on a closed chiller (blue), closed =
+ *  off (grey). */
 const STATUS_BG: Record<ChillerStatus, string> = {
-  open: 'var(--color-ok)', punching: 'var(--color-warn)', rat_race: 'var(--color-danger)', closed: '#64748b',
+  open: 'var(--color-ok)', punching: 'var(--color-warn)', rat_race: '#0ea5e9', closed: '#64748b',
 };
 
 function fmtWhen(iso: string): string {
@@ -72,6 +73,7 @@ export function ChillersPanel() {
                         aria-checked={on}
                         disabled={!canEdit || busy || on}
                         onClick={() => { setErr(null); setStatus.mutate({ id: r.id, status: s }, { onError }); }}
+                        title={CHILLER_STATUS_HINT[s]}
                         className="t-small px-2 py-0.5"
                         style={{
                           background: on ? STATUS_BG[s] : 'var(--color-card)',

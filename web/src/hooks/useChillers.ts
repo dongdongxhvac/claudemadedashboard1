@@ -1,6 +1,8 @@
 // Chillers — the chiller status board (migration 0149). One row per
-// chiller (18 across UPark); status is one of the shop's four states and
-// status_at / status_by record the last change. TV2's Chillers tile shows
+// chiller (16 across UPark); status is one of the shop's four states —
+// open (running), punching (tubes being punched), rat race (the chemical
+// run on a closed chiller), closed — and status_at / status_by record the
+// last change. TV2's Chillers tile shows
 // the board; the UPark manager page's §14 card sets statuses and adds /
 // removes chillers.
 //
@@ -13,10 +15,19 @@ import { useMe } from './useMe';
 
 export type ChillerStatus = 'open' | 'punching' | 'rat_race' | 'closed';
 
+/** Display / sort order: running first, closed last (user 2026-10-13). */
 export const CHILLER_STATUSES: ChillerStatus[] = ['open', 'punching', 'rat_race', 'closed'];
 export const CHILLER_STATUS_LABEL: Record<ChillerStatus, string> = {
   open: 'Open', punching: 'Punching', rat_race: 'Rat race', closed: 'Closed',
 };
+export const CHILLER_STATUS_HINT: Record<ChillerStatus, string> = {
+  open: 'running', punching: 'tubes being punched', rat_race: 'chemical run on a closed chiller', closed: 'off',
+};
+/** By status (open → punching → rat race → closed), then list order. */
+export function sortChillers(rows: Chiller[]): Chiller[] {
+  const rank = (s: ChillerStatus) => CHILLER_STATUSES.indexOf(s);
+  return [...rows].sort((a, b) => rank(a.status) - rank(b.status) || a.sort_order - b.sort_order);
+}
 
 export type Chiller = {
   id: string;
