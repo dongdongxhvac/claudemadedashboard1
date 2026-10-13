@@ -2375,8 +2375,9 @@ function Tv2ViewInner() {
 // ── TV3 — the wide-right coverage board (user 2026-10-09) ─────────────────
 //
 // TV2's panels in three side-by-side sections instead of TV2's strip-over-
-// two-columns — 20% / 58% / 22% of the screen (user 2026-10-13; the right
-// column was pinned at 35% then narrowed to 22% to widen overtime):
+// two-columns — 20% / 56.5% / 23.5% of the screen (user 2026-10-13; the
+// right column was pinned at 35%, narrowed to 22% to widen overtime, then
+// eased back to 23.5%):
 // col 1 = PTO heat map (month spelled in each week's date label) over 7-day
 // Coverage; col 2 = EVERY overtime coverage post incl. yesterday's, compact
 // rows; col 3 = On-call schedule over LOTO · Equipment, with the narrow-
@@ -2426,11 +2427,11 @@ function Tv3ViewInner() {
           <PtoHeatmapTvPanel pto={ptoRows} now={now} monthInDate />
           <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
         </div>
-        {/* Section 2 (58%) — every OT post incl. yesterday's, compact rows;
+        {/* Section 2 (56.5%) — every OT post incl. yesterday's, compact rows;
             useFittingRows still hides whatever can't fit and counts it in
             "+N more". */}
         <OvertimeTvPanel now={now} maxRows={Infinity} compact />
-        {/* Section 3 (22%) — on-call grid (content-sized) over equipment
+        {/* Section 3 (23.5%) — on-call grid (content-sized) over equipment
             (takes the rest). */}
         <div className="tv3-right-col">
           <OncallPanel
@@ -2730,7 +2731,7 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
 // Styles
 // ============================================================================
 
-/** TV3 grid: three side-by-side sections, 20% / 58% / 22% of the screen —
+/** TV3 grid: three side-by-side sections, 20% / 56.5% / 23.5% of the screen —
  *  fr units, so the split is locked whatever the panels contain (every
  *  child is min-width:0). Heat-map and equipment CSS come from Tv2Styles,
  *  which TV3 also mounts. */
@@ -2743,7 +2744,7 @@ function Tv3Styles() {
       .tv3-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 20fr 58fr 22fr;
+        grid-template-columns: 20fr 56.5fr 23.5fr;
         gap: 0.5vw;
         min-height: 0;
         min-width: 0;
@@ -2787,7 +2788,7 @@ function Tv3Styles() {
       .tv-ot-panel-compact .tv-ot-list { gap: 0.1vw; }
       .tv-ot-row-past { opacity: 0.5; }
 
-      /* Right 22%: the on-call grid's "m/d-m/d" ranges won't fit
+      /* Right 23.5%: the on-call grid's "m/d-m/d" ranges won't fit
          seven columns, so the cells may break at the hyphen onto a second
          line and the type steps down a notch. */
       .tv3-right-col .tv-oncall-grid { font-size: 0.6vw; }
