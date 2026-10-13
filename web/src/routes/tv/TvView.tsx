@@ -2375,8 +2375,8 @@ function Tv2ViewInner() {
 // ── TV3 — the wide-right coverage board (user 2026-10-09) ─────────────────
 //
 // TV2's panels in three side-by-side sections instead of TV2's strip-over-
-// two-columns — 20% / 45% / 35% of the screen (user 2026-10-11; the right
-// column is pinned at 35%, the left was squeezed to give overtime room):
+// two-columns — 20% / 58% / 22% of the screen (user 2026-10-13; the right
+// column was pinned at 35% then narrowed to 22% to widen overtime):
 // col 1 = PTO heat map (month spelled in each week's date label) over 7-day
 // Coverage; col 2 = EVERY overtime coverage post incl. yesterday's, compact
 // rows; col 3 = On-call schedule over LOTO · Equipment, with the narrow-
@@ -2409,7 +2409,7 @@ function Tv3ViewInner() {
   useKioskAutoReload();
 
   return (
-    <div className="tv-root">
+    <div className="tv-root tv3-root">
       <TvStyles />
       <Tv2Styles />
       <Tv3Styles />
@@ -2426,11 +2426,11 @@ function Tv3ViewInner() {
           <PtoHeatmapTvPanel pto={ptoRows} now={now} monthInDate />
           <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
         </div>
-        {/* Section 2 (45%) — every OT post incl. yesterday's, compact rows;
+        {/* Section 2 (58%) — every OT post incl. yesterday's, compact rows;
             useFittingRows still hides whatever can't fit and counts it in
             "+N more". */}
         <OvertimeTvPanel now={now} maxRows={Infinity} compact />
-        {/* Section 3 (35%) — on-call grid (content-sized) over equipment
+        {/* Section 3 (22%) — on-call grid (content-sized) over equipment
             (takes the rest). */}
         <div className="tv3-right-col">
           <OncallPanel
@@ -2730,18 +2730,21 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
 // Styles
 // ============================================================================
 
-/** TV3 grid: three side-by-side sections, 20% / 45% / 35% of the screen —
+/** TV3 grid: three side-by-side sections, 20% / 58% / 22% of the screen —
  *  fr units, so the split is locked whatever the panels contain (every
  *  child is min-width:0). Heat-map and equipment CSS come from Tv2Styles,
  *  which TV3 also mounts. */
 function Tv3Styles() {
   return (
     <style>{`
+      /* TV3 hugs the screen edges (user 2026-10-13: less margin on the
+         left and right panels) — a slimmer outer padding than TV1/TV2. */
+      .tv3-root { padding: 0.35vw 0.25vw 0.3vw; }
       .tv3-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 20fr 45fr 35fr;
-        gap: 0.6vw;
+        grid-template-columns: 20fr 58fr 22fr;
+        gap: 0.5vw;
         min-height: 0;
         min-width: 0;
       }
@@ -2773,11 +2776,18 @@ function Tv3Styles() {
          spacing. Past rows (yesterday's coverage) are dimmed. */
       .tv-ot-panel-compact .tv-ot-row { grid-template-columns: 1fr; font-size: 0.74vw; line-height: 1.2; padding: 0.1vw 0.3vw; }
       .tv-ot-panel-compact .tv-ot-l1 { grid-template-columns: 13.5vw minmax(0, 2fr) 2.2vw minmax(0, 1fr); }
+      /* Staffing lane wraps (user 2026-10-13) so three or more sign-ups
+         are all legible instead of "AustinM · JorgeF…"; the row grows. */
+      .tv-ot-panel-compact .tv-ot-l1 > .tv-ot-slots {
+        white-space: normal; overflow: visible; text-overflow: clip;
+        line-height: 1.25;
+      }
+      .tv-ot-panel-compact .tv-ot-slots > span { white-space: nowrap; }
       .tv-ot-panel-compact .tv-ot-l2 { font-size: 0.68vw; }
       .tv-ot-panel-compact .tv-ot-list { gap: 0.1vw; }
       .tv-ot-row-past { opacity: 0.5; }
 
-      /* Right 35%: the on-call grid's "m/d-m/d" ranges may still not fit
+      /* Right 22%: the on-call grid's "m/d-m/d" ranges won't fit
          seven columns, so the cells may break at the hyphen onto a second
          line and the type steps down a notch. */
       .tv3-right-col .tv-oncall-grid { font-size: 0.6vw; }
