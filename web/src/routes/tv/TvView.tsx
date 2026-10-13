@@ -2390,18 +2390,18 @@ function Tv2ViewInner() {
         weather={weatherQ.data ?? null}
         focusItems={focusItems}
       />
-      {/* 3 × 3 (user 2026-10-13, sketch): each column is a flex stack so a
-          short tile (heartbeats) yields its height to the taller ones. */}
+      {/* 3 × 3 (user 2026-10-13, sketch; buildings combined bottom-left
+          like TV1, same day): each column is a flex stack so a short tile
+          (heartbeats) yields its height to the taller ones. */}
       <main className="tv2-grid">
         <div className="tv2-col">
           <WorkloadTvPanel pmRows={pmQ.data ?? []} engineers={engineers} shifts={shiftsQ.data ?? []} woRows={woQ.data ?? []} now={now} />
           <CrewTvPanel closes={closesQ.data ?? []} laborDaily={laborDailyQ.data ?? []} pto={ptoRows} now={now} />
-          <AssignmentsTvPanel data={bldg} />
+          <BuildingsTvPanel data={bldg} />
         </div>
         <div className="tv2-col">
           <HeartbeatTvPanel />
           <WinterizationTvPanel now={now} />
-          <RoundsTvPanel data={bldg} />
         </div>
         <div className="tv2-col">
           <WeeklyTestsTvPanel kind="water" now={now} />
@@ -2646,80 +2646,17 @@ function WinterizationTvPanel({ now }: { now: Date }) {
   );
 }
 
-/** Building assignments — engineer → primary buildings by shift, plus the
- *  leads' coverage; the assignment half of TV1's buildings rollup. */
-function AssignmentsTvPanel({ data }: { data: BuildingsRollup }) {
-  const fmtCodes = (list: Building[]) => list.map((b) => b.short_code ?? b.code).join(' · ');
-  const groups = data.shiftGroups
-    .map((g) => ({ ...g, engineers: g.engineers.filter((e) => e.primary.length > 0) }))
-    .filter((g) => g.engineers.length > 0);
+/** Buildings · rounds + assignments — TV1's rollup block (Rounds · Engineer
+ *  · Assignments by shift, leads' coverage underneath) as a tile of its own. */
+function BuildingsTvPanel({ data }: { data: BuildingsRollup }) {
   return (
     <section className="tv-panel" style={{ borderTopColor: '#a78bfa' }}>
       <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Building assignments</h2>
-        <div className="tv-panel-meta">primary · ★ lead coverage</div>
+        <h2 className="tv-panel-title">Buildings · rounds + assignments</h2>
+        <div className="tv-panel-meta">by shift · ★ lead coverage</div>
       </div>
       <div className="tv-panel-body">
-        <div className="tv-bldgs">
-          {groups.length === 0 ? <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No assignments.</p> : groups.map((g) => (
-            <div key={g.shift.id} className="tv-bldgs-band">
-              <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
-              <ul className="tv-bldgs-rows">
-                {g.engineers.map((e) => (
-                  <li key={e.user_id} className="tv-bldgs-row tv2-two-col">
-                    <span className="tv-bldgs-eng">{shortName(e.name)}</span>
-                    <span className="tv-bldgs-codes">{fmtCodes(e.primary)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          {data.leads.length > 0 && (
-            <div className="tv-bldgs-leads">
-              {data.leads.map((l) => (
-                <div key={l.user_id} className="tv-bldgs-lead-row">
-                  <span className="tv-bldgs-lead-name">★ {shortName(l.name)}</span>
-                  <span className="tv-bldgs-lead-codes">{l.coverage.length > 0 ? fmtCodes(l.coverage) : 'no coverage set'}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** Building rounds — engineer → today's round stops by shift; the rounds
- *  half of TV1's buildings rollup. */
-function RoundsTvPanel({ data }: { data: BuildingsRollup }) {
-  const groups = data.shiftGroups
-    .map((g) => ({ ...g, engineers: g.engineers.filter((e) => e.round) }))
-    .filter((g) => g.engineers.length > 0);
-  return (
-    <section className="tv-panel" style={{ borderTopColor: '#a78bfa' }}>
-      <div className="tv-panel-titlerow">
-        <h2 className="tv-panel-title">Building rounds</h2>
-        <div className="tv-panel-meta">current round · stops in order</div>
-      </div>
-      <div className="tv-panel-body">
-        <div className="tv-bldgs">
-          {groups.length === 0 ? <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No rounds assigned.</p> : groups.map((g) => (
-            <div key={g.shift.id} className="tv-bldgs-band">
-              <div className="tv-bldgs-band-label">{g.bandLabel} shift</div>
-              <ul className="tv-bldgs-rows">
-                {g.engineers.map((e) => (
-                  <li key={e.user_id} className="tv-bldgs-row tv2-two-col">
-                    <span className="tv-bldgs-eng">{shortName(e.name)}</span>
-                    <span className="tv-bldgs-codes">
-                      {e.round!.stops.map((st) => st.short_code ?? st.code).join(' · ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <BuildingsInner data={data} />
       </div>
     </section>
   );
@@ -4391,10 +4328,6 @@ function Tv2Styles() {
       .tv2-col > .tv-panel.tv2-fit { flex: 0 0 auto; }
       .tv2-hb-list { gap: 0.35vw 1vw; }
       .tv2-hb-list li { font-size: 0.9vw; }
-      /* Two-column rows (engineer · codes) for the split rollup tiles. */
-      .tv-bldgs-row.tv2-two-col { grid-template-columns: 6vw 1fr; }
-      .tv-bldgs-row.tv2-two-col .tv-bldgs-eng { text-align: left; }
-      .tv-bldgs-row.tv2-two-col .tv-bldgs-codes { text-align: left; }
 
       /* Weekly test boards — building · loop/unit · date · initials · ✓/⚠ */
       .tv-wt-list {
