@@ -3,7 +3,7 @@
 // A kiosk account's users.preferences.tv_layout decides which board the
 // screen shows: 'tv' (the original board, "TV0"), 'tv2' ("Performance &
 // Status" — performance · scheduling · status · compliance),
-// 'tv3' (coverage in three sections 20/56/24, "Coverage" — display names
+// 'tv3' (coverage in three sections 20/55/25, "Coverage" — display names
 // per user 2026-10-11 / 10-13) or 'rotate' (cycle the ENABLED boards every
 // ROTATE_MINUTES on wall-clock slots). preferences.tv_layouts_off lists the
 // boards the account may not show (0142) — rotate skips them and a fixed
@@ -52,7 +52,7 @@ export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3'];
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
   { value: 'tv',     label: `${TV_LAYOUT_SHORT.tv} · original board`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
   { value: 'tv2',    label: `${TV_LAYOUT_SHORT.tv2} · 3×3 grid`, hint: 'performance · scheduling · status · compliance: workload, PMs/labor, buildings | heartbeats, winterization, chillers | weekly water-treatment + generator tests' },
-  { value: 'tv3',    label: `${TV_LAYOUT_SHORT.tv3} · 20/56/24`, hint: 'PTO heat map + 7-day coverage 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
+  { value: 'tv3',    label: `${TV_LAYOUT_SHORT.tv3} · 20/55/25`, hint: 'PTO heat map + 7-day coverage 20%, every overtime post incl. yesterday 55%, on-call + LOTO 25%' },
   { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
 
