@@ -19,6 +19,7 @@ import { CoverageForecastPanel } from '../../components/CoverageForecastPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
 import { EquipmentDownPanel } from '../../components/EquipmentDownPanel';
 import { WinterizationPanel } from '../../components/WinterizationPanel';
+import { ChillersPanel } from '../../components/ChillersPanel';
 import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -241,6 +242,9 @@ export default function ManagerPc() {
           {/* §13 — the cold-weather-prep whiteboard; TV2's Winterization
               tile follows the ticks live (0145). */}
           <WinterizationPanel />
+          {/* §14 — the chiller status board; TV2's Chillers tile follows it
+              live (0149). */}
+          <ChillersPanel />
           <MonthlyMeterReadingsPanel />
         </div>
         <JumpNav />

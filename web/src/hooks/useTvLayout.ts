@@ -43,7 +43,7 @@ export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3'];
 
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
   { value: 'tv',     label: `${TV_LAYOUT_LABELS.tv} · Operations`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
-  { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · Operations grid`, hint: '3×3: workload · PMs/labor · buildings (rounds + assignments) | heartbeats · winterization · equipment/LOTO | weekly water-treatment + generator tests' },
+  { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · Operations grid`, hint: '3×3: workload · PMs/labor · buildings (rounds + assignments) | heartbeats · winterization · chillers | weekly water-treatment + generator tests' },
   { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · Coverage 20/56/24`, hint: 'same panels in three sections — PTO 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
   { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
