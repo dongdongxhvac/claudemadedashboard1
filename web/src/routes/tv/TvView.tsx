@@ -337,9 +337,10 @@ function TvViewInner() {
 // Header
 // ============================================================================
 
-/** Which board this is, and — for a kiosk account on rotate — the next
- *  board and a live countdown to the flip (user 2026-10-11). Ticks once a
- *  second only while rotating. Admins previewing a board see the name. */
+/** For a kiosk account on rotate: the next board and a live countdown to
+ *  the flip, right after the title ("UPark Operation → Coverage in 2:32",
+ *  user 2026-10-13). Ticks once a second only while rotating; renders
+ *  nothing otherwise — the title already carries the board's name. */
 function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const me = useMe().data;
   const prefs = (me?.preferences ?? {}) as Record<string, unknown>;
@@ -350,9 +351,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [rotating]);
-  if (!rotating) {
-    return <div className="tv-h-layout" title="Wall layout">{TV_LAYOUT_LABELS[layout]}</div>;
-  }
+  if (!rotating) return null;
   const at = new Date(tick);
   const next = nextRotateLayout(layout, parseTvLayoutsOff(prefs.tv_layouts_off));
   const left = msToNextRotateFlip(at, parseRotateMinutes(prefs.tv_rotate_minutes));
@@ -360,8 +359,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
   return (
     <div className="tv-h-layout tv-h-layout-rotate" title="Rotating — next board and time to the flip">
-      {TV_LAYOUT_LABELS[layout]}
-      <span className="tv-h-layout-next">→ {TV_LAYOUT_LABELS[next]} in {mm}:{ss}</span>
+      → {TV_LAYOUT_LABELS[next]} in {mm}:{ss}
     </div>
   );
 }
@@ -396,7 +394,10 @@ function Header({ now, oncall, weather, focusItems, layout }: {
   return (
     <header className="tv-header">
       <div className="tv-h-left">
-        <div className="tv-h-title">UPark</div>
+        {/* The board's name is the title (user 2026-10-13): "UPark
+            Operation", "UPark Coverage", "UPark TV0". */}
+        <div className="tv-h-title">UPark {TV_LAYOUT_LABELS[layout]}</div>
+        <TvLayoutBadge layout={layout} />
         <div className="tv-h-oncall">
           <div className="tv-h-oncall-block">
             <span className="tv-h-oncall-label">On-call</span>
@@ -428,7 +429,6 @@ function Header({ now, oncall, weather, focusItems, layout }: {
       </div>
 
       <div className="tv-h-right-cluster">
-        <TvLayoutBadge layout={layout} />
         {weather && wx && (
           <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
             <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
@@ -3228,18 +3228,17 @@ function TvStyles() {
       }
       .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
 
-      /* Board name badge (+ rotate countdown) at the left of the right cluster */
+      /* Rotate chip right after the title: "→ Coverage in 2:32" */
       .tv-h-layout {
         display: inline-flex; align-items: baseline; gap: 0.4vw;
-        font-size: 0.72vw; font-weight: 700; letter-spacing: 0.12em;
-        color: #94a3b8;
-        border: 1px solid #334155; border-radius: 3px;
+        font-size: 0.72vw; font-weight: 600; letter-spacing: 0.06em;
+        color: #e2e8f0;
+        border: 1px solid #475569; border-radius: 3px;
         padding: 0.12vw 0.5vw;
         flex: 0 0 auto;
         font-variant-numeric: tabular-nums;
+        align-self: center;
       }
-      .tv-h-layout-rotate { color: #e2e8f0; border-color: #475569; }
-      .tv-h-layout-next { font-weight: 500; letter-spacing: 0.04em; color: #94a3b8; }
 
       /* Center: top-2 announcements pulled from the focus board */
       .tv-h-center {
