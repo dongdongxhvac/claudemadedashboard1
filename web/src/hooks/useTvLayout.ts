@@ -2,7 +2,7 @@
 //
 // A kiosk account's users.preferences.tv_layout decides which board the
 // screen shows: 'tv' (operations, shown as "TV0"), 'tv2' (coverage, "TV2"),
-// 'tv3' (coverage in three sections 20/56.5/23.5, "TV212" — display names per
+// 'tv3' (coverage in three sections 20/56/24, "TV212" — display names per
 // user 2026-10-11) or 'rotate' (cycle the ENABLED boards every
 // ROTATE_MINUTES on wall-clock slots). preferences.tv_layouts_off lists the
 // boards the account may not show (0142) — rotate skips them and a fixed
@@ -44,7 +44,7 @@ export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3'];
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
   { value: 'tv',     label: `${TV_LAYOUT_LABELS.tv} · Operations`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
   { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · Coverage`,   hint: 'PTO heat map, 7-day coverage, overtime, on-call, LOTO' },
-  { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · Coverage 20/56/24`, hint: 'same panels in three sections — PTO 20%, every overtime post incl. yesterday 56.5%, on-call + LOTO 23.5%' },
+  { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · Coverage 20/56/24`, hint: 'same panels in three sections — PTO 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
   { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
 
