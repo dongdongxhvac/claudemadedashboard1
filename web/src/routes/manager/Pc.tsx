@@ -18,6 +18,7 @@ import { PtoPanel } from '../../components/PtoPanel';
 import { CoverageForecastPanel } from '../../components/CoverageForecastPanel';
 import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadingsPanel';
 import { EquipmentDownPanel } from '../../components/EquipmentDownPanel';
+import { WinterizationPanel } from '../../components/WinterizationPanel';
 import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -237,6 +238,9 @@ export default function ManagerPc() {
           <BmsEmailAlarmsPanel />
           <EmailAlarmsHistoryPanel />
           <EquipmentDownPanel />
+          {/* §13 — the cold-weather-prep whiteboard; TV2's Winterization
+              tile follows the ticks live (0145). */}
+          <WinterizationPanel />
           <MonthlyMeterReadingsPanel />
         </div>
         <JumpNav />
