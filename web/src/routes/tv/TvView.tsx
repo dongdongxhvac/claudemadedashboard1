@@ -2671,7 +2671,7 @@ function BuildingsTvPanel({ data }: { data: BuildingsRollup }) {
     <section className="tv-panel" style={{ borderTopColor: '#a78bfa' }}>
       <div className="tv-panel-titlerow">
         <h2 className="tv-panel-title">Buildings</h2>
-        <div className="tv-panel-meta">rounds + assignments by shift · ★ lead coverage</div>
+        <div className="tv-panel-meta">rounds + assignments · ★ leads</div>
       </div>
       <div className="tv-panel-body">
         <BuildingsInner data={data} />
@@ -4393,7 +4393,7 @@ function Tv2Styles() {
       }
       .tv-wz-row {
         display: grid;
-        grid-template-columns: 5.6vw 3.2vw minmax(0, 1fr) auto;
+        grid-template-columns: 6.6vw 3.2vw minmax(0, 1fr) auto;   /* chip lane fits "TO DO · WINTER" */
         gap: 0.45vw;
         align-items: baseline;
         font-size: 0.84vw;
