@@ -11,7 +11,7 @@ import EngineerProfile from './routes/engineer/Profile';
 import EngineerMe from './routes/engineer/Me';
 import EngineerBuildings from './routes/engineer/Buildings';
 import EngineerShiftTv from './routes/engineer/ShiftTv';
-import TvView, { Tv2View, Tv3View } from './routes/tv/TvView';
+import TvView, { Tv2View, Tv3View, Tv4View } from './routes/tv/TvView';
 import BuildingsIndex from './routes/buildings/Index';
 import BuildingDetail from './routes/buildings/Detail';
 import Training from './routes/training/Training';
@@ -206,6 +206,9 @@ export default function App() {
         {/* Third layout — TV2's panels in three side-by-side sections with a
             wide on-call + LOTO column (2026-10-09). */}
         <Route path="/upark/tv3" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv3"><Tv3View /></TvLayoutGate></RequireSite></Protected>} />
+        {/* Fourth layout — TV3 with the OT coverage heat map in the left
+            column instead of PTO (2026-10-14). */}
+        <Route path="/upark/tv4" element={<Protected><RequireSite site="upark"><TvLayoutGate path="/upark/tv4"><Tv4View /></TvLayoutGate></RequireSite></Protected>} />
         {/* Buildings KB is UPark-only content (Index filters via
             useUparkBuildingIds), so fence it like the other UPark surfaces —
             otherwise Binney staff land in UPark's building list. */}

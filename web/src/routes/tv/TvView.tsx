@@ -2811,6 +2811,73 @@ function Tv3ViewInner() {
   );
 }
 
+// ── TV4 "OT Coverage" ─────────────────────────────────────────────────────
+//
+// TV3 with its left column swapped (user 2026-10-14): the OT coverage heat
+// map (OvertimeHeatmapTvPanel) where TV3 shows the PTO heat map + 7-day
+// coverage. Middle (every OT post incl. yesterday) and right (on-call +
+// LOTO) columns, the 20/56/24 split and the edge-hugging padding are TV3's.
+export function Tv4View() {
+  return (
+    <QueryClientProvider client={kioskClient}>
+      <Tv4ViewInner />
+    </QueryClientProvider>
+  );
+}
+
+function Tv4ViewInner() {
+  useOncallRealtime();
+  useOncallNotesRealtime();
+  useFocusBoardRealtime();
+  useBuildingEquipmentDownRealtime();
+
+  const oncallQ         = useUpcomingOncall(12);
+  const participantsQ   = useOncallParticipants();
+  const oncallSettingsQ = useOncallSettings();
+  const oncallNotesQ    = useOncallNotes();
+  const weatherQ        = useWeather();
+  const eqDownQ         = useBuildingEquipmentDown();
+  const { focusItems } = useUparkTvPeople();
+
+  const now = useMinuteClock();
+  useKioskCursorHide();
+  useKioskAutoReload();
+
+  return (
+    <div className="tv-root tv3-root">
+      <TvStyles />
+      <Tv2Styles />
+      <Tv3Styles />
+      <Tv4Styles />
+      <Header
+        layout="tv4"
+        now={now}
+        oncall={oncallQ.data ?? []}
+        weather={weatherQ.data ?? null}
+        focusItems={focusItems}
+      />
+      <main className="tv3-grid">
+        {/* Section 1 (20%) — OT coverage heat map, the whole column. */}
+        <div className="tv2-pto-col tv3-left-col tv4-left-col">
+          <OvertimeHeatmapTvPanel now={now} />
+        </div>
+        {/* Section 2 (56%) — every OT post incl. yesterday's (TV3's). */}
+        <OvertimeTvPanel now={now} maxRows={Infinity} compact />
+        {/* Section 3 (24%) — on-call grid over equipment (TV3's). */}
+        <div className="tv3-right-col">
+          <OncallPanel
+            participants={participantsQ.data ?? []}
+            settings={oncallSettingsQ.data ?? null}
+            notes={oncallNotesQ.data ?? []}
+            now={now}
+          />
+          <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
 // ── PTO heat map ──────────────────────────────────────────────────────────
 //
 // The manager dashboard's vacation-cap heat map (CapHeatmap in
@@ -3027,6 +3094,207 @@ function PtoHeatmapTvPanel({ pto, now, monthInDate = false }: {
   );
 }
 
+// ── OT coverage heat map (TV4) ────────────────────────────────────────────
+//
+// The manager page's overtime coverage heat map (components/
+// OvertimeHeatmap.tsx), read-only and restyled for the wall, in TV4's left
+// column (user 2026-10-14). One row per Mon–Sun week — OT_HEAT_TV_PAST_WEEKS
+// of history, then the current week and ahead, OT_HEAT_TV_WEEKS rows in all
+// — each cell a day of overtime:
+//   · colour = open slots that day: nothing posted (grey), every slot
+//     filled (green), 1 open (amber), 2 (orange), 3+ (red)
+//   · label = sign-up initials when the day has one shift with 1–2 names,
+//     else filled/needed; a corner badge counts 2+ shifts; a teal corner
+//     dot marks an OT-viewer (Outlook) job on the day
+//   · a shift lands on the LOCAL date it starts (an overnight post is one
+//     night); weekends are NOT dimmed — off-hour work lands on them
+// Sources are the middle column's: every post but cancelled ones, and the
+// OT viewer mirror (what's coming) + its permanent log (what ran; ghosts
+// that dropped off before they started excluded). Copied rather than
+// imported, like the PTO map, so the manager panel's interactive code
+// stays out of the kiosk.
+const OT_HEAT_TV_WEEKS = 14;
+const OT_HEAT_TV_PAST_WEEKS = 1;
+
+type OtHeatCell = {
+  iso: string;
+  isToday: boolean;
+  isPast: boolean;
+  shifts: TvOtRow[];
+  needed: number;
+  filled: number;
+  open: number;
+  holiday: boolean;
+};
+type OtHeatWeek = {
+  key: string;
+  labelLong: string;   // the week's Monday as "Oct 13"
+  banded: boolean;
+  isCurrent: boolean;
+  cells: OtHeatCell[];
+};
+
+function buildOtHeatWeeks(shifts: TvOtRow[], todayIso: string, pastWeeks: number, weeks: number): OtHeatWeek[] {
+  const start = addDays(mondayOf(new Date(todayIso + 'T00:00:00')), -pastWeeks * 7);
+  const byDay = new Map<string, TvOtRow[]>();
+  for (const r of shifts) {
+    const iso = localISODate(new Date(r.startsAt));
+    const list = byDay.get(iso);
+    if (list) list.push(r);
+    else byDay.set(iso, [r]);
+  }
+  for (const list of byDay.values()) list.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const holidays = new Set(BMR_HOLIDAYS.map((h) => h.date));
+
+  const out: OtHeatWeek[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const monday = addDays(start, w * 7);
+    const cells: OtHeatCell[] = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = localISODate(addDays(monday, i));
+      const day = byDay.get(iso) ?? [];
+      cells.push({
+        iso,
+        isToday: iso === todayIso,
+        isPast: iso < todayIso,
+        shifts: day,
+        needed: day.reduce((n, r) => n + r.needed, 0),
+        filled: day.reduce((n, r) => n + r.filled, 0),
+        open: day.reduce((n, r) => n + Math.max(r.needed - r.filled, 0), 0),
+        holiday: holidays.has(iso),
+      });
+    }
+    const tue = addDays(monday, 1);
+    out.push({
+      key: cells[0].iso,
+      labelLong: monday.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      banded: tue.getMonth() % 2 === 1,
+      isCurrent: w === pastWeeks,
+      cells,
+    });
+  }
+  return out;
+}
+
+/** Cell colour class suffix: none · ok · o1 · o2 · o3. */
+function otHeatTone(c: OtHeatCell): string {
+  if (c.shifts.length === 0) return 'none';
+  if (c.open <= 0) return 'ok';
+  return c.open === 1 ? 'o1' : c.open === 2 ? 'o2' : 'o3';
+}
+
+/** In-cell text: initials for one shift with 1–2 sign-ups, else the day's
+ *  filled/needed — digits always mean slots, never a name. */
+function otHeatParts(c: OtHeatCell): string[] {
+  if (c.shifts.length === 0) return [];
+  if (c.shifts.length === 1) {
+    const names = c.shifts[0].names;
+    if (names.length >= 1 && names.length <= 2) return names.map(heatInitials);
+  }
+  return [`${c.filled}/${c.needed}`];
+}
+
+function OvertimeHeatmapTvPanel({ now }: { now: Date }) {
+  const postsQ   = useOvertimePosts();
+  const apiJobsQ = useOtApiJobs();
+  // Keyed on the date, not the minute clock, so the grid rebuilds once a day
+  // and the log query's key doesn't churn.
+  const todayIso = localISODate(now);
+  const sinceIso = useMemo(
+    () => addDays(mondayOf(new Date(todayIso + 'T00:00:00')), -OT_HEAT_TV_PAST_WEEKS * 7).toISOString(),
+    [todayIso],
+  );
+  const logQ = useOtApiJobsLog(sinceIso);
+
+  const weeks = useMemo(() => {
+    const posts = (postsQ.data ?? []).filter((p) => p.status !== 'cancelled').map(postToTvRow);
+    const live = apiJobsQ.data ?? [];
+    const liveIds = new Set(live.map((j) => j.id));
+    const logged = (logQ.data ?? []).filter((j) => !liveIds.has(j.id) && otApiJobHappened(j));
+    return buildOtHeatWeeks(
+      [...posts, ...live.map(apiJobToTvRow), ...logged.map(apiJobToTvRow)],
+      todayIso, OT_HEAT_TV_PAST_WEEKS, OT_HEAT_TV_WEEKS,
+    );
+  }, [postsQ.data, apiJobsQ.data, logQ.data, todayIso]);
+
+  // Title-row tally: today and ahead only (history is on the grid, faded).
+  const ahead = useMemo(() => {
+    let shifts = 0, open = 0;
+    for (const wk of weeks) for (const c of wk.cells) if (!c.isPast) { shifts += c.shifts.length; open += c.open; }
+    return { shifts, open };
+  }, [weeks]);
+  const lastIso = weeks[weeks.length - 1].cells[6].iso;
+  const lastLong = new Date(lastIso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Short, so the title row stays on one line in the 20% column; the
+  // horizon's end shows in the last row's date anyway.
+  const meta = ahead.shifts === 0
+    ? `nothing posted to ${lastLong}`
+    : `${ahead.shifts} shift${ahead.shifts === 1 ? '' : 's'} · ${ahead.open === 0 ? 'all covered' : `${ahead.open} open`}`;
+
+  return (
+    <section className="tv-panel tv-heat-panel tv-heat-md tv-oth-panel" style={{ borderTopColor: TV_OT_API_DOT }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">OT heat map</h2>
+        <div className="tv-panel-meta">{meta}</div>
+      </div>
+      <div className="tv-panel-body tv-heat-body">
+        <div className="tv-heat-legend">
+          <span className="tv-heat-legend-item">overtime:</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-none" />none</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-ok" />covered</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o1" />1 open</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o2" />2</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o3" />3+</span>
+          <span className="tv-heat-legend-item"><span className="tv-oth-badge tv-oth-legend">2</span>shifts</span>
+          <span className="tv-heat-legend-item"><span className="tv-oth-api tv-oth-legend" />OT viewer</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-holiday" />holiday</span>
+        </div>
+        <div className="tv-heat-dow">
+          <span />
+          {HEAT_DOW.map((d) => <span key={d}>{d}</span>)}
+        </div>
+        <div
+          className="tv-heat-weeks"
+          style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+        >
+          {weeks.map((wk) => (
+            <div
+              key={wk.key}
+              className={[
+                'tv-heat-week',
+                wk.banded && 'tv-heat-week-banded',
+                wk.isCurrent && 'tv-heat-week-current',
+              ].filter(Boolean).join(' ')}
+            >
+              <span className="tv-heat-date">{wk.labelLong}</span>
+              {wk.cells.map((c) => (
+                <span
+                  key={c.iso}
+                  className={[
+                    'tv-heat-cell',
+                    'tv-oth-cell',
+                    `tv-oth-${otHeatTone(c)}`,
+                    c.isPast && 'tv-heat-past',
+                    c.holiday && 'tv-heat-holiday',
+                    c.isToday && 'tv-heat-today',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {/* No separator: two sets of initials stack on two lines in
+                      the tall TV4 cells (the cell wraps), so the type can be
+                      a size the shop floor can read. */}
+                  {otHeatParts(c).map((t, i) => <span key={i}>{t}</span>)}
+                  {c.shifts.length > 1 && <span className="tv-oth-badge">{c.shifts.length}</span>}
+                  {c.shifts.some((r) => r.key.startsWith('api:')) && <span className="tv-oth-api" />}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** How many of a clipped list's rows fit completely. The list keeps every
  *  row in the DOM (its overflow:hidden does the clipping) so the count can
  *  be re-measured whenever the box or a row changes size — the neighbouring
@@ -3170,6 +3438,52 @@ function Tv3Styles() {
       .tv3-right-col > .tv-panel:first-child .tv-panel-title { white-space: nowrap; }
       .tv3-right-col .tv-oncall-notes { flex-direction: column; gap: 0.08vw; }
       .tv3-right-col .tv-oncall-note { flex: 0 0 auto; }
+    `}</style>
+  );
+}
+
+/** TV4: TV3's grid; the left column is the OT coverage heat map alone, so
+ *  with 14 week rows instead of 20 the cells are taller and the type can
+ *  step up. Cell colours are open-slot counts, not the PTO cap. */
+function Tv4Styles() {
+  return (
+    <style>{`
+      /* The map is the column's only panel — so also its :last-child, which
+         Tv2Styles sizes to content; this later rule of equal specificity
+         gives it the whole column back. */
+      .tv4-left-col > .tv-heat-panel:last-child { flex: 1 1 0; min-height: 0; }
+      .tv4-left-col .tv-heat-date { font-size: 0.62vw; }
+      /* 14 rows → cells ~60px tall but only ~40px wide: let two initials
+         wrap onto two lines rather than shrink the type. */
+      .tv4-left-col .tv-heat-cell {
+        font-size: 0.78vw;
+        flex-wrap: wrap; align-content: center;
+        column-gap: 0.3vw; row-gap: 0.08vw;
+      }
+      .tv4-left-col .tv-heat-legend { font-size: 0.58vw; gap: 0.1vw 0.5vw; }
+      .tv-oth-cell { position: relative; }
+      .tv-oth-none { background: rgba(148, 163, 184, 0.10); }
+      .tv-oth-ok   { background: rgba(34, 197, 94, 0.45); }
+      .tv-oth-o1   { background: rgba(234, 179, 8, 0.50); }
+      .tv-oth-o2   { background: rgba(234, 88, 12, 0.65); }
+      .tv-oth-o3   { background: rgba(220, 38, 38, 0.75); }
+      /* Shift-count badge (top right) and OT-viewer dot (bottom right). */
+      .tv-oth-badge {
+        position: absolute; top: 0.08vw; right: 0.08vw;
+        min-width: 0.66vw; height: 0.66vw; padding: 0 0.1vw;
+        border-radius: 999px;
+        background: #f8fafc; color: #0b1220;
+        font-size: 0.44vw; font-weight: 800; line-height: 0.66vw; text-align: center;
+        box-sizing: border-box;
+      }
+      .tv-oth-api {
+        position: absolute; bottom: 0.1vw; right: 0.1vw;
+        width: 0.42vw; height: 0.42vw; border-radius: 50%;
+        background: ${TV_OT_API_DOT};
+        border: 1px solid rgba(11, 18, 32, 0.6);
+        box-sizing: border-box;
+      }
+      .tv-oth-legend { position: static; display: inline-block; flex: 0 0 auto; }
     `}</style>
   );
 }
