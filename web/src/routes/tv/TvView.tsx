@@ -2811,7 +2811,7 @@ function Tv3ViewInner() {
   );
 }
 
-// ── TV4 "OT Coverage" ─────────────────────────────────────────────────────
+// ── TV4 "OT Heat Map" ─────────────────────────────────────────────────────
 //
 // TV3 with its left column swapped (user 2026-10-14): the OT coverage heat
 // map (OvertimeHeatmapTvPanel) where TV3 shows the PTO heat map + 7-day

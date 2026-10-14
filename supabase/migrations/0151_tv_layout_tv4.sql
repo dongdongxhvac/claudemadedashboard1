@@ -1,6 +1,6 @@
 -- Migration 0151 — set_tv_layout / set_tv_layout_enabled accept 'tv4'.
 --
--- Fourth wall layout (user 2026-10-14): /upark/tv4 "OT Coverage" = TV3
+-- Fourth wall layout (user 2026-10-14): /upark/tv4 "OT Heat Map" = TV3
 -- with the OT coverage heat map in the left column instead of the PTO
 -- heat map + 7-day coverage. The gate (App.tsx TvLayoutGate /
 -- resolveTvLayout) and the Admin "Shop TV" card know the value from

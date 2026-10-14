@@ -4,7 +4,7 @@
 // screen shows: 'tv' (the original board, "TV0"), 'tv2' ("Performance &
 // Status" — performance · scheduling · status · compliance),
 // 'tv3' (coverage in three sections 20/56/24, "Coverage" — display names
-// per user 2026-10-11 / 10-13), 'tv4' ("OT Coverage", 2026-10-14: TV3 with
+// per user 2026-10-11 / 10-13), 'tv4' ("OT Heat Map", 2026-10-14: TV3 with
 // the OT coverage heat map in place of the PTO column) or 'rotate' (cycle the ENABLED boards every
 // ROTATE_MINUTES on wall-clock slots). preferences.tv_layouts_off lists the
 // boards the account may not show (0142) — rotate skips them and a fixed
@@ -33,20 +33,20 @@ export function parseRotateMinutes(raw: unknown): number {
   return Number.isInteger(n) && n >= 2 && n <= 10 ? n : ROTATE_MINUTES;
 }
 
-/** Display names (user 2026-10-11, renamed 2026-10-13): the keys and
+/** Display names (user 2026-10-11, renamed 2026-10-13; TV4 named 2026-10-14): the keys and
  *  URLs are unchanged. The wall header reads "UPark <name>"; the short
  *  form goes where space is tight — the rotate chip and the Shop TV card. */
 export const TV_LAYOUT_LABELS: Record<TvLayout, string> = {
   tv:  'TV0',
   tv2: 'Performance & Status',
   tv3: 'Coverage',
-  tv4: 'OT Coverage',
+  tv4: 'OT Heat Map',
 };
 export const TV_LAYOUT_SHORT: Record<TvLayout, string> = {
   tv:  'TV0',
   tv2: 'Perf & Status',
   tv3: 'Coverage',
-  tv4: 'OT Coverage',
+  tv4: 'OT Heat Map',
 };
 
 /** The order rotate cycles through (disabled boards are skipped). */
