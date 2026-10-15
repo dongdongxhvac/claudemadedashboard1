@@ -57,6 +57,16 @@ export function TrackerTab() {
         </label>
         {eng.isLoading && <span className="t-small t-muted">Loading…</span>}
         {eng.error && <span className="t-small t-danger">Error: {(eng.error as Error).message}</span>}
+        {/* The item list as a Word file (web/public/tracker/, regenerated from
+            lib/tracker.ts whenever the items change) — edit it, forward it. */}
+        <a
+          href={encodeURI('/tracker/Engineer Tracker - items.docx')}
+          download
+          className="t-small t-accent hover:underline ml-auto"
+          title="All tracker items — log kinds, professional traits, skills checklist — as a Word file"
+        >
+          Download items (Word) ↓
+        </a>
       </div>
 
       {view === 'all' && !eng.isLoading && (

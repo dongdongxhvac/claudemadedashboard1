@@ -22,6 +22,7 @@ import {
   useAdminRemoveSignup,
   OVERTIME_CATEGORY_LABELS,
   OVERTIME_CATEGORY_ORDER,
+  OVERTIME_CATEGORY_COLOR,
   type OvertimeCategory,
   type OvertimePost,
 } from '../hooks/useOvertime';
@@ -42,13 +43,9 @@ import {
   type OtConflict,
 } from '../hooks/useOvertimeConflicts';
 import { Section } from './Section';
+import { OvertimeHeatmap } from './OvertimeHeatmap';
 
-const CATEGORY_ACCENT: Record<OvertimeCategory, string> = {
-  cold_weather:      '#60a5fa',  // blue — winter
-  major_off_hour_pm: '#a78bfa',  // purple — PM theme matches OpenPMsBreakdown
-  off_hour_repair:   '#fb923c',  // orange — repair / wrench
-  vendor_escort:     '#f472b6',  // pink — vendor/escort
-};
+const CATEGORY_ACCENT = OVERTIME_CATEGORY_COLOR;
 
 function fmtWhen(starts: string, ends: string | null): string {
   const s = new Date(starts);
@@ -114,6 +111,8 @@ export function OvertimePanel() {
   const archivePast  = useArchivePastOvertimePosts();
 
   const [showNew, setShowNew] = useState(false);
+  // Date a heatmap click pre-fills in the New-post form (null = blank).
+  const [newPresetDate, setNewPresetDate] = useState<string | null>(null);
   const [showAssignFor, setShowAssignFor] = useState<string | null>(null);
   // Edit modal — keyed by post id (not the row) so a realtime refresh while
   // the form is open doesn't leave us holding a stale copy.
@@ -219,7 +218,7 @@ export function OvertimePanel() {
       </span>
       {canManage && (
         <button
-          onClick={() => setShowNew(true)}
+          onClick={() => { setNewPresetDate(null); setShowNew(true); }}
           className="ml-3 t-accent hover:underline"
           style={{ fontWeight: 600 }}
         >
@@ -263,6 +262,17 @@ export function OvertimePanel() {
         <p className="t-text t-danger">Error: {(postsQ.error as Error).message}</p>
       ) : (
         <>
+          {/* Coverage heatmap (user 2026-10-14, "like PTO"): one cell per
+              day coloured by open slots, OT-viewer jobs included, with the
+              open-slot digest beside it. Clicking a future day opens the
+              New-post form on that date. */}
+          <div style={{ marginBottom: 16 }}>
+            <OvertimeHeatmap
+              posts={postsQ.data ?? []}
+              onPickDate={canManage ? (iso) => { setNewPresetDate(iso); setShowNew(true); } : undefined}
+            />
+          </div>
+
           <div
             className="grid gap-4"
             style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
@@ -345,8 +355,9 @@ export function OvertimePanel() {
 
       {showNew && (
         <PostFormModal
-          onClose={() => setShowNew(false)}
+          onClose={() => { setShowNew(false); setNewPresetDate(null); }}
           buildings={buildingsQ.data ?? []}
+          presetDate={newPresetDate ?? undefined}
         />
       )}
 
@@ -771,11 +782,13 @@ function timeOptions(extra: string[]): { value: string; label: string }[] {
  *  useUpdateOvertimePost. Signups are untouched by an edit — the slot
  *  count just can't drop below the number already filled. */
 function PostFormModal({
-  onClose, buildings, initial,
+  onClose, buildings, initial, presetDate,
 }: {
   onClose: () => void;
   buildings: { id: string; code: string; short_code: string | null; name: string }[];
   initial?: OvertimePost;
+  /** New-post only: the date to start the form on (a heatmap click). */
+  presetDate?: string;
 }) {
   const create = useCreateOvertimePost();
   const update = useUpdateOvertimePost();
@@ -785,7 +798,7 @@ function PostFormModal({
   const minSlots  = initial ? Math.max(1, initial.slots_filled) : 1;
 
   const [category, setCategory]       = useState<OvertimeCategory>(initial?.category ?? 'major_off_hour_pm');
-  const [dateIso, setDateIso]         = useState(initStart?.date ?? '');   // YYYY-MM-DD
+  const [dateIso, setDateIso]         = useState(initStart?.date ?? presetDate ?? '');   // YYYY-MM-DD
   const [startTime, setStartTime]     = useState(initStart?.time ?? '');   // 'HH:MM'
   const [endTime, setEndTime]         = useState(initEnd?.time ?? '');     // '' = no end time
   const [buildingId, setBuildingId]   = useState<string>(initial?.building_id ?? '');

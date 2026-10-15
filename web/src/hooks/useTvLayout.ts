@@ -1,9 +1,11 @@
 // Wall-screen layout switch (0138 / 0140 / 0142).
 //
 // A kiosk account's users.preferences.tv_layout decides which board the
-// screen shows: 'tv' (operations, shown as "TV0"), 'tv2' (coverage, "TV2"),
-// 'tv3' (coverage in three sections 20/45/35, "TV212" — display names per
-// user 2026-10-11) or 'rotate' (cycle the ENABLED boards every
+// screen shows: 'tv' (the original board, "TV0"), 'tv2' ("Performance &
+// Status" — performance · scheduling · status · compliance),
+// 'tv3' (coverage in three sections 20/56/24, "Coverage" — display names
+// per user 2026-10-11 / 10-13), 'tv4' ("OT Heat Map", 2026-10-14: TV3 with
+// the OT coverage heat map in place of the PTO column) or 'rotate' (cycle the ENABLED boards every
 // ROTATE_MINUTES on wall-clock slots). preferences.tv_layouts_off lists the
 // boards the account may not show (0142) — rotate skips them and a fixed
 // choice that is disabled falls back to the first enabled board. App.tsx's
@@ -16,7 +18,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
-export type TvLayout = 'tv' | 'tv2' | 'tv3';
+export type TvLayout = 'tv' | 'tv2' | 'tv3' | 'tv4';
 export type TvLayoutSetting = TvLayout | 'rotate';
 
 /** Default rotate interval; each kiosk may override it with
@@ -31,20 +33,34 @@ export function parseRotateMinutes(raw: unknown): number {
   return Number.isInteger(n) && n >= 2 && n <= 10 ? n : ROTATE_MINUTES;
 }
 
-/** Display names (user 2026-10-11): the keys and URLs are unchanged. */
+/** Display names (user 2026-10-11, renamed 2026-10-13; TV4 named 2026-10-14): the keys and
+ *  URLs are unchanged. The wall header reads "UPark <name>"; the short
+ *  form goes where space is tight — the rotate chip and the Shop TV card. */
 export const TV_LAYOUT_LABELS: Record<TvLayout, string> = {
   tv:  'TV0',
-  tv2: 'TV2',
-  tv3: 'TV212',
+  tv2: 'Performance & Status',
+  tv3: 'Coverage',
+  tv4: 'OT Heat Map',
+};
+export const TV_LAYOUT_SHORT: Record<TvLayout, string> = {
+  tv:  'TV0',
+  tv2: 'Perf & Status',
+  tv3: 'Coverage',
+  tv4: 'OT Heat Map',
 };
 
 /** The order rotate cycles through (disabled boards are skipped). */
-export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3'];
+export const TV_ROTATION_ORDER: TvLayout[] = ['tv', 'tv2', 'tv3', 'tv4'];
+
+export function isTvLayout(v: unknown): v is TvLayout {
+  return typeof v === 'string' && (TV_ROTATION_ORDER as string[]).includes(v);
+}
 
 export const TV_LAYOUT_OPTIONS: { value: TvLayoutSetting; label: string; hint: string }[] = [
-  { value: 'tv',     label: `${TV_LAYOUT_LABELS.tv} · Operations`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
-  { value: 'tv2',    label: `${TV_LAYOUT_LABELS.tv2} · Coverage`,   hint: 'PTO heat map, 7-day coverage, overtime, on-call, LOTO' },
-  { value: 'tv3',    label: `${TV_LAYOUT_LABELS.tv3} · Coverage 20/45/35`, hint: 'same panels in three sections — PTO 20%, every overtime post incl. yesterday 45%, on-call + LOTO 35%' },
+  { value: 'tv',     label: `${TV_LAYOUT_SHORT.tv} · original board`, hint: 'workload, BMS, equipment, projects, PTO, on-call, overtime' },
+  { value: 'tv2',    label: `${TV_LAYOUT_SHORT.tv2} · 3×3 grid`, hint: 'performance · scheduling · status · compliance: workload, PMs/labor, buildings | heartbeats, winterization, chillers | weekly water-treatment + generator tests' },
+  { value: 'tv3',    label: `${TV_LAYOUT_SHORT.tv3} · 20/56/24`, hint: 'PTO heat map + 7-day coverage 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
+  { value: 'tv4',    label: `${TV_LAYOUT_SHORT.tv4} · 20/56/24`, hint: 'OT coverage heat map 20%, every overtime post incl. yesterday 56%, on-call + LOTO 24%' },
   { value: 'rotate', label: 'Rotate', hint: 'cycle the enabled boards on the clock, at the interval chosen beside it' },
 ];
 
@@ -72,6 +88,7 @@ export const TV_LAYOUT_PATHS: Record<TvLayout, string> = {
   tv:  '/upark/tv',
   tv2: '/upark/tv2',
   tv3: '/upark/tv3',
+  tv4: '/upark/tv4',
 };
 
 /** The board a setting means right now. 'rotate' cycles the enabled boards
@@ -89,7 +106,7 @@ export function resolveTvLayout(
     const slot = Math.floor(now.getTime() / (minutes * 60_000));
     return enabled[slot % enabled.length];
   }
-  const fixed: TvLayout = setting === 'tv2' ? 'tv2' : setting === 'tv3' ? 'tv3' : 'tv';
+  const fixed: TvLayout = isTvLayout(setting) ? setting : 'tv';
   return enabled.includes(fixed) ? fixed : enabled[0];
 }
 
@@ -131,7 +148,7 @@ export function useTvKiosks() {
       return (data ?? []).map((r) => {
         const prefs = r.preferences as Record<string, unknown> | null;
         const raw = prefs?.tv_layout;
-        const layout: TvLayoutSetting = raw === 'tv2' || raw === 'tv3' || raw === 'rotate' ? raw : 'tv';
+        const layout: TvLayoutSetting = isTvLayout(raw) ? raw : raw === 'rotate' ? 'rotate' : 'tv';
         return {
           id: r.id, full_name: r.full_name, email: r.email, active: r.active, layout,
           off: parseTvLayoutsOff(prefs?.tv_layouts_off),

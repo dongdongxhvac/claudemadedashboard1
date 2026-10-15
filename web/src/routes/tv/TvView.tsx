@@ -34,7 +34,9 @@ import { useCurrentBuildingAssignments, useBuildingAssignmentsRealtime, type Bui
 import { useEngineers, type EngineerRow } from '../../hooks/useEngineers';
 import { useWeather, weatherDescription } from '../../hooks/useWeather';
 import { useEmailAlarmsOpen, useEmailPollState, useBmsHeartbeats } from '../../hooks/useEmailAlarms';
-import { usePlantlogTodayCompliance } from '../../hooks/usePlantlog';
+import { usePlantlogTodayCompliance, usePlantlogWeeklyTests, usePlantlogUserMap, type PlantlogWeeklyTest } from '../../hooks/usePlantlog';
+import { useWinterizationTasks, useWinterizationRealtime, currentWinterSeason, isWinterAction, WINTERIZATION_ACTION_LABEL } from '../../hooks/useWinterization';
+import { useChillers, useChillersRealtime, sortChillers, CHILLER_STATUSES, CHILLER_STATUS_LABEL, type ChillerStatus } from '../../hooks/useChillers';
 import {
   useBuildingEquipmentDown,
   useBuildingEquipmentDownRealtime,
@@ -68,7 +70,7 @@ import {
 } from '../../hooks/usePto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
-import { TV_LAYOUT_LABELS, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
+import { TV_LAYOUT_LABELS, TV_LAYOUT_SHORT, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
 import { useMe } from '../../hooks/useMe';
 import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
@@ -335,9 +337,10 @@ function TvViewInner() {
 // Header
 // ============================================================================
 
-/** Which board this is, and — for a kiosk account on rotate — the next
- *  board and a live countdown to the flip (user 2026-10-11). Ticks once a
- *  second only while rotating. Admins previewing a board see the name. */
+/** For a kiosk account on rotate: the next board and a live countdown to
+ *  the flip, right after the title ("UPark Operation → Coverage in 2:32",
+ *  user 2026-10-13). Ticks once a second only while rotating; renders
+ *  nothing otherwise — the title already carries the board's name. */
 function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const me = useMe().data;
   const prefs = (me?.preferences ?? {}) as Record<string, unknown>;
@@ -348,9 +351,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [rotating]);
-  if (!rotating) {
-    return <div className="tv-h-layout" title="Wall layout">{TV_LAYOUT_LABELS[layout]}</div>;
-  }
+  if (!rotating) return null;
   const at = new Date(tick);
   const next = nextRotateLayout(layout, parseTvLayoutsOff(prefs.tv_layouts_off));
   const left = msToNextRotateFlip(at, parseRotateMinutes(prefs.tv_rotate_minutes));
@@ -358,8 +359,7 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
   return (
     <div className="tv-h-layout tv-h-layout-rotate" title="Rotating — next board and time to the flip">
-      {TV_LAYOUT_LABELS[layout]}
-      <span className="tv-h-layout-next">→ {TV_LAYOUT_LABELS[next]} in {mm}:{ss}</span>
+      → {TV_LAYOUT_SHORT[next]} in {mm}:{ss}
     </div>
   );
 }
@@ -394,7 +394,10 @@ function Header({ now, oncall, weather, focusItems, layout }: {
   return (
     <header className="tv-header">
       <div className="tv-h-left">
-        <div className="tv-h-title">UPark</div>
+        {/* The board's name is the title (user 2026-10-13): "UPark
+            Operation", "UPark Coverage", "UPark TV0". */}
+        <div className="tv-h-title">UPark {TV_LAYOUT_LABELS[layout]}</div>
+        <TvLayoutBadge layout={layout} />
         <div className="tv-h-oncall">
           <div className="tv-h-oncall-block">
             <span className="tv-h-oncall-label">On-call</span>
@@ -426,7 +429,6 @@ function Header({ now, oncall, weather, focusItems, layout }: {
       </div>
 
       <div className="tv-h-right-cluster">
-        <TvLayoutBadge layout={layout} />
         {weather && wx && (
           <div className={`tv-h-weather ${isHot ? 'tv-h-weather-hot' : ''}`} title={`${wx.label}${weather.high != null ? ` · high ${Math.round(weather.high)}°F` : ''}`}>
             <span className="tv-h-wx-icon">{isHot ? '🔥' : wx.icon}</span>
@@ -476,6 +478,32 @@ function Panel({ title, children, accent, meta }: { title: string; children: Rea
  *  The Buildings sub-section here is the SAME content as the middle column's
  *  BuildingsPanel, surfaced again in the tall left panel so it's visible
  *  at glance height alongside the other workload-shape data. */
+/** Open WOs with no Cove update in 7+ days — same rule as §02 and the
+ *  watcher email (v_wo_stale). Most-stale first. Shared by TV1's tall
+ *  panel and TV2's Workload tile. */
+function useStaleWos(woRows: WoRow[], now: Date) {
+  return useMemo(() => {
+    return woRows
+      .filter((r) => r.is_open !== false)
+      .map((r) => ({ id: r.wo_id ?? '—', days: woDaysSinceUpdate(r, now) }))
+      .filter((r): r is { id: string; days: number } =>
+        r.days !== null && r.days >= WO_STALE_DAYS)
+      .sort((a, b) => b.days - a.days);
+  }, [woRows, now]);
+}
+
+function StaleWoStrip({ staleWos }: { staleWos: { id: string; days: number }[] }) {
+  if (staleWos.length === 0) return null;
+  return (
+    <div className="tv-wo-stale-strip" title="Open WOs with no Cove update in 7+ days">
+      <span className="tv-wo-stale-count">WO {WO_STALE_DAYS}d+ no update: {staleWos.length}</span>
+      <span className="tv-wo-stale-list">
+        {staleWos.map((w) => `${w.id} ${w.days}d`).join(' · ')}
+      </span>
+    </div>
+  );
+}
+
 function WorkloadPerformancePanel({
   pmRows, laborRows, engineers, shifts, closes, woCloses, woRows, laborDaily, pto, now,
   buildings, assignments, rounds,
@@ -510,16 +538,7 @@ function WorkloadPerformancePanel({
   // remain available for downstream tweaks without re-threading props.
   void closes; void woCloses;
 
-  // Open WOs with no Cove update in 7+ days — same rule as §02 and the
-  // watcher email (v_wo_stale). One compact strip, most-stale first.
-  const staleWos = useMemo(() => {
-    return woRows
-      .filter((r) => r.is_open !== false)
-      .map((r) => ({ id: r.wo_id ?? '—', days: woDaysSinceUpdate(r, now) }))
-      .filter((r): r is { id: string; days: number } =>
-        r.days !== null && r.days >= WO_STALE_DAYS)
-      .sort((a, b) => b.days - a.days);
-  }, [woRows, now]);
+  const staleWos = useStaleWos(woRows, now);
 
   return (
     <section className="tv-panel tv-panel-tall" style={{ borderTopColor: '#f59e0b' }}>
@@ -874,12 +893,11 @@ type HbDot = {
   stale: boolean;
 };
 
-function BmsHealthPanel() {
+/** §09 heartbeat dots — BMS vendors + the two Plantlog windows. Shared by
+ *  TV1's BMS panel and TV2's Heartbeat tile. */
+function useHeartbeatDots(): { hbRows: HbDot[]; hbAggr: { total: number; stale: number; live: number } } {
   const hbQ           = useBmsHeartbeats();
   const plantlogCompQ = usePlantlogTodayCompliance();
-  const emailOpenQ    = useEmailAlarmsOpen();
-  const emailStateQ   = useEmailPollState();
-  const eqDownQ       = useBuildingEquipmentDown();
 
   // §09 — Heartbeats. BMS vendors + 2 Plantlog windows (AM/PM) folded
   // into one dot row. Plantlog dots match the §06 chips: pre-deadline
@@ -932,6 +950,15 @@ function BmsHealthPanel() {
     const stale = hbRows.filter((r) => r.stale).length;
     return { total, stale, live: total - stale };
   }, [hbRows]);
+
+  return { hbRows, hbAggr };
+}
+
+function BmsHealthPanel() {
+  const emailOpenQ    = useEmailAlarmsOpen();
+  const emailStateQ   = useEmailPollState();
+  const eqDownQ       = useBuildingEquipmentDown();
+  const { hbRows, hbAggr } = useHeartbeatDots();
 
   // §10 — Email alarms
   const emailRows = emailOpenQ.data ?? [];
@@ -1818,7 +1845,6 @@ function tvBuildingLabel(p: OvertimePost): string {
 // (TV1 keeps the default 5; TV2 shows 10, user 2026-10-06), then "+N more";
 // with nothing open it's a one-line strip.
 const OT_TV_MAX_ROWS = 5;
-const OT_TV2_MAX_ROWS = 10;
 
 /** One row on the wall, whichever system the shift came from: the
  *  dashboard's own OT posts (§11, overtime_posts) and the OT viewer's
@@ -2317,25 +2343,43 @@ export function Tv2View() {
 }
 
 function Tv2ViewInner() {
-  // Live data — only the feeds these panels (and the header) read.
-  // OvertimeTvPanel subscribes to its own.
+  // Live data — the feeds these tiles (and the header) read.
+  useSnapshotRealtime();
   useOncallRealtime();
-  useOncallNotesRealtime();
   useFocusBoardRealtime();
+  useRoundsRealtime();
+  useShiftsRealtime();
+  useBuildingsRealtime();
+  useBuildingAssignmentsRealtime();
   usePtoRealtime();
-  useBuildingEquipmentDownRealtime();
+  useWinterizationRealtime();
+  useChillersRealtime();
 
-  const oncallQ         = useUpcomingOncall(12);
-  const participantsQ   = useOncallParticipants();
-  const oncallSettingsQ = useOncallSettings();
-  const oncallNotesQ    = useOncallNotes();
-  const weatherQ        = useWeather();
-  const eqDownQ         = useBuildingEquipmentDown();
+  const oncallQ      = useUpcomingOncall(12);
+  const weatherQ     = useWeather();
+  const pmQ          = useCurrentPmRows();
+  const closesQ      = useRecentPmCloses(14);
+  const woQ          = useCurrentWoRows();
+  const laborDailyQ  = useLaborDaily(14);
+  const roundsQ      = useRounds();
+  const shiftsQ      = useShifts();
+  const buildingsQ   = useBuildings();
+  const assignmentsQ = useCurrentBuildingAssignments();
   const { engineers, ptoRows, focusItems } = useUparkTvPeople();
+  const uparkBldgIds = useUparkBuildingIds();
+  const uparkBuildings = useMemo(
+    () => (buildingsQ.data ?? []).filter((b) => !uparkBldgIds || uparkBldgIds.has(b.id)),
+    [buildingsQ.data, uparkBldgIds],
+  );
 
   const now = useMinuteClock();
   useKioskCursorHide();
   useKioskAutoReload();
+
+  const bldg = useBuildingsRollup({
+    engineers, buildings: uparkBuildings,
+    assignments: assignmentsQ.data ?? [], rounds: roundsQ.data ?? [], shifts: shiftsQ.data ?? [],
+  });
 
   return (
     <div className="tv-root">
@@ -2348,35 +2392,356 @@ function Tv2ViewInner() {
         weather={weatherQ.data ?? null}
         focusItems={focusItems}
       />
+      {/* 3 × 3 (user 2026-10-13, sketch; buildings combined bottom-left
+          like TV1, same day): each column is a flex stack so a short tile
+          (heartbeats) yields its height to the taller ones. */}
       <main className="tv2-grid">
-        {/* Column 1 — PTO: the long view over the short view. */}
-        <div className="tv2-pto-col">
-          <PtoHeatmapTvPanel pto={ptoRows} now={now} />
-          <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
+        <div className="tv2-col">
+          <WorkloadTvPanel pmRows={pmQ.data ?? []} engineers={engineers} shifts={shiftsQ.data ?? []} woRows={woQ.data ?? []} now={now} />
+          <CrewTvPanel closes={closesQ.data ?? []} laborDaily={laborDailyQ.data ?? []} pto={ptoRows} now={now} />
+          <BuildingsTvPanel data={bldg} />
         </div>
-        {/* Columns 2–3 — OT across the top, then one panel per column. */}
-        <div className="tv2-right-block">
-          <OvertimeTvPanel now={now} maxRows={OT_TV2_MAX_ROWS} />
-          <div className="tv2-right-cols">
-            <OncallPanel
-              participants={participantsQ.data ?? []}
-              settings={oncallSettingsQ.data ?? null}
-              notes={oncallNotesQ.data ?? []}
-              now={now}
-            />
-            <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
-          </div>
+        <div className="tv2-col">
+          <HeartbeatTvPanel />
+          <WinterizationTvPanel now={now} />
+          {/* The sketch left this cell empty; the chiller status board
+              fills it (user 2026-10-13, replacing the LOTO tile). */}
+          <ChillersTvPanel />
+        </div>
+        <div className="tv2-col">
+          <WeeklyTestsTvPanel kind="water" now={now} />
+          <WeeklyTestsTvPanel kind="generator" now={now} />
         </div>
       </main>
     </div>
   );
 }
 
+// ── TV2 tiles ─────────────────────────────────────────────────────────────
+
+/** Workload · the due-today/overdue + next-14d section with the stale-WO
+ *  strip — TV1's top sub-section as a tile of its own. */
+function WorkloadTvPanel({ pmRows, engineers, shifts, woRows, now }: {
+  pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
+  engineers: EngineerRow[];
+  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
+  woRows: WoRow[];
+  now: Date;
+}) {
+  const staleWos = useStaleWos(woRows, now);
+  const pmAge = formatDataAge(now, pmRows[0]?.snapshot_taken_at ?? null);
+  return (
+    <section className="tv-panel" style={{ borderTopColor: '#f59e0b' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Workload · performance</h2>
+        <div className="tv-panel-meta">PM <b>{pmAge}</b></div>
+      </div>
+      <div className="tv-panel-body tv-wp-body">
+        <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
+        <StaleWoStrip staleWos={staleWos} />
+      </div>
+    </section>
+  );
+}
+
+/** PMs closed · labor — TV1's crew sub-section as a tile. */
+function CrewTvPanel({ closes, laborDaily, pto, now }: {
+  closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
+  laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
+  pto: PtoDayRow[];
+  now: Date;
+}) {
+  return (
+    <section className="tv-panel tv2-crew-panel" style={{ borderTopColor: '#f59e0b' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">PMs closed · labor</h2>
+        <div className="tv-panel-meta">last 8 days</div>
+      </div>
+      <div className="tv-panel-body tv-wp-body">
+        <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} now={now} />
+      </div>
+    </section>
+  );
+}
+
+/** Heartbeats — the §09 dot row (BMS vendors + Plantlog AM/PM) on its own. */
+function HeartbeatTvPanel() {
+  const { hbRows, hbAggr } = useHeartbeatDots();
+  return (
+    <section className="tv-panel tv2-fit" style={{ borderTopColor: '#dc2626' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Heartbeats</h2>
+        <div className="tv-panel-meta">
+          {hbAggr.total > 0 ? (
+            <>
+              <span style={{ color: hbAggr.stale === 0 ? '#34d399' : '#f8fafc', fontWeight: 700 }}>
+                {hbAggr.live}/{hbAggr.total}
+              </span> live
+              {hbAggr.stale > 0 && <span style={{ color: '#fca5a5', marginLeft: '0.4vw' }}>· {hbAggr.stale} stale</span>}
+            </>
+          ) : '—'}
+        </div>
+      </div>
+      <div className="tv-panel-body">
+        {hbRows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No heartbeats yet.</p>
+        ) : (
+          <ul className="tv-bms-hb-list tv2-hb-list">
+            {hbRows.map((r) => (
+              <li key={r.key}>
+                <span className={`tv-bms-hb-dot ${r.stale ? 'stale' : 'live'}`} />
+                <span className="tv-bms-hb-name">{r.label}</span>
+                <span className="tv-bms-hb-age" style={{ color: r.stale ? '#fca5a5' : '#94a3b8' }}>{r.ageLabel}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Weekly tests — the shop's two paper boards ("Weekly Generator Test",
+// "Weekly Water Treatment Test": building · date · initials) fed from
+// Plantlog's v_plantlog_weekly_tests_status, one row per log. The
+// calendar-week rule is the manager §07 panel's (Mon–Sun ET), copied so
+// the wall stays independent of the manager components:
+//   fresh   ✓  done this week        pending   done last week, this week open
+//   overdue ⚠  last week went by without a completion
+
+function startOfWeekMondayET(d: Date): Date {
+  const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  const offset = day === 0 ? 6 : day - 1;
+  const monday = new Date(et);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - offset);
+  return monday;
+}
+type WeeklyStatus = 'fresh' | 'pending' | 'overdue';
+function weeklyTestStatus(lastDoneUtc: string, now: Date): WeeklyStatus {
+  const lastDone = new Date(lastDoneUtc);
+  const thisWeek = startOfWeekMondayET(now);
+  const lastWeek = new Date(thisWeek); lastWeek.setDate(lastWeek.getDate() - 7);
+  if (lastDone >= thisWeek) return 'fresh';
+  if (lastDone >= lastWeek) return 'pending';
+  return 'overdue';
+}
+/** Initials for the board's "who" column: full name when the Plantlog
+ *  username maps to a profile ("Brandon Gonzalez" → "BG"), else the
+ *  username's own capitals ("PiotrOlszewski" → "PO", "Bgonzalez" → "BG"). */
+function plantlogInitials(user: string | null, fullName: string | null | undefined): string {
+  if (fullName) return heatInitials(fullName);
+  if (!user) return '—';
+  const m = user.match(/^([A-Za-z])[a-z]*([A-Z])/);
+  return (m ? m[1] + m[2] : user.slice(0, 2)).toUpperCase();
+}
+type WeeklyBoardRow = { key: string; code: string; label: string; date: string; who: string; status: WeeklyStatus };
+function weeklyBoardRows(
+  rows: PlantlogWeeklyTest[],
+  kind: 'water' | 'generator',
+  userMap: Map<string, { full_name: string; user_id: string }> | undefined,
+  now: Date,
+): WeeklyBoardRow[] {
+  const out: WeeklyBoardRow[] = rows
+    .filter((r) => r.test_type === kind)
+    .map((r) => {
+      const code = (r.building ?? '').match(/^(\d+)/)?.[1] ?? r.log_name.match(/(\d+)\s*$/)?.[1] ?? '—';
+      let label: string;
+      if (kind === 'water') {
+        label = r.log_name.replace(/^water\s*test\s*/i, '').replace(/\s*\d+\s*$/, '').trim() || 'Weekly test';
+      } else {
+        const a = (r.activity_name ?? '').replace(/^\d+\s*/, '').replace(/generator/ig, '').replace(/\s+/g, ' ').trim();
+        label = a || r.log_name.replace(/generator/ig, '').replace(/weekly\s*test/ig, '').replace(/\d+\s*$/, '').replace(/\s+/g, ' ').trim();
+      }
+      return {
+        key: r.log_name,
+        code,
+        label,
+        date: new Date(r.last_done_utc).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric' }),
+        who: plantlogInitials(r.last_by_user, r.last_by_user ? userMap?.get(r.last_by_user)?.full_name : null),
+        status: weeklyTestStatus(r.last_done_utc, now),
+      };
+    });
+  return out.sort((a, b) =>
+    (parseInt(a.code, 10) || 9999) - (parseInt(b.code, 10) || 9999) || a.label.localeCompare(b.label));
+}
+
+function WeeklyTestsTvPanel({ kind, now }: { kind: 'water' | 'generator'; now: Date }) {
+  const testsQ = usePlantlogWeeklyTests();
+  const userMapQ = usePlantlogUserMap();
+  const rows = useMemo(
+    () => weeklyBoardRows(testsQ.data ?? [], kind, userMapQ.data, now),
+    [testsQ.data, kind, userMapQ.data, now],
+  );
+  const fresh = rows.filter((r) => r.status === 'fresh').length;
+  const overdue = rows.filter((r) => r.status === 'overdue').length;
+  // Short titles: at TV2's 28% column the "· weekly" wrapped; "this week" in
+  // the meta already says the cadence.
+  const title = kind === 'water' ? 'Water treatment' : 'Generator test';
+  return (
+    <section className="tv-panel" style={{ borderTopColor: kind === 'water' ? '#eab308' : '#f97316' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">{title}</h2>
+        <div className="tv-panel-meta">
+          <span style={{ color: fresh === rows.length && rows.length > 0 ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{fresh}/{rows.length}</span> this week
+          {overdue > 0 && <span style={{ color: '#fca5a5', marginLeft: '0.4vw' }}>· {overdue} overdue</span>}
+        </div>
+      </div>
+      <div className="tv-panel-body" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {rows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No tests logged yet.</p>
+        ) : (
+          <>
+            <div className="tv-wt-row tv-wt-head">
+              <span>{kind === 'water' ? 'Bldg' : 'Gen'}</span><span>{kind === 'water' ? 'Loop' : 'Unit'}</span><span>Date</span><span>By</span><span />
+            </div>
+            <ul className="tv-wt-list">
+              {rows.map((r) => (
+                <li key={r.key} className={`tv-wt-row tv-wt-${r.status}`}>
+                  <span className="tv-wt-code">{r.code}</span>
+                  <span className="tv-wt-label" title={r.key}>{r.label}</span>
+                  <span className="tv-wt-date">{r.date}</span>
+                  <span className="tv-wt-who">{r.who}</span>
+                  <span className="tv-wt-status">{r.status === 'fresh' ? '✓' : r.status === 'overdue' ? '⚠' : ''}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Winterization — the "Cold Weather Prep" whiteboard (0145–0148),
+ *  current season. The to-do is the action: a task shows "TO DO · DRAIN"
+ *  (amber) until someone marks it done, then "DRAINED 10/14 · SM" — green
+ *  for the fall actions (drain / winter mode), blue once a spring action
+ *  (fill / summer mode) is done. */
+function WinterizationTvPanel({ now }: { now: Date }) {
+  const season = currentWinterSeason(now);
+  const q = useWinterizationTasks(season);
+  const rows = q.data ?? [];
+  const done = rows.filter((r) => r.done_at).length;
+  return (
+    <section className="tv-panel tv2-fit" style={{ borderTopColor: '#38bdf8' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Winterization</h2>
+        <div className="tv-panel-meta">
+          cold weather prep · <span style={{ color: rows.length > 0 && done === rows.length ? '#34d399' : '#f8fafc', fontWeight: 700 }}>{done}/{rows.length}</span> done · {season}
+        </div>
+      </div>
+      <div className="tv-panel-body">
+        {rows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No tasks listed for {season}.</p>
+        ) : (
+          <ul className="tv-wz-list">
+            {rows.map((r) => {
+              const isDone = !!r.done_at;
+              const tone = !isDone ? 'wait' : isWinterAction(r.action) ? 'good' : 'off';
+              const label = WINTERIZATION_ACTION_LABEL[r.action];
+              return (
+                <li key={r.id} className={`tv-wz-row${isDone ? ' tv-wz-done' : ''}`}>
+                  <span className={`tv-wz-status tv-wz-status-${tone}`}>
+                    {isDone ? label.done.replace(' mode', '') : `To do · ${label.todo.replace(' mode', '')}`}
+                  </span>
+                  <span className="tv-wz-code">{r.building_code}</span>
+                  <span className="tv-wz-task">{r.task}</span>
+                  <span className="tv-wz-meta">
+                    {r.done_at
+                      ? `${new Date(r.done_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.done_by_name ? ` · ${shortName(r.done_by_name)}` : ''}`
+                      : ''}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Chillers — the chiller status board (0149 / 0150): every chiller with
+ *  its shop state (open · punching · rat race = chemical run on a closed
+ *  chiller · closed) and the date + who set it. Sorted by state with
+ *  closed last and split into two columns (user 2026-10-13); header
+ *  counts per state. */
+const TV_CHILLER_TONE: Record<ChillerStatus, string> = {
+  open: 'open', punching: 'punching', rat_race: 'ratrace', closed: 'closed',
+};
+function ChillersTvPanel() {
+  const q = useChillers();
+  const rows = useMemo(() => sortChillers(q.data ?? []), [q.data]);
+  const counts = CHILLER_STATUSES.map((s) => ({ s, n: rows.filter((r) => r.status === s).length }));
+  // Two columns, first half left, second half right — reads top-down
+  // then across, so the sort stays obvious.
+  const half = Math.ceil(rows.length / 2);
+  const cols = [rows.slice(0, half), rows.slice(half)];
+  return (
+    <section className="tv-panel" style={{ borderTopColor: '#22d3ee' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Chillers</h2>
+        <div className="tv-panel-meta">
+          {counts.map(({ s, n }, i) => (
+            <span key={s}>
+              {i > 0 && <span style={{ color: '#475569', margin: '0 0.3vw' }}>·</span>}
+              <span className={`tv-ch-count tv-ch-count-${TV_CHILLER_TONE[s]}`}>{n}</span> {CHILLER_STATUS_LABEL[s].toLowerCase()}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="tv-panel-body">
+        {rows.length === 0 ? (
+          <p className="tv-muted" style={{ fontSize: '0.78vw', margin: 0 }}>No chillers listed.</p>
+        ) : (
+          <div className="tv-ch-cols">
+            {cols.map((col, i) => (
+              <ul key={i} className="tv-ch-list">
+                {col.map((r) => (
+                  <li key={r.id} className={`tv-ch-row tv-ch-row-${TV_CHILLER_TONE[r.status]}`}>
+                    <span className="tv-ch-code">{r.building_code}</span>
+                    <span className="tv-ch-name">{r.name ?? <span style={{ color: '#64748b' }}>chiller</span>}</span>
+                    <span className={`tv-ch-status tv-ch-status-${TV_CHILLER_TONE[r.status]}`}>{CHILLER_STATUS_LABEL[r.status]}</span>
+                    <span className="tv-ch-meta">
+                      {r.status_at
+                        ? `${new Date(r.status_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}${r.status_by_name ? ` · ${shortName(r.status_by_name)}` : ''}`
+                        : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Buildings · rounds + assignments — TV1's rollup block (Rounds · Engineer
+ *  · Assignments by shift, leads' coverage underneath) as a tile of its own. */
+function BuildingsTvPanel({ data }: { data: BuildingsRollup }) {
+  return (
+    <section className="tv-panel" style={{ borderTopColor: '#a78bfa' }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">Buildings</h2>
+        <div className="tv-panel-meta">rounds + assignments · ★ leads</div>
+      </div>
+      <div className="tv-panel-body">
+        <BuildingsInner data={data} />
+      </div>
+    </section>
+  );
+}
+
 // ── TV3 — the wide-right coverage board (user 2026-10-09) ─────────────────
 //
 // TV2's panels in three side-by-side sections instead of TV2's strip-over-
-// two-columns — 20% / 45% / 35% of the screen (user 2026-10-11; the right
-// column is pinned at 35%, the left was squeezed to give overtime room):
+// two-columns — 20% / 56% / 24% of the screen (user 2026-10-13; the right
+// column was pinned at 35%, narrowed to 22% to widen overtime, then settled
+// at 24%):
 // col 1 = PTO heat map (month spelled in each week's date label) over 7-day
 // Coverage; col 2 = EVERY overtime coverage post incl. yesterday's, compact
 // rows; col 3 = On-call schedule over LOTO · Equipment, with the narrow-
@@ -2409,7 +2774,7 @@ function Tv3ViewInner() {
   useKioskAutoReload();
 
   return (
-    <div className="tv-root">
+    <div className="tv-root tv3-root">
       <TvStyles />
       <Tv2Styles />
       <Tv3Styles />
@@ -2426,12 +2791,79 @@ function Tv3ViewInner() {
           <PtoHeatmapTvPanel pto={ptoRows} now={now} monthInDate />
           <CoverageTvPanel engineers={engineers} pto={ptoRows} now={now} workDays={7} fit />
         </div>
-        {/* Section 2 (45%) — every OT post incl. yesterday's, compact rows;
+        {/* Section 2 (56%) — every OT post incl. yesterday's, compact rows;
             useFittingRows still hides whatever can't fit and counts it in
             "+N more". */}
         <OvertimeTvPanel now={now} maxRows={Infinity} compact />
-        {/* Section 3 (35%) — on-call grid (content-sized) over equipment
+        {/* Section 3 (24%) — on-call grid (content-sized) over equipment
             (takes the rest). */}
+        <div className="tv3-right-col">
+          <OncallPanel
+            participants={participantsQ.data ?? []}
+            settings={oncallSettingsQ.data ?? null}
+            notes={oncallNotesQ.data ?? []}
+            now={now}
+          />
+          <EquipmentTvPanel eqDown={eqDownQ.data ?? []} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ── TV4 "OT Heat Map" ─────────────────────────────────────────────────────
+//
+// TV3 with its left column swapped (user 2026-10-14): the OT coverage heat
+// map (OvertimeHeatmapTvPanel) where TV3 shows the PTO heat map + 7-day
+// coverage. Middle (every OT post incl. yesterday) and right (on-call +
+// LOTO) columns, the 20/56/24 split and the edge-hugging padding are TV3's.
+export function Tv4View() {
+  return (
+    <QueryClientProvider client={kioskClient}>
+      <Tv4ViewInner />
+    </QueryClientProvider>
+  );
+}
+
+function Tv4ViewInner() {
+  useOncallRealtime();
+  useOncallNotesRealtime();
+  useFocusBoardRealtime();
+  useBuildingEquipmentDownRealtime();
+
+  const oncallQ         = useUpcomingOncall(12);
+  const participantsQ   = useOncallParticipants();
+  const oncallSettingsQ = useOncallSettings();
+  const oncallNotesQ    = useOncallNotes();
+  const weatherQ        = useWeather();
+  const eqDownQ         = useBuildingEquipmentDown();
+  const { focusItems } = useUparkTvPeople();
+
+  const now = useMinuteClock();
+  useKioskCursorHide();
+  useKioskAutoReload();
+
+  return (
+    <div className="tv-root tv3-root">
+      <TvStyles />
+      <Tv2Styles />
+      <Tv3Styles />
+      <Tv4Styles />
+      <Header
+        layout="tv4"
+        now={now}
+        oncall={oncallQ.data ?? []}
+        weather={weatherQ.data ?? null}
+        focusItems={focusItems}
+      />
+      <main className="tv3-grid">
+        {/* Section 1 (20%) — OT coverage heat map, the whole column. */}
+        <div className="tv2-pto-col tv3-left-col tv4-left-col">
+          <OvertimeHeatmapTvPanel now={now} />
+        </div>
+        {/* Section 2 (56%) — every OT post incl. yesterday's (TV3's). */}
+        <OvertimeTvPanel now={now} maxRows={Infinity} compact />
+        {/* Section 3 (24%) — on-call grid over equipment (TV3's). */}
         <div className="tv3-right-col">
           <OncallPanel
             participants={participantsQ.data ?? []}
@@ -2662,6 +3094,207 @@ function PtoHeatmapTvPanel({ pto, now, monthInDate = false }: {
   );
 }
 
+// ── OT coverage heat map (TV4) ────────────────────────────────────────────
+//
+// The manager page's overtime coverage heat map (components/
+// OvertimeHeatmap.tsx), read-only and restyled for the wall, in TV4's left
+// column (user 2026-10-14). One row per Mon–Sun week — OT_HEAT_TV_PAST_WEEKS
+// of history, then the current week and ahead, OT_HEAT_TV_WEEKS rows in all
+// — each cell a day of overtime:
+//   · colour = open slots that day: nothing posted (grey), every slot
+//     filled (green), 1 open (amber), 2 (orange), 3+ (red)
+//   · label = sign-up initials when the day has one shift with 1–2 names,
+//     else filled/needed; a corner badge counts 2+ shifts; a teal corner
+//     dot marks an OT-viewer (Outlook) job on the day
+//   · a shift lands on the LOCAL date it starts (an overnight post is one
+//     night); weekends are NOT dimmed — off-hour work lands on them
+// Sources are the middle column's: every post but cancelled ones, and the
+// OT viewer mirror (what's coming) + its permanent log (what ran; ghosts
+// that dropped off before they started excluded). Copied rather than
+// imported, like the PTO map, so the manager panel's interactive code
+// stays out of the kiosk.
+const OT_HEAT_TV_WEEKS = 14;
+const OT_HEAT_TV_PAST_WEEKS = 1;
+
+type OtHeatCell = {
+  iso: string;
+  isToday: boolean;
+  isPast: boolean;
+  shifts: TvOtRow[];
+  needed: number;
+  filled: number;
+  open: number;
+  holiday: boolean;
+};
+type OtHeatWeek = {
+  key: string;
+  labelLong: string;   // the week's Monday as "Oct 13"
+  banded: boolean;
+  isCurrent: boolean;
+  cells: OtHeatCell[];
+};
+
+function buildOtHeatWeeks(shifts: TvOtRow[], todayIso: string, pastWeeks: number, weeks: number): OtHeatWeek[] {
+  const start = addDays(mondayOf(new Date(todayIso + 'T00:00:00')), -pastWeeks * 7);
+  const byDay = new Map<string, TvOtRow[]>();
+  for (const r of shifts) {
+    const iso = localISODate(new Date(r.startsAt));
+    const list = byDay.get(iso);
+    if (list) list.push(r);
+    else byDay.set(iso, [r]);
+  }
+  for (const list of byDay.values()) list.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const holidays = new Set(BMR_HOLIDAYS.map((h) => h.date));
+
+  const out: OtHeatWeek[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const monday = addDays(start, w * 7);
+    const cells: OtHeatCell[] = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = localISODate(addDays(monday, i));
+      const day = byDay.get(iso) ?? [];
+      cells.push({
+        iso,
+        isToday: iso === todayIso,
+        isPast: iso < todayIso,
+        shifts: day,
+        needed: day.reduce((n, r) => n + r.needed, 0),
+        filled: day.reduce((n, r) => n + r.filled, 0),
+        open: day.reduce((n, r) => n + Math.max(r.needed - r.filled, 0), 0),
+        holiday: holidays.has(iso),
+      });
+    }
+    const tue = addDays(monday, 1);
+    out.push({
+      key: cells[0].iso,
+      labelLong: monday.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      banded: tue.getMonth() % 2 === 1,
+      isCurrent: w === pastWeeks,
+      cells,
+    });
+  }
+  return out;
+}
+
+/** Cell colour class suffix: none · ok · o1 · o2 · o3. */
+function otHeatTone(c: OtHeatCell): string {
+  if (c.shifts.length === 0) return 'none';
+  if (c.open <= 0) return 'ok';
+  return c.open === 1 ? 'o1' : c.open === 2 ? 'o2' : 'o3';
+}
+
+/** In-cell text: initials for one shift with 1–2 sign-ups, else the day's
+ *  filled/needed — digits always mean slots, never a name. */
+function otHeatParts(c: OtHeatCell): string[] {
+  if (c.shifts.length === 0) return [];
+  if (c.shifts.length === 1) {
+    const names = c.shifts[0].names;
+    if (names.length >= 1 && names.length <= 2) return names.map(heatInitials);
+  }
+  return [`${c.filled}/${c.needed}`];
+}
+
+function OvertimeHeatmapTvPanel({ now }: { now: Date }) {
+  const postsQ   = useOvertimePosts();
+  const apiJobsQ = useOtApiJobs();
+  // Keyed on the date, not the minute clock, so the grid rebuilds once a day
+  // and the log query's key doesn't churn.
+  const todayIso = localISODate(now);
+  const sinceIso = useMemo(
+    () => addDays(mondayOf(new Date(todayIso + 'T00:00:00')), -OT_HEAT_TV_PAST_WEEKS * 7).toISOString(),
+    [todayIso],
+  );
+  const logQ = useOtApiJobsLog(sinceIso);
+
+  const weeks = useMemo(() => {
+    const posts = (postsQ.data ?? []).filter((p) => p.status !== 'cancelled').map(postToTvRow);
+    const live = apiJobsQ.data ?? [];
+    const liveIds = new Set(live.map((j) => j.id));
+    const logged = (logQ.data ?? []).filter((j) => !liveIds.has(j.id) && otApiJobHappened(j));
+    return buildOtHeatWeeks(
+      [...posts, ...live.map(apiJobToTvRow), ...logged.map(apiJobToTvRow)],
+      todayIso, OT_HEAT_TV_PAST_WEEKS, OT_HEAT_TV_WEEKS,
+    );
+  }, [postsQ.data, apiJobsQ.data, logQ.data, todayIso]);
+
+  // Title-row tally: today and ahead only (history is on the grid, faded).
+  const ahead = useMemo(() => {
+    let shifts = 0, open = 0;
+    for (const wk of weeks) for (const c of wk.cells) if (!c.isPast) { shifts += c.shifts.length; open += c.open; }
+    return { shifts, open };
+  }, [weeks]);
+  const lastIso = weeks[weeks.length - 1].cells[6].iso;
+  const lastLong = new Date(lastIso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Short, so the title row stays on one line in the 20% column; the
+  // horizon's end shows in the last row's date anyway.
+  const meta = ahead.shifts === 0
+    ? `nothing posted to ${lastLong}`
+    : `${ahead.shifts} shift${ahead.shifts === 1 ? '' : 's'} · ${ahead.open === 0 ? 'all covered' : `${ahead.open} open`}`;
+
+  return (
+    <section className="tv-panel tv-heat-panel tv-heat-md tv-oth-panel" style={{ borderTopColor: TV_OT_API_DOT }}>
+      <div className="tv-panel-titlerow">
+        <h2 className="tv-panel-title">OT heat map</h2>
+        <div className="tv-panel-meta">{meta}</div>
+      </div>
+      <div className="tv-panel-body tv-heat-body">
+        <div className="tv-heat-legend">
+          <span className="tv-heat-legend-item">overtime:</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-none" />none</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-ok" />covered</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o1" />1 open</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o2" />2</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-oth-o3" />3+</span>
+          <span className="tv-heat-legend-item"><span className="tv-oth-badge tv-oth-legend">2</span>shifts</span>
+          <span className="tv-heat-legend-item"><span className="tv-oth-api tv-oth-legend" />OT viewer</span>
+          <span className="tv-heat-legend-item"><span className="tv-heat-swatch tv-heat-holiday" />holiday</span>
+        </div>
+        <div className="tv-heat-dow">
+          <span />
+          {HEAT_DOW.map((d) => <span key={d}>{d}</span>)}
+        </div>
+        <div
+          className="tv-heat-weeks"
+          style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+        >
+          {weeks.map((wk) => (
+            <div
+              key={wk.key}
+              className={[
+                'tv-heat-week',
+                wk.banded && 'tv-heat-week-banded',
+                wk.isCurrent && 'tv-heat-week-current',
+              ].filter(Boolean).join(' ')}
+            >
+              <span className="tv-heat-date">{wk.labelLong}</span>
+              {wk.cells.map((c) => (
+                <span
+                  key={c.iso}
+                  className={[
+                    'tv-heat-cell',
+                    'tv-oth-cell',
+                    `tv-oth-${otHeatTone(c)}`,
+                    c.isPast && 'tv-heat-past',
+                    c.holiday && 'tv-heat-holiday',
+                    c.isToday && 'tv-heat-today',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {/* No separator: two sets of initials stack on two lines in
+                      the tall TV4 cells (the cell wraps), so the type can be
+                      a size the shop floor can read. */}
+                  {otHeatParts(c).map((t, i) => <span key={i}>{t}</span>)}
+                  {c.shifts.length > 1 && <span className="tv-oth-badge">{c.shifts.length}</span>}
+                  {c.shifts.some((r) => r.key.startsWith('api:')) && <span className="tv-oth-api" />}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** How many of a clipped list's rows fit completely. The list keeps every
  *  row in the DOM (its overflow:hidden does the clipping) so the count can
  *  be re-measured whenever the box or a row changes size — the neighbouring
@@ -2730,18 +3363,24 @@ function EquipmentTvPanel({ eqDown }: { eqDown: BuildingEquipmentStatusRow[] }) 
 // Styles
 // ============================================================================
 
-/** TV3 grid: three side-by-side sections, 20% / 45% / 35% of the screen —
+/** TV3 grid: three side-by-side sections, 20% / 56% / 24% of the screen —
  *  fr units, so the split is locked whatever the panels contain (every
  *  child is min-width:0). Heat-map and equipment CSS come from Tv2Styles,
  *  which TV3 also mounts. */
 function Tv3Styles() {
   return (
     <style>{`
+      /* TV3 hugs the screen edges (user 2026-10-13, twice: less margin on
+         the left and right panels) — a near-zero outer gutter, and the
+         outer panels' own side padding halved so their content sits
+         closer to the bezel too. TV1/TV2 unchanged. */
+      .tv3-root { padding: 0.3vw 0.12vw 0.25vw; }
+      .tv3-left-col > .tv-panel, .tv3-right-col > .tv-panel { padding-left: 0.4vw; padding-right: 0.4vw; }
       .tv3-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 20fr 45fr 35fr;
-        gap: 0.6vw;
+        grid-template-columns: 20fr 56fr 24fr;
+        gap: 0.5vw;
         min-height: 0;
         min-width: 0;
       }
@@ -2773,11 +3412,18 @@ function Tv3Styles() {
          spacing. Past rows (yesterday's coverage) are dimmed. */
       .tv-ot-panel-compact .tv-ot-row { grid-template-columns: 1fr; font-size: 0.74vw; line-height: 1.2; padding: 0.1vw 0.3vw; }
       .tv-ot-panel-compact .tv-ot-l1 { grid-template-columns: 13.5vw minmax(0, 2fr) 2.2vw minmax(0, 1fr); }
+      /* Staffing lane wraps (user 2026-10-13) so three or more sign-ups
+         are all legible instead of "AustinM · JorgeF…"; the row grows. */
+      .tv-ot-panel-compact .tv-ot-l1 > .tv-ot-slots {
+        white-space: normal; overflow: visible; text-overflow: clip;
+        line-height: 1.25;
+      }
+      .tv-ot-panel-compact .tv-ot-slots > span { white-space: nowrap; }
       .tv-ot-panel-compact .tv-ot-l2 { font-size: 0.68vw; }
       .tv-ot-panel-compact .tv-ot-list { gap: 0.1vw; }
       .tv-ot-row-past { opacity: 0.5; }
 
-      /* Right 35%: the on-call grid's "m/d-m/d" ranges may still not fit
+      /* Right 24%: the on-call grid's "m/d-m/d" ranges won't fit
          seven columns, so the cells may break at the hyphen onto a second
          line and the type steps down a notch. */
       .tv3-right-col .tv-oncall-grid { font-size: 0.6vw; }
@@ -2792,6 +3438,52 @@ function Tv3Styles() {
       .tv3-right-col > .tv-panel:first-child .tv-panel-title { white-space: nowrap; }
       .tv3-right-col .tv-oncall-notes { flex-direction: column; gap: 0.08vw; }
       .tv3-right-col .tv-oncall-note { flex: 0 0 auto; }
+    `}</style>
+  );
+}
+
+/** TV4: TV3's grid; the left column is the OT coverage heat map alone, so
+ *  with 14 week rows instead of 20 the cells are taller and the type can
+ *  step up. Cell colours are open-slot counts, not the PTO cap. */
+function Tv4Styles() {
+  return (
+    <style>{`
+      /* The map is the column's only panel — so also its :last-child, which
+         Tv2Styles sizes to content; this later rule of equal specificity
+         gives it the whole column back. */
+      .tv4-left-col > .tv-heat-panel:last-child { flex: 1 1 0; min-height: 0; }
+      .tv4-left-col .tv-heat-date { font-size: 0.62vw; }
+      /* 14 rows → cells ~60px tall but only ~40px wide: let two initials
+         wrap onto two lines rather than shrink the type. */
+      .tv4-left-col .tv-heat-cell {
+        font-size: 0.78vw;
+        flex-wrap: wrap; align-content: center;
+        column-gap: 0.3vw; row-gap: 0.08vw;
+      }
+      .tv4-left-col .tv-heat-legend { font-size: 0.58vw; gap: 0.1vw 0.5vw; }
+      .tv-oth-cell { position: relative; }
+      .tv-oth-none { background: rgba(148, 163, 184, 0.10); }
+      .tv-oth-ok   { background: rgba(34, 197, 94, 0.45); }
+      .tv-oth-o1   { background: rgba(234, 179, 8, 0.50); }
+      .tv-oth-o2   { background: rgba(234, 88, 12, 0.65); }
+      .tv-oth-o3   { background: rgba(220, 38, 38, 0.75); }
+      /* Shift-count badge (top right) and OT-viewer dot (bottom right). */
+      .tv-oth-badge {
+        position: absolute; top: 0.08vw; right: 0.08vw;
+        min-width: 0.66vw; height: 0.66vw; padding: 0 0.1vw;
+        border-radius: 999px;
+        background: #f8fafc; color: #0b1220;
+        font-size: 0.44vw; font-weight: 800; line-height: 0.66vw; text-align: center;
+        box-sizing: border-box;
+      }
+      .tv-oth-api {
+        position: absolute; bottom: 0.1vw; right: 0.1vw;
+        width: 0.42vw; height: 0.42vw; border-radius: 50%;
+        background: ${TV_OT_API_DOT};
+        border: 1px solid rgba(11, 18, 32, 0.6);
+        box-sizing: border-box;
+      }
+      .tv-oth-legend { position: static; display: inline-block; flex: 0 0 auto; }
     `}</style>
   );
 }
@@ -2850,18 +3542,22 @@ function TvStyles() {
       }
       .tv-h-oncall-next .tv-h-oncall-name { color: #94a3b8; font-size: 0.95vw; font-weight: 600; }
 
-      /* Board name badge (+ rotate countdown) at the left of the right cluster */
+      /* Rotate chip right after the title: "→ Perf & Status in 2:32".
+         Bigger and brighter than the rest of the header (user 2026-10-13:
+         "so everyone is aware") — amber text on an amber tint with a soft
+         glow, nearly title-sized. */
       .tv-h-layout {
-        display: inline-flex; align-items: baseline; gap: 0.4vw;
-        font-size: 0.72vw; font-weight: 700; letter-spacing: 0.12em;
-        color: #94a3b8;
-        border: 1px solid #334155; border-radius: 3px;
-        padding: 0.12vw 0.5vw;
+        display: inline-flex; align-items: baseline; gap: 0.45vw;
+        font-size: 1.05vw; font-weight: 700; letter-spacing: 0.04em;
+        color: #fde68a;
+        background: rgba(251, 191, 36, 0.14);
+        border: 1px solid rgba(251, 191, 36, 0.6); border-radius: 4px;
+        box-shadow: 0 0 0.6vw rgba(251, 191, 36, 0.25);
+        padding: 0.15vw 0.7vw;
         flex: 0 0 auto;
         font-variant-numeric: tabular-nums;
+        align-self: center;
       }
-      .tv-h-layout-rotate { color: #e2e8f0; border-color: #475569; }
-      .tv-h-layout-next { font-weight: 500; letter-spacing: 0.04em; color: #94a3b8; }
 
       /* Center: top-2 announcements pulled from the focus board */
       .tv-h-center {
@@ -4004,26 +4700,138 @@ function TvStyles() {
 function Tv2Styles() {
   return (
     <style>{`
-      /* Three equal columns, like TV1. Column 1 is the PTO stack; columns
-         2–3 are one block (OT strip over a 2-column row) whose inner
-         columns line up with the outer thirds. */
+      /* TV2 — 3 × 3 (user 2026-10-13): three columns (30 / 42 / 28), each a
+         flex stack of tiles that share the column's height by content. The
+         sketch's bottom-right cell is empty, so the test boards share the
+         whole third column. */
       .tv2-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 30fr 42fr 28fr;   /* user 2026-10-13: left 30, right 28, middle takes the rest */
         gap: 0.6vw;
         min-height: 0;
         min-width: 0;
       }
-      /* Same guard as .tv-grid: content adapts to its track, never the
-         reverse. */
       .tv2-grid > * { min-width: 0; min-height: 0; }
+      .tv2-col { display: flex; flex-direction: column; gap: 0.5vw; min-height: 0; }
+      .tv2-col > .tv-panel { flex: 1 1 auto; min-height: 0; padding: 0.4vw 0.7vw 0.45vw; }
+      .tv2-col > .tv-panel .tv-panel-titlerow { margin-bottom: 0.25vw; }
+      /* The crew block carries its own section label from TV1's tall panel;
+         inside a titled tile that's a duplicate row — hide it. */
+      .tv2-crew-panel .tv-workload-section-label { display: none; }
+      /* Content-sized tiles (the heartbeat dot row, the winterization list)
+         leave their height to the column's other tiles — on TV2 that is the
+         equipment list, which trims itself to whatever is left. */
+      .tv2-col > .tv-panel.tv2-fit { flex: 0 0 auto; }
+      .tv2-hb-list { gap: 0.35vw 1vw; }
+      .tv2-hb-list li { font-size: 0.9vw; }
 
-      /* PTO column. Coverage is content-sized; the heat map takes the rest
-         and its week rows stretch to fill it. The heat map's floor — its
-         title/legend/header (~5.4vw) plus ~0.97vw per week row — keeps the
-         rows tall enough to read, so in a very heavy week it is Coverage
-         that gives way (dropping whole days — see its fit prop). */
+      /* Weekly test boards — building · loop/unit · date · initials · ✓/⚠ */
+      .tv-wt-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.1vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-wt-row {
+        display: grid;
+        grid-template-columns: 2.6vw minmax(0, 1fr) 3vw 2.4vw 1.2vw;
+        gap: 0.4vw;
+        align-items: baseline;
+        font-size: 0.82vw;
+        line-height: 1.25;
+        padding: 0.08vw 0.35vw;
+        border-radius: 2px;
+      }
+      .tv-wt-row > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .tv-wt-head {
+        font-size: 0.56vw; text-transform: uppercase; letter-spacing: 0.1em;
+        color: #64748b; padding-bottom: 0.15vw; margin-bottom: 0.1vw;
+        border-bottom: 1px solid #1e293b; flex: 0 0 auto;
+      }
+      .tv-wt-code { font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+      .tv-wt-label { color: #cbd5e1; }
+      .tv-wt-date { color: #e2e8f0; font-variant-numeric: tabular-nums; text-align: right; }
+      .tv-wt-who { color: #94a3b8; font-weight: 600; text-align: right; }
+      .tv-wt-status { text-align: center; font-weight: 800; }
+      .tv-wt-fresh { background: rgba(34, 197, 94, 0.10); }
+      .tv-wt-fresh .tv-wt-status { color: #34d399; }
+      .tv-wt-pending .tv-wt-status { color: #64748b; }
+      .tv-wt-overdue { background: rgba(239, 68, 68, 0.10); }
+      .tv-wt-overdue .tv-wt-status, .tv-wt-overdue .tv-wt-date { color: #fca5a5; }
+
+      /* Winterization list — status chip · bldg · task (wraps) · date · who */
+      .tv-wz-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.15vw;
+        min-height: 0; overflow: hidden;
+      }
+      .tv-wz-row {
+        display: grid;
+        grid-template-columns: 6.6vw 3.2vw minmax(0, 1fr) auto;   /* chip lane fits "TO DO · WINTER" */
+        gap: 0.45vw;
+        align-items: baseline;
+        font-size: 0.84vw;
+        line-height: 1.25;
+        padding: 0.12vw 0.35vw;
+        border-radius: 2px;
+      }
+      .tv-wz-row > span { min-width: 0; }
+      .tv-wz-status {
+        font-size: 0.6vw; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+        padding: 0.05vw 0.35vw; border-radius: 3px; text-align: center; white-space: nowrap;
+      }
+      .tv-wz-status-wait { color: #fbbf24; background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.4); }
+      .tv-wz-status-good { color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); }
+      .tv-wz-status-off  { color: #7dd3fc; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); }
+      .tv-wz-code { font-weight: 700; color: #fde68a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .tv-wz-task { color: #e2e8f0; }
+      .tv-wz-meta { color: #94a3b8; font-size: 0.7vw; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .tv-wz-done { background: rgba(34, 197, 94, 0.07); }
+      .tv-wz-done .tv-wz-task { color: #94a3b8; }
+
+      /* Chiller board — two side-by-side lists; each row bldg · name ·
+         status chip · date · who, sized for half of the 42% column. Rows
+         tint faintly by state. */
+      .tv-ch-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.9vw; min-height: 0; overflow: hidden; }
+      .tv-ch-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.12vw;
+        min-height: 0; min-width: 0; overflow: hidden;
+      }
+      .tv-ch-row {
+        display: grid;
+        grid-template-columns: 2.2vw minmax(0, 1fr) 4.8vw auto;
+        gap: 0.4vw;
+        align-items: baseline;
+        font-size: 0.78vw;
+        line-height: 1.25;
+        padding: 0.1vw 0.3vw;
+        border-radius: 2px;
+      }
+      .tv-ch-row > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tv-ch-code { font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+      .tv-ch-name { color: #e2e8f0; }
+      .tv-ch-meta { color: #94a3b8; font-size: 0.7vw; font-variant-numeric: tabular-nums; }
+      .tv-ch-status {
+        font-size: 0.6vw; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+        padding: 0.05vw 0.35vw; border-radius: 3px; text-align: center;
+      }
+      .tv-ch-status-open     { color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); }
+      .tv-ch-status-punching { color: #fbbf24; background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.4); }
+      .tv-ch-status-ratrace  { color: #67e8f9; background: rgba(6, 182, 212, 0.14);  border: 1px solid rgba(6, 182, 212, 0.45); }
+      .tv-ch-status-closed   { color: #94a3b8; background: rgba(100, 116, 139, 0.16); border: 1px solid rgba(100, 116, 139, 0.45); }
+      .tv-ch-row-open     { background: rgba(16, 185, 129, 0.05); }
+      .tv-ch-row-ratrace  { background: rgba(6, 182, 212, 0.06); }
+      .tv-ch-count { font-weight: 700; }
+      .tv-ch-count-open { color: #34d399; } .tv-ch-count-punching { color: #fbbf24; }
+      .tv-ch-count-ratrace { color: #67e8f9; } .tv-ch-count-closed { color: #cbd5e1; }
+
+      /* PTO column (used by TV3). Coverage is content-sized; the heat map
+         takes the rest and its week rows stretch to fill it. The heat
+         map's floor — its title/legend/header (~5.4vw) plus ~0.97vw per
+         week row — keeps the rows tall enough to read, so in a very heavy
+         week it is Coverage that gives way (dropping whole days — see its
+         fit prop). */
       .tv2-pto-col {
         display: flex;
         flex-direction: column;
@@ -4031,21 +4839,6 @@ function Tv2Styles() {
       }
       .tv2-pto-col > .tv-heat-panel { flex: 1 1 0; min-height: ${(5.4 + HEAT_TV_WEEKS * 0.97).toFixed(1)}vw; }
       .tv2-pto-col > .tv-panel:last-child { flex: 0 1 auto; min-height: 0; }
-
-      .tv2-right-block {
-        grid-column: 2 / span 2;
-        display: flex;
-        flex-direction: column;
-        gap: 0.6vw;
-      }
-      .tv2-right-cols {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.6vw;
-      }
-      .tv2-right-cols > * { min-width: 0; min-height: 0; }
 
       /* Equipment: the row list is the clipping box useFittingRows
          measures, so it has to own the leftover height. The meta is set a

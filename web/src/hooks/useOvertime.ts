@@ -32,6 +32,15 @@ export const OVERTIME_CATEGORY_ORDER: OvertimeCategory[] = [
   'vendor_escort',
 ];
 
+/** Category accent colours — §11's cards and the overtime coverage
+ *  heatmap share them (the TV wall's dots use the same values). */
+export const OVERTIME_CATEGORY_COLOR: Record<OvertimeCategory, string> = {
+  cold_weather:      '#60a5fa',  // blue — winter
+  major_off_hour_pm: '#a78bfa',  // purple — PM theme matches OpenPMsBreakdown
+  off_hour_repair:   '#fb923c',  // orange — repair / wrench
+  vendor_escort:     '#f472b6',  // pink — vendor/escort
+};
+
 export type OvertimeStatus = 'open' | 'closed' | 'cancelled' | 'completed';
 
 export type OvertimeSignup = {
