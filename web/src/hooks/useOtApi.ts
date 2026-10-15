@@ -215,14 +215,14 @@ export function isOtApiJobCurrent(j: OtApiJob, now: Date): boolean {
   return s.getTime() >= nowMs;
 }
 
-/** Freshness label for the mirror: the poller runs every 5 minutes, so
- *  anything past 20 minutes means it has stopped. */
+/** Freshness label for the mirror: the sync runs every 15 minutes, so
+ *  anything past 35 minutes (two missed runs) means it has stopped. */
 export function otApiFreshness(sync: OtApiSync | null | undefined, now: Date):
   { label: string; tone: 'ok' | 'warn' | 'bad' | 'none' } {
   if (!sync) return { label: 'poller has not run yet', tone: 'none' };
   const ageMin = Math.max(0, Math.round((now.getTime() - new Date(sync.fetched_at).getTime()) / 60_000));
   const age = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : ageMin < 48 * 60 ? `${Math.floor(ageMin / 60)}h ago` : `${Math.floor(ageMin / 1440)}d ago`;
   if (sync.status === 'error') return { label: `last poll failed ${age}`, tone: 'bad' };
-  if (ageMin > 20) return { label: `synced ${age} · poller stalled?`, tone: 'warn' };
+  if (ageMin > 35) return { label: `synced ${age} · sync stalled?`, tone: 'warn' };
   return { label: `synced ${age}`, tone: 'ok' };
 }

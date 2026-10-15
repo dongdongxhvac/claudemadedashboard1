@@ -76,7 +76,7 @@ Logs end up in the Windows Event Log (or configure NSSM to redirect stdout to a 
 
 Mirrors Steve's (BMR) OT viewer — the crew's Outlook off-hours events and
 added OT jobs, with spaces and volunteers — into Supabase `ot_api_jobs`
-every 5 minutes. Feeds §11b on `/upark/manager` and the overtime strip on
+every 15 minutes. Feeds §11b on `/upark/manager` and the overtime strip on
 both wall screens (`/upark/tv`, `/upark/tv2`). Read-only: the API's write
 endpoints are not used.
 

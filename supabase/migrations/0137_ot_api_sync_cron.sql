@@ -12,12 +12,12 @@
 --   select set_app_secret('UPARK_OT_API_BASE', 'https://uparkot.rai-zenith.com');
 --
 -- Anon key satisfies verify_jwt, same pattern as flush-pto-notify-queue
--- (0109). The job fires every minute; the FUNCTION paces the upstream
--- reads (UPARK_OT_API_MIN_GAP_S, default 310 s) because the key is allowed
--- one read per 300 s (the API's 429 says so — stricter than the handoff's
--- 60/min). So a change in the OT viewer reaches the mirror within ~5-6
--- minutes, and if Steve relaxes the key's limit one set_app_secret call
--- shortens that — no cron change needed.
+-- (0109). Every 15 minutes (user 2026-10-15; was every minute with the
+-- function pacing reads to the key's one-per-300 s limit). The function's
+-- own floor is set to match (select set_app_secret('UPARK_OT_API_MIN_GAP_S',
+-- '840')) so a stray extra call can't read upstream sooner. A change in the
+-- OT viewer therefore reaches the dashboard within 15 minutes; to go faster
+-- again, shorten both the schedule here and that secret.
 --
 -- Pause:   select cron.unschedule('ot-api-sync');
 -- Resume:  re-run this file.
@@ -26,7 +26,7 @@ select cron.unschedule(jobid) from cron.job where jobname = 'ot-api-sync';
 
 select cron.schedule(
   'ot-api-sync',
-  '* * * * *',
+  '*/15 * * * *',
   $$
   select net.http_post(
     url     := 'https://iujuibvcahuapzowjtym.supabase.co/functions/v1/ot-api-sync',

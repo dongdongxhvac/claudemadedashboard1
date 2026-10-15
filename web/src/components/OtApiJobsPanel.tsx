@@ -252,7 +252,7 @@ export function OtApiJobsPanel() {
         <div className="t-text t-muted space-y-1">
           <p>No data yet — the OT viewer sync has not run.</p>
           <p style={{ fontSize: '0.8rem' }}>
-            The <code>ot-api-sync</code> edge function runs every 5 minutes (cron job <code>ot-api-sync</code>)
+            The <code>ot-api-sync</code> edge function runs every 15 minutes (cron job <code>ot-api-sync</code>)
             with the key from the Vault (<code>UPARK_OT_API_KEY</code>). Check <code>ot_api_syncs</code> for an
             error row; the watcher poller (<code>ot_api_poller.py</code>) is the fallback if the API is only
             reachable on the tailnet.
