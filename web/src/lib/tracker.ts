@@ -120,6 +120,7 @@ export const SKILLS: SkillDef[] = [
   { key: 'pm_boiler',              label: 'Boiler PM',                              group: 'Preventive maintenance' },
   { key: 'pm_chiller',             label: 'Chiller PM',                             group: 'Preventive maintenance' },
   { key: 'pm_vfd',                 label: 'VFD PM',                                 group: 'Preventive maintenance' },
+  { key: 'pm_glycol_loop',         label: 'Glycol loop PM',                         group: 'Preventive maintenance', hint: 'concentration, freeze point, make-up, inhibitor' },
   // Pneumatics
   { key: 'pneumatic_knowledge',    label: 'Pneumatic knowledge',                    group: 'Pneumatics' },
   { key: 'pneumatic_experience',   label: 'Pneumatic experience',                   group: 'Pneumatics' },
