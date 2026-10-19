@@ -65,6 +65,12 @@ import {
   type OtApiJob,
 } from '../../hooks/useOtApi';
 import {
+  useOtActivity,
+  useOtActivityRealtime,
+  describeOtActivity,
+  otActivityTone,
+} from '../../hooks/useOtActivity';
+import {
   usePtoRequests, usePtoRealtime, isPartialDay, partialDayLabel,
   type PtoRequest,
 } from '../../hooks/usePto';
@@ -2132,7 +2138,50 @@ function OvertimeTvPanel({ now, maxRows = OT_TV_MAX_ROWS, compact = false }: {
           </>
         )}
       </div>
+      <OvertimeActivityStrip now={now} />
     </section>
+  );
+}
+
+/** The last few lines of the overtime activity feed (0145), under the OT
+ *  list on every wall layout that carries it: "2:06p · Austin M. withdrew ·
+ *  75 AHU Major PMs · Sat Oct 17". Five rows (user 2026-10-19), one line
+ *  each, so the strip grows by a fixed amount. Hidden while empty. */
+const OT_TV_ACTIVITY_ROWS = 5;
+function OvertimeActivityStrip({ now }: { now: Date }) {
+  useOtActivityRealtime();
+  const q = useOtActivity(OT_TV_ACTIVITY_ROWS);
+  const rows = (q.data ?? []).slice(0, OT_TV_ACTIVITY_ROWS);
+  if (rows.length === 0) return null;
+  const stamp = (iso: string) => {
+    const d = new Date(iso);
+    const sameDay = d.toDateString() === now.toDateString();
+    const h12 = d.getHours() % 12 || 12;
+    const t = `${h12}:${String(d.getMinutes()).padStart(2, '0')}${d.getHours() < 12 ? 'a' : 'p'}`;
+    return sameDay ? t : `${d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })} ${t}`;
+  };
+  return (
+    <div className="tv-ot-activity">
+      <div className="tv-ot-activity-title">Recent activity</div>
+      <ul className="tv-ot-activity-list">
+        {rows.map((e) => {
+          const d = describeOtActivity(e, { short: true });
+          return (
+            <li key={e.key} className="tv-ot-activity-row">
+              <span className="tv-ot-activity-when">{stamp(e.at)}</span>
+              <span className="tv-ot-activity-text">
+                {d.who && <span className="tv-ot-activity-who">{d.who} </span>}
+                <span className={`tv-ot-activity-act tv-ot-activity-${otActivityTone(e.kind)}`}>{d.action}</span>
+                {d.extra && <span className="tv-ot-activity-extra"> {d.extra}</span>}
+                <span className="tv-ot-sep">·</span>
+                <span className="tv-ot-activity-job">{d.job}</span>
+                {d.when && <span className="tv-ot-activity-date"> · {d.when}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -3422,6 +3471,40 @@ function Tv3Styles() {
       .tv-ot-panel-compact .tv-ot-l2 { font-size: 0.68vw; }
       .tv-ot-panel-compact .tv-ot-list { gap: 0.1vw; }
       .tv-ot-row-past { opacity: 0.5; }
+
+      /* Recent activity (0145): five one-line rows under the OT list. */
+      .tv-ot-activity {
+        flex: 0 0 auto;
+        margin-top: 0.35vw;
+        padding-top: 0.25vw;
+        border-top: 1px solid #1e293b;
+      }
+      .tv-ot-activity-title {
+        font-size: 0.62vw;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+        margin-bottom: 0.12vw;
+      }
+      .tv-ot-activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.08vw; }
+      .tv-ot-activity-row {
+        display: grid;
+        grid-template-columns: 4.6vw 1fr;
+        gap: 0.5vw;
+        font-size: 0.74vw;
+        line-height: 1.3;
+        min-width: 0;
+      }
+      .tv-ot-activity-when { color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .tv-ot-activity-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #cbd5e1; }
+      .tv-ot-activity-who { color: #f8fafc; font-weight: 700; }
+      .tv-ot-activity-act { font-weight: 600; }
+      .tv-ot-activity-good  { color: #34d399; }
+      .tv-ot-activity-bad   { color: #f87171; }
+      .tv-ot-activity-warn  { color: #fbbf24; }
+      .tv-ot-activity-muted { color: #94a3b8; }
+      .tv-ot-activity-extra, .tv-ot-activity-date { color: #94a3b8; }
+      .tv-ot-activity-job { color: #e2e8f0; }
 
       /* Right 24%: the on-call grid's "m/d-m/d" ranges won't fit
          seven columns, so the cells may break at the hyphen onto a second
