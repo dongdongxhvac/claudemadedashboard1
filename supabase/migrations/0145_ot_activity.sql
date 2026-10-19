@@ -189,7 +189,10 @@ select 'ot_viewer'::text,
        e.title,
        e.start_at,
        e.detail
-  from public.ot_api_job_events e;
+  from public.ot_api_job_events e
+ -- The OT viewer API is forward-only: a job drops off once it has started.
+ -- That "removed" is the job aging out, not a cancellation — keep it out.
+ where not (e.kind = 'removed' and e.start_at is not null and e.at >= e.start_at);
 
 grant select on public.v_ot_activity to authenticated, service_role;
 
