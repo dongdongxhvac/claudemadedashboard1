@@ -559,7 +559,7 @@ function WorkloadPerformancePanel({
         </div>
       </div>
       <div className="tv-panel-body tv-wp-body">
-        <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
+        <WorkloadSection pmRows={pmRows} engineers={engineers} now={now} />
         {staleWos.length > 0 && (
           <div className="tv-wo-stale-strip" title="Open WOs with no Cove update in 7+ days">
             <span className="tv-wo-stale-count">WO {WO_STALE_DAYS}d+ no update: {staleWos.length}</span>
@@ -570,7 +570,7 @@ function WorkloadPerformancePanel({
         )}
         <div className="tv-wp-divider" />
         <div className="tv-wp-crew-wrap">
-          <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} now={now} />
+          <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} engineers={engineers} now={now} />
         </div>
         <div className="tv-wp-divider" />
         <div className="tv-wp-bldgs-wrap">
@@ -589,29 +589,6 @@ function WorkloadPerformancePanel({
 // it (shortDesc, buildingShortCode, shortTaskId, relTime) were unused
 // after the swap and got stripped to keep tsc clean. Re-add from git
 // history if you bring back a closes list later.
-
-function WklRow({ row }: { row: { name: string; pm14: number; major46: number } }) {
-  // <li> uses display: contents so its three children participate in the
-  // parent <ul>'s grid. The shared grid is what makes P-chips and M-chips
-  // line up vertically across rows even though the name column auto-sizes
-  // to the longest engineer name in this shift. Empty <span /> placeholders
-  // keep the grid columns intact when a row doesn't have a P or M chip.
-  return (
-    <li>
-      <span className="tv-wkl-chip-eng">{shortName(row.name)}</span>
-      {row.pm14 > 0 ? (
-        <span className="tv-wkl-chip" title="Open PMs (non-Major) due within 14 days">
-          P <span className="tv-wkl-chip-count">{row.pm14}</span>
-        </span>
-      ) : <span />}
-      {row.major46 > 0 ? (
-        <span className="tv-wkl-chip tv-wkl-chip-major" title="Major PMs due within 46 days">
-          M <span className="tv-wkl-chip-count">{row.major46}</span>
-        </span>
-      ) : <span />}
-    </li>
-  );
-}
 
 function OncallPanel({ participants, settings, notes, now }: {
   participants: OncallParticipant[];
@@ -1316,13 +1293,35 @@ function CrewColumn({ rows, renderRow }: {
   );
 }
 
-function CrewSection({ closes, laborDaily, pto, now }: {
+function CrewSection({ closes, laborDaily, pto, engineers, now }: {
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
   pto: PtoDayRow[];
+  engineers: EngineerRow[];
   now: Date;
 }) {
   const data = useMemo(() => {
+    // Engineer-level crew only (user 2026-10-20): a manager who closes PMs
+    // or logs labor in the CMMS stays off the wall. Names come from the
+    // CMMS, so match on the profile's CMMS name as well as the display
+    // name, and show the display name; anyone not on the active
+    // engineer roster (managers, "Unassigned", stray CMMS names) is skipped.
+    const displayByCmms = new Map<string, string>();
+    const allowed = new Set<string>();
+    for (const e of engineers) {
+      if (!e.active || e.role !== 'engineer' || e.is_manager) continue;
+      allowed.add(e.full_name);
+      if (e.cmms_assignee_name) {
+        allowed.add(e.cmms_assignee_name);
+        displayByCmms.set(e.cmms_assignee_name, e.full_name);
+      }
+    }
+    const crewName = (raw: string | null | undefined): string | null => {
+      const n = (raw ?? '').trim();
+      if (!n || !allowed.has(n)) return null;
+      return displayByCmms.get(n) ?? n;
+    };
+
     const winEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const winStart = addDays(winEnd, -8);
     // Day count stops at yesterday while hours/PMs still include today. Crews
@@ -1342,15 +1341,15 @@ function CrewSection({ closes, laborDaily, pto, now }: {
     // PM closes (Phase 5.5): from explicit pm_close_events log.
     for (const c of closes) {
       const d = new Date(c.completed_on);
-      const a = (c.assigned_to_name ?? '').trim() || 'Unassigned';
-      if (d >= winStart && d < winEnd) get(a).pms++;
+      const a = crewName(c.assigned_to_name);
+      if (a && d >= winStart && d < winEnd) get(a).pms++;
     }
     // Labor hours (Phase 5.5): per-tech per-day from labor_daily view.
     for (const l of laborDaily) {
       const d = new Date(l.day_et + 'T00:00:00');
-      const a = (l.assigned_to_name ?? '').trim() || 'Unassigned';
+      const a = crewName(l.assigned_to_name);
       const hrs = l.hours_that_day ?? 0;
-      if (d >= winStart && d < winEnd) get(a).hours += hrs;
+      if (a && d >= winStart && d < winEnd) get(a).hours += hrs;
     }
 
     const names = Array.from(byTech.keys());
@@ -1372,7 +1371,7 @@ function CrewSection({ closes, laborDaily, pto, now }: {
         .sort((a, b) => a.hours - b.hours || a.pms - b.pms)
         .slice(0, 10),
     };
-  }, [closes, laborDaily, pto, now]);
+  }, [closes, laborDaily, pto, engineers, now]);
 
   const leftCol  = data.rows.slice(0, 5);
   const rightCol = data.rows.slice(5);
@@ -1412,157 +1411,83 @@ function CrewSection({ closes, laborDaily, pto, now }: {
   );
 }
 
-function WorkloadSection({ pmRows, engineers, shifts, now }: {
+/** How far ahead the workload list looks past today (user 2026-10-20). */
+const WORKLOAD_AHEAD_DAYS = 4;
+
+function WorkloadSection({ pmRows, engineers, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   engineers: EngineerRow[];
-  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
   now: Date;
 }) {
+  // One list (user 2026-10-20): every open PM that is overdue, due today or
+  // due within the next WORKLOAD_AHEAD_DAYS, per engineer. The former
+  // "Next 14d / Major 46d" block split by shift was removed the same day.
   const data = useMemo(() => {
     const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayStr = localISODate(todayD);
-    const cutoff14 = new Date(todayD); cutoff14.setDate(todayD.getDate() + 14);
-    const cutoff46 = new Date(todayD); cutoff46.setDate(todayD.getDate() + 46);
-    const cutoff14Str = localISODate(cutoff14);
-    const cutoff46Str = localISODate(cutoff46);
+    const aheadStr = localISODate(addDays(todayD, WORKLOAD_AHEAD_DAYS));
 
-    // CMMS-name → display-name (Eduin → Edwin, etc.) and display-name → shift.
+    // CMMS-name → display-name (Eduin → Edwin, etc.).
     const displayByCmms = new Map<string, string>();
-    const shiftByDisplay = new Map<string, string | null>();
     for (const e of engineers) {
       if (!e.active || e.role !== 'engineer') continue;
       if (e.cmms_assignee_name) displayByCmms.set(e.cmms_assignee_name, e.full_name);
-      shiftByDisplay.set(e.full_name, e.shift_id);
     }
     const displayOf = (raw: string | null): string => {
       const n = (raw ?? '').trim() || 'Unassigned';
       return displayByCmms.get(n) ?? n;
     };
 
-    const byTechToday = new Map<string, number>();
-    const pm14 = new Map<string, number>();      // non-Major, due within 14d (incl. today)
-    const major46 = new Map<string, number>();   // Major, due within 46d (incl. today)
-    let overdue = 0;
+    type Acc = { count: number; overdue: number };
+    const byTech = new Map<string, Acc>();
+    let overdue = 0, today = 0, ahead = 0;
 
     for (const r of pmRows) {
       if (isClosed(r.status)) continue;
       if (!r.due_date) continue;
+      if (r.due_date > aheadStr) continue;
       const name = displayOf(r.assigned_to_name);
-      const isMajor = r.pm_type === 'Major';
-
-      // Top section: overdue + due today, per-tech count.
-      if (r.due_date < todayStr) {
-        overdue++;
-        byTechToday.set(name, (byTechToday.get(name) ?? 0) + 1);
-      } else if (r.due_date === todayStr) {
-        byTechToday.set(name, (byTechToday.get(name) ?? 0) + 1);
-      }
-
-      // Bottom section: forward-looking windows.
-      if (r.due_date >= todayStr && r.due_date <= cutoff14Str && !isMajor) {
-        pm14.set(name, (pm14.get(name) ?? 0) + 1);
-      }
-      if (r.due_date >= todayStr && r.due_date <= cutoff46Str && isMajor) {
-        major46.set(name, (major46.get(name) ?? 0) + 1);
-      }
+      const acc = byTech.get(name) ?? { count: 0, overdue: 0 };
+      acc.count++;
+      if (r.due_date < todayStr)        { overdue++; acc.overdue++; }
+      else if (r.due_date === todayStr) { today++; }
+      else                              { ahead++; }
+      byTech.set(name, acc);
     }
 
-    const todayCards = Array.from(byTechToday.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-      .slice(0, 5);
+    const cards = Array.from(byTech.entries())
+      .map(([name, a]) => ({ name, count: a.count, overdue: a.overdue }))
+      .sort((a, b) => b.count - a.count || b.overdue - a.overdue || a.name.localeCompare(b.name));
 
-    const techs = new Set<string>([...pm14.keys(), ...major46.keys()]);
-    const upcomingRows = Array.from(techs)
-      .map((name) => ({
-        name,
-        pm14:    pm14.get(name) ?? 0,
-        major46: major46.get(name) ?? 0,
-        shift_id: shiftByDisplay.get(name) ?? null,
-      }))
-      .sort((a, b) =>
-        (b.pm14 + b.major46) - (a.pm14 + a.major46)
-        || b.pm14 - a.pm14
-        || a.name.localeCompare(b.name),
-      );
-
-    // Split by shift: AM = first shift (sort_order 1), PM = second shift.
-    const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
-    const amShiftId = orderedShifts[0]?.id ?? null;
-    const pmShiftId = orderedShifts[1]?.id ?? null;
-    const amLabel   = orderedShifts[0]?.name ?? 'AM';
-    const pmLabel   = orderedShifts[1]?.name ?? 'PM';
-
-    const am = upcomingRows.filter((r) => r.shift_id === amShiftId);
-    const pm = upcomingRows.filter((r) => r.shift_id === pmShiftId);
-    const other = upcomingRows.filter((r) => r.shift_id !== amShiftId && r.shift_id !== pmShiftId);
-
-    const pm14Total    = Array.from(pm14.values()).reduce((s, v) => s + v, 0);
-    const major46Total = Array.from(major46.values()).reduce((s, v) => s + v, 0);
-
-    return { todayCards, overdue, am, pm, other, amLabel, pmLabel, pm14Total, major46Total };
-  }, [pmRows, engineers, shifts, now]);
-
-  const todayCount = data.todayCards.reduce((s, c) => s + c.count, 0);
+    return { cards, overdue, today, ahead, total: overdue + today + ahead };
+  }, [pmRows, engineers, now]);
 
   return (
     <div className="tv-wp-workload">
       <div className="tv-workload-top">
         <div className="tv-workload-section-label">
-          Due today + overdue · <strong style={{ color: '#f8fafc' }}>{todayCount}</strong>
+          Due in {WORKLOAD_AHEAD_DAYS}d + today + overdue · <strong style={{ color: '#f8fafc' }}>{data.total}</strong>
           {data.overdue > 0 && (
             <span className="tv-warn" style={{ marginLeft: '0.6vw' }}>⚠ {data.overdue} overdue</span>
           )}
         </div>
-        {data.todayCards.length === 0 ? (
+        {/* The split behind the total, on its own line so the label above
+            never wraps mid-phrase in the narrow TV2 tile. */}
+        <div className="tv-workload-section-label" style={{ color: '#94a3b8', letterSpacing: '0.08em' }}>
+          {data.overdue} overdue · {data.today} today · {data.ahead} next {WORKLOAD_AHEAD_DAYS}d
+        </div>
+        {data.cards.length === 0 ? (
           <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing on the board.</p>
         ) : (
           <ul className="tv-today-list">
-            {data.todayCards.map((c) => (
+            {data.cards.map((c) => (
               <li key={c.name}>
                 <span className="tv-today-count">{c.count}</span>
                 <span className="tv-today-name">{shortName(c.name)}</span>
+                {c.overdue > 0 && <span className="tv-today-over">{c.overdue} overdue</span>}
               </li>
             ))}
           </ul>
-        )}
-      </div>
-      <div className="tv-workload-divider" />
-      <div className="tv-workload-bottom">
-        <div className="tv-workload-section-label">
-          Next 14d · <strong style={{ color: '#f8fafc' }}>{data.pm14Total}</strong>
-          <span style={{ margin: '0 0.4vw', color: '#475569' }}>|</span>
-          <span style={{ color: '#a78bfa' }}>◆ Major 46d · <strong>{data.major46Total}</strong></span>
-        </div>
-        {data.am.length === 0 && data.pm.length === 0 && data.other.length === 0 ? (
-          <p className="tv-muted" style={{ fontSize: '1.0vw' }}>Nothing scheduled.</p>
-        ) : (
-          <div className="tv-wkl-shift-grid">
-            <div className="tv-wkl-shift-col">
-              <div className="tv-wkl-shift-label">{data.amLabel} shift</div>
-              <ul className="tv-wkl-chip-list">
-                {data.am.map((r) => <WklRow key={r.name} row={r} />)}
-              </ul>
-            </div>
-            <div className="tv-wkl-shift-col">
-              <div className="tv-wkl-shift-label">{data.pmLabel} shift</div>
-              <ul className="tv-wkl-chip-list">
-                {data.pm.map((r) => <WklRow key={r.name} row={r} />)}
-              </ul>
-            </div>
-            {/* No-shift column always renders — keeps the 3-col grid stable
-                even when nobody's there. Empty-state is just a muted dash. */}
-            <div className="tv-wkl-shift-col">
-              <div className="tv-wkl-shift-label">No shift</div>
-              {data.other.length === 0 ? (
-                <p className="tv-muted" style={{ fontSize: '0.7vw', margin: 0 }}>—</p>
-              ) : (
-                <ul className="tv-wkl-chip-list">
-                  {data.other.map((r) => <WklRow key={r.name} row={r} />)}
-                </ul>
-              )}
-            </div>
-          </div>
         )}
       </div>
     </div>
@@ -2446,8 +2371,8 @@ function Tv2ViewInner() {
           (heartbeats) yields its height to the taller ones. */}
       <main className="tv2-grid">
         <div className="tv2-col">
-          <WorkloadTvPanel pmRows={pmQ.data ?? []} engineers={engineers} shifts={shiftsQ.data ?? []} woRows={woQ.data ?? []} now={now} />
-          <CrewTvPanel closes={closesQ.data ?? []} laborDaily={laborDailyQ.data ?? []} pto={ptoRows} now={now} />
+          <WorkloadTvPanel pmRows={pmQ.data ?? []} engineers={engineers} woRows={woQ.data ?? []} now={now} />
+          <CrewTvPanel closes={closesQ.data ?? []} laborDaily={laborDailyQ.data ?? []} pto={ptoRows} engineers={engineers} now={now} />
           <BuildingsTvPanel data={bldg} />
         </div>
         <div className="tv2-col">
@@ -2470,10 +2395,9 @@ function Tv2ViewInner() {
 
 /** Workload · the due-today/overdue + next-14d section with the stale-WO
  *  strip — TV1's top sub-section as a tile of its own. */
-function WorkloadTvPanel({ pmRows, engineers, shifts, woRows, now }: {
+function WorkloadTvPanel({ pmRows, engineers, woRows, now }: {
   pmRows: NonNullable<ReturnType<typeof useCurrentPmRows>['data']>;
   engineers: EngineerRow[];
-  shifts: NonNullable<ReturnType<typeof useShifts>['data']>;
   woRows: WoRow[];
   now: Date;
 }) {
@@ -2486,7 +2410,7 @@ function WorkloadTvPanel({ pmRows, engineers, shifts, woRows, now }: {
         <div className="tv-panel-meta">PM <b>{pmAge}</b></div>
       </div>
       <div className="tv-panel-body tv-wp-body">
-        <WorkloadSection pmRows={pmRows} engineers={engineers} shifts={shifts} now={now} />
+        <WorkloadSection pmRows={pmRows} engineers={engineers} now={now} />
         <StaleWoStrip staleWos={staleWos} />
       </div>
     </section>
@@ -2494,10 +2418,11 @@ function WorkloadTvPanel({ pmRows, engineers, shifts, woRows, now }: {
 }
 
 /** PMs closed · labor — TV1's crew sub-section as a tile. */
-function CrewTvPanel({ closes, laborDaily, pto, now }: {
+function CrewTvPanel({ closes, laborDaily, pto, engineers, now }: {
   closes: NonNullable<ReturnType<typeof useRecentPmCloses>['data']>;
   laborDaily: NonNullable<ReturnType<typeof useLaborDaily>['data']>;
   pto: PtoDayRow[];
+  engineers: EngineerRow[];
   now: Date;
 }) {
   return (
@@ -2507,7 +2432,7 @@ function CrewTvPanel({ closes, laborDaily, pto, now }: {
         <div className="tv-panel-meta">last 8 days</div>
       </div>
       <div className="tv-panel-body tv-wp-body">
-        <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} now={now} />
+        <CrewSection closes={closes} laborDaily={laborDaily} pto={pto} engineers={engineers} now={now} />
       </div>
     </section>
   );
@@ -4424,6 +4349,7 @@ function TvStyles() {
         font-variant-numeric: tabular-nums;
       }
       .tv-today-name { color: #e2e8f0; }
+      .tv-today-over { color: #fca5a5; font-size: 0.68vw; font-weight: 600; }
 
       /* Combined Buildings panel: rounds | engineer | assignments per row */
       .tv-bldgs { display: flex; flex-direction: column; gap: 0.25vw; }
@@ -4473,84 +4399,12 @@ function TvStyles() {
 
       /* Workload panel (Due today on top, Upcoming 9d on bottom) */
       .tv-workload-top { display: flex; flex-direction: column; gap: 0.15vw; }
-      .tv-workload-bottom { display: flex; flex-direction: column; gap: 0.15vw; }
-      .tv-workload-divider {
-        height: 1px;
-        background: #1e293b;
-        margin: 0.25vw 0;
-      }
       .tv-workload-section-label {
         font-size: 0.72vw;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         color: #64748b;
       }
-      /* (no .tv-workload-top overrides needed — base .tv-today-list is already chip-shaped) */
-
-      /* Workload bottom: per-tech chip list (§03-style chips). 3 columns
-         (7AM shift · 9:30AM shift · No shift). Each gets its own column
-         even when one is empty so the visual rhythm stays consistent.
-         Horizontal gap tightened so the three columns sit close, not
-         spread across the panel. */
-      .tv-wkl-shift-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 0.35vw 0.25vw;
-      }
-      .tv-wkl-shift-col { min-width: 0; }
-      .tv-wkl-shift-label {
-        font-size: 0.68vw;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: #64748b;
-        margin-bottom: 0.15vw;
-      }
-      /* Grid on the PARENT ul so name / P / M columns size to the widest
-         entry in this shift and align vertically across rows. Each li uses
-         display: contents so its 3 children become direct grid items of
-         the ul. Result: name column hugs the longest name (hair gap to
-         the chip), and P + M chips line up vertically down the column. */
-      .tv-wkl-chip-list {
-        list-style: none; padding: 0; margin: 0;
-        display: grid;
-        grid-template-columns: max-content max-content max-content;
-        column-gap: 0.22vw;
-        row-gap: 0.15vw;
-        align-items: center;
-      }
-      .tv-wkl-chip-list li {
-        display: contents;
-      }
-      .tv-wkl-chip-eng {
-        color: #e2e8f0;
-        font-weight: 500;
-        font-size: 0.82vw;
-        white-space: nowrap;
-      }
-      .tv-wkl-chip {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;   /* center P 7 / M 19 inside its fixed slot */
-        gap: 0.15vw;
-        padding: 0 0.25vw;
-        border: 1px solid #334155;
-        border-radius: 4px;
-        font-size: 0.72vw;
-        background: #1e293b;
-        color: #e2e8f0;
-        white-space: nowrap;
-      }
-      .tv-wkl-chip-count {
-        color: #94a3b8;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-      }
-      .tv-wkl-chip-major {
-        border-color: rgba(124, 58, 237, 0.5);
-        background: rgba(124, 58, 237, 0.15);
-        color: #c4b5fd;
-      }
-      .tv-wkl-chip-major .tv-wkl-chip-count { color: #a78bfa; }
 
       /* Kiosk cursor hiding — toggled by the 30 s idle timer in TvView. */
       .tv-cursor-hidden, .tv-cursor-hidden * { cursor: none !important; }
