@@ -27,7 +27,7 @@ SRC = os.path.join(HERE, 'print-station-src')
 
 # Mirror of keyForTitle() in web/src/hooks/useTrainingDocs.ts — keep the two in step.
 ALIAS_RULES = [
-    (r'^8-?week schedule', 'plan'), (r'^8-?week tracker', 'tracker'), (r'sign-?off sheet', 'signoff_sheet'),
+    (r'^8-?week schedule', 'plan'), (r'^8-?week tracker', 'tracker'), (r'^8-?week program', 'brief'), (r'sign-?off sheet', 'signoff_sheet'),
     (r'^week 1 guide', 'week1_guide'), (r'^week 1 checklist', 'week1_checklist'),
     (r'^week 2 guide', 'week2_guide'), (r'^week 2 checklist', 'week2_checklist'),
     (r'^upark site map', 'site_map'), (r'^binney site map', 'binney_site_map'), (r'^building check', 'building_check'),

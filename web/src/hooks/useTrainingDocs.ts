@@ -45,7 +45,7 @@ export type NhDocGroup = { key: string; label: string };
 
 /** title → key. Tested against the lower-cased title, in order. */
 const ALIAS_RULES: [RegExp, string][] = [
-  [/^8-?week schedule/, 'plan'], [/^8-?week tracker/, 'tracker'],
+  [/^8-?week schedule/, 'plan'], [/^8-?week tracker/, 'tracker'], [/^8-?week program/, 'brief'],
   [/sign-?off sheet/, 'signoff_sheet'],
   [/^week 1 guide/, 'week1_guide'],
   [/^week 1 checklist/, 'week1_checklist'],
