@@ -31,7 +31,7 @@ export function TrackerDrawer({ person, onClose }: {
           </div>
           <button onClick={onClose} className="t-small t-accent hover:underline">Close</button>
         </div>
-        <TrackerPanel key={person.user_id} userId={person.user_id} canEdit={canEdit} isSelf={me.data?.id === person.user_id} />
+        <TrackerPanel key={person.user_id} userId={person.user_id} canEdit={canEdit} isSelf={me.data?.id === person.user_id} boardName={person.full_name} />
       </div>
     </div>
   );

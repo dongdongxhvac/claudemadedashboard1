@@ -10,6 +10,7 @@
 // which a click on the engineer's name opens.
 import { useMemo } from 'react';
 import type { EngineerRow } from '../../hooks/useEngineers';
+import { useAllTrainingBoardProgress } from '../../hooks/useTrainingBoard';
 import {
   useAllTrackerEntryCounts, useAllTrackerTraits, useAllTrackerSkills,
   useUpsertTrackerTrait, useUpsertTrackerSkill,
@@ -97,6 +98,7 @@ export function TrackerMatrix({ engineers, canEdit, onOpen }: {
   const countsQ = useAllTrackerEntryCounts();
   const traitsQ = useAllTrackerTraits();
   const skillsQ = useAllTrackerSkills();
+  const boardQ = useAllTrainingBoardProgress();
   const upTrait = useUpsertTrackerTrait();
   const upSkill = useUpsertTrackerSkill();
   const today = new Date().toLocaleDateString('en-CA');
@@ -129,7 +131,7 @@ export function TrackerMatrix({ engineers, canEdit, onOpen }: {
                 </button>
               </div>
               <div className="t-mono t-muted" style={{ fontSize: 11, lineHeight: '22px' }}>
-                {c?.total ?? 0} entries · {done}/{SKILLS.length} skills done · {verified} verified
+                {c?.total ?? 0} entries · {done}/{SKILLS.length} skills done · {verified} verified{boardQ.byUser.get(e.user_id) ? ` · ${boardQ.byUser.get(e.user_id)!.done}/${boardQ.byUser.get(e.user_id)!.total} board` : ''}
               </div>
             </div>
 

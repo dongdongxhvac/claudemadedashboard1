@@ -12,6 +12,8 @@ import { useMe, type ManageScope } from '../../hooks/useMe';
 import { CoveIdFinder } from '../../components/CoveIdFinder';
 import { useNewHireAll } from '../../hooks/useNewHire';
 import { useCertificationsAll } from '../../hooks/useCertifications';
+import { useAllTrainingBoardProgress } from '../../hooks/useTrainingBoard';
+import { nhWeekFor } from '../../lib/newHireProgram';
 import { certExpiryState, daysUntil } from '../../lib/careerTimeline';
 import { supabase } from '../../lib/supabase';
 
@@ -125,6 +127,8 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
   const enrolledIds = useMemo(() => new Set(nhQ.data?.byUser.keys() ?? []), [nhQ.data]);
   // Licenses / certifications (0133): one line under the name when one is expired or expires within 90 days.
   const certsQ = useCertificationsAll();
+  // 8-Week Tracker board progress (0152) → one pill under the name, opens the Tracker drawer.
+  const boardQ = useAllTrainingBoardProgress();
   // 'all' = admin (any user/role). 'engineers' = manager: may add + edit
   // ENGINEER rows only (DB-enforced, migration 0124). 'none' = lead: view.
   const canManageUsers  = manageScope === 'all';                 // full roster powers
@@ -301,6 +305,23 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                           hired {new Date(r.hiring_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
                       )}
+                      {(() => {
+                        const bp = boardQ.byUser.get(r.user_id);
+                        const enr = nhQ.data?.enrollments.get(`${r.user_id}:upark_l1_plan_b`);
+                        if (!bp && !enr?.start_date) return null;
+                        const wk = nhWeekFor(enr?.start_date);
+                        const done = bp?.done ?? 0, total = bp?.total ?? boardQ.total;
+                        return (
+                          <button type="button" onClick={() => setTrackerFor(r)}
+                            className="t-small mt-0.5 mr-1 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                            style={{ background: done >= total && total ? 'rgba(16,185,129,0.12)' : 'rgba(94,106,210,0.10)', color: done >= total && total ? '#047857' : 'var(--color-accent)', fontSize: 10, fontWeight: 600, letterSpacing: '0.02em' }}
+                            title={`8-Week Tracker board — ${done}/${total} done${bp?.moreWork ? ` · ${bp.moreWork} more work` : ''}${bp?.nextWeek ? ` · ${bp.nextWeek} next week` : ''}. Click to open the Tracker.`}>
+                            <span>8-WK</span>
+                            <span>{wk === 0 ? 'not started' : wk > 8 ? 'past wk 8' : `W${wk}`}</span>
+                            <span style={{ opacity: 0.8 }}>· {done}/{total}</span>
+                          </button>
+                        );
+                      })()}
                       {(() => {
                         const today = new Date();
                         const worst = (certsQ.data?.get(r.user_id) ?? [])

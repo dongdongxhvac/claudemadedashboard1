@@ -6,6 +6,7 @@
 // unverified log entries and type their SOP write-ups, nothing else).
 import { useMemo, useState } from 'react';
 import { Section } from '../Section';
+import { TrainingSection } from './TrainingSection';
 import {
   TRACK_KINDS, TRACK_KIND_LABELS, TRACK_KIND_HINTS,
   SPIRITS, SPIRIT_LABELS, SPIRIT_HINTS,
@@ -28,16 +29,20 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--color-border)', borderRadius: 4, padding: '4px 6px', fontSize: 12,
 };
 
-export function TrackerPanel({ userId, canEdit, isSelf, personName }: {
+export function TrackerPanel({ userId, canEdit, isSelf, personName, boardName }: {
   userId: string;
   /** Lead / manager / admin: verify, mark spirit, score traits, set skill status. */
   canEdit: boolean;
   /** The page belongs to the person being tracked. */
   isSelf: boolean;
   personName?: string;
+  /** Name on the 8-week board / invite when the Log title should stay plain (the drawer). */
+  boardName?: string;
 }) {
   return (
     <div className="space-y-4">
+      {/* 8-Week Tracker board (user 2026-10-23) — the mentor's record, admin side only */}
+      {canEdit && <TrainingSection userId={userId} canEdit={canEdit} personName={boardName ?? personName ?? ''} />}
       <LogSection userId={userId} canEdit={canEdit} isSelf={isSelf} personName={personName} />
       <TraitsSection userId={userId} canEdit={canEdit} />
       <SkillsSection userId={userId} canEdit={canEdit} isSelf={isSelf} />

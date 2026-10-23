@@ -105,7 +105,8 @@ export function Section({
         )}
         {subtitle && <span className="t-small t-muted">{subtitle}</span>}
       </div>
-      {!collapsed && (loading ? <p className="t-text t-muted">Loading...</p> : children)}
+      {/* a non-collapsible section always shows its body (collapsed only applies when canCollapse) */}
+      {(!canCollapse || !collapsed) && (loading ? <p className="t-text t-muted">Loading...</p> : children)}
     </section>
   );
 }
