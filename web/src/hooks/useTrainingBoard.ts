@@ -82,12 +82,13 @@ export function useSaveTrainingBoard() {
       const program_key = input.program_key ?? DEFAULT_PROGRAM.key;
       const keep = input.rows.filter((r) => r.status || (r.note && r.note.trim()) || Object.keys(r.value ?? {}).length);
       const drop = input.rows.filter((r) => !keep.includes(r));
+      const today = new Date().toLocaleDateString('en-CA');   // the save date, shown on each log entry
       if (keep.length) {
         const { data, error } = await supabase
           .from('training_board')
           .upsert(keep.map((r) => ({
             user_id: input.user_id, program_key, item_key: r.item_key, week: r.week,
-            status: r.status, note: r.note?.trim() || null, value: r.value ?? {}, updated_by: me?.id ?? null,
+            status: r.status, note: r.note?.trim() || null, value: r.value ?? {}, entered_on: today, updated_by: me?.id ?? null,
           })), { onConflict: 'user_id,program_key,item_key,week' })
           .select('item_key');
         if (error) throw error;

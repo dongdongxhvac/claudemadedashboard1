@@ -56,7 +56,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
             return (
               <div key={sec.key}>
                 <div className="flex items-baseline justify-between px-1.5 py-0.5 rounded mb-1 uppercase tracking-wider"
-                  style={{ ...mono, fontSize: 10.5, fontWeight: 700, background: 'var(--color-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+                  style={{ ...mono, fontSize: 12, fontWeight: 700, background: 'var(--color-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
                   <span>{sec.num} · {sec.title}</span>
                   <span className="t-mono" style={{ textTransform: 'none', letterSpacing: 0 }}>{sp?.done ?? 0} / {sp?.total ?? sec.items.length}</span>
                 </div>
@@ -77,8 +77,8 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
                     return (
                       <div key={item.key} className="t-small" style={{ borderBottom: '1px solid var(--color-border)', padding: '5px 2px 6px', background: meta ? meta.bg : 'transparent', borderLeft: `3px solid ${meta ? meta.color : 'transparent'}`, paddingLeft: 6 }}>
                         <div className="flex items-start gap-2">
-                          <span className="t-mono" style={{ flex: '0 0 22px', fontWeight: 700, color: 'var(--color-text-muted)' }}>{item.num}</span>
-                          <span className="flex-1 min-w-0" style={{ fontWeight: 600, lineHeight: 1.25 }}>
+                          <span className="t-mono" style={{ flex: '0 0 24px', fontWeight: 700, fontSize: 14, color: 'var(--color-text-muted)' }}>{item.num}</span>
+                          <span className="flex-1 min-w-0" style={{ fontWeight: 600, lineHeight: 1.25, fontSize: 15 }}>
                             {item.text}
                             {item.hint && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>{item.hint}</span>}
                           </span>
@@ -114,7 +114,6 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
                                   <Box key={i} on={i < n} disabled={!canEdit} title={`${i + 1} of ${c.n}`}
                                     onClick={() => setRow(item.key, week, { value: { ...valueBase(item), n: i + 1 === n ? i : i + 1 } })} />
                                 ))}
-                                <DateInput value={typeof cur.value.on === 'string' ? cur.value.on : ''} disabled={!canEdit} onChange={(v) => setRow(item.key, week, { value: { ...valueBase(item), on: v || undefined } })} />
                               </>
                             );
                           })()}
@@ -143,13 +142,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
                               </div>
                             );
                           })()}
-                          {(c.kind === 'date' || c.kind === 'check' || (c.kind === 'note' && c.box)) && (
-                            <>
-                              {c.kind !== 'date' && <Box on={cur.status === 'done'} disabled={!canEdit} title="Done" onClick={() => setRow(item.key, week, { status: cur.status === 'done' && (wr?.status === 'done') ? null : 'done' })} />}
-                              <DateInput value={typeof cur.value.on === 'string' ? cur.value.on : ''} disabled={!canEdit}
-                                onChange={(v) => setRow(item.key, week, { value: { ...valueBase(item), on: v || undefined }, ...(v && !cur.status ? { status: 'done' as const } : {}) })} />
-                            </>
-                          )}
+                          {/* note / check / date items: the status pill is the tick; the save date is recorded on Save (user 2026-10-24) */}
                         </div>
 
                         {/* note — this week's note; the latest earlier note shows muted */}
@@ -179,7 +172,3 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
   );
 }
 type BoardSection3 = TrainingBoardDef['sections'];
-
-function DateInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled: boolean }) {
-  return <input type="date" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ ...input, padding: '1px 4px', fontSize: 11 }} title="Date" />;
-}
