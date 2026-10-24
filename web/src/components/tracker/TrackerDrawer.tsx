@@ -3,6 +3,7 @@
 // Binney, user 2026-10-09). Same panel as the admin Tracker tab; edit rights
 // follow the career helpers (admin, or same-site manager / lead) — the DB
 // enforces them, this only decides which controls to show.
+// Full-screen (user 2026-10-24) so the 8-week board gets its three columns.
 import { useMe } from '../../hooks/useMe';
 import { TrackerPanel } from './TrackerPanel';
 
@@ -19,7 +20,7 @@ export function TrackerDrawer({ person, onClose }: {
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl h-full overflow-y-auto p-6"
+        className="w-full h-full overflow-y-auto p-6"
         style={{ background: 'var(--color-bg)' }}
       >
         <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
