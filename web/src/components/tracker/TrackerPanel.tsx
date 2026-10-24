@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import { Section } from '../Section';
 import { TrainingSection } from './TrainingSection';
+import { useMe, manageScopeFor } from '../../hooks/useMe';
 import {
   TRACK_KINDS, TRACK_KIND_LABELS, TRACK_KIND_HINTS,
   SPIRITS, SPIRIT_LABELS, SPIRIT_HINTS,
@@ -39,10 +40,12 @@ export function TrackerPanel({ userId, canEdit, isSelf, personName, boardName }:
   /** Name on the 8-week board / invite when the Log title should stay plain (the drawer). */
   boardName?: string;
 }) {
+  // 8-Week Tracker board: manager-and-above only (manager / director / admin, user 2026-10-24) — not leads.
+  const me = useMe().data;
+  const canBoard = canEdit && manageScopeFor(me) !== 'none';
   return (
     <div className="space-y-4">
-      {/* 8-Week Tracker board (user 2026-10-23) — the mentor's record, admin side only */}
-      {canEdit && <TrainingSection userId={userId} canEdit={canEdit} personName={boardName ?? personName ?? ''} />}
+      {canBoard && <TrainingSection userId={userId} canEdit={canBoard} personName={boardName ?? personName ?? ''} />}
       <LogSection userId={userId} canEdit={canEdit} isSelf={isSelf} personName={personName} />
       <TraitsSection userId={userId} canEdit={canEdit} />
       <SkillsSection userId={userId} canEdit={canEdit} isSelf={isSelf} />

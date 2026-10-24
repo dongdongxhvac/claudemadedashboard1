@@ -21,10 +21,12 @@
 -- The board shows the latest week's status/note per item; weekly-log row W
 -- is exactly the rows of week W. Nothing is derived server-side.
 --
--- Access: admin-side only — read current_user_can_view_career(user_id),
--- write current_user_can_edit_career(user_id) (0133: admin anywhere,
--- same-site manager / lead). The person does not get their own rows
--- (no self clause) — the board is the mentor's record, not a self-report.
+-- Access (user 2026-10-24): manager-and-above only — manager / director /
+-- admin / is_manager (current_user_can_manage_users(), 0124). Leads do not
+-- see it; the person does not get their own rows — the board is the
+-- manager's record, not a self-report. Writes are also site-fenced through
+-- current_user_can_edit_career(user_id) (0133: admin anywhere, same-site
+-- manager).
 --
 -- Rollback: drop table training_board.
 
@@ -63,20 +65,20 @@ drop policy if exists tb_delete on training_board;
 
 create policy tb_read on training_board
   for select to authenticated
-  using (current_user_can_view_career(user_id));
+  using (coalesce(current_user_can_manage_users(), false));
 
 create policy tb_insert on training_board
   for insert to authenticated
-  with check (current_user_can_edit_career(user_id));
+  with check (current_user_can_edit_career(user_id) and coalesce(current_user_can_manage_users(), false));
 
 create policy tb_update on training_board
   for update to authenticated
-  using (current_user_can_edit_career(user_id))
-  with check (current_user_can_edit_career(user_id));
+  using (current_user_can_edit_career(user_id) and coalesce(current_user_can_manage_users(), false))
+  with check (current_user_can_edit_career(user_id) and coalesce(current_user_can_manage_users(), false));
 
 create policy tb_delete on training_board
   for delete to authenticated
-  using (current_user_can_edit_career(user_id));
+  using (current_user_can_edit_career(user_id) and coalesce(current_user_can_manage_users(), false));
 
 grant select, insert, update, delete on training_board to authenticated;
 grant all on training_board to service_role;

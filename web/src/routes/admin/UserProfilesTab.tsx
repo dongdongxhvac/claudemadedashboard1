@@ -306,6 +306,7 @@ export function UserProfilesTab({ manageScope = 'all' }: { manageScope?: ManageS
                         </div>
                       )}
                       {(() => {
+                        if (manageScope === 'none') return null;   // board is manager-and-above only
                         const bp = boardQ.byUser.get(r.user_id);
                         const enr = nhQ.data?.enrollments.get(`${r.user_id}:upark_l1_plan_b`);
                         if (!bp && !enr?.start_date) return null;
