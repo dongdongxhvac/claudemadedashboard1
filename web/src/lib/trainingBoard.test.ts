@@ -74,19 +74,19 @@ assertEq(p.sections.get('overview'), { done: 1, total: 2 }, 'overview section');
 // weekly log rows
 const w1 = weekLog(def, rows, 1, [{ week: 1, title: 'How HVAC Works', score: 15, total: 16 }]);
 assertEq(w1.tallies, [{ label: 'COVE', value: '38 h' }, { label: 'Overview', value: '' }], 'W1 tallies');
-assertEq(w1.review, ['10 HVAC — missed low static switch', 'quiz passed: How HVAC Works 15/16'], 'W1 review');
-assertEq(w1.done, ['2 Week — activity summary logged'], 'W1 done lists the week tick');
+assertEq(w1.review, ['Oct 1 · 10 HVAC — missed low static switch', 'quiz passed: How HVAC Works 15/16'], 'W1 review (dated)');
+assertEq(w1.done, ['Oct 1 · 2 Week — activity summary logged'], 'W1 done lists the week tick');
 const w2 = weekLog(def, rows, 2);
 assertEq(w2.tallies, [{ label: 'COVE', value: '40 h' }, { label: 'Overview', value: '1' }], 'W2 tallies');
-assertEq(w2.done, ['2 Week — activity summary logged', '10 HVAC'], 'W2 done');
-assertEq(w2.focus, ['11 Plumbing'], 'W2 focus');
-assertEq(w2.review, ['10 HVAC — retest ok'], 'W2 review');
+assertEq(w2.done, ['Oct 1 · 2 Week — activity summary logged', 'Oct 1 · 10 HVAC'], 'W2 done');
+assertEq(w2.focus, ['Oct 1 · 11 Plumbing'], 'W2 focus');
+assertEq(w2.review, ['Oct 1 · 10 HVAC — retest ok'], 'W2 review');
 
 // invite body
 const inv = inviteText(def, rows, 2, 'Evan');
 assertEq(inv.split('\n')[0], 'Title: 8-Week Review · W2 · Evan', 'invite title');
-assertEq(inv.includes('Focus:\n  • 11 Plumbing') || inv.includes('Focus: 11 Plumbing'), true, 'invite focus');
-assertEq(inv.includes('• 10 HVAC — retest ok'), true, 'invite review');
+assertEq(inv.includes('Focus: Oct 1 · 11 Plumbing'), true, 'invite focus');
+assertEq(inv.includes('• Oct 1 · 10 HVAC — retest ok'), true, 'invite review (done + note, dated)');
 assertEq(inv.includes('Done: 1 / 5 on the board'), true, 'invite done');
 const inv1 = inviteText(def, [...rows, row('meta.invite', 1, null, null, { when: 'Fri 2pm', title: 'Kickoff' })], 1, 'Evan');
 assertEq(inv1.startsWith('Title: Kickoff\n\nWhen: Fri 2pm'), true, 'invite meta');

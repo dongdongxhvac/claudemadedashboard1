@@ -181,6 +181,9 @@ export function boardProgress(def: TrainingBoardDef, rows: BoardRow[]): BoardPro
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0, moreWork, nextWeek, sections };
 }
 
+/** "Oct 24" for a YYYY-MM-DD (empty when missing). */
+export const fmtDay = (ymd: string | null | undefined) => (ymd ? new Date(ymd.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
+
 // ── weekly log (pages 2–3) ─────────────────────────────────────────────────
 export type QuizPass = { week: number; title: string; score: number; total: number };
 export type WeekLog = {
@@ -193,7 +196,8 @@ export type WeekLog = {
 export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, quizzes: QuizPass[] = []): WeekLog {
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
-  const name = (r: BoardRow) => { const it = byKey.get(r.item_key); return it ? `${it.num} ${it.text}` : r.item_key; };
+  // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
+  const name = (r: BoardRow) => { const it = byKey.get(r.item_key); return `${fmtDay(r.entered_on)} · ${it ? `${it.num} ${it.text}` : r.item_key}`; };
   const tallies = def.tallies.map((t) => {
     const sec = def.sections.find((s) => s.key === t.section);
     if (t.hours) {
@@ -220,7 +224,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const when = typeof meta.when === 'string' ? meta.when : '';
   const title = typeof meta.title === 'string' && meta.title ? meta.title : `8-Week Review · W${week} · ${personName}`;
-  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; return `${it.num} ${it.text}${r.note ? ` — ${r.note}` : ''}`; });
+  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; return `${fmtDay(r.entered_on)} · ${it.num} ${it.text}${r.note ? ` — ${r.note}` : ''}`; });
   const doneCum = boardProgress(def, rows.filter((r) => r.week <= week));
   const fields = def.inviteFields.length ? def.inviteFields : ['Title', 'When', 'Focus', 'To do', 'Review with Jie', 'Done'];
   const body: Record<string, string[]> = {
@@ -228,7 +232,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
     [fields[1] ?? 'When']: [when],
     [fields[2] ?? 'Focus']: log.focus,
     [fields[3] ?? 'To do']: moreWork,
-    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${byKey.get(x.item_key)!.num} ${byKey.get(x.item_key)!.text}` === d); return r?.note ? `${d} — ${r.note}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
+    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${byKey.get(x.item_key)!.num} ${byKey.get(x.item_key)!.text}` === d); return r?.note ? `${d} — ${r.note}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
     [fields[5] ?? 'Done']: [`${doneCum.done} / ${doneCum.total} on the board`],
   };
   return fields.map((f) => {
