@@ -4,7 +4,7 @@
 // back the HTML for a new tab → browser print. The printout IS the
 // print-station page, filled in.
 import {
-  currentOf, hoursOf, weekTicked, weekLog, inviteText, boardProgress, WEEKS, META_FIRST,
+  currentOf, hoursOf, roundOf, weekTicked, weekLog, inviteText, boardProgress, WEEKS, META_FIRST, ROUND_META,
   type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
@@ -68,9 +68,15 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       const t = fi.querySelector(':scope > .t');
       const bx = fi.querySelector(':scope > .bx');
       const c = item.control;
-      if (c.kind === 'hours8') {
+      if (c.kind === 'hours8' || c.kind === 'rounds8') {
         const hws = t ? Array.from(t.querySelectorAll('.under .hw .wk')) : [];
         WEEKS.forEach((w, i) => { const h = hoursOf(rows, item.key, w); setText(hws[i], h == null ? '' : String(h)); });
+        // the merged "Building round — each area" row: one line per round, ticked when solo
+        const fi2 = item.docIdx2 == null ? null : fis[item.docIdx2];
+        if (c.kind === 'rounds8' && fi2) {
+          const lns = Array.from(fi2.querySelectorAll(':scope > .t .lines .ln'));
+          WEEKS.forEach((w, i) => { const ro = roundOf(rows, item.key, w); setText(lns[i]?.querySelector('.wk'), ro ? `${w} · ${ROUND_META[ro].label.toLowerCase()}` : ''); tick(lns[i]?.querySelector('.box'), ro === 'solo'); });
+        }
       } else if (c.kind === 'weeks8') {
         const boxes = t ? Array.from(t.querySelectorAll('.under .wkb .box')) : [];
         WEEKS.forEach((w, i) => tick(boxes[i], weekTicked(rows, item.key, w)));

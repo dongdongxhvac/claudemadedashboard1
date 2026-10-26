@@ -12,6 +12,7 @@ import { slug } from './signoffSheet.ts';
 
 export type BoardControl =
   | { kind: 'hours8' }                       // 8 blanks "1 __ 2 __ …" — hours per week
+  | { kind: 'rounds8' }                      // 8 rounds — hours + learning / solo / next week (items 7 + 9 merged)
   | { kind: 'weeks8' }                       // 8 boxes labelled 1..8 — one tick per week
   | { kind: 'count'; n: number }             // n boxes + a date line — how many times
   | { kind: 'labels'; labels: string[] }     // boxes with labels (COVE · PlantLog · …)
@@ -27,6 +28,21 @@ export type BoardItem = {
   docIdx: number;
   /** major equipment rows split in two (user 2026-10-26): overview + quiz · find it / tag it */
   part?: 'overview' | 'tagit';
+  /** a second printed row this item also fills (the merged "Building round — each area" row) */
+  docIdx2?: number;
+};
+/** The round state of a PlantLog / building round (value.round on that week's row). */
+export type BoardRound = 'learning' | 'solo' | 'next_week';
+export const ROUNDS: BoardRound[] = ['learning', 'solo', 'next_week'];
+export const ROUND_META: Record<BoardRound, { label: string; short: string; color: string; bg: string }> = {
+  learning:  { label: 'Learning',  short: '◐', color: '#b45309', bg: 'rgba(245,158,11,0.16)' },
+  solo:      { label: 'Solo',      short: '✓', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+  next_week: { label: 'Next week', short: '→', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
+};
+const isRound = (v: unknown): v is BoardRound => (ROUNDS as string[]).includes(String(v));
+export const roundOf = (rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[], itemKey: string, week: number): BoardRound | null => {
+  const v = rows.find((r) => r.item_key === itemKey && r.week === week)?.value?.round;
+  return isRound(v) ? v : null;
 };
 /** Items in the "Find It & Tag It" section that are a major piece of equipment get the two parts. */
 const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
@@ -168,7 +184,20 @@ export function parseTrainingBoard(html: string): TrainingBoardDef {
         sec.items.push(base);
       }
     });
-    if (!sec.total || split) sec.total = sec.items.length;
+    // "PlantLog round" (hours per week) + "Building round — each area" are one item (user 2026-10-26):
+    // per round the hours and whether it was learning / solo / next week. Keeps row 7's key (hours already saved).
+    const hoursIt = sec.items.find((it) => it.control.kind === 'hours8' && /plantlog round/i.test(it.text));
+    const areasIt = sec.items.find((it) => it.control.kind === 'areas' && /building round/i.test(it.text));
+    let merged = false;
+    if (hoursIt && areasIt) {
+      merged = true;
+      hoursIt.control = { kind: 'rounds8' };
+      hoursIt.text = `${hoursIt.text} · ${areasIt.text.replace(/\s*—.*$/, '').toLowerCase()}`;
+      hoursIt.hint = hoursIt.hint ?? 'per round: hours · learning / solo / next week';
+      hoursIt.docIdx2 = areasIt.docIdx;
+      sec.items.splice(sec.items.indexOf(areasIt), 1);
+    }
+    if (!sec.total || split || merged) sec.total = sec.items.length;
     sections.push(sec);
   }
   const items = sections.flatMap((s) => s.items);
@@ -267,6 +296,7 @@ export function itemProgress(item: BoardItem, rows: BoardRow[]): number {
   const c = item.control;
   switch (c.kind) {
     case 'hours8': return WEEKS.filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0).length / 8;
+    case 'rounds8': return WEEKS.filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0 || roundOf(rows, item.key, w)).length / 8;
     case 'weeks8': return WEEKS.filter((w) => weekTicked(rows, item.key, w)).length / 8;
     case 'count': return Math.min(1, (Number(cur.value.n) || 0) / c.n);
     case 'labels': return Math.min(1, ((cur.value.ticks as string[] | undefined)?.length ?? 0) / c.labels.length);
@@ -280,6 +310,8 @@ export const itemDone = (item: BoardItem, rows: BoardRow[]) => {
   const k = item.control.kind;
   if (k === 'weeks8') return itemProgress(item, rows) >= 1;
   if (k === 'hours8') return currentOf(rows, item.key).status === 'done' || itemProgress(item, rows) >= 1;
+  // rounds: done once every round was solo (or the mentor ticks it)
+  if (k === 'rounds8') return currentOf(rows, item.key).status === 'done' || WEEKS.every((w) => roundOf(rows, item.key, w) === 'solo');
   return currentOf(rows, item.key).status === 'done';
 };
 
@@ -330,6 +362,12 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
       const v = h ? hoursOf(rows, h.key, week) : null;
       return { label: t.label, value: v == null ? '' : `${v} h` };
     }
+    // the rounds item (PlantLog · building round) reports that week's "38 h · solo" instead of a count
+    const rd = sec?.items.find((it) => it.control.kind === 'rounds8');
+    if (rd) {
+      const h = hoursOf(rows, rd.key, week); const ro = roundOf(rows, rd.key, week);
+      return { label: t.label, value: [h == null ? '' : `${h} h`, ro ? ROUND_META[ro].label.toLowerCase() : ''].filter(Boolean).join(' · ') };
+    }
     const n = sec ? sec.items.filter((it) => wk.some((r) => r.item_key === it.key && r.status === 'done')).length : 0;
     return { label: t.label, value: n ? String(n) : '' };
   });
@@ -339,7 +377,10 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
     ...changes,
     ...quizzes.filter((q) => q.week === week).map((q) => `quiz passed: ${q.title} ${q.score}/${q.total}`),
   ];
-  const list = (st: BoardStatus) => wk.filter((r) => r.status === st && byKey.has(r.item_key)).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num).map(name);
+  // a solo round counts as done that week, a next-week round as focus
+  const roundAs = (r: BoardRow): BoardStatus | null => { const it = byKey.get(r.item_key); if (it?.control.kind !== 'rounds8') return null; const ro = roundOf([r], r.item_key, r.week); return ro === 'solo' ? 'done' : ro === 'next_week' ? 'next_week' : null; };
+  const list = (st: BoardStatus) => wk.filter((r) => byKey.has(r.item_key) && (r.status === st || roundAs(r) === st)).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)
+    .map((r) => { const h = byKey.get(r.item_key)!.control.kind === 'rounds8' ? hoursOf(rows, r.item_key, r.week) : null; return h == null ? name(r) : `${name(r)} — ${h} h`; });
   return { week, tallies, review, done: list('done'), focus: list('next_week') };
 }
 

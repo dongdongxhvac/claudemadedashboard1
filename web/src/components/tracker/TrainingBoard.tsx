@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
+  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, ROUNDS, ROUND_META, isScorable, statusForScore, currentOf, hoursOf, roundOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress, type BoardNote,
 } from '../../lib/trainingBoard';
 
@@ -109,10 +109,39 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                             <label key={w} className="inline-flex items-center gap-0.5" title={`${w}`}>
                               <span className="t-mono t-muted" style={{ fontSize: 10 }}>{w}</span>
                               <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={hoursOf(rows, item.key, w) ?? ''}
-                                onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); setRow(item.key, w, { value: d === '' ? {} : { hours: Number(d) } }); }}
+                                onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); const { hours: _h, ...v } = rowFor(item, w)?.value ?? {}; void _h; setRow(item.key, w, { value: d === '' ? v : { ...v, hours: Number(d) } }); }}
                                 style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />
                             </label>
                           ))}
+                          {/* rounds (items 7 + 9 merged, user 2026-10-26): per round the hours and learning / solo / next week */}
+                          {c.kind === 'rounds8' && (
+                            <div className="w-full" style={{ display: 'grid', gridTemplateColumns: 'auto auto 1fr', columnGap: 8, rowGap: 3, alignItems: 'center' }}>
+                              {WEEKS.map((w) => {
+                                const h = hoursOf(rows, item.key, w); const ro = roundOf(rows, item.key, w);
+                                const write = (patch: { hours?: number | null; round?: string | null }) => {
+                                  const { hours: _h, round: _r, ...v } = rowFor(item, w)?.value ?? {}; void _h; void _r;
+                                  const hh = patch.hours === undefined ? h : patch.hours; const rr = patch.round === undefined ? ro : patch.round;
+                                  setRow(item.key, w, { value: { ...v, ...(hh == null ? {} : { hours: hh }), ...(rr ? { round: rr } : {}) } });
+                                };
+                                return [
+                                  <span key={`n${w}`} className="t-mono t-muted" style={{ fontSize: 10.5, fontWeight: 700 }}>{w}</span>,
+                                  <input key={`h${w}`} type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={h ?? ''} placeholder="h" title={`Round ${w} · hours`}
+                                    onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); write({ hours: d === '' ? null : Number(d) }); }}
+                                    style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />,
+                                  <span key={`r${w}`} className="inline-flex gap-1">
+                                    {ROUNDS.map((r) => {
+                                      const m = ROUND_META[r]; const on = ro === r;
+                                      return (
+                                        <button key={r} type="button" disabled={!canEdit} title={`Round ${w} · ${m.label}`} onClick={() => write({ round: on ? null : r })}
+                                          className="px-1.5 rounded whitespace-nowrap"
+                                          style={{ fontSize: 10, fontWeight: 700, height: 18, border: `1px solid ${on ? m.color : 'var(--color-border)'}`, background: on ? m.bg : 'var(--color-card)', color: on ? m.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{m.short} {m.label}</button>
+                                      );
+                                    })}
+                                  </span>,
+                                ];
+                              })}
+                            </div>
+                          )}
                           {c.kind === 'weeks8' && WEEKS.map((w) => (
                             <span key={w} className="inline-flex flex-col items-center" title={`Week ${w}`}>
                               <Box on={weekTicked(rows, item.key, w)} disabled={!canEdit} onClick={() => setRow(item.key, w, { status: weekTicked(rows, item.key, w) ? null : 'done' })} />

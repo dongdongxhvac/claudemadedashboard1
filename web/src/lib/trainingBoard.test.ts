@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates,
+  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -138,6 +138,22 @@ assertEq(diffRows([row('hvac', 3, 'done', 'legacy text')], [{ item_key: 'hvac', 
 
 assertEq(weekDates([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26', '3': '2026-11-09' } })]), { 1: '2026-10-26', 3: '2026-11-09' }, 'week dates');
 assertEq(diffRows([], [{ item_key: 'meta.weeks', week: 0, status: null, note: null, value: { dates: { '1': '2026-10-26' } } }]), [], 'meta rows are not logged');
+
+// ── rounds (items 7 + 9 merged): hours + learning / solo / next week per round ──
+const rdef: TrainingBoardDef = { ...def, sections: [{ num: 2, key: 'plantlog', title: 'PlantLog', total: 1, items: [
+  { num: 7, key: 'plantlog_round', text: 'PlantLog round · building round', hint: null, section: 'plantlog', control: { kind: 'rounds8' }, docIdx: 0, docIdx2: 2 },
+] }], tallies: [{ label: 'PlantLog', hours: false, section: 'plantlog' }] };
+rdef.items = rdef.sections.flatMap((s) => s.items);
+const rrows = [row('plantlog_round', 1, null, null, { hours: 6, round: 'learning' }), row('plantlog_round', 2, null, null, { hours: 7, round: 'solo' }), row('plantlog_round', 3, null, null, { round: 'next_week' })];
+assertEq(roundOf(rrows, 'plantlog_round', 2), 'solo', 'round of week 2');
+assertEq(roundOf(rrows, 'plantlog_round', 5), null, 'no round yet');
+assertEq(itemProgress(rdef.items[0], rrows), 3 / 8, 'rounds: 3 of 8 filled');
+assertEq(itemDone(rdef.items[0], rrows), false, 'rounds not done until all solo');
+assertEq(itemDone(rdef.items[0], [1, 2, 3, 4, 5, 6, 7, 8].map((w) => row('plantlog_round', w, null, null, { round: 'solo' }))), true, 'rounds done when every round is solo');
+assertEq(weekLog(rdef, rrows, 2).tallies, [{ label: 'PlantLog', value: '7 h · solo' }], 'tally shows hours and round');
+assertEq(weekLog(rdef, rrows, 2).done, ['Oct 1 · 7 PlantLog round · building round — 7 h'], 'solo round is done that week');
+assertEq(weekLog(rdef, rrows, 3).focus, ['Oct 1 · 7 PlantLog round · building round'], 'next-week round is focus');
+assertEq(diffRows([rrows[0]], [{ ...rrows[0], value: { hours: 8, round: 'solo' } }]).map((x) => [x.field, x.old, x.new]), [['hours', '6', '8'], ['value', 'round: learning', 'round: solo']], 'round changes are logged');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
