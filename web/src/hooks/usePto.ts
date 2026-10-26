@@ -35,10 +35,10 @@ export const PTO_TYPE_LABELS: Partial<Record<PtoType, string>> = {
 
 /** Types the manager Add/Quick/Edit-PTO dropdowns offer, in display order.
  *  vacation/sick/holiday carry balances; the rest are non-balance absence
- *  types that still show on the heatmap + year log. 'unpaid'/'personal' are
- *  legacy — not offered for new entries but still render via ptoTypeLabel(). */
+ *  types that still show on the heatmap + year log. 'personal' is legacy —
+ *  not offered for new entries but still renders via ptoTypeLabel(). */
 export const PTO_MANAGER_TYPE_OPTIONS: PtoType[] = [
-  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty',
+  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty', 'unpaid',
 ];
 
 /** Types the engineer self-serve form offers. Subset of the manager set. */

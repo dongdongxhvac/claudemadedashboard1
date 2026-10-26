@@ -48,10 +48,10 @@ export function ptoTypeLabel(t: PtoType | null | undefined): string {
 }
 
 /** Types the manager Add/Quick/Edit-PTO dropdowns offer, in display order.
- *  Mirrors the shared usePto set. 'unpaid'/'personal' are legacy — not
- *  offered for new entries but still render via ptoTypeLabel(). */
+ *  Mirrors the shared usePto set. 'personal' is legacy — not offered for
+ *  new entries but still renders via ptoTypeLabel(). */
 export const PTO_MANAGER_TYPE_OPTIONS: PtoType[] = [
-  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty',
+  'sick', 'vacation', 'holiday', 'bereavement', 'leave', 'short_term', 'jury_duty', 'unpaid',
 ];
 
 export type PtoRequestSource =
