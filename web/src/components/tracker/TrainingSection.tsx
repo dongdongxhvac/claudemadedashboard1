@@ -52,17 +52,27 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
       return next;
     });
   };
+  /** Reset: clear every saved row of the item (all weeks) — dropped on Save and logged as "reset". */
+  const resetItem = (itemKey: string) => {
+    const weeks = new Set(b.rows.filter((r) => r.item_key === itemKey).map((r) => r.week));
+    for (const [k] of draft) if (k.startsWith(itemKey + ':')) weeks.add(Number(k.slice(itemKey.length + 1)));
+    setDraft((prev) => {
+      const next = new Map(prev);
+      for (const wk of weeks) next.set(rowKey(itemKey, wk), { item_key: itemKey, week: wk, status: null, note: null, value: {} });
+      return next;
+    });
+  };
   const dirty = draft.size;
   const doSave = () => {
     setErr(null);
-    save.mutate({ user_id: userId, rows: [...draft.values()] }, {
+    save.mutate({ user_id: userId, rows: [...draft.values()], base: b.rows }, {
       onSuccess: () => setDraft(new Map()),
       onError: (e) => setErr((e as Error).message),
     });
   };
   const print = () => {
     if (!b.def || !b.doc) return;
-    const html = buildTrackerPrintHtml(b.doc.html, b.def, rows, { name: personName, startDate: b.startDate, quizzes: b.quizzes });
+    const html = buildTrackerPrintHtml(b.doc.html, b.def, rows, { name: personName, startDate: b.startDate, quizzes: b.quizzes, log: b.log });
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     window.open(url, '_blank', 'noopener');
   };
@@ -126,13 +136,13 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
           {tab === 'board' && (
             <>
               <p className="t-small t-muted mb-2">
-                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.more_work.color }}>more work</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; hours, boxes, dates and notes are the paper board's. Edits land on week {w} until you press Save.
+                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.more_work.color }}>more work</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4, mark the note missed / checked / good, ↺ resets an item. Edits land on week {w} until you press Save; every change is logged with its date in the weekly log.
               </p>
-              <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit} setRow={setRow} progress={p} />
+              <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit} setRow={setRow} onReset={resetItem} progress={p} />
             </>
           )}
-          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
-          {tab === 'invite' && <InviteCard def={b.def} rows={rows} week={w} personName={personName} canEdit={canEdit} setRow={setRow} />}
+          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
+          {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={w} personName={personName} canEdit={canEdit} setRow={setRow} />}
         </>
       )}
     </Section>

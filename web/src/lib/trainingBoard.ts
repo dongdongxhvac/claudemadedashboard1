@@ -45,6 +45,26 @@ export const STATUS_META: Record<BoardStatus, { label: string; short: string; co
 };
 export const STATUS_CYCLE: (BoardStatus | null)[] = [null, 'done', 'more_work', 'next_week'];
 
+/** The mark next to a note (user 2026-10-26): missed · checked · good. Lives in value.mark. */
+export type BoardMark = 'missed' | 'checked' | 'good';
+export const MARKS: BoardMark[] = ['missed', 'checked', 'good'];
+export const MARK_META: Record<BoardMark, { label: string; short: string; color: string; bg: string }> = {
+  missed:  { label: 'Missed',  short: '✗', color: '#b91c1c', bg: 'rgba(239,68,68,0.14)' },
+  checked: { label: 'Checked', short: '✓', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
+  good:    { label: 'Good',    short: '★', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+};
+/** Score 1–4 per item (value.score). */
+export const SCORES = [1, 2, 3, 4] as const;
+export const SCORE_LABELS: Record<number, string> = { 1: 'needs work', 2: 'developing', 3: 'solid', 4: 'strong' };
+
+/** One change-log line (training_board_log, migration 0153). */
+export type BoardLogField = 'status' | 'score' | 'mark' | 'note' | 'hours' | 'value' | 'reset';
+export type BoardLogRow = {
+  id: string; user_id: string; program_key: string; item_key: string; week: number;
+  field: BoardLogField; old: string | null; new: string | null; changed_on: string; changed_by: string | null; created_at: string;
+};
+export type BoardLogInput = Pick<BoardLogRow, 'item_key' | 'week' | 'field' | 'old' | 'new'>;
+
 /** One stored row (training_board). `value` per control: hours8 {hours:number}
  *  (that week's hours) · count {n} · labels {ticks:string[]} · areas {areas:string[]}
  *  · date/check/note {on?:string} · meta.invite {when,title} · meta.first_meeting {covered:string[], dates:{[signer]:string}}. */
@@ -122,7 +142,7 @@ export const rowKey = (itemKey: string, week: number) => `${itemKey}:${week}`;
 
 /** The board's current view of an item: last non-null status / note by week,
  *  and the latest row's value (cumulative controls). */
-export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardStatus | null; statusWeek: number; note: string | null; value: Record<string, unknown>; week: number } {
+export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardStatus | null; statusWeek: number; note: string | null; value: Record<string, unknown>; week: number; score: number | null; mark: BoardMark | null } {
   const mine = rows.filter((r) => r.item_key === itemKey).sort((a, b) => a.week - b.week);
   let status: BoardStatus | null = null, statusWeek = 0, note: string | null = null, value: Record<string, unknown> = {}, week = 0;
   for (const r of mine) {
@@ -131,7 +151,56 @@ export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardSta
     if (r.value && Object.keys(r.value).length) value = r.value;
     week = r.week;
   }
-  return { status, statusWeek, note, value, week };
+  const score = typeof value.score === 'number' ? value.score : null;
+  const mark = (MARKS as string[]).includes(String(value.mark)) ? (value.mark as BoardMark) : null;
+  return { status, statusWeek, note, value, week, score, mark };
+}
+
+// ── change log ─────────────────────────────────────────────────────────────
+const num = (v: unknown) => (typeof v === 'number' ? v : null);
+/** "n: 2 · ticks: COVE, UKG" for the control part of a value (score / mark / hours aside). */
+export function summarizeValue(v: Record<string, unknown> | null | undefined): string | null {
+  if (!v) return null;
+  const parts: string[] = [];
+  for (const [k, x] of Object.entries(v)) {
+    if (k === 'score' || k === 'mark' || k === 'hours' || x == null || x === '') continue;
+    if (Array.isArray(x)) { const arr = x.filter(Boolean); if (arr.length) parts.push(`${k}: ${arr.join(', ')}`); }
+    else if (typeof x === 'object') parts.push(`${k}: ${JSON.stringify(x)}`);
+    else parts.push(`${k}: ${String(x)}`);
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+/** What a Save changed, per field — the lines written to training_board_log. */
+export function diffRows(base: BoardRow[], saved: Pick<BoardRow, 'item_key' | 'week' | 'status' | 'note' | 'value'>[]): BoardLogInput[] {
+  const out: BoardLogInput[] = [];
+  for (const r of saved) {
+    const b = base.find((x) => x.item_key === r.item_key && x.week === r.week) ?? null;
+    const bv = b?.value ?? {}; const nv = r.value ?? {};
+    const note = (r.note ?? '').trim(); const bnote = (b?.note ?? '').trim();
+    const empty = !r.status && !note && !Object.keys(nv).length;
+    const line = (field: BoardLogField, o: string | null, n: string | null) => { if (o !== n) out.push({ item_key: r.item_key, week: r.week, field, old: o, new: n }); };
+    if (empty) { if (b) line('reset', [b.status, bnote || null, summarizeValue(bv)].filter(Boolean).join(' · ') || null, null); continue; }
+    line('status', b?.status ?? null, r.status ?? null);
+    line('note', bnote || null, note || null);
+    line('score', num(bv.score)?.toString() ?? null, num(nv.score)?.toString() ?? null);
+    line('mark', typeof bv.mark === 'string' ? bv.mark : null, typeof nv.mark === 'string' ? nv.mark : null);
+    line('hours', num(bv.hours)?.toString() ?? null, num(nv.hours)?.toString() ?? null);
+    line('value', summarizeValue(bv), summarizeValue(nv));
+  }
+  return out;
+}
+/** "score 2 → 3", "mark: good", "status: done", "note: …", "hours 38", "reset". */
+export function describeChange(l: Pick<BoardLogRow, 'field' | 'old' | 'new'>): string {
+  const label = (v: string | null) => (v == null ? '—' : v === 'more_work' ? 'more work' : v === 'next_week' ? 'next week' : v);
+  switch (l.field) {
+    case 'status': return l.old ? `status: ${label(l.old)} → ${label(l.new)}` : `status: ${label(l.new)}`;
+    case 'score': return l.old ? `score ${l.old} → ${l.new ?? '—'}` : `score ${l.new ?? '—'}`;
+    case 'mark': return l.old ? `mark: ${l.old} → ${l.new ?? '—'}` : `mark: ${l.new ?? '—'}`;
+    case 'note': return l.new ? `note: ${l.new}` : `note cleared${l.old ? ` (was "${l.old}")` : ''}`;
+    case 'hours': return l.new ? `hours ${l.new}${l.old ? ` (was ${l.old})` : ''}` : `hours cleared`;
+    case 'value': return l.new ?? `cleared${l.old ? ` (was ${l.old})` : ''}`;
+    case 'reset': return `reset${l.old ? ` (was ${l.old})` : ''}`;
+  }
 }
 
 export const hoursOf = (rows: BoardRow[], itemKey: string, week: number): number | null => {
@@ -193,9 +262,14 @@ export type WeekLog = {
   done: string[];       // "10 HVAC"
   focus: string[];      // next-week items
 };
-export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, quizzes: QuizPass[] = []): WeekLog {
+export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, quizzes: QuizPass[] = [], log: BoardLogRow[] = []): WeekLog {
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
+  const itemName = (key: string) => { const it = byKey.get(key); return it ? `${it.num} ${it.text}` : key; };
+  // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"
+  const changes = log.filter((l) => l.week === week && byKey.has(l.item_key)).sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
+  const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
   // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
   const name = (r: BoardRow) => { const it = byKey.get(r.item_key); return `${fmtDay(r.entered_on)} · ${it ? `${it.num} ${it.text}` : r.item_key}`; };
   const tallies = def.tallies.map((t) => {
@@ -209,7 +283,9 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
     return { label: t.label, value: n ? String(n) : '' };
   });
   const review = [
-    ...wk.filter((r) => r.note && byKey.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).map((r) => `${name(r)} — ${r.note}`),
+    // notes saved before the change log existed (no logged note line for them)
+    ...wk.filter((r) => r.note && byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).map((r) => `${name(r)} — ${r.note}`),
+    ...changes,
     ...quizzes.filter((q) => q.week === week).map((q) => `quiz passed: ${q.title} ${q.score}/${q.total}`),
   ];
   const list = (st: BoardStatus) => wk.filter((r) => r.status === st && byKey.has(r.item_key)).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num).map(name);
@@ -217,8 +293,8 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
 }
 
 // ── invite (page 4) ────────────────────────────────────────────────────────
-export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number, personName: string): string {
-  const log = weekLog(def, rows, week);
+export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number, personName: string, changes: BoardLogRow[] = []): string {
+  const log = weekLog(def, rows, week, [], changes);
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};

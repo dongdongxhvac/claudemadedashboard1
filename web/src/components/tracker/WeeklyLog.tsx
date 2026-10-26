@@ -1,10 +1,10 @@
 // WeeklyLog — pages 2–3 of the 8-Week Tracker, generated from the board's
 // rows: per week the category tallies, Review (notes + quiz passes), Done
 // (items ticked that week) and Focus (items marked next week).
-import { weekLog, WEEKS, type TrainingBoardDef, type BoardRow, type QuizPass } from '../../lib/trainingBoard';
+import { weekLog, WEEKS, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
 
-export function WeeklyLog({ def, rows, quizzes, currentWeek, onPickWeek }: {
-  def: TrainingBoardDef; rows: BoardRow[]; quizzes: QuizPass[]; currentWeek: number; onPickWeek?: (w: number) => void;
+export function WeeklyLog({ def, rows, quizzes, log: log0 = [], currentWeek, onPickWeek }: {
+  def: TrainingBoardDef; rows: BoardRow[]; quizzes: QuizPass[]; log?: BoardLogRow[]; currentWeek: number; onPickWeek?: (w: number) => void;
 }) {
   const cols = def.logColumns.length === 4 ? def.logColumns : ['Week · by category', 'Review — past week activities · quiz or field exercise', 'Done — ticked on the board (#)', 'Focus — next week'];
   return (
@@ -16,7 +16,7 @@ export function WeeklyLog({ def, rows, quizzes, currentWeek, onPickWeek }: {
         </thead>
         <tbody>
           {WEEKS.map((w) => {
-            const log = weekLog(def, rows, w, quizzes);
+            const log = weekLog(def, rows, w, quizzes, log0);
             const empty = !log.review.length && !log.done.length && !log.focus.length && log.tallies.every((t) => !t.value);
             const isCur = w === currentWeek;
             return (

@@ -5,7 +5,7 @@
 // print-station page, filled in.
 import {
   currentOf, hoursOf, weekTicked, weekLog, inviteText, boardProgress, WEEKS, META_FIRST,
-  type TrainingBoardDef, type BoardRow, type QuizPass,
+  type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
 const FILL_CSS = `
@@ -23,7 +23,7 @@ const fmt = (ymd: string | null | undefined) => (ymd ? new Date(ymd + 'T00:00:00
 const setText = (el: Element | null | undefined, text: string) => { if (!el) return; el.textContent = text; if (text) el.classList.add('txt'); };
 const tick = (el: Element | null | undefined, on: boolean) => { if (el && on) el.classList.add('on'); };
 
-export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, rows: BoardRow[], opts: { name: string; startDate: string | null; site?: string; quizzes?: QuizPass[] }): string {
+export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, rows: BoardRow[], opts: { name: string; startDate: string | null; site?: string; quizzes?: QuizPass[]; log?: BoardLogRow[] }): string {
   const doc = new DOMParser().parseFromString(docHtml, 'text/html');
   const style = doc.createElement('style');
   style.textContent = FILL_CSS;
@@ -97,7 +97,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
   WEEKS.forEach((w, i) => {
     const tr = trs[i];
     if (!tr) return;
-    const log = weekLog(def, rows, w, opts.quizzes ?? []);
+    const log = weekLog(def, rows, w, opts.quizzes ?? [], opts.log ?? []);
     const tds = Array.from(tr.querySelectorAll(':scope > td'));
     const habs = Array.from(tds[0]?.querySelectorAll('.hab div') ?? []);
     // the markup already carries the unit ("COVE __ h") — write the number only
@@ -121,7 +121,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
   setText(doc.querySelector('.cont .who i'), opts.name);
   const weekForInvite = Math.max(1, Math.min(8, Math.max(0, ...rows.map((r) => r.week)) || 1));
   const mail = doc.querySelector('.mail');
-  if (mail) mail.textContent = inviteText(def, rows, weekForInvite, opts.name);
+  if (mail) mail.textContent = inviteText(def, rows, weekForInvite, opts.name, opts.log ?? []);
 
   return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 }

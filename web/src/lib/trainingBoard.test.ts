@@ -5,8 +5,8 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate,
-  type TrainingBoardDef, type BoardRow,
+  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue,
+  type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
 let failures = 0;
@@ -96,6 +96,34 @@ assertEq(weekOfDate('2026-10-01T12:00:00Z', '2026-09-28'), 1, 'week 1');
 assertEq(weekOfDate('2026-10-05T12:00:00Z', '2026-09-28'), 2, 'week 2');
 assertEq(weekOfDate('2026-09-01T12:00:00Z', '2026-09-28'), 0, 'before start');
 assertEq(weekOfDate('2026-12-30T12:00:00Z', '2026-09-28'), 9, 'after week 8');
+
+// ── change log (0153) ───────────────────────────────────────────────────────
+assertEq(currentOf([...rows, row('hvac', 3, null, null, { score: 3, mark: 'good' })], 'hvac').score, 3, 'score from value');
+assertEq(currentOf([...rows, row('hvac', 3, null, null, { score: 3, mark: 'good' })], 'hvac').mark, 'good', 'mark from value');
+assertEq(summarizeValue({ n: 2, ticks: ['COVE', 'UKG'], score: 3, mark: 'good', hours: 38 }), 'n: 2 · ticks: COVE, UKG', 'summarize skips score/mark/hours');
+const base = [row('hvac', 2, 'more_work', 'retest', { score: 2 })];
+const d = diffRows(base, [
+  { item_key: 'hvac', week: 2, status: 'done', note: 'retest ok', value: { score: 3, mark: 'good' } },   // three changes + mark
+  { item_key: 'plumbing', week: 2, status: 'next_week', note: null, value: {} },                       // new row
+  { item_key: 'week_hours', week: 1, status: null, note: null, value: { hours: 38 } },                 // hours
+]);
+assertEq(d.map((x) => [x.item_key, x.field, x.old, x.new]), [
+  ['hvac', 'status', 'more_work', 'done'], ['hvac', 'note', 'retest', 'retest ok'], ['hvac', 'score', '2', '3'], ['hvac', 'mark', null, 'good'],
+  ['plumbing', 'status', null, 'next_week'], ['week_hours', 'hours', null, '38'],
+], 'diff lines');
+assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: null, note: null, value: {} }]).map((x) => [x.field, x.old]), [['reset', 'more_work · retest']], 'reset line');
+assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: 'more_work', note: 'retest', value: { score: 2 } }]), [], 'no change → no lines');
+assertEq(describeChange({ field: 'score', old: '2', new: '3' }), 'score 2 → 3', 'describe score');
+assertEq(describeChange({ field: 'status', old: 'more_work', new: 'done' }), 'status: more work → done', 'describe status');
+assertEq(describeChange({ field: 'mark', old: null, new: 'good' }), 'mark: good', 'describe mark');
+assertEq(describeChange({ field: 'reset', old: 'done', new: null }), 'reset (was done)', 'describe reset');
+const logRows: BoardLogRow[] = [
+  { id: 'l1', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'score', old: '2', new: '3', changed_on: '2026-10-26', changed_by: null, created_at: '2026-10-26T10:00:00Z' },
+  { id: 'l2', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'note', old: null, new: 'retest ok', changed_on: '2026-10-26', changed_by: null, created_at: '2026-10-26T10:00:01Z' },
+];
+const w2l = weekLog(def, rows, 2, [], logRows);
+assertEq(w2l.review, ['Oct 26 · 10 HVAC — score 2 → 3', 'Oct 26 · 10 HVAC — note: retest ok'], 'review = logged changes; the logged note replaces the row-note line');
+assertEq(weekLog(def, rows, 1, [], logRows).review, ['Oct 1 · 10 HVAC — missed low static switch'], 'W1 keeps its pre-log note line');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

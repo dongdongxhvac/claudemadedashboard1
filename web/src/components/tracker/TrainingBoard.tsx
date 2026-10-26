@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, currentOf, hoursOf, weekTicked, itemProgress,
+  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, currentOf, hoursOf, weekTicked, itemProgress,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress,
 } from '../../lib/trainingBoard';
 
@@ -29,7 +29,7 @@ function Box({ on, half, onClick, title, disabled }: { on: boolean; half?: boole
   );
 }
 
-export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
+export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progress }: {
   def: TrainingBoardDef;
   /** base rows merged with the draft */
   rows: BoardRow[];
@@ -37,6 +37,8 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
   week: number;
   canEdit: boolean;
   setRow: SetRow;
+  /** clear every saved row of an item (logged as "reset" on Save) */
+  onReset: (itemKey: string) => void;
   progress: BoardProgress;
 }) {
   const rowFor = (item: BoardItem, w = week) => rows.find((r) => r.item_key === item.key && r.week === w) ?? null;
@@ -88,6 +90,36 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, progress }: {
                             style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${meta ? meta.color : 'var(--color-border)'}`, color: meta ? meta.color : 'var(--color-text-muted)', background: 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
                             {meta ? `${meta.short} ${meta.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}
                           </button>
+                        </div>
+
+                        {/* score 1–4 · mark · reset (user 2026-10-26) */}
+                        <div className="mt-1 ml-7 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="inline-flex items-center gap-0.5" title="Score 1–4 (saved with this week)">
+                            {SCORES.map((n) => {
+                              const on = cur.score === n;
+                              return (
+                                <button key={n} type="button" disabled={!canEdit} title={`${n} · ${SCORE_LABELS[n]}`}
+                                  onClick={() => setRow(item.key, week, { value: { ...valueBase(item), score: on ? undefined : n } })}
+                                  className="t-mono rounded"
+                                  style={{ width: 22, height: 20, fontSize: 11, fontWeight: 700, border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-border)'}`, background: on ? 'var(--color-accent)' : 'var(--color-card)', color: on ? '#fff' : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{n}</button>
+                              );
+                            })}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            {MARKS.map((m) => {
+                              const mm = MARK_META[m]; const on = cur.mark === m;
+                              return (
+                                <button key={m} type="button" disabled={!canEdit} title={mm.label}
+                                  onClick={() => setRow(item.key, week, { value: { ...valueBase(item), mark: on ? undefined : m } })}
+                                  className="px-1.5 rounded"
+                                  style={{ fontSize: 10, fontWeight: 700, height: 20, border: `1px solid ${on ? mm.color : 'var(--color-border)'}`, background: on ? mm.bg : 'var(--color-card)', color: on ? mm.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{mm.short} {mm.label}</button>
+                              );
+                            })}
+                          </span>
+                          {canEdit && (cur.status || cur.note || Object.keys(cur.value).length > 0 || wr) && (
+                            <button type="button" onClick={() => { if (window.confirm(`Reset "${item.num} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
+                              className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
+                          )}
                         </div>
 
                         {/* the item's own control */}

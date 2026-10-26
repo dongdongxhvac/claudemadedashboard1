@@ -2,7 +2,7 @@
 // the weekly calendar-invite body (generated from the selected week's rows;
 // Title / When editable and saved with the board) and the report dates.
 import { useState } from 'react';
-import { inviteText, META_INVITE, META_FIRST, type TrainingBoardDef, type BoardRow } from '../../lib/trainingBoard';
+import { inviteText, META_INVITE, META_FIRST, type TrainingBoardDef, type BoardRow, type BoardLogRow } from '../../lib/trainingBoard';
 import type { SetRow } from './TrainingBoard';
 
 const input: React.CSSProperties = {
@@ -10,14 +10,14 @@ const input: React.CSSProperties = {
   borderRadius: 4, padding: '2px 5px', fontSize: 12,
 };
 
-export function InviteCard({ def, rows, week, personName, canEdit, setRow }: {
-  def: TrainingBoardDef; rows: BoardRow[]; week: number; personName: string; canEdit: boolean; setRow: SetRow;
+export function InviteCard({ def, rows, log = [], week, personName, canEdit, setRow }: {
+  def: TrainingBoardDef; rows: BoardRow[]; log?: BoardLogRow[]; week: number; personName: string; canEdit: boolean; setRow: SetRow;
 }) {
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const first = rows.find((r) => r.item_key === META_FIRST && r.week === 0)?.value ?? {};
   const covered = (first.covered as string[] | undefined) ?? [];
   const dates = (first.dates as Record<string, string> | undefined) ?? {};
-  const text = inviteText(def, rows, week, personName);
+  const text = inviteText(def, rows, week, personName, log);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }

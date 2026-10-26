@@ -12,8 +12,8 @@ import { useNewHireUser, useEnrollNewHire } from './useNewHire';
 import { DEFAULT_PROGRAM } from '../lib/programs';
 import { nhWeekFor } from '../lib/newHireProgram';
 import {
-  parseTrainingBoard, boardProgress, weekOfDate,
-  type BoardRow, type TrainingBoardDef, type QuizPass, type BoardProgress,
+  parseTrainingBoard, boardProgress, weekOfDate, diffRows,
+  type BoardRow, type BoardLogRow, type TrainingBoardDef, type QuizPass, type BoardProgress,
 } from '../lib/trainingBoard';
 
 const KEY = ['training_board'];
@@ -35,6 +35,23 @@ export function useTrainingBoardRows(userId: string | undefined, programKey = DE
   });
 }
 
+/** The change trail (training_board_log) for one person — every Save's diffs. */
+export function useTrainingBoardLog(userId: string | undefined, programKey = DEFAULT_PROGRAM.key) {
+  return useQuery({
+    queryKey: [...KEY, 'log', userId, programKey],
+    enabled: !!userId,
+    staleTime: 15_000,
+    queryFn: async (): Promise<BoardLogRow[]> => {
+      const { data, error } = await supabase
+        .from('training_board_log').select('*')
+        .eq('user_id', userId!).eq('program_key', programKey)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as BoardLogRow[];
+    },
+  });
+}
+
 /** The board definition parsed from the print station (null while loading / missing). */
 export function useTrainingBoardDef() {
   const docs = useTrainingDocs();
@@ -49,6 +66,7 @@ export function useTrainingBoardDef() {
 export function useTrainingBoard(userId: string | undefined) {
   const program = DEFAULT_PROGRAM;
   const rowsQ = useTrainingBoardRows(userId, program.key);
+  const logQ = useTrainingBoardLog(userId, program.key);
   const { def, doc, isLoading: defLoading, error: defError, printStationUrl } = useTrainingBoardDef();
   const nh = useNewHireUser(userId ?? '', program);
   const startDate = nh.state.enrollment?.start_date ?? null;
@@ -58,8 +76,9 @@ export function useTrainingBoard(userId: string | undefined) {
     .filter((a) => a.kind === 'quiz' && a.score != null && a.total && a.score / a.total >= 0.8)
     .map((a) => ({ week: weekOfDate(a.at, startDate), title: a.quiz_title || a.doc_key, score: a.score!, total: a.total! })), [nh.state.activity, startDate]);
   const progress = useMemo<BoardProgress | null>(() => (def ? boardProgress(def, rows) : null), [def, rows]);
+  const log = useMemo(() => logQ.data ?? [], [logQ.data]);
   return {
-    def, doc, rows, startDate, currentWeek, quizzes, progress, printStationUrl,
+    def, doc, rows, log, startDate, currentWeek, quizzes, progress, printStationUrl,
     enrollment: nh.state.enrollment,
     isLoading: rowsQ.isLoading || defLoading || nh.isLoading,
     error: (rowsQ.error as Error | null) ?? defError ?? null,
@@ -78,8 +97,10 @@ export function useSaveTrainingBoard() {
   const inv = useInvalidate();
   const me = useMe().data;
   return useMutation({
-    mutationFn: async (input: { user_id: string; program_key?: string; rows: BoardRowInput[] }) => {
+    mutationFn: async (input: { user_id: string; program_key?: string; rows: BoardRowInput[]; base?: BoardRow[] }) => {
       const program_key = input.program_key ?? DEFAULT_PROGRAM.key;
+      // what changed vs. the rows the board was showing → one log line per field (0153)
+      const changes = diffRows(input.base ?? [], input.rows);
       const keep = input.rows.filter((r) => r.status || (r.note && r.note.trim()) || Object.keys(r.value ?? {}).length);
       const drop = input.rows.filter((r) => !keep.includes(r));
       const today = new Date().toLocaleDateString('en-CA');   // the save date, shown on each log entry
@@ -97,6 +118,13 @@ export function useSaveTrainingBoard() {
       for (const r of drop) {
         const { error } = await supabase.from('training_board').delete()
           .eq('user_id', input.user_id).eq('program_key', program_key).eq('item_key', r.item_key).eq('week', r.week);
+        if (error) throw error;
+      }
+      if (changes.length) {
+        const { error } = await supabase.from('training_board_log').insert(changes.map((c) => ({
+          user_id: input.user_id, program_key, item_key: c.item_key, week: c.week, field: c.field, old: c.old, new: c.new,
+          changed_on: today, changed_by: me?.id ?? null,
+        })));
         if (error) throw error;
       }
     },
