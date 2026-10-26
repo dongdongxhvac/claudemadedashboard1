@@ -31,23 +31,6 @@ export type BoardItem = {
   /** a second printed row this item also fills (the merged "Building round — each area" row) */
   docIdx2?: number;
 };
-/** The round state of a PlantLog / building round (value.round on that week's row). */
-export type BoardRound = 'learning' | 'solo' | 'next_week';
-export const ROUNDS: BoardRound[] = ['learning', 'solo', 'next_week'];
-export const ROUND_META: Record<BoardRound, { label: string; short: string; color: string; bg: string }> = {
-  learning:  { label: 'Learning',  short: '◐', color: '#b45309', bg: 'rgba(245,158,11,0.16)' },
-  solo:      { label: 'Solo',      short: '✓', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
-  next_week: { label: 'Next week', short: '→', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
-};
-const isRound = (v: unknown): v is BoardRound => (ROUNDS as string[]).includes(String(v));
-export const roundOf = (rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[], itemKey: string, week: number): BoardRound | null => {
-  const v = rows.find((r) => r.item_key === itemKey && r.week === week)?.value?.round;
-  return isRound(v) ? v : null;
-};
-/** Items in the "Find It & Tag It" section that are a major piece of equipment get the two parts. */
-const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
-export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
-export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
 export type BoardSection = { num: number; key: string; title: string; total: number; items: BoardItem[] };
 export type BoardTally = { label: string; hours: boolean; section: string | null };
 export type TrainingBoardDef = {
@@ -72,12 +55,13 @@ export const STATUS_META: Record<BoardStatus, { label: string; short: string; co
 /** The pill cycles none → done → next week (user 2026-10-26: no "more work"; old rows that carry it still display). */
 export const STATUS_CYCLE: (BoardStatus | null)[] = [null, 'done', 'next_week'];
 
-/** Each note carries its own mark (user 2026-10-26): missed · good ('checked' kept for old rows). */
-export type BoardMark = 'missed' | 'checked' | 'good';
+/** Each note carries its own mark (user 2026-10-26): missed · good ('checked' kept for old rows);
+ *  on a round (items 7 + 9) the note's mark is the round state: learning · solo · next week. */
+export type BoardMark = 'missed' | 'checked' | 'good' | 'learning' | 'solo' | 'next_week';
 export const MARKS: BoardMark[] = ['missed', 'good'];
 /** A note on an item for one week — several per week (value.notes). */
 export type BoardNote = { text: string; mark: BoardMark | null };
-const isMark = (v: unknown): v is BoardMark => v === 'missed' || v === 'checked' || v === 'good';
+const isMark = (v: unknown): v is BoardMark => typeof v === 'string' && v in MARK_META;
 /** Notes of a row: value.notes, else the legacy single `note` column. */
 export function notesOf(r: Pick<BoardRow, 'note' | 'value'> | null | undefined, keepEmpty = false): BoardNote[] {
   if (!r) return [];
@@ -90,10 +74,29 @@ export const noteLine = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].short + 
 /** Every note on an item, newest week last, with its week. */
 export const allNotes = (rows: BoardRow[], itemKey: string) => rows.filter((r) => r.item_key === itemKey).sort((a, b) => a.week - b.week).flatMap((r) => notesOf(r).map((n) => ({ ...n, week: r.week })));
 export const MARK_META: Record<BoardMark, { label: string; short: string; color: string; bg: string }> = {
-  missed:  { label: 'Missed',  short: '✗', color: '#b91c1c', bg: 'rgba(239,68,68,0.14)' },
-  checked: { label: 'Checked', short: '✓', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
-  good:    { label: 'Good',    short: '★', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+  missed:    { label: 'Missed',    short: '✗', color: '#b91c1c', bg: 'rgba(239,68,68,0.14)' },
+  checked:   { label: 'Checked',   short: '✓', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
+  good:      { label: 'Good',      short: '★', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+  learning:  { label: 'Learning',  short: '◐', color: '#b45309', bg: 'rgba(245,158,11,0.16)' },
+  solo:      { label: 'Solo',      short: '✓', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+  next_week: { label: 'Next week', short: '→', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
 };
+/** The round state of a PlantLog / building round: the mark of that round's latest note
+ *  (user 2026-10-26: "status defines notes, not hours"); the hours box is just hours. */
+export type BoardRound = 'learning' | 'solo' | 'next_week';
+export const ROUNDS: BoardRound[] = ['learning', 'solo', 'next_week'];
+export const ROUND_META: Record<BoardRound, { label: string; short: string; color: string; bg: string }> = MARK_META;
+const isRound = (v: unknown): v is BoardRound => (ROUNDS as string[]).includes(String(v));
+export const roundOf = (rows: Pick<BoardRow, 'item_key' | 'week' | 'note' | 'value'>[], itemKey: string, week: number): BoardRound | null => {
+  const r = rows.find((x) => x.item_key === itemKey && x.week === week);
+  const fromNote = [...notesOf(r)].reverse().find((n) => isRound(n.mark))?.mark;
+  if (isRound(fromNote)) return fromNote;
+  return isRound(r?.value?.round) ? r.value.round : null;   // rows saved before notes carried the state
+};
+/** Items in the "Find It & Tag It" section that are a major piece of equipment get the two parts. */
+const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
+export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
+export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
 /** Score 1–4 per item (value.score). Sections 1 · 2 · 6 (COVE, PlantLog / site /
  *  buildings, Setup) are activity lists, not skills — no score there (user 2026-10-26). */
 export const SCORES = [1, 2, 3, 4] as const;

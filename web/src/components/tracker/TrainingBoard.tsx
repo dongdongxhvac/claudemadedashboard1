@@ -113,32 +113,46 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                                 style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />
                             </label>
                           ))}
-                          {/* rounds (items 7 + 9 merged, user 2026-10-26): per round the hours and learning / solo / next week */}
+                          {/* rounds (items 7 + 9 merged, user 2026-10-26): per round the hours spent and its own notes —
+                              each note's mark is the round state (learning / solo / next week), not the hours */}
                           {c.kind === 'rounds8' && (
-                            <div className="w-full" style={{ display: 'grid', gridTemplateColumns: 'auto auto 1fr', columnGap: 8, rowGap: 3, alignItems: 'center' }}>
+                            <div className="w-full space-y-1">
                               {WEEKS.map((w) => {
+                                const r = rowFor(item, w);
                                 const h = hoursOf(rows, item.key, w); const ro = roundOf(rows, item.key, w);
-                                const write = (patch: { hours?: number | null; round?: string | null }) => {
-                                  const { hours: _h, round: _r, ...v } = rowFor(item, w)?.value ?? {}; void _h; void _r;
-                                  const hh = patch.hours === undefined ? h : patch.hours; const rr = patch.round === undefined ? ro : patch.round;
-                                  setRow(item.key, w, { value: { ...v, ...(hh == null ? {} : { hours: hh }), ...(rr ? { round: rr } : {}) } });
-                                };
-                                return [
-                                  <span key={`n${w}`} className="t-mono t-muted" style={{ fontSize: 10.5, fontWeight: 700 }}>{w}</span>,
-                                  <input key={`h${w}`} type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={h ?? ''} placeholder="h" title={`Round ${w} · hours`}
-                                    onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); write({ hours: d === '' ? null : Number(d) }); }}
-                                    style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />,
-                                  <span key={`r${w}`} className="inline-flex gap-1">
-                                    {ROUNDS.map((r) => {
-                                      const m = ROUND_META[r]; const on = ro === r;
-                                      return (
-                                        <button key={r} type="button" disabled={!canEdit} title={`Round ${w} · ${m.label}`} onClick={() => write({ round: on ? null : r })}
-                                          className="px-1.5 rounded whitespace-nowrap"
-                                          style={{ fontSize: 10, fontWeight: 700, height: 18, border: `1px solid ${on ? m.color : 'var(--color-border)'}`, background: on ? m.bg : 'var(--color-card)', color: on ? m.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{m.short} {m.label}</button>
-                                      );
-                                    })}
-                                  </span>,
-                                ];
+                                const rm = ro ? ROUND_META[ro] : null;
+                                const notes: BoardNote[] = notesOf(r, true);
+                                const clean = () => { const { mark: _m, round: _r, ...v } = r?.value ?? {}; void _m; void _r; return v; };
+                                const writeNotes = (next: BoardNote[]) => setRow(item.key, w, { note: null, value: { ...clean(), notes: next } });
+                                return (
+                                  <div key={w} style={{ borderLeft: `3px solid ${rm ? rm.color : 'var(--color-border)'}`, paddingLeft: 6, background: rm ? rm.bg : 'transparent', borderRadius: 3, padding: '2px 4px 2px 6px' }}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="t-mono" style={{ fontSize: 11, fontWeight: 700, minWidth: 12, color: rm ? rm.color : 'var(--color-text-muted)' }}>{w}</span>
+                                      <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={h ?? ''} placeholder="h" title={`Round ${w} · hours spent`}
+                                        onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); const { hours: _h, ...v } = r?.value ?? {}; void _h; setRow(item.key, w, { value: d === '' ? v : { ...v, hours: Number(d) } }); }}
+                                        style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />
+                                      {rm && <span style={{ fontSize: 10.5, fontWeight: 700, color: rm.color }}>{rm.short} {rm.label}</span>}
+                                      {canEdit && <button type="button" onClick={() => writeNotes([...notes, { text: '', mark: null }])} className="t-accent hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }}>+ note</button>}
+                                    </div>
+                                    {notes.map((n, i) => (
+                                      <div key={i} className="flex items-center gap-1 mt-0.5">
+                                        {ROUNDS.map((m) => {
+                                          const mm = ROUND_META[m]; const on = n.mark === m;
+                                          return (
+                                            <button key={m} type="button" disabled={!canEdit} title={mm.label}
+                                              onClick={() => writeNotes(notes.map((x, j) => (j === i ? { ...x, mark: on ? null : m } : x)))}
+                                              className="px-1 rounded whitespace-nowrap"
+                                              style={{ fontSize: 10, fontWeight: 700, height: 18, border: `1px solid ${on ? mm.color : 'var(--color-border)'}`, background: on ? mm.bg : 'var(--color-card)', color: on ? mm.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{mm.short} {mm.label}</button>
+                                          );
+                                        })}
+                                        <input value={n.text} disabled={!canEdit} placeholder="note"
+                                          onChange={(e) => writeNotes(notes.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                                          style={{ ...input, flex: 1, minWidth: 60, padding: '1px 5px', fontSize: 11, color: n.mark ? MARK_META[n.mark].color : undefined }} />
+                                        {canEdit && <button type="button" onClick={() => writeNotes(notes.filter((_, j) => j !== i))} className="t-muted hover:underline" style={{ fontSize: 11 }} title="Remove this note">×</button>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
                               })}
                             </div>
                           )}
@@ -189,7 +203,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
 
                         {/* notes — several per week, each with its own mark (missed / good); earlier weeks' notes shown muted */}
                         <div className="mt-1 ml-7">
-                          {allNotes(rows, item.key).filter((n) => n.week !== week).map((n, i) => (
+                          {c.kind !== 'rounds8' && allNotes(rows, item.key).filter((n) => n.week !== week).map((n, i) => (
                             <div key={`${n.week}-${i}`} className="t-muted" style={{ fontSize: 10.5, paddingLeft: 5 }}>
                               W{n.week}: {n.mark && <span style={{ color: MARK_META[n.mark].color, fontWeight: 700 }}>{MARK_META[n.mark].short} </span>}{n.text}
                             </div>
@@ -198,6 +212,12 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                             const notes: BoardNote[] = notesOf(wr, true);   // keep the blank line being typed
                             // the legacy item-level `mark` is not carried forward — marks live on the notes now
                             const write = (next: BoardNote[]) => { const { mark: _legacy, ...v } = { ...valueBase(item), ...(wr?.value ?? {}) }; void _legacy; setRow(item.key, week, { note: null, value: { ...v, notes: next } }); };
+                            const hasAny = cur.status || cur.note || Object.keys(cur.value).length > 0 || wr || rows.some((r) => r.item_key === item.key);
+                            const reset = canEdit && hasAny && (
+                              <button type="button" onClick={() => { if (window.confirm(`Reset "${itemNum(item)} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
+                                className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
+                            );
+                            if (c.kind === 'rounds8') return reset ? <div className="flex items-center">{reset}</div> : null;
                             return (
                               <>
                                 {notes.map((n, i) => (
@@ -220,10 +240,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                                 {canEdit && (
                                   <div className="flex items-center gap-3">
                                     <button type="button" onClick={() => write([...notes, { text: '', mark: null }])} className="t-accent hover:underline" style={{ fontSize: 10.5 }}>+ note · W{week}</button>
-                                    {(cur.status || cur.note || Object.keys(cur.value).length > 0 || wr) && (
-                                      <button type="button" onClick={() => { if (window.confirm(`Reset "${itemNum(item)} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
-                                        className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
-                                    )}
+                                    {reset}
                                   </div>
                                 )}
                               </>

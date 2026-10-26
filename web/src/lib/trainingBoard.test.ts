@@ -144,8 +144,13 @@ const rdef: TrainingBoardDef = { ...def, sections: [{ num: 2, key: 'plantlog', t
   { num: 7, key: 'plantlog_round', text: 'PlantLog round · building round', hint: null, section: 'plantlog', control: { kind: 'rounds8' }, docIdx: 0, docIdx2: 2 },
 ] }], tallies: [{ label: 'PlantLog', hours: false, section: 'plantlog' }] };
 rdef.items = rdef.sections.flatMap((s) => s.items);
-const rrows = [row('plantlog_round', 1, null, null, { hours: 6, round: 'learning' }), row('plantlog_round', 2, null, null, { hours: 7, round: 'solo' }), row('plantlog_round', 3, null, null, { round: 'next_week' })];
-assertEq(roundOf(rrows, 'plantlog_round', 2), 'solo', 'round of week 2');
+const rrows = [
+  row('plantlog_round', 1, null, null, { hours: 6, round: 'learning' }),                                              // legacy: state on the row
+  row('plantlog_round', 2, null, null, { hours: 7, notes: [{ text: 'boiler room', mark: 'learning' }, { text: 'B2 alone', mark: 'solo' }] }),   // state = latest note's mark
+  row('plantlog_round', 3, null, null, { notes: [{ text: 'redo cooling tower', mark: 'next_week' }] }),
+];
+assertEq(roundOf(rrows, 'plantlog_round', 1), 'learning', 'legacy round on the row');
+assertEq(roundOf(rrows, 'plantlog_round', 2), 'solo', 'round = mark of the latest round note');
 assertEq(roundOf(rrows, 'plantlog_round', 5), null, 'no round yet');
 assertEq(itemProgress(rdef.items[0], rrows), 3 / 8, 'rounds: 3 of 8 filled');
 assertEq(itemDone(rdef.items[0], rrows), false, 'rounds not done until all solo');
@@ -153,7 +158,8 @@ assertEq(itemDone(rdef.items[0], [1, 2, 3, 4, 5, 6, 7, 8].map((w) => row('plantl
 assertEq(weekLog(rdef, rrows, 2).tallies, [{ label: 'PlantLog', value: '7 h · solo' }], 'tally shows hours and round');
 assertEq(weekLog(rdef, rrows, 2).done, ['Oct 1 · 7 PlantLog round · building round — 7 h'], 'solo round is done that week');
 assertEq(weekLog(rdef, rrows, 3).focus, ['Oct 1 · 7 PlantLog round · building round'], 'next-week round is focus');
-assertEq(diffRows([rrows[0]], [{ ...rrows[0], value: { hours: 8, round: 'solo' } }]).map((x) => [x.field, x.old, x.new]), [['hours', '6', '8'], ['value', 'round: learning', 'round: solo']], 'round changes are logged');
+assertEq(weekLog(rdef, rrows, 2).review, ['Oct 1 · 7 PlantLog round · building round — ◐ boiler room', 'Oct 1 · 7 PlantLog round · building round — ✓ B2 alone'], 'round notes in review');
+assertEq(diffRows([rrows[1]], [{ ...rrows[1], value: { hours: 8, notes: [{ text: 'boiler room', mark: 'solo' }] } }]).map((x) => [x.field, x.old, x.new]), [['note', '◐ boiler room', '✓ boiler room'], ['note', '✓ B2 alone', null], ['hours', '7', '8']], 'round note and hours changes are logged');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
