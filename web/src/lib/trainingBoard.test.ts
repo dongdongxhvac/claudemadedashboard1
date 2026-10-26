@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue,
+  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -124,6 +124,9 @@ const logRows: BoardLogRow[] = [
 const w2l = weekLog(def, rows, 2, [], logRows);
 assertEq(w2l.review, ['Oct 26 · 10 HVAC — score 2 → 3', 'Oct 26 · 10 HVAC — note: retest ok'], 'review = logged changes; the logged note replaces the row-note line');
 assertEq(weekLog(def, rows, 1, [], logRows).review, ['Oct 1 · 10 HVAC — missed low static switch'], 'W1 keeps its pre-log note line');
+
+assertEq([1, 2, 3, 4, 5, 6].map(isScorable), [false, false, true, true, true, false], 'sections 1 · 2 · 6 are not scored');
+assertEq([1, 2, 3, 4].map(statusForScore), ['next_week', 'next_week', 'next_week', 'done'], 'score → status');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

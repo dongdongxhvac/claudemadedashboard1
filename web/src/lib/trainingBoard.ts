@@ -53,9 +53,14 @@ export const MARK_META: Record<BoardMark, { label: string; short: string; color:
   checked: { label: 'Checked', short: '✓', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
   good:    { label: 'Good',    short: '★', color: '#047857', bg: 'rgba(16,185,129,0.14)' },
 };
-/** Score 1–4 per item (value.score). */
+/** Score 1–4 per item (value.score). Sections 1 · 2 · 6 (COVE, PlantLog / site /
+ *  buildings, Setup) are activity lists, not skills — no score there (user 2026-10-26). */
 export const SCORES = [1, 2, 3, 4] as const;
 export const SCORE_LABELS: Record<number, string> = { 1: 'needs work', 2: 'developing', 3: 'solid', 4: 'strong' };
+export const NO_SCORE_SECTIONS = [1, 2, 6];
+export const isScorable = (sectionNum: number) => !NO_SCORE_SECTIONS.includes(sectionNum);
+/** Scoring sets the status: 1–3 stays on the board as "next week" for review, 4 = done. */
+export const statusForScore = (score: number): BoardStatus => (score >= 4 ? 'done' : 'next_week');
 
 /** One change-log line (training_board_log, migration 0153). */
 export type BoardLogField = 'status' | 'score' | 'mark' | 'note' | 'hours' | 'value' | 'reset';

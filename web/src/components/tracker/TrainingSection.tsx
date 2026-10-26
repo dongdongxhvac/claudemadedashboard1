@@ -136,7 +136,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
           {tab === 'board' && (
             <>
               <p className="t-small t-muted mb-2">
-                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.more_work.color }}>more work</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4, mark the note missed / checked / good, ↺ resets an item. Edits land on week {w} until you press Save; every change is logged with its date in the weekly log.
+                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.more_work.color }}>more work</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on <b style={{ color: STATUS_META.next_week.color }}>next week</b> for review, 4 = done; no score on COVE / PlantLog / Setup), mark the note missed / checked / good, ↺ resets an item. Edits land on week {w} until you press Save; every change is logged with its date in the weekly log.
               </p>
               <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit} setRow={setRow} onReset={resetItem} progress={p} />
             </>

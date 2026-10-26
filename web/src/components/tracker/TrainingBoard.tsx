@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, currentOf, hoursOf, weekTicked, itemProgress,
+  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress,
 } from '../../lib/trainingBoard';
 
@@ -94,17 +94,17 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
 
                         {/* score 1–4 · mark · reset (user 2026-10-26) */}
                         <div className="mt-1 ml-7 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="inline-flex items-center gap-0.5" title="Score 1–4 (saved with this week)">
+                          {isScorable(sec.num) && <span className="inline-flex items-center gap-0.5" title="Score 1–4 · 1–3 keeps the item on next week for review, 4 = done">
                             {SCORES.map((n) => {
                               const on = cur.score === n;
                               return (
-                                <button key={n} type="button" disabled={!canEdit} title={`${n} · ${SCORE_LABELS[n]}`}
-                                  onClick={() => setRow(item.key, week, { value: { ...valueBase(item), score: on ? undefined : n } })}
+                                <button key={n} type="button" disabled={!canEdit} title={`${n} · ${SCORE_LABELS[n]}${n >= 4 ? ' → done' : ' → next week'}`}
+                                  onClick={() => setRow(item.key, week, on ? { value: { ...valueBase(item), score: undefined } } : { value: { ...valueBase(item), score: n }, status: statusForScore(n) })}
                                   className="t-mono rounded"
                                   style={{ width: 22, height: 20, fontSize: 11, fontWeight: 700, border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-border)'}`, background: on ? 'var(--color-accent)' : 'var(--color-card)', color: on ? '#fff' : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{n}</button>
                               );
                             })}
-                          </span>
+                          </span>}
                           <span className="inline-flex items-center gap-1">
                             {MARKS.map((m) => {
                               const mm = MARK_META[m]; const on = cur.mark === m;
