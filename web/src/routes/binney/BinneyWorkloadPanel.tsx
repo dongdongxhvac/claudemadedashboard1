@@ -196,6 +196,20 @@ export function BinneyWorkloadPanel() {
     return rows;
   }, [closesQ.data, laborQ.data, ptoQ.data, engineers, shiftsQ.data, now]);
 
+  // Labor hours are derived from daily snapshots, and the Binney labor poller
+  // only started 2026-10-26 — until the window's first day has a snapshot the
+  // hrs column is incomplete. Note it next to the title; disappears on its own.
+  const laborNote = useMemo(() => {
+    const days = (laborQ.data ?? []).map((l) => l.day_et).filter(Boolean).sort();
+    if (days.length === 0) return null;
+    const first = days[0];
+    const winStartIso = localISODate(addDays(now, -(CREW_WINDOW_DAYS - 1)));
+    if (first <= winStartIso) return null;
+    const complete = addDays(new Date(first + 'T00:00:00'), CREW_WINDOW_DAYS - 1);
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `labor hrs collecting since ${fmt(new Date(first + 'T00:00:00'))} · complete ${fmt(complete)}`;
+  }, [laborQ.data, now]);
+
   const half = Math.ceil(crew.length / 2);
   const cols = [crew.slice(0, half), crew.slice(half)];
 
@@ -205,7 +219,14 @@ export function BinneyWorkloadPanel() {
   return (
     <section className="t-card" style={{ padding: '1rem 1.25rem', borderTop: '3px solid var(--color-warn)' }}>
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-        <h2 className="t-section-title" style={{ letterSpacing: '0.04em' }}>Workload · Performance</h2>
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h2 className="t-section-title" style={{ letterSpacing: '0.04em' }}>Workload · Performance</h2>
+          {laborNote && (
+            <span className="t-small t-warn" style={{ fontWeight: 600 }} title="Per-day hours come from daily Cove labor snapshots; the Binney poller is new, so earlier days in the window have none yet.">
+              ⏳ {laborNote}
+            </span>
+          )}
+        </div>
         <span className="t-small t-muted">
           PM <b className="t-text">{formatAge(now, agesQ.data?.pm12)}</b>
           <span className="mx-1">·</span>
@@ -223,7 +244,43 @@ export function BinneyWorkloadPanel() {
         </p>
       )}
 
-      <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)' }}>
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)' }}>
+        {/* ── PMs closed · labor ── */}
+        <div>
+          <div className="t-small t-muted uppercase tracking-wider">PMs closed · labor · last {CREW_WINDOW_DAYS} days</div>
+          <div className="t-small t-muted mt-0.5">
+            hrs/days · days = crew schedule through yesterday · holidays + approved PTO excluded
+          </div>
+          {crew.length === 0 ? (
+            <p className="t-small t-muted mt-2">{loading ? 'Loading…' : 'No data.'}</p>
+          ) : (
+            <div className="grid gap-x-6 mt-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              {cols.map((col, i) => (
+                <div key={i} className="grid items-baseline" style={{ gridTemplateColumns: 'max-content auto auto', columnGap: '0.75rem', rowGap: '0.15rem' }}>
+                  <span className="t-small t-muted uppercase tracking-wider"> </span>
+                  <span className="t-small t-muted uppercase tracking-wider text-right">PMs</span>
+                  <span className="t-small t-muted uppercase tracking-wider text-right">hrs/d</span>
+                  {col.map((c) => (
+                    <div key={c.name} className="contents">
+                      <span className="t-text">{shortName(c.name)}</span>
+                      <span className="t-mono text-right">{c.pms}</span>
+                      <span className="t-mono text-right">
+                        {Math.round(c.hours)}
+                        <span
+                          className="t-small"
+                          style={{ color: c.days >= c.fullDays ? 'var(--color-ok)' : 'var(--color-warn)', fontWeight: 600 }}
+                        >
+                          /{c.days}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* ── Workload ── */}
         <div>
           <div className="t-small t-muted uppercase tracking-wider">
@@ -258,42 +315,6 @@ export function BinneyWorkloadPanel() {
             <div className="t-small mt-3" title={`Open WOs with no Cove update in ${WO_STALE_DAYS}+ days`}>
               <span className="t-danger" style={{ fontWeight: 700 }}>WO {WO_STALE_DAYS}d+ no update: {staleWos.length}</span>
               <span className="t-mono t-muted ml-2">{staleWos.map((w) => `${w.id} ${w.days}d`).join(' · ')}</span>
-            </div>
-          )}
-        </div>
-
-        {/* ── PMs closed · labor ── */}
-        <div>
-          <div className="t-small t-muted uppercase tracking-wider">PMs closed · labor · last {CREW_WINDOW_DAYS} days</div>
-          <div className="t-small t-muted mt-0.5">
-            hrs/days · days = crew schedule through yesterday · holidays + approved PTO excluded
-          </div>
-          {crew.length === 0 ? (
-            <p className="t-small t-muted mt-2">{loading ? 'Loading…' : 'No data.'}</p>
-          ) : (
-            <div className="grid gap-x-6 mt-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              {cols.map((col, i) => (
-                <div key={i} className="grid items-baseline" style={{ gridTemplateColumns: 'max-content auto auto', columnGap: '0.75rem', rowGap: '0.15rem' }}>
-                  <span className="t-small t-muted uppercase tracking-wider"> </span>
-                  <span className="t-small t-muted uppercase tracking-wider text-right">PMs</span>
-                  <span className="t-small t-muted uppercase tracking-wider text-right">hrs/d</span>
-                  {col.map((c) => (
-                    <div key={c.name} className="contents">
-                      <span className="t-text">{shortName(c.name)}</span>
-                      <span className="t-mono text-right">{c.pms}</span>
-                      <span className="t-mono text-right">
-                        {Math.round(c.hours)}
-                        <span
-                          className="t-small"
-                          style={{ color: c.days >= c.fullDays ? 'var(--color-ok)' : 'var(--color-warn)', fontWeight: 600 }}
-                        >
-                          /{c.days}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
             </div>
           )}
         </div>
