@@ -39,6 +39,9 @@ export type EngineerRow = {
   is_manager: boolean;
   cmms_assignee_name: string | null;
   plantlog_username: string | null;
+  /** Cove (CMMS) user ID (0127). Backfilled for the Binney roster 2026-10-26
+   *  from the Binney Cove network's WO/PM assignees. Display-only here. */
+  cove_user_id: string | null;
   discipline: Discipline | null;
   level: number;
   xp: number;
@@ -61,7 +64,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
     .select(`
       id, full_name, email, phone, hiring_date, auth_user_id, active, role, is_manager,
       engineer_profiles!inner (
-        cmms_assignee_name, plantlog_username, discipline, level, xp,
+        cmms_assignee_name, plantlog_username, cove_user_id, discipline, level, xp,
         visible_to_self, notes, title, shift_id, is_lead, updated_at
       )
     `)
@@ -72,6 +75,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
   type Profile = {
     cmms_assignee_name: string | null;
     plantlog_username: string | null;
+    cove_user_id: string | null;
     discipline: Discipline | null;
     level: number; xp: number; visible_to_self: boolean;
     notes: string | null; title: string | null;
@@ -102,6 +106,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
         is_manager: r.is_manager,
         cmms_assignee_name: ep.cmms_assignee_name,
         plantlog_username: ep.plantlog_username,
+        cove_user_id: ep.cove_user_id,
         discipline: ep.discipline,
         level: ep.level,
         xp: ep.xp,

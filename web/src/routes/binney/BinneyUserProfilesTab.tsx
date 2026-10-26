@@ -558,7 +558,10 @@ function EditDrawer({
                 </span>
               )}
             </h3>
-            <p className="t-small t-muted">CMMS: {row.cmms_assignee_name ?? '—'}</p>
+            <p className="t-small t-muted">
+              CMMS: {row.cmms_assignee_name ?? '—'}
+              {' · '}Cove ID: <span className="t-mono">{row.cove_user_id ?? '—'}</span>
+            </p>
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
         </div>
