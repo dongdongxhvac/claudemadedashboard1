@@ -29,7 +29,7 @@ export type BoardItem = {
   part?: 'overview' | 'tagit';
 };
 /** Items in the "Find It & Tag It" section that are a major piece of equipment get the two parts. */
-const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller)\b/i;
+const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
 export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
 export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
 export type BoardSection = { num: number; key: string; title: string; total: number; items: BoardItem[] };
@@ -307,8 +307,8 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
   const itemName = (key: string) => { const it = byKey.get(key); return it ? `${itemNum(it)} ${it.text}` : key; };
-  // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"
-  const changes = log.filter((l) => l.week === week && byKey.has(l.item_key)).sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"; resets live on the Reset log tab
+  const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key)).sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
   const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
   // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
