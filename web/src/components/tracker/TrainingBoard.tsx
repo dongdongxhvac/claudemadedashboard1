@@ -4,8 +4,8 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress,
-  type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress,
+  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress, notesOf, allNotes,
+  type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress, type BoardNote,
 } from '../../lib/trainingBoard';
 
 export type RowPatch = { status?: BoardStatus | null; note?: string | null; value?: Record<string, unknown> };
@@ -84,16 +84,6 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                             {item.text}
                             {item.hint && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>{item.hint}</span>}
                           </span>
-                          <button type="button" onClick={cycle} disabled={!canEdit}
-                            title={canEdit ? `Week ${week}: click to cycle · none → done → more work → next week` : meta?.label ?? ''}
-                            className="px-1.5 py-0.5 rounded whitespace-nowrap"
-                            style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${meta ? meta.color : 'var(--color-border)'}`, color: meta ? meta.color : 'var(--color-text-muted)', background: 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
-                            {meta ? `${meta.short} ${meta.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}
-                          </button>
-                        </div>
-
-                        {/* score 1–4 · mark · reset (user 2026-10-26) */}
-                        <div className="mt-1 ml-7 flex flex-wrap items-center gap-x-3 gap-y-1">
                           {isScorable(sec.num) && <span className="inline-flex items-center gap-0.5" title="Score 1–4 · 1–3 keeps the item on next week for review, 4 = done">
                             {SCORES.map((n) => {
                               const on = cur.score === n;
@@ -105,21 +95,12 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                               );
                             })}
                           </span>}
-                          <span className="inline-flex items-center gap-1">
-                            {MARKS.map((m) => {
-                              const mm = MARK_META[m]; const on = cur.mark === m;
-                              return (
-                                <button key={m} type="button" disabled={!canEdit} title={mm.label}
-                                  onClick={() => setRow(item.key, week, { value: { ...valueBase(item), mark: on ? undefined : m } })}
-                                  className="px-1.5 rounded"
-                                  style={{ fontSize: 10, fontWeight: 700, height: 20, border: `1px solid ${on ? mm.color : 'var(--color-border)'}`, background: on ? mm.bg : 'var(--color-card)', color: on ? mm.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{mm.short} {mm.label}</button>
-                              );
-                            })}
-                          </span>
-                          {canEdit && (cur.status || cur.note || Object.keys(cur.value).length > 0 || wr) && (
-                            <button type="button" onClick={() => { if (window.confirm(`Reset "${item.num} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
-                              className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
-                          )}
+                          <button type="button" onClick={cycle} disabled={!canEdit}
+                            title={canEdit ? `Week ${week}: click to cycle · none → done → next week` : meta?.label ?? ''}
+                            className="px-1.5 py-0.5 rounded whitespace-nowrap"
+                            style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${meta ? meta.color : 'var(--color-border)'}`, color: meta ? meta.color : 'var(--color-text-muted)', background: 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
+                            {meta ? `${meta.short} ${meta.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}
+                          </button>
                         </div>
 
                         {/* the item's own control */}
@@ -177,14 +158,48 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                           {/* note / check / date items: the status pill is the tick; the save date is recorded on Save (user 2026-10-24) */}
                         </div>
 
-                        {/* note — this week's note; the latest earlier note shows muted */}
+                        {/* notes — several per week, each with its own mark (missed / good); earlier weeks' notes shown muted */}
                         <div className="mt-1 ml-7">
-                          <input value={wr?.note ?? ''} disabled={!canEdit} placeholder={canEdit ? `note · W${week}` : ''}
-                            onChange={(e) => setRow(item.key, week, { note: e.target.value })}
-                            style={{ ...input, width: '100%', padding: '1px 5px', fontSize: 11, background: 'transparent', borderColor: wr?.note ? 'var(--color-border)' : 'transparent' }}
-                            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
-                            onBlur={(e) => { if (!e.currentTarget.value) e.currentTarget.style.borderColor = 'transparent'; }} />
-                          {cur.note && cur.note !== (wr?.note ?? '') && <div className="t-muted" style={{ fontSize: 10.5, paddingLeft: 5 }}>W{cur.week}: {cur.note}</div>}
+                          {allNotes(rows, item.key).filter((n) => n.week !== week).map((n, i) => (
+                            <div key={`${n.week}-${i}`} className="t-muted" style={{ fontSize: 10.5, paddingLeft: 5 }}>
+                              W{n.week}: {n.mark && <span style={{ color: MARK_META[n.mark].color, fontWeight: 700 }}>{MARK_META[n.mark].short} </span>}{n.text}
+                            </div>
+                          ))}
+                          {(() => {
+                            const notes: BoardNote[] = notesOf(wr, true);   // keep the blank line being typed
+                            // the legacy item-level `mark` is not carried forward — marks live on the notes now
+                            const write = (next: BoardNote[]) => { const { mark: _legacy, ...v } = { ...valueBase(item), ...(wr?.value ?? {}) }; void _legacy; setRow(item.key, week, { note: null, value: { ...v, notes: next } }); };
+                            return (
+                              <>
+                                {notes.map((n, i) => (
+                                  <div key={i} className="flex items-center gap-1 mb-0.5">
+                                    {MARKS.map((m) => {
+                                      const mm = MARK_META[m]; const on = n.mark === m;
+                                      return (
+                                        <button key={m} type="button" disabled={!canEdit} title={mm.label}
+                                          onClick={() => write(notes.map((x, j) => (j === i ? { ...x, mark: on ? null : m } : x)))}
+                                          className="px-1 rounded"
+                                          style={{ fontSize: 10, fontWeight: 700, height: 18, border: `1px solid ${on ? mm.color : 'var(--color-border)'}`, background: on ? mm.bg : 'var(--color-card)', color: on ? mm.color : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{mm.short} {mm.label}</button>
+                                      );
+                                    })}
+                                    <input value={n.text} disabled={!canEdit} placeholder="note"
+                                      onChange={(e) => write(notes.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                                      style={{ ...input, flex: 1, padding: '1px 5px', fontSize: 11, color: n.mark ? MARK_META[n.mark].color : undefined }} />
+                                    {canEdit && <button type="button" onClick={() => write(notes.filter((_, j) => j !== i))} className="t-muted hover:underline" style={{ fontSize: 11 }} title="Remove this note">×</button>}
+                                  </div>
+                                ))}
+                                {canEdit && (
+                                  <div className="flex items-center gap-3">
+                                    <button type="button" onClick={() => write([...notes, { text: '', mark: null }])} className="t-accent hover:underline" style={{ fontSize: 10.5 }}>+ note · W{week}</button>
+                                    {(cur.status || cur.note || Object.keys(cur.value).length > 0 || wr) && (
+                                      <button type="button" onClick={() => { if (window.confirm(`Reset "${item.num} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
+                                        className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* progress sliver */}

@@ -99,10 +99,16 @@ export function useSaveTrainingBoard() {
   return useMutation({
     mutationFn: async (input: { user_id: string; program_key?: string; rows: BoardRowInput[]; base?: BoardRow[] }) => {
       const program_key = input.program_key ?? DEFAULT_PROGRAM.key;
+      // blank note lines are dropped before anything is compared or written
+      const rows = input.rows.map((r) => {
+        const v = { ...(r.value ?? {}) };
+        if (Array.isArray(v.notes)) { const ns = (v.notes as { text?: unknown; mark?: unknown }[]).filter((n) => String(n?.text ?? '').trim()); if (ns.length) v.notes = ns; else delete v.notes; }
+        return { ...r, value: v };
+      });
       // what changed vs. the rows the board was showing → one log line per field (0153)
-      const changes = diffRows(input.base ?? [], input.rows);
-      const keep = input.rows.filter((r) => r.status || (r.note && r.note.trim()) || Object.keys(r.value ?? {}).length);
-      const drop = input.rows.filter((r) => !keep.includes(r));
+      const changes = diffRows(input.base ?? [], rows);
+      const keep = rows.filter((r) => r.status || (r.note && r.note.trim()) || Object.keys(r.value ?? {}).length);
+      const drop = rows.filter((r) => !keep.includes(r));
       const today = new Date().toLocaleDateString('en-CA');   // the save date, shown on each log entry
       if (keep.length) {
         const { data, error } = await supabase

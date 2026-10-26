@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore,
+  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -108,7 +108,7 @@ const d = diffRows(base, [
   { item_key: 'week_hours', week: 1, status: null, note: null, value: { hours: 38 } },                 // hours
 ]);
 assertEq(d.map((x) => [x.item_key, x.field, x.old, x.new]), [
-  ['hvac', 'status', 'more_work', 'done'], ['hvac', 'note', 'retest', 'retest ok'], ['hvac', 'score', '2', '3'], ['hvac', 'mark', null, 'good'],
+  ['hvac', 'status', 'more_work', 'done'], ['hvac', 'note', 'retest', '★ retest ok'], ['hvac', 'score', '2', '3'], ['hvac', 'mark', null, 'good'],
   ['plumbing', 'status', null, 'next_week'], ['week_hours', 'hours', null, '38'],
 ], 'diff lines');
 assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: null, note: null, value: {} }]).map((x) => [x.field, x.old]), [['reset', 'more_work · retest']], 'reset line');
@@ -127,6 +127,14 @@ assertEq(weekLog(def, rows, 1, [], logRows).review, ['Oct 1 · 10 HVAC — misse
 
 assertEq([1, 2, 3, 4, 5, 6].map(isScorable), [false, false, true, true, true, false], 'sections 1 · 2 · 6 are not scored');
 assertEq([1, 2, 3, 4].map(statusForScore), ['next_week', 'next_week', 'next_week', 'done'], 'score → status');
+
+// multi-notes with marks
+const rn = row('hvac', 3, 'done', null, { notes: [{ text: 'low static switch', mark: 'missed' }, { text: 'refrigerant monitor', mark: 'good' }] });
+assertEq(notesOf(rn).map(noteLine), ['✗ low static switch', '★ refrigerant monitor'], 'notes with marks');
+assertEq(notesOf(row('hvac', 3, null, 'legacy text', { mark: 'good' })).map(noteLine), ['★ legacy text'], 'legacy single note');
+assertEq(weekLog(def, [rn], 3).review, ['Oct 1 · 10 HVAC — ✗ low static switch', 'Oct 1 · 10 HVAC — ★ refrigerant monitor'], 'one review line per note');
+assertEq(diffRows([row('hvac', 3, 'done', 'legacy text')], [{ item_key: 'hvac', week: 3, status: 'done', note: null, value: { notes: [{ text: 'legacy text', mark: 'good' }, { text: 'second', mark: null }] } }]).map((x) => [x.field, x.old, x.new]),
+  [['note', 'legacy text', '★ legacy text'], ['note', null, 'second']], 'note diff per note (legacy seed → marked + added)');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

@@ -43,11 +43,26 @@ export const STATUS_META: Record<BoardStatus, { label: string; short: string; co
   more_work: { label: 'More work', short: '⟳', color: '#b45309', bg: 'rgba(245,158,11,0.16)' },
   next_week: { label: 'Next week', short: '→', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
 };
-export const STATUS_CYCLE: (BoardStatus | null)[] = [null, 'done', 'more_work', 'next_week'];
+/** The pill cycles none → done → next week (user 2026-10-26: no "more work"; old rows that carry it still display). */
+export const STATUS_CYCLE: (BoardStatus | null)[] = [null, 'done', 'next_week'];
 
-/** The mark next to a note (user 2026-10-26): missed · checked · good. Lives in value.mark. */
+/** Each note carries its own mark (user 2026-10-26): missed · good ('checked' kept for old rows). */
 export type BoardMark = 'missed' | 'checked' | 'good';
-export const MARKS: BoardMark[] = ['missed', 'checked', 'good'];
+export const MARKS: BoardMark[] = ['missed', 'good'];
+/** A note on an item for one week — several per week (value.notes). */
+export type BoardNote = { text: string; mark: BoardMark | null };
+const isMark = (v: unknown): v is BoardMark => v === 'missed' || v === 'checked' || v === 'good';
+/** Notes of a row: value.notes, else the legacy single `note` column. */
+export function notesOf(r: Pick<BoardRow, 'note' | 'value'> | null | undefined, keepEmpty = false): BoardNote[] {
+  if (!r) return [];
+  const raw = r.value?.notes;
+  if (Array.isArray(raw)) return raw.map((n) => ({ text: keepEmpty ? String((n as BoardNote)?.text ?? '') : String((n as BoardNote)?.text ?? '').trim(), mark: isMark((n as BoardNote)?.mark) ? (n as BoardNote).mark : null })).filter((n) => keepEmpty || n.text);
+  const t = (r.note ?? '').trim();
+  return t ? [{ text: t, mark: isMark(r.value?.mark) ? (r.value.mark as BoardMark) : null }] : [];
+}
+export const noteLine = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].short + ' ' : ''}${n.text}`;
+/** Every note on an item, newest week last, with its week. */
+export const allNotes = (rows: BoardRow[], itemKey: string) => rows.filter((r) => r.item_key === itemKey).sort((a, b) => a.week - b.week).flatMap((r) => notesOf(r).map((n) => ({ ...n, week: r.week })));
 export const MARK_META: Record<BoardMark, { label: string; short: string; color: string; bg: string }> = {
   missed:  { label: 'Missed',  short: '✗', color: '#b91c1c', bg: 'rgba(239,68,68,0.14)' },
   checked: { label: 'Checked', short: '✓', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
@@ -152,7 +167,7 @@ export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardSta
   let status: BoardStatus | null = null, statusWeek = 0, note: string | null = null, value: Record<string, unknown> = {}, week = 0;
   for (const r of mine) {
     if (r.status) { status = r.status; statusWeek = r.week; }
-    if (r.note) note = r.note;
+    const ns = notesOf(r); if (ns.length) note = ns.map(noteLine).join(' · ');
     if (r.value && Object.keys(r.value).length) value = r.value;
     week = r.week;
   }
@@ -168,7 +183,7 @@ export function summarizeValue(v: Record<string, unknown> | null | undefined): s
   if (!v) return null;
   const parts: string[] = [];
   for (const [k, x] of Object.entries(v)) {
-    if (k === 'score' || k === 'mark' || k === 'hours' || x == null || x === '') continue;
+    if (k === 'score' || k === 'mark' || k === 'hours' || k === 'notes' || x == null || x === '') continue;
     if (Array.isArray(x)) { const arr = x.filter(Boolean); if (arr.length) parts.push(`${k}: ${arr.join(', ')}`); }
     else if (typeof x === 'object') parts.push(`${k}: ${JSON.stringify(x)}`);
     else parts.push(`${k}: ${String(x)}`);
@@ -181,12 +196,12 @@ export function diffRows(base: BoardRow[], saved: Pick<BoardRow, 'item_key' | 'w
   for (const r of saved) {
     const b = base.find((x) => x.item_key === r.item_key && x.week === r.week) ?? null;
     const bv = b?.value ?? {}; const nv = r.value ?? {};
-    const note = (r.note ?? '').trim(); const bnote = (b?.note ?? '').trim();
-    const empty = !r.status && !note && !Object.keys(nv).length;
+    const notes = notesOf(r); const bnotes = notesOf(b);
+    const empty = !r.status && !notes.length && !Object.keys(nv).filter((k) => k !== 'notes').length;
     const line = (field: BoardLogField, o: string | null, n: string | null) => { if (o !== n) out.push({ item_key: r.item_key, week: r.week, field, old: o, new: n }); };
-    if (empty) { if (b) line('reset', [b.status, bnote || null, summarizeValue(bv)].filter(Boolean).join(' · ') || null, null); continue; }
+    if (empty) { if (b) line('reset', [b.status, bnotes.map(noteLine).join(' | ') || null, summarizeValue(bv)].filter(Boolean).join(' · ') || null, null); continue; }
     line('status', b?.status ?? null, r.status ?? null);
-    line('note', bnote || null, note || null);
+    for (let i = 0; i < Math.max(notes.length, bnotes.length); i++) line('note', bnotes[i] ? noteLine(bnotes[i]) : null, notes[i] ? noteLine(notes[i]) : null);
     line('score', num(bv.score)?.toString() ?? null, num(nv.score)?.toString() ?? null);
     line('mark', typeof bv.mark === 'string' ? bv.mark : null, typeof nv.mark === 'string' ? nv.mark : null);
     line('hours', num(bv.hours)?.toString() ?? null, num(nv.hours)?.toString() ?? null);
@@ -289,7 +304,7 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   });
   const review = [
     // notes saved before the change log existed (no logged note line for them)
-    ...wk.filter((r) => r.note && byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).map((r) => `${name(r)} — ${r.note}`),
+    ...wk.filter((r) => byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).flatMap((r) => notesOf(r).map((n) => `${name(r)} — ${noteLine(n)}`)),
     ...changes,
     ...quizzes.filter((q) => q.week === week).map((q) => `quiz passed: ${q.title} ${q.score}/${q.total}`),
   ];
@@ -305,7 +320,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const when = typeof meta.when === 'string' ? meta.when : '';
   const title = typeof meta.title === 'string' && meta.title ? meta.title : `8-Week Review · W${week} · ${personName}`;
-  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; return `${fmtDay(r.entered_on)} · ${it.num} ${it.text}${r.note ? ` — ${r.note}` : ''}`; });
+  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; const n = notesOf(r).map(noteLine).join(' · '); return `${fmtDay(r.entered_on)} · ${it.num} ${it.text}${n ? ` — ${n}` : ''}`; });
   const doneCum = boardProgress(def, rows.filter((r) => r.week <= week));
   const fields = def.inviteFields.length ? def.inviteFields : ['Title', 'When', 'Focus', 'To do', 'Review with Jie', 'Done'];
   const body: Record<string, string[]> = {
@@ -313,7 +328,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
     [fields[1] ?? 'When']: [when],
     [fields[2] ?? 'Focus']: log.focus,
     [fields[3] ?? 'To do']: moreWork,
-    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${byKey.get(x.item_key)!.num} ${byKey.get(x.item_key)!.text}` === d); return r?.note ? `${d} — ${r.note}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
+    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${byKey.get(x.item_key)!.num} ${byKey.get(x.item_key)!.text}` === d); const n = r ? notesOf(r).map(noteLine).join(' · ') : ''; return n ? `${d} — ${n}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
     [fields[5] ?? 'Done']: [`${doneCum.done} / ${doneCum.total} on the board`],
   };
   return fields.map((f) => {
