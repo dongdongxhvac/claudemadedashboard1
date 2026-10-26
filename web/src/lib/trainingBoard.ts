@@ -105,6 +105,15 @@ export type BoardRow = {
 };
 export const META_INVITE = 'meta.invite';
 export const META_FIRST = 'meta.first_meeting';
+/** Week chips are review sessions, not calendar weeks (user 2026-10-26): clicking W1 stamps today
+ *  as that session's date. Stored once, week 0, value {dates: {'1': 'YYYY-MM-DD', …}}. */
+export const META_WEEKS = 'meta.weeks';
+export function weekDates(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]): Record<number, string> {
+  const v = rows.find((r) => r.item_key === META_WEEKS && r.week === 0)?.value?.dates;
+  const out: Record<number, string> = {};
+  if (v && typeof v === 'object') for (const [k, d] of Object.entries(v as Record<string, unknown>)) if (typeof d === 'string' && d) out[Number(k)] = d;
+  return out;
+}
 export const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 // ── parsing ────────────────────────────────────────────────────────────────
@@ -215,6 +224,7 @@ export function summarizeValue(v: Record<string, unknown> | null | undefined): s
 export function diffRows(base: BoardRow[], saved: Pick<BoardRow, 'item_key' | 'week' | 'status' | 'note' | 'value'>[]): BoardLogInput[] {
   const out: BoardLogInput[] = [];
   for (const r of saved) {
+    if (r.item_key.startsWith('meta.')) continue;   // invite / first-meeting / week dates: not a change on an item
     const b = base.find((x) => x.item_key === r.item_key && x.week === r.week) ?? null;
     const bv = b?.value ?? {}; const nv = r.value ?? {};
     const notes = notesOf(r); const bnotes = notesOf(b);

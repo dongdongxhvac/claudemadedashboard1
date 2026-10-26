@@ -106,11 +106,11 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                         {/* the item's own control */}
                         <div className="mt-1 ml-7 flex flex-wrap items-center gap-x-2 gap-y-1">
                           {c.kind === 'hours8' && WEEKS.map((w) => (
-                            <label key={w} className="inline-flex items-center gap-0.5" title={`Week ${w} hours`}>
+                            <label key={w} className="inline-flex items-center gap-0.5" title={`${w}`}>
                               <span className="t-mono t-muted" style={{ fontSize: 10 }}>{w}</span>
-                              <input type="number" min={0} max={99} step={0.5} disabled={!canEdit} value={hoursOf(rows, item.key, w) ?? ''}
-                                onChange={(e) => setRow(item.key, w, { value: e.target.value === '' ? {} : { hours: Number(e.target.value) } })}
-                                style={{ ...input, width: 46, padding: '1px 3px', fontSize: 11 }} />
+                              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={hoursOf(rows, item.key, w) ?? ''}
+                                onChange={(e) => { const d = e.target.value.replace(/[^0-9]/g, ''); setRow(item.key, w, { value: d === '' ? {} : { hours: Number(d) } }); }}
+                                style={{ ...input, width: 40, padding: '1px 4px', fontSize: 11, textAlign: 'center' }} />
                             </label>
                           ))}
                           {c.kind === 'weeks8' && WEEKS.map((w) => (

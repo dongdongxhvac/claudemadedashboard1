@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react';
 import { Section } from '../Section';
 import { useTrainingBoard, useSaveTrainingBoard, useSetTrainingStart, type BoardRowInput } from '../../hooks/useTrainingBoard';
-import { rowKey, WEEKS, STATUS_META, type BoardRow } from '../../lib/trainingBoard';
+import { rowKey, WEEKS, STATUS_META, META_WEEKS, weekDates, fmtDay, type BoardRow } from '../../lib/trainingBoard';
 import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
 import { WeeklyLog } from './WeeklyLog';
@@ -28,8 +28,10 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const [draft, setDraft] = useState<Map<string, BoardRowInput>>(new Map());
   const [err, setErr] = useState<string | null>(null);
 
-  // week chip: the one picked, else the week since the start date (clamped 1..8)
-  const w = week || Math.min(8, Math.max(1, b.currentWeek || 1));
+  // week chips are review sessions (user 2026-10-26): the one picked, else the last one that has a date, else 1
+  const dates = useMemo(() => weekDates(b.rows), [b.rows]);
+  const lastDated = WEEKS.filter((x) => dates[x]).pop() ?? 1;
+  const w = week || lastDated;
 
   // base rows + draft → what the board, log and invite see
   const rows = useMemo<BoardRow[]>(() => {
@@ -64,6 +66,15 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
     });
   };
   const dirty = draft.size;
+  /** Clicking a chip selects it and, the first time, stamps today as that session's date (saved right away). */
+  const pickWeek = (x: number) => {
+    setWeek(x);
+    if (dates[x]) return;
+    const today = new Date().toLocaleDateString('en-CA');
+    save.mutate({ user_id: userId, rows: [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: { ...dates, [x]: today } } }], base: b.rows }, {
+      onError: (e) => setErr((e as Error).message),
+    });
+  };
   const doSave = () => {
     setErr(null);
     save.mutate({ user_id: userId, rows: [...draft.values()], base: b.rows }, {
@@ -81,7 +92,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const p = b.progress;
   const subtitle = (
     <span className="t-small t-muted">
-      {p ? <>{p.done}/{p.total} done{b.startDate ? ` · week ${Math.min(8, b.currentWeek)} of 8` : ' · no start date'}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
+      {p ? <>{p.done}/{p.total} done · W{w}{dates[w] ? ` ${fmtDay(dates[w])}` : ''}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
       {dirty > 0 && <> · <span className="px-1.5 rounded" style={{ background: 'rgba(245,158,11,0.18)', color: '#92400e', fontWeight: 600 }}>{dirty} unsaved</span></>}
     </span>
   );
@@ -98,14 +109,15 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <span className="t-muted">Start</span>
               <input type="date" value={b.startDate ?? ''} disabled={!canEdit || setStart.isPending}
                 onChange={(e) => setStart.mutate({ user_id: userId, start_date: e.target.value || null, mentor_user_id: b.enrollment?.mentor_user_id ?? null }, { onError: (x) => setErr((x as Error).message) })}
-                style={{ ...input, padding: '1px 4px', fontSize: 11 }} title="Program start date (new_hire_enrollments) — the week chips follow it" />
+                style={{ ...input, padding: '1px 4px', fontSize: 11 }} title="Program start date (new_hire_enrollments) — shown on the printout and the roster; the week chips are independent review sessions" />
             </label>
-            <div className="flex items-center gap-1" title="Which program week your edits belong to">
-              <span className="t-small t-muted">Week</span>
+            <div className="flex items-start gap-1" title="Review session 1–8 · click one to work on it; the first click stamps today's date">
+              <span className="t-small t-muted" style={{ paddingTop: 2 }}>Week</span>
               {WEEKS.map((x) => (
-                <button key={x} type="button" onClick={() => setWeek(x)} className="t-mono px-1.5 py-0.5 rounded border t-small"
-                  style={{ borderColor: x === w ? 'var(--color-accent)' : 'var(--color-border)', color: x === w ? 'var(--color-accent)' : 'var(--color-text-muted)', background: 'var(--color-card)', fontWeight: x === w ? 700 : 500, outline: x === Math.min(8, b.currentWeek) && b.startDate ? '1px dashed var(--color-accent)' : 'none' }}>
-                  {x}
+                <button key={x} type="button" onClick={() => pickWeek(x)} className="t-mono px-1.5 py-0.5 rounded border t-small flex flex-col items-center"
+                  style={{ borderColor: x === w ? 'var(--color-accent)' : 'var(--color-border)', color: x === w ? 'var(--color-accent)' : dates[x] ? 'var(--color-text)' : 'var(--color-text-muted)', background: 'var(--color-card)', fontWeight: x === w ? 700 : 500, lineHeight: 1.1 }}>
+                  <span>{x}</span>
+                  <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.8 }}>{dates[x] ? fmtDay(dates[x]) : '·'}</span>
                 </button>
               ))}
             </div>
@@ -142,7 +154,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit} setRow={setRow} onReset={resetItem} progress={p} />
             </>
           )}
-          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
+          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
           {tab === 'resets' && <ResetLog def={b.def} log={b.log} />}
           {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={w} personName={personName} canEdit={canEdit} setRow={setRow} />}
         </>

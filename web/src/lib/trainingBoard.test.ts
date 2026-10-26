@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine,
+  currentOf, itemProgress, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -135,6 +135,9 @@ assertEq(notesOf(row('hvac', 3, null, 'legacy text', { mark: 'good' })).map(note
 assertEq(weekLog(def, [rn], 3).review, ['Oct 1 · 10 HVAC — ✗ low static switch', 'Oct 1 · 10 HVAC — ★ refrigerant monitor'], 'one review line per note');
 assertEq(diffRows([row('hvac', 3, 'done', 'legacy text')], [{ item_key: 'hvac', week: 3, status: 'done', note: null, value: { notes: [{ text: 'legacy text', mark: 'good' }, { text: 'second', mark: null }] } }]).map((x) => [x.field, x.old, x.new]),
   [['note', 'legacy text', '★ legacy text'], ['note', null, 'second']], 'note diff per note (legacy seed → marked + added)');
+
+assertEq(weekDates([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26', '3': '2026-11-09' } })]), { 1: '2026-10-26', 3: '2026-11-09' }, 'week dates');
+assertEq(diffRows([], [{ item_key: 'meta.weeks', week: 0, status: null, note: null, value: { dates: { '1': '2026-10-26' } } }]), [], 'meta rows are not logged');
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
