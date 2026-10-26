@@ -88,6 +88,23 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
       onError: (e) => setErr((e as Error).message),
     });
   };
+  /** Undo a session saved by mistake: clear its date stamp and, on request, every row saved on that week (logged as resets). */
+  const resetWeek = () => {
+    if (!w || !dates[w]) return;
+    const wkRows = b.rows.filter((r) => r.week === w);
+    const items = wkRows.filter((r) => !r.item_key.startsWith('meta.')).length;
+    if (!window.confirm(`Reset W${w}? Its date (${fmtDay(dates[w])}) is cleared so the next Save stamps it again.`)) return;
+    const rest: Record<number, string> = { ...dates }; delete rest[w];
+    const out: BoardRowInput[] = [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: rest } }];
+    if (wkRows.length && window.confirm(`Also clear everything saved on W${w} (${items} item${items === 1 ? '' : 's'})? This is logged as a reset per item.`)) {
+      out.push(...wkRows.map((r) => ({ item_key: r.item_key, week: r.week, status: null, note: null, value: {} })));
+    }
+    setErr(null);
+    save.mutate({ user_id: userId, rows: out, base: b.rows }, {
+      onSuccess: () => { setWeek(0); setDraft((prev) => new Map([...prev].filter(([k]) => !k.endsWith(`:${w}`)))); },
+      onError: (e) => setErr((e as Error).message),
+    });
+  };
   const print = () => {
     if (!b.def || !b.doc) return;
     const html = buildTrackerPrintHtml(b.doc.html, b.def, rows, { name: personName, startDate: b.startDate, quizzes: b.quizzes, log: b.log });
@@ -132,6 +149,10 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
                   </button>
                 );
               })}
+              {canEdit && w > 0 && dates[w] && (
+                <button type="button" onClick={resetWeek} disabled={save.isPending} className="t-small t-muted hover:underline whitespace-nowrap" style={{ paddingTop: 4, fontSize: 10.5 }}
+                  title={`Clear the date on W${w} (and, if you choose, everything saved on it)`}>↺ reset W{w}</button>
+              )}
             </div>
             <div className="flex-1 min-w-[160px]">
               <div className="rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-border)' }}>
