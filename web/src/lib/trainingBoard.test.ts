@@ -23,13 +23,13 @@ const def: TrainingBoardDef = {
   title: 'New-Hire 8-Week Board', total: 5,
   sections: [
     { num: 1, key: 'cove', title: 'COVE', total: 3, items: [
-      { num: 1, key: 'week_hours', text: 'Week at ≥35 h in COVE — write hours', hint: null, section: 'cove', control: { kind: 'hours8' } },
-      { num: 2, key: 'week_summary', text: 'Week — activity summary logged', hint: null, section: 'cove', control: { kind: 'weeks8' } },
-      { num: 3, key: 'pm_closed', text: 'PM closed with update', hint: null, section: 'cove', control: { kind: 'count', n: 3 } },
+      { num: 1, key: 'week_hours', text: 'Week at ≥35 h in COVE — write hours', hint: null, section: 'cove', control: { kind: 'hours8' } , docIdx: 0 },
+      { num: 2, key: 'week_summary', text: 'Week — activity summary logged', hint: null, section: 'cove', control: { kind: 'weeks8' } , docIdx: 0 },
+      { num: 3, key: 'pm_closed', text: 'PM closed with update', hint: null, section: 'cove', control: { kind: 'count', n: 3 } , docIdx: 0 },
     ] },
     { num: 3, key: 'overview', title: 'Overview + quiz', total: 2, items: [
-      { num: 10, key: 'hvac', text: 'HVAC', hint: null, section: 'overview', control: { kind: 'note', box: true } },
-      { num: 11, key: 'plumbing', text: 'Plumbing', hint: null, section: 'overview', control: { kind: 'note', box: true } },
+      { num: 10, key: 'hvac', text: 'HVAC', hint: null, section: 'overview', control: { kind: 'note', box: true } , docIdx: 0 },
+      { num: 11, key: 'plumbing', text: 'Plumbing', hint: null, section: 'overview', control: { kind: 'note', box: true } , docIdx: 0 },
     ] },
   ],
   items: [], logColumns: [], tallies: [{ label: 'COVE', hours: true, section: 'cove' }, { label: 'Overview', hours: false, section: 'overview' }],

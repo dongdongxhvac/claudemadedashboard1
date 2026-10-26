@@ -11,12 +11,13 @@ import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
 import { WeeklyLog } from './WeeklyLog';
 import { InviteCard } from './InviteCard';
+import { ResetLog } from './ResetLog';
 
 const input: React.CSSProperties = {
   background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
   borderRadius: 4, padding: '2px 5px', fontSize: 12,
 };
-type Tab = 'board' | 'log' | 'invite';
+type Tab = 'board' | 'log' | 'invite' | 'resets';
 
 export function TrainingSection({ userId, canEdit, personName }: { userId: string; canEdit: boolean; personName: string }) {
   const b = useTrainingBoard(userId);
@@ -127,7 +128,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
 
           {/* tabs */}
           <div className="flex gap-1 mb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
-            {([['board', 'Board'], ['log', 'Weekly log'], ['invite', 'Invite · first meeting']] as [Tab, string][]).map(([k, label]) => (
+            {([['board', 'Board'], ['log', 'Weekly log'], ['invite', 'Invite · first meeting'], ['resets', 'Reset log']] as [Tab, string][]).map(([k, label]) => (
               <button key={k} type="button" onClick={() => setTab(k)} className="t-small px-3 py-1.5"
                 style={{ borderBottom: `2px solid ${tab === k ? 'var(--color-accent)' : 'transparent'}`, color: tab === k ? 'var(--color-accent)' : 'var(--color-text-muted)', fontWeight: 600, marginBottom: -1 }}>{label}</button>
             ))}
@@ -142,6 +143,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
             </>
           )}
           {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
+          {tab === 'resets' && <ResetLog def={b.def} log={b.log} />}
           {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={w} personName={personName} canEdit={canEdit} setRow={setRow} />}
         </>
       )}

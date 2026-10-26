@@ -49,10 +49,21 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     const sp = prog.sections.get(sec.key);
     if (sp) setText(fg.querySelector('.fgh .cnt'), `${sp.done} / ${sp.total}`);
     const fis = Array.from(fg.querySelectorAll(':scope > .fi'));
-    sec.items.forEach((item, ii) => {
-      const fi = fis[ii];
-      if (!fi) return;
-      const cur = currentOf(rows, item.key);
+    // one printed row can hold two parts (overview + quiz · find it / tag it): done when both are, notes labelled
+    const byRow = new Map<number, typeof sec.items>();
+    for (const it of sec.items) byRow.set(it.docIdx, [...(byRow.get(it.docIdx) ?? []), it]);
+    for (const [docIdx, parts] of byRow) {
+      const fi = fis[docIdx];
+      if (!fi) continue;
+      const item = parts[0];
+      const curs = parts.map((pt) => ({ pt, cur: currentOf(rows, pt.key) }));
+      const cur = parts.length === 1 ? curs[0].cur : {
+        ...curs[0].cur,
+        // done only when every part is done; otherwise the part still open wins
+        status: curs.every((c) => c.cur.status === 'done') ? 'done' as const : (curs.find((c) => c.cur.status && c.cur.status !== 'done')?.cur.status ?? curs.find((c) => c.cur.status)?.cur.status ?? null),
+        statusWeek: Math.max(...curs.map((c) => c.cur.statusWeek)),
+        note: curs.filter((c) => c.cur.note).map((c) => `${c.pt.part === 'tagit' ? 'tag it' : 'overview'}: ${c.cur.note}`).join(' · ') || null,
+      };
       if (cur.status) fi.classList.add(`st-${cur.status}`);
       const t = fi.querySelector(':scope > .t');
       const bx = fi.querySelector(':scope > .bx');
@@ -89,7 +100,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
           t?.appendChild(small);
         }
       }
-    });
+    }
   });
 
   // weekly log rows (W1..W8 across the two tables)

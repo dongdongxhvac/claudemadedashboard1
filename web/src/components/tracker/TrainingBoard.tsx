@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress, notesOf, allNotes,
+  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, isScorable, statusForScore, currentOf, hoursOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress, type BoardNote,
 } from '../../lib/trainingBoard';
 
@@ -79,7 +79,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                     return (
                       <div key={item.key} className="t-small" style={{ borderBottom: '1px solid var(--color-border)', padding: '5px 2px 6px', background: meta ? meta.bg : 'transparent', borderLeft: `3px solid ${meta ? meta.color : 'transparent'}`, paddingLeft: 6 }}>
                         <div className="flex items-start gap-2">
-                          <span className="t-mono" style={{ flex: '0 0 24px', fontWeight: 700, fontSize: 14, color: 'var(--color-text-muted)' }}>{item.num}</span>
+                          <span className="t-mono" style={{ flex: '0 0 28px', fontWeight: 700, fontSize: 14, color: 'var(--color-text-muted)' }}>{itemNum(item)}</span>
                           <span className="flex-1 min-w-0" style={{ fontWeight: 600, lineHeight: 1.25, fontSize: 15 }}>
                             {item.text}
                             {item.hint && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>{item.hint}</span>}
@@ -192,7 +192,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                                   <div className="flex items-center gap-3">
                                     <button type="button" onClick={() => write([...notes, { text: '', mark: null }])} className="t-accent hover:underline" style={{ fontSize: 10.5 }}>+ note · W{week}</button>
                                     {(cur.status || cur.note || Object.keys(cur.value).length > 0 || wr) && (
-                                      <button type="button" onClick={() => { if (window.confirm(`Reset "${item.num} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
+                                      <button type="button" onClick={() => { if (window.confirm(`Reset "${itemNum(item)} ${item.text}"? Every saved week of this item is cleared (logged as a reset).`)) onReset(item.key); }}
                                         className="t-muted hover:underline" style={{ fontSize: 10.5, marginLeft: 'auto' }} title="Clear this item (all weeks)">↺ reset</button>
                                     )}
                                   </div>

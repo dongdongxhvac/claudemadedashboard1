@@ -21,7 +21,17 @@ export type BoardControl =
   | { kind: 'date' }                         // a date line only
   | { kind: 'none' };
 
-export type BoardItem = { num: number; key: string; text: string; hint: string | null; section: string; control: BoardControl };
+export type BoardItem = {
+  num: number; key: string; text: string; hint: string | null; section: string; control: BoardControl;
+  /** index of the printed row inside its section (several parts can share one printed row) */
+  docIdx: number;
+  /** major equipment rows split in two (user 2026-10-26): overview + quiz · find it / tag it */
+  part?: 'overview' | 'tagit';
+};
+/** Items in the "Find It & Tag It" section that are a major piece of equipment get the two parts. */
+const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller)\b/i;
+export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
+export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
 export type BoardSection = { num: number; key: string; title: string; total: number; items: BoardItem[] };
 export type BoardTally = { label: string; hours: boolean; section: string | null };
 export type TrainingBoardDef = {
@@ -132,18 +142,29 @@ export function parseTrainingBoard(html: string): TrainingBoardDef {
     const stitle = (m ? m[2] : head).trim();
     const total = Number(/\/\s*(\d+)/.exec(cnt)?.[1] ?? 0);
     const sec: BoardSection = { num, key: slug(stitle, 30), title: stitle, total, items: [] };
-    for (const fi of Array.from(fg.querySelectorAll(':scope > .fi'))) {
+    const fis = Array.from(fg.querySelectorAll(':scope > .fi'));
+    let split = false;
+    fis.forEach((fi, docIdx) => {
       const t = fi.querySelector(':scope > .t');
-      if (!t) continue;
+      if (!t) return;
       const text = ownText(t);
       const hint = txt(t.querySelector(':scope > small')) || null;
-      sec.items.push({ num: Number(txt(fi.querySelector('.num'))) || sec.items.length + 1, key: slug(text, 40), text, hint, section: sec.key, control: controlFor(fi) });
-    }
-    if (!sec.total) sec.total = sec.items.length;
+      const base: BoardItem = { num: Number(txt(fi.querySelector('.num'))) || sec.items.length + 1, key: slug(text, 40), text, hint, section: sec.key, control: controlFor(fi), docIdx };
+      if (/find it/i.test(stitle) && EQUIPMENT_RE.test(text)) {
+        split = true;
+        // the overview part keeps the row's own key (earlier records stay attached to it)
+        sec.items.push({ ...base, part: 'overview', text: `${text} · ${PART_LABEL.overview}` });
+        sec.items.push({ ...base, key: `${base.key}.tagit`, part: 'tagit', text: `${text} · ${PART_LABEL.tagit}` });
+      } else {
+        sec.items.push(base);
+      }
+    });
+    if (!sec.total || split) sec.total = sec.items.length;
     sections.push(sec);
   }
   const items = sections.flatMap((s) => s.items);
-  const total = Number(/\/\s*(\d+)/.exec(txt(doc.querySelector('.idrow .v.prog')))?.[1] ?? items.length);
+  const printed = Number(/\/\s*(\d+)/.exec(txt(doc.querySelector('.idrow .v.prog')))?.[1] ?? 0);
+  const total = items.length > printed ? items.length : (printed || items.length);
   const logColumns = Array.from(doc.querySelectorAll('table thead th')).slice(0, 4).map(txt);
   const tallies: BoardTally[] = Array.from(doc.querySelectorAll('td.c .hab div')).slice(0, 12).map((d, i) => {
     const label = ownText(d).replace(/\bh$/, '').trim();
@@ -285,13 +306,13 @@ export type WeekLog = {
 export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, quizzes: QuizPass[] = [], log: BoardLogRow[] = []): WeekLog {
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
-  const itemName = (key: string) => { const it = byKey.get(key); return it ? `${it.num} ${it.text}` : key; };
+  const itemName = (key: string) => { const it = byKey.get(key); return it ? `${itemNum(it)} ${it.text}` : key; };
   // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"
   const changes = log.filter((l) => l.week === week && byKey.has(l.item_key)).sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
   const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
   // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
-  const name = (r: BoardRow) => { const it = byKey.get(r.item_key); return `${fmtDay(r.entered_on)} · ${it ? `${it.num} ${it.text}` : r.item_key}`; };
+  const name = (r: BoardRow) => { const it = byKey.get(r.item_key); return `${fmtDay(r.entered_on)} · ${it ? `${itemNum(it)} ${it.text}` : r.item_key}`; };
   const tallies = def.tallies.map((t) => {
     const sec = def.sections.find((s) => s.key === t.section);
     if (t.hours) {
@@ -320,7 +341,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const when = typeof meta.when === 'string' ? meta.when : '';
   const title = typeof meta.title === 'string' && meta.title ? meta.title : `8-Week Review · W${week} · ${personName}`;
-  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; const n = notesOf(r).map(noteLine).join(' · '); return `${fmtDay(r.entered_on)} · ${it.num} ${it.text}${n ? ` — ${n}` : ''}`; });
+  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; const n = notesOf(r).map(noteLine).join(' · '); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}`; });
   const doneCum = boardProgress(def, rows.filter((r) => r.week <= week));
   const fields = def.inviteFields.length ? def.inviteFields : ['Title', 'When', 'Focus', 'To do', 'Review with Jie', 'Done'];
   const body: Record<string, string[]> = {
@@ -328,7 +349,7 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
     [fields[1] ?? 'When']: [when],
     [fields[2] ?? 'Focus']: log.focus,
     [fields[3] ?? 'To do']: moreWork,
-    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${byKey.get(x.item_key)!.num} ${byKey.get(x.item_key)!.text}` === d); const n = r ? notesOf(r).map(noteLine).join(' · ') : ''; return n ? `${d} — ${n}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
+    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${itemNum(byKey.get(x.item_key)!)} ${byKey.get(x.item_key)!.text}` === d); const n = r ? notesOf(r).map(noteLine).join(' · ') : ''; return n ? `${d} — ${n}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
     [fields[5] ?? 'Done']: [`${doneCum.done} / ${doneCum.total} on the board`],
   };
   return fields.map((f) => {
