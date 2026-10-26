@@ -1,11 +1,14 @@
 // TrainingSection — the 8-Week Tracker in the admin Tracker drawer: the
 // board (page 1) as a live form with a draft + Save, the generated weekly
-// log (pages 2–3) and invite (page 4), a start-date field (week chips follow
-// it) and Print (the real print-station document, filled in). Admin side
-// only: TrackerPanel mounts it when canEdit.
+// log (pages 2–3) and invite (page 4), the engineer's schedule (shift), the
+// week chips (review sessions 1–8: pick one, Save stamps its date) and Print
+// (the real print-station document, filled in). Admin side only:
+// TrackerPanel mounts it when canEdit.
 import { useMemo, useState } from 'react';
 import { Section } from '../Section';
-import { useTrainingBoard, useSaveTrainingBoard, useSetTrainingStart, type BoardRowInput } from '../../hooks/useTrainingBoard';
+import { useTrainingBoard, useSaveTrainingBoard, type BoardRowInput } from '../../hooks/useTrainingBoard';
+import { useEngineers } from '../../hooks/useEngineers';
+import { useShifts } from '../../hooks/useShifts';
 import { rowKey, WEEKS, STATUS_META, META_WEEKS, weekDates, fmtDay, type BoardRow } from '../../lib/trainingBoard';
 import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
@@ -13,25 +16,30 @@ import { WeeklyLog } from './WeeklyLog';
 import { InviteCard } from './InviteCard';
 import { ResetLog } from './ResetLog';
 
-const input: React.CSSProperties = {
-  background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
-  borderRadius: 4, padding: '2px 5px', fontSize: 12,
-};
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '');
 type Tab = 'board' | 'log' | 'invite' | 'resets';
 
 export function TrainingSection({ userId, canEdit, personName }: { userId: string; canEdit: boolean; personName: string }) {
   const b = useTrainingBoard(userId);
   const save = useSaveTrainingBoard();
-  const setStart = useSetTrainingStart();
+  const engineers = useEngineers();
+  const shifts = useShifts();
+  const shift = useMemo(() => {
+    const sid = engineers.data?.find((e) => e.user_id === userId)?.shift_id;
+    return sid ? shifts.data?.find((s) => s.id === sid) ?? null : null;
+  }, [engineers.data, shifts.data, userId]);
+  /** the selected review session (0 = none); one at a time, click again to unselect, required to Save */
   const [week, setWeek] = useState<number>(0);
   const [tab, setTab] = useState<Tab>('board');
   const [draft, setDraft] = useState<Map<string, BoardRowInput>>(new Map());
   const [err, setErr] = useState<string | null>(null);
 
-  // week chips are review sessions (user 2026-10-26): the one picked, else the last one that has a date, else 1
+  // week chips are review sessions (user 2026-10-26): exactly one selected at a time, none by default;
+  // the log / invite views fall back to the last dated session
   const dates = useMemo(() => weekDates(b.rows), [b.rows]);
   const lastDated = WEEKS.filter((x) => dates[x]).pop() ?? 1;
-  const w = week || lastDated;
+  const w = week;
+  const wView = week || lastDated;
 
   // base rows + draft → what the board, log and invite see
   const rows = useMemo<BoardRow[]>(() => {
@@ -66,18 +74,16 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
     });
   };
   const dirty = draft.size;
-  /** Clicking a chip selects it and, the first time, stamps today as that session's date (saved right away). */
-  const pickWeek = (x: number) => {
-    setWeek(x);
-    if (dates[x]) return;
-    const today = new Date().toLocaleDateString('en-CA');
-    save.mutate({ user_id: userId, rows: [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: { ...dates, [x]: today } } }], base: b.rows }, {
-      onError: (e) => setErr((e as Error).message),
-    });
-  };
+  /** A chip selects that session; clicking the selected one unselects it. Nothing is written until Save. */
+  const pickWeek = (x: number) => setWeek((cur) => (cur === x ? 0 : x));
+  const canSave = canEdit && dirty > 0 && w > 0 && !save.isPending;
+  /** Save writes the draft and, the first time a session is saved, stamps today as its date. */
   const doSave = () => {
+    if (!w) { setErr('Select a week (1–8) before saving.'); return; }
     setErr(null);
-    save.mutate({ user_id: userId, rows: [...draft.values()], base: b.rows }, {
+    const today = new Date().toLocaleDateString('en-CA');
+    const stamp: BoardRowInput[] = dates[w] ? [] : [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: { ...dates, [w]: today } } }];
+    save.mutate({ user_id: userId, rows: [...draft.values(), ...stamp], base: b.rows }, {
       onSuccess: () => setDraft(new Map()),
       onError: (e) => setErr((e as Error).message),
     });
@@ -92,7 +98,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const p = b.progress;
   const subtitle = (
     <span className="t-small t-muted">
-      {p ? <>{p.done}/{p.total} done · W{w}{dates[w] ? ` ${fmtDay(dates[w])}` : ''}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
+      {p ? <>{p.done}/{p.total} done{w ? ` · W${w}${dates[w] ? ` ${fmtDay(dates[w])}` : ''}` : ''}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
       {dirty > 0 && <> · <span className="px-1.5 rounded" style={{ background: 'rgba(245,158,11,0.18)', color: '#92400e', fontWeight: 600 }}>{dirty} unsaved</span></>}
     </span>
   );
@@ -105,21 +111,27 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
         <>
           {/* toolbar */}
           <div className="flex items-center gap-3 flex-wrap mb-3">
-            <label className="t-small flex items-center gap-1">
-              <span className="t-muted">Start</span>
-              <input type="date" value={b.startDate ?? ''} disabled={!canEdit || setStart.isPending}
-                onChange={(e) => setStart.mutate({ user_id: userId, start_date: e.target.value || null, mentor_user_id: b.enrollment?.mentor_user_id ?? null }, { onError: (x) => setErr((x as Error).message) })}
-                style={{ ...input, padding: '1px 4px', fontSize: 11 }} title="Program start date (new_hire_enrollments) — shown on the printout and the roster; the week chips are independent review sessions" />
-            </label>
-            <div className="flex items-start gap-1" title="Review session 1–8 · click one to work on it; the first click stamps today's date">
+            {/* the engineer's schedule (shift from the profile) replaces the start-date field (user 2026-10-26) */}
+            <span className="t-small flex items-center gap-1" title="Schedule — the shift set on the engineer's profile">
+              <span className="t-muted">Schedule</span>
+              {shift ? (
+                <span className="px-1.5 py-0.5 rounded border t-mono" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11 }}>
+                  {shift.name}{shift.start_time ? <span className="t-muted"> · {hhmm(shift.start_time)}–{hhmm(shift.end_time)}</span> : null}
+                </span>
+              ) : <span className="t-muted">{engineers.isLoading || shifts.isLoading ? '…' : 'no shift on the profile'}</span>}
+            </span>
+            <div className="flex items-start gap-1" title="Review session 1–8 · select one to edit and save; click it again to unselect. Save stamps the session's date the first time.">
               <span className="t-small t-muted" style={{ paddingTop: 2 }}>Week</span>
-              {WEEKS.map((x) => (
-                <button key={x} type="button" onClick={() => pickWeek(x)} className="t-mono px-1.5 py-0.5 rounded border t-small flex flex-col items-center"
-                  style={{ borderColor: x === w ? 'var(--color-accent)' : 'var(--color-border)', color: x === w ? 'var(--color-accent)' : dates[x] ? 'var(--color-text)' : 'var(--color-text-muted)', background: 'var(--color-card)', fontWeight: x === w ? 700 : 500, lineHeight: 1.1 }}>
-                  <span>{x}</span>
-                  <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.8 }}>{dates[x] ? fmtDay(dates[x]) : '·'}</span>
-                </button>
-              ))}
+              {WEEKS.map((x) => {
+                const on = x === w;
+                return (
+                  <button key={x} type="button" onClick={() => pickWeek(x)} aria-pressed={on} className="t-mono px-1.5 py-0.5 rounded border t-small flex flex-col items-center"
+                    style={{ borderColor: on ? 'var(--color-accent)' : 'var(--color-border)', color: on ? '#fff' : dates[x] ? 'var(--color-text)' : 'var(--color-text-muted)', background: on ? 'var(--color-accent)' : 'var(--color-card)', fontWeight: on ? 700 : 500, lineHeight: 1.1 }}>
+                    <span>{x}</span>
+                    <span style={{ fontSize: 9, fontWeight: 500, opacity: on ? 0.9 : 0.8 }}>{dates[x] ? fmtDay(dates[x]) : '·'}</span>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex-1 min-w-[160px]">
               <div className="rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-border)' }}>
@@ -128,9 +140,10 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <div className="t-small t-muted t-mono" style={{ fontSize: 10.5 }}>{p.pct}% · {p.done} of {p.total}</div>
             </div>
             {canEdit && (
-              <button type="button" onClick={doSave} disabled={!dirty || save.isPending} className="t-small px-3 py-1 rounded font-semibold"
-                style={{ background: dirty ? 'var(--color-accent)' : 'var(--color-border)', color: dirty ? '#fff' : 'var(--color-text-muted)' }}>
-                {save.isPending ? 'Saving…' : dirty ? `Save (${dirty})` : 'Saved'}
+              <button type="button" onClick={doSave} disabled={!canSave} className="t-small px-3 py-1 rounded font-semibold"
+                title={dirty && !w ? 'Select a week (1–8) first' : ''}
+                style={{ background: canSave ? 'var(--color-accent)' : 'var(--color-border)', color: canSave ? '#fff' : 'var(--color-text-muted)' }}>
+                {save.isPending ? 'Saving…' : dirty ? (w ? `Save W${w} (${dirty})` : `Save (${dirty}) · pick a week`) : 'Saved'}
               </button>
             )}
             {canEdit && dirty > 0 && <button type="button" onClick={() => setDraft(new Map())} className="t-small t-muted hover:underline">discard</button>}
@@ -148,15 +161,16 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
 
           {tab === 'board' && (
             <>
+              {!w && <p className="t-small mb-2 px-2 py-1 rounded" style={{ background: 'rgba(245,158,11,0.14)', color: '#92400e' }}>Select a week (1–8) above to edit this session. Only one can be selected; click it again to unselect.</p>}
               <p className="t-small t-muted mb-2">
-                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on next week for review, 4 = done; no score on COVE / PlantLog / Setup); add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. Edits land on week {w} until you press Save; every change is logged with its date in the weekly log.
+                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on next week for review, 4 = done; no score on COVE / PlantLog / Setup); add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. {w ? `Edits land on week ${w} until you press Save` : 'Select a week to edit'}; every change is logged with its date in the weekly log.
               </p>
-              <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit} setRow={setRow} onReset={resetItem} progress={p} />
+              <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit && w > 0} setRow={setRow} onReset={resetItem} progress={p} />
             </>
           )}
-          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} currentWeek={w} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
+          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} currentWeek={wView} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
           {tab === 'resets' && <ResetLog def={b.def} log={b.log} />}
-          {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={w} personName={personName} canEdit={canEdit} setRow={setRow} />}
+          {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={wView} personName={personName} canEdit={canEdit && w > 0} setRow={setRow} />}
         </>
       )}
     </Section>
