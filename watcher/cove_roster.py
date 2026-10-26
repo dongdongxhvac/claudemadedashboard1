@@ -70,7 +70,8 @@ def assignee_ids(client, legacy: list[str], label: str = "") -> list[str]:
             if cid and cid not in ids:
                 ids.append(cid)
                 added += 1
-        print(f"  assignee filter{(' ' + label) if label else ''}: {len(legacy)} legacy + {added} from roster = {len(ids)}")
+        n_legacy = len(ids) - added
+        print(f"  assignee filter{(' ' + label) if label else ''}: {n_legacy} legacy + {added} from roster = {len(ids)}")
     except Exception as e:  # noqa: BLE001
         print(f"WARN: roster read failed, using legacy assignee list only: {e}", file=sys.stderr)
     if not ids:
