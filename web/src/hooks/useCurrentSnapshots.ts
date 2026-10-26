@@ -189,6 +189,7 @@ export function usePmVariance(daysBack: number = 30) {
       const { data, error } = await supabase
         .from('pm_variance_recent')
         .select('*')
+        .eq('site_code', 'upark')
         .gte('completed_on', since.toISOString())
         .order('completed_on', { ascending: false });
       if (error) throw error;
@@ -208,6 +209,7 @@ export function useRecentWoCloses(daysBack: number = 40) {
       const { data, error } = await supabase
         .from('wo_close_events')
         .select('wo_id, completed_on, assigned_to_name, building_code, category, description, billable_total, labor_hours')
+        .eq('site_code', 'upark') // 0152: Binney closes land in the same table
         .gte('completed_on', since.toISOString())
         .order('completed_on', { ascending: false });
       if (error) throw error;
@@ -228,6 +230,7 @@ export function useRecentPmCloses(daysBack: number = 40) {
       const { data, error } = await supabase
         .from('pm_close_events')
         .select('task_no, completed_on, assigned_to_name, site, building_code, pm_type, labor_hours, task_name')
+        .eq('site_code', 'upark') // 0152: Binney closes land in the same table
         .gte('completed_on', since.toISOString());
       if (error) throw error;
       return (data ?? []) as PmCloseEvent[];

@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import sys
 
+from cove_sites import SITE, CFG  # noqa: E402
+
 
 def _full_name(assignee: dict | None) -> str | None:
     if not assignee:
@@ -42,9 +44,14 @@ def _full_name(assignee: dict | None) -> str | None:
 
 
 def _roster(client) -> list[dict]:
+    # 0152: v_site_active_engineers carries every site; scope to the one this
+    # process polls (COVE_SITE) and to the roles that site's config includes
+    # (UPark: engineers only, as before; Binney: engineers + managers).
     res = (
-        client.table("v_upark_active_engineers")
-        .select("user_id, full_name, cmms_assignee_name, cove_user_id")
+        client.table("v_site_active_engineers")
+        .select("user_id, full_name, role, cmms_assignee_name, cove_user_id")
+        .eq("site_code", SITE)
+        .in_("role", list(CFG["roster_roles"]))
         .execute()
     )
     return res.data or []
@@ -53,7 +60,8 @@ def _roster(client) -> list[dict]:
 def assignee_ids(client, legacy: list[str], label: str = "") -> list[str]:
     """Roster cove_user_ids ∪ legacy list, deduped, order-stable (legacy
     first so the request body is stable across runs when nothing changed)."""
-    ids: list[str] = list(dict.fromkeys(legacy))
+    # Legacy hardcoded IDs are UPark's floor only; other sites are roster-only.
+    ids: list[str] = list(dict.fromkeys(legacy)) if CFG["use_legacy"] else []
     try:
         roster = _roster(client)
         added = 0
@@ -65,6 +73,11 @@ def assignee_ids(client, legacy: list[str], label: str = "") -> list[str]:
         print(f"  assignee filter{(' ' + label) if label else ''}: {len(legacy)} legacy + {added} from roster = {len(ids)}")
     except Exception as e:  # noqa: BLE001
         print(f"WARN: roster read failed, using legacy assignee list only: {e}", file=sys.stderr)
+    if not ids:
+        # Never send an empty assignee filter — it would pull the whole network.
+        raise RuntimeError(
+            f"no Cove assignee IDs for site {SITE!r} (roster empty/unreadable and no legacy list) — refusing to poll"
+        )
     return ids
 
 

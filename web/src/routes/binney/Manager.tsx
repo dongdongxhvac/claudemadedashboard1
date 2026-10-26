@@ -1,12 +1,12 @@
-// Binney St manager view — first pass, PTO only. A slim page shell around
-// the duplicated BinneyPtoPanel. Everything else on the UPark manager page
-// (PMs/WOs, plantlog, BMS alarms, overtime, meters) is deferred until Binney
-// has those data sources.
+// Binney St manager view: PTO panel + Workload · Performance (Cove PMs/WOs/
+// labor via the Binney pollers, 2026-10-26). Plantlog, BMS alarms, overtime
+// and meters stay deferred until Binney has those data sources.
 import { Link } from 'react-router-dom';
 import { DEFAULT_PROGRAM } from '../../lib/programs';
 import { useAuth } from '../../lib/auth';
 import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
+import { BinneyWorkloadPanel } from './BinneyWorkloadPanel';
 import { SiteSwitcher } from './SiteSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { useBinneySiteId } from './hooks/useBinneySiteId';
@@ -36,7 +36,7 @@ export default function BinneyManager() {
               <h1 className="t-section-title">Binney St · Dashboard</h1>
               <SiteSwitcher />
             </div>
-            <p className="t-small t-muted">{today} · first pass — PTO only</p>
+            <p className="t-small t-muted">{today}</p>
           </div>
           <div className="flex items-center gap-4">
             {canOpenAdmin && (
@@ -85,6 +85,9 @@ export default function BinneyManager() {
               </p>
             )}
             <BinneyPtoPanel />
+            {/* Workload · Performance + PMs closed · Labor — Binney Cove pollers
+                (COVE_SITE=binney) + migration 0152. Below PTO per user 2026-10-26. */}
+            <BinneyWorkloadPanel />
           </>
         )}
       </main>

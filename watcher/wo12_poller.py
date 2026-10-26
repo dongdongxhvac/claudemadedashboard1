@@ -34,13 +34,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
 from cove_roster import assignee_ids, backfill_cove_ids  # noqa: E402
+from cove_sites import SITE, CFG as SITE_CFG, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip  # noqa: E402
 from wo_stale_check import run_stale_wo_check  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
 TOKEN: str = ""
 COOKIE = os.environ.get("COVE_COOKIE", "").strip()
-NETWORK_ID = os.environ.get("COVE_NETWORK_ID", "OoxMP8BZJF").strip()
+NETWORK_ID = _SITE_NETWORK_ID  # per COVE_SITE (cove_sites); UPark default unchanged
 GQL_URL = "https://api.cove.is/gql"
 EASTERN = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -216,7 +217,8 @@ WO_CREATED_LOOKBACK_DAYS = 60
 
 # Split for the Phase 5.5 schema: wo_rows snapshots only OPEN WOs, while
 # wo_close_events captures Done transitions via completedAt/closedAt.
-OPEN_STATUSES   = ["in_progress", "submitted", "accepted", "on_hold"]
+# Binney also uses 'scheduled' (cove_sites.wo_extra_open); UPark list unchanged.
+OPEN_STATUSES   = ["in_progress", "submitted", "accepted", "on_hold"] + list(SITE_CFG["wo_extra_open"])
 CLOSED_STATUSES = ["done"]
 
 SORT_BY = {"desc": True, "field": "createdAt"}
@@ -246,7 +248,7 @@ def build_wo_filter(statuses: list[str], assignee_ids: list[str] | None = None) 
 # ---------- helpers ----------
 
 def synthetic_filename(now_local: datetime) -> str:
-    return f"api-COVE WO12 {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
+    return f"api-{filename_label('COVE WO12')} {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
 
 
 def decode_token_exp(jwt: str) -> int | None:
@@ -447,9 +449,8 @@ def main() -> int:
     now_local = datetime.now(EASTERN)
     filename = synthetic_filename(now_local)
 
-    # Sundays — skip. Task Scheduler still fires this every day so this is
-    # the day-of-week gate.
-    if now_local.weekday() == 6:
+    # Sundays — skip (UPark only; Binney's Sun–Wed crew works Sundays).
+    if sunday_skip() and now_local.weekday() == 6:
         print(f"[{now_local.isoformat()}] Sunday — skipping.")
         return 0
 
@@ -462,7 +463,7 @@ def main() -> int:
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
-    print(f"[{now_local.isoformat()}] polling wo12 (open snapshot + closes-since-last)")
+    print(f"[{now_local.isoformat()}] polling wo12 for site={SITE} network={NETWORK_ID} (open snapshot + closes-since-last)")
 
     client = get_client()
 
@@ -472,6 +473,7 @@ def main() -> int:
         client.table("snapshots")
         .select("taken_at")
         .eq("kind", "wo")
+        .eq("site_code", SITE)
         .order("taken_at", desc=True)
         .limit(1)
         .execute()
@@ -480,7 +482,12 @@ def main() -> int:
     print(f"  since_iso={since_iso}")
 
     # Assignee filter = roster cove_user_ids ∪ legacy list (cove_roster).
-    ids = assignee_ids(client, WO_ASSIGNEE_IDS, "wo")
+    try:
+        ids = assignee_ids(client, WO_ASSIGNEE_IDS, "wo")
+    except RuntimeError as e:
+        _log_error(filename, str(e))
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     try:
         open_items   = fetch_all_work_orders(OPEN_STATUSES, ids)
@@ -502,6 +509,7 @@ def main() -> int:
     # ----- wo_rows: open work queue only -----
     snap = client.table("snapshots").insert({
         "kind":        "wo",
+        "site_code":   SITE,
         "taken_at":    datetime.now(UTC).isoformat(),
         "filename":    filename,
         "source_path": "api://api.cove.is/gql",
@@ -521,6 +529,7 @@ def main() -> int:
             continue                                  # neither completedAt nor closedAt
         if since_iso and ev["completed_on"] <= since_iso:
             continue                                  # already captured previously
+        ev["site_code"] = SITE
         events.append(ev)
 
     for i in range(0, len(events), CHUNK):
@@ -541,11 +550,13 @@ def main() -> int:
     print(f"[ok] {filename}: {len(rows)} open rows, {len(events)} new closes")
 
     # Stale-WO check (no Cove update in 7+ days) — alert email with
-    # insert-claim dedupe. Never fails the ingest.
-    try:
-        run_stale_wo_check(client)
-    except Exception as e:
-        print(f"WARN: stale-WO check failed: {e}", file=sys.stderr)
+    # insert-claim dedupe. Never fails the ingest. UPark only: v_wo_stale
+    # reads the UPark slice (0152) and the alert recipients are UPark's.
+    if SITE == "upark":
+        try:
+            run_stale_wo_check(client)
+        except Exception as e:
+            print(f"WARN: stale-WO check failed: {e}", file=sys.stderr)
 
     return 0
 

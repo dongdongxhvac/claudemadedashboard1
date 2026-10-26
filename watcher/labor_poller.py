@@ -34,12 +34,13 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
+from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
 TOKEN: str = ""
 COOKIE = os.environ.get("COVE_COOKIE", "").strip()
-NETWORK_ID = os.environ.get("COVE_NETWORK_ID", "OoxMP8BZJF").strip()
+NETWORK_ID = _SITE_NETWORK_ID  # per COVE_SITE (cove_sites); UPark default unchanged
 GQL_URL = "https://api.cove.is/gql"
 EASTERN = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -92,7 +93,7 @@ def synthetic_filename(now_local: datetime) -> str:
     # this row came from the API poller, not a dropped CSV.
     # Use HH:MM (not just hour) so manual re-runs in the same hour as the
     # scheduled task don't collide on the (kind, filename) unique index.
-    return f"api-COVE Labor {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
+    return f"api-{filename_label('COVE Labor')} {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
 
 
 def decode_token_exp(jwt: str) -> int | None:
@@ -112,7 +113,7 @@ def main() -> int:
     # Sunday gate. Task Scheduler fires every hour 7-19 daily; this is the
     # day-of-week filter so we don't burn auth tokens on Sundays when nothing
     # changes.
-    if now_local.weekday() == 6:  # Sunday
+    if sunday_skip() and now_local.weekday() == 6:  # Sunday (UPark only)
         print(f"[{now_local.isoformat()}] Sunday — skipping.")
         return 0
 
@@ -131,7 +132,7 @@ def main() -> int:
     end_iso = _iso_utc(end)
     filename = synthetic_filename(now_local)
 
-    print(f"[{now_local.isoformat()}] polling labor, window {start_iso} -> {end_iso}")
+    print(f"[{now_local.isoformat()}] polling labor for site={SITE} network={NETWORK_ID}, window {start_iso} -> {end_iso}")
 
     body = {
         "operationName": "GetWorkOrderAndPMTaskLaborReport",
@@ -203,6 +204,7 @@ def main() -> int:
     client = get_client()
     snap = client.table("snapshots").insert({
         "kind":        "labor",
+        "site_code":   SITE,
         "taken_at":    datetime.now(UTC).isoformat(),
         "filename":    filename,
         "source_path": "api://api.cove.is/gql",

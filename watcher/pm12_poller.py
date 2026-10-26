@@ -34,12 +34,13 @@ from supabase_client import get_client  # noqa: E402
 from classify import classify_pm  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
 from cove_roster import assignee_ids, backfill_cove_ids, roster_gap_check  # noqa: E402
+from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
 TOKEN: str = ""
 COOKIE = os.environ.get("COVE_COOKIE", "").strip()
-NETWORK_ID = os.environ.get("COVE_NETWORK_ID", "OoxMP8BZJF").strip()
+NETWORK_ID = _SITE_NETWORK_ID  # per COVE_SITE (cove_sites); UPark default unchanged
 GQL_URL = "https://api.cove.is/gql"
 EASTERN = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -189,7 +190,7 @@ def hour_label(dt: datetime) -> str:
 
 
 def synthetic_filename(now_local: datetime) -> str:
-    return f"api-COVE PM12 {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
+    return f"api-{filename_label('COVE PM12')} {now_local.strftime('%Y-%m-%d %H-%M')}.csv"
 
 
 def decode_token_exp(jwt: str) -> int | None:
@@ -388,9 +389,8 @@ def main() -> int:
     now_local = datetime.now(EASTERN)
     filename = synthetic_filename(now_local)
 
-    # Sundays — skip. Task Scheduler still fires this every day so this is
-    # the day-of-week gate.
-    if now_local.weekday() == 6:
+    # Sundays — skip (UPark only; Binney's Sun–Wed crew works Sundays).
+    if sunday_skip() and now_local.weekday() == 6:
         print(f"[{now_local.isoformat()}] Sunday — skipping.")
         return 0
 
@@ -403,7 +403,7 @@ def main() -> int:
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
-    print(f"[{now_local.isoformat()}] polling pm12 (open snapshot + closes-since-last)")
+    print(f"[{now_local.isoformat()}] polling pm12 for site={SITE} network={NETWORK_ID} (open snapshot + closes-since-last)")
 
     client = get_client()
 
@@ -415,6 +415,7 @@ def main() -> int:
         client.table("snapshots")
         .select("taken_at")
         .eq("kind", "pm12")
+        .eq("site_code", SITE)
         .order("taken_at", desc=True)
         .limit(1)
         .execute()
@@ -423,7 +424,12 @@ def main() -> int:
     print(f"  since_iso={since_iso}")
 
     # Assignee filter = roster cove_user_ids ∪ legacy list (cove_roster).
-    ids = assignee_ids(client, PM_ASSIGNEE_IDS, "pm12")
+    try:
+        ids = assignee_ids(client, PM_ASSIGNEE_IDS, "pm12")
+    except RuntimeError as e:
+        _log_error(filename, str(e))
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     try:
         open_items   = fetch_all_pm_tasks(OPEN_STATUSES, ids)
@@ -445,6 +451,7 @@ def main() -> int:
     # ----- pm_rows: open work queue only (To Do / In Progress / On Hold) -----
     snap = client.table("snapshots").insert({
         "kind":        "pm12",
+        "site_code":   SITE,
         "taken_at":    datetime.now(UTC).isoformat(),
         "filename":    filename,
         "source_path": "api://api.cove.is/gql",
@@ -464,7 +471,9 @@ def main() -> int:
             continue                        # reopened / never closed — skip
         if since_iso and co <= since_iso:
             continue                        # already captured in a prior run
-        events.append(map_close_event(it, snapshot_id))
+        ev = map_close_event(it, snapshot_id)
+        ev["site_code"] = SITE
+        events.append(ev)
 
     for i in range(0, len(events), CHUNK):
         client.table("pm_close_events").upsert(
