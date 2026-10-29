@@ -18,6 +18,7 @@ export type BinneyBuilding = {
   active: boolean;
   cluster: Cluster | null;
   rounds_group: string | null;
+  updated_at: string | null;
 };
 
 const KEY_BUILDINGS = ['binney_buildings'];
@@ -30,7 +31,7 @@ export function useBinneyBuildings() {
     queryFn: async (): Promise<BinneyBuilding[]> => {
       const { data, error } = await supabase
         .from('buildings')
-        .select('id, code, name, short_code, active, cluster, rounds_group')
+        .select('id, code, name, short_code, active, cluster, rounds_group, updated_at')
         .eq('site_id', siteQ.data!)
         .order('code');
       if (error) throw error;

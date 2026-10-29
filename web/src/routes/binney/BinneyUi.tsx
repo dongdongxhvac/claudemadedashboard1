@@ -59,10 +59,24 @@ export function EngineerSelect({
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} title={heading}
       className="w-full border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 0, fontSize: 11 }}>
-      {heading && <option disabled value="__heading">▸ {heading}</option>}
-      <option value="">{placeholder}</option>
+      {/* A group label renders bold in the native menu (a disabled option only greys out). */}
+      {heading
+        ? <optgroup label={`▸ ${heading.toUpperCase()}`}><option value="">{placeholder}</option></optgroup>
+        : <option value="">{placeholder}</option>}
       {body}
     </select>
+  );
+}
+
+/** Small, discreet "updated Oct 29, 3:33 PM" stamp for a section header. */
+export function Stamp({ iso, label = 'updated' }: { iso: string | null | undefined; label?: string }) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return (
+    <span className="t-small t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }} title={d.toLocaleString()}>
+      {label} {d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+    </span>
   );
 }
 

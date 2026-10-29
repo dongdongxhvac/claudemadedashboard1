@@ -11,7 +11,7 @@ import {
 import { useWeekendPlans, useUpsertWeekendPlan, useDeleteWeekendPlan, type WeekendPlanInput } from './hooks/useBinneyOps';
 import { ClusterBadge } from './ClusterBadge';
 import type { ClusterIndex, ClusterPerson } from './hooks/useBinneyClusterIndex';
-import { SmallBtn, EngineerSelect } from './BinneyUi';
+import { SmallBtn, EngineerSelect, Stamp } from './BinneyUi';
 import { buildWeekendPlanPrintHtml, openPrintHtml } from '../../lib/binneyPrint';
 
 const DEFAULT_GROUPS: { code: GroupCode; label: string; cluster: Cluster }[] = [
@@ -145,6 +145,7 @@ export function BinneyWeekendPlanBlock({
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
         <div className="flex items-baseline gap-2 flex-wrap">
           <div className="t-small t-muted uppercase tracking-wider">Weekend plan · manager hand-out</div>
+          {plan && !editor && <Stamp iso={plan.updated_at} />}
           {plans.length > 1 && (
             <select value={shownIso ?? ''} onChange={(e) => setPicked(e.target.value)}
               className="border rounded px-1 py-0 t-small" style={inputStyle}>
@@ -221,9 +222,6 @@ export function BinneyWeekendPlanBlock({
               <ItemList items={plan.reminders} bullet={false} />
             </div>
           )}
-          <p className="t-small t-muted mt-2" style={{ fontSize: 10 }}>
-            updated {new Date(plan.updated_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-          </p>
         </div>
       )}
 

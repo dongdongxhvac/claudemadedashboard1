@@ -33,7 +33,14 @@ import {
 import { ClusterBadge } from './ClusterBadge';
 import { useBinneyClusterIndex, type ClusterIndex, type ClusterPerson } from './hooks/useBinneyClusterIndex';
 import { BinneyWeekendPlanBlock } from './BinneyWeekendPlan';
-import { SmallBtn, EngineerSelect } from './BinneyUi';
+import { SmallBtn, EngineerSelect, Stamp } from './BinneyUi';
+
+/** Latest ISO timestamp in a list (null when none). */
+function latest(isos: (string | null | undefined)[]): string | null {
+  let best: string | null = null;
+  for (const v of isos) if (v && (!best || v > best)) best = v;
+  return best;
+}
 import { buildRotationPrintHtml, openPrintHtml } from '../../lib/binneyPrint';
 
 const WEEKDAYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
@@ -130,10 +137,14 @@ const CREW_LABEL: Record<'sunday' | 'saturday' | 'none', string> = {
 
 function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
   const unclustered = idx.people.filter((p) => p.role === 'engineer' && !p.cluster);
+  const updatedAt = latest(idx.people.map((p) => p.updated_at));
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
-        <div className="t-small t-muted uppercase tracking-wider">Crews by cluster · dedicated manager</div>
+        <div className="flex items-baseline gap-2">
+          <div className="t-small t-muted uppercase tracking-wider">Crews by cluster · dedicated manager</div>
+          <Stamp iso={updatedAt} />
+        </div>
         <span className="t-small t-muted">
           <mark style={{ background: 'rgba(250, 204, 21, 0.45)', color: 'inherit', padding: '0 3px', borderRadius: 2 }}>highlighted</mark>
           {' '}= not on the Week A / B rounds sheet · sorted floater → round → BMS
@@ -244,7 +255,10 @@ function BuildingsBlock({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <div className="t-small t-muted uppercase tracking-wider">Buildings · rounds group</div>
+        <div className="flex items-baseline gap-2">
+          <div className="t-small t-muted uppercase tracking-wider">Buildings · rounds group</div>
+          {!editing && <Stamp iso={latest(active.map((b) => b.updated_at))} />}
+        </div>
         {canEdit && (
           <SmallBtn onClick={() => setEditing((v) => !v)}>{editing ? 'Done' : 'Edit'}</SmallBtn>
         )}
@@ -362,12 +376,13 @@ function BuildingsBlock({
 // ── Rounds rotation (Week A / Week B) ──────────────────────────────────────
 
 function RotationBlock({
-  rot, idx, week, now, canEdit, onSave, saving, bldgs,
+  rot, idx, week, now, canEdit, onSave, saving, bldgs, updatedAt,
 }: {
   rot: RoundsRotation; idx: ClusterIndex; week: WeekLetter; now: Date; canEdit: boolean;
   onSave: (next: RoundsRotation) => Promise<void>; saving: boolean;
   /** For the printed sheet's cluster building lists. */
   bldgs: BinneyBuilding[];
+  updatedAt: string | null;
 }) {
   const [draft, setDraft] = useState<RoundsRotation | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -490,6 +505,7 @@ function RotationBlock({
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
         <div className="flex items-baseline gap-3 flex-wrap">
           <div className="t-small t-muted uppercase tracking-wider">Building rounds · rotation</div>
+          {!draft && <Stamp iso={updatedAt} />}
           <span className="t-small t-muted">
             Wednesday round alternates: week A → <b className="t-text">{rot.wednesday_rule.A}</b> crew, week B → <b className="t-text">{rot.wednesday_rule.B}</b> crew.
             Both crews overlap Wednesday; the underlined name walks it.
@@ -611,9 +627,9 @@ function DutiesBlock({ rot }: { rot: RoundsRotation }) {
 // ── Weekend PM plan (East / Floating / West) ───────────────────────────────
 
 function PmPlanBlock({
-  pm, idx, canEdit, onSave, saving,
+  pm, idx, canEdit, onSave, saving, updatedAt,
 }: {
-  pm: PmPlan; idx: ClusterIndex; canEdit: boolean; onSave: (next: PmPlan) => Promise<void>; saving: boolean;
+  pm: PmPlan; idx: ClusterIndex; canEdit: boolean; onSave: (next: PmPlan) => Promise<void>; saving: boolean; updatedAt: string | null;
 }) {
   const [draft, setDraft] = useState<PmPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -654,7 +670,10 @@ function PmPlanBlock({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <div className="t-small t-muted uppercase tracking-wider">Weekend PM plan · hours budget</div>
+        <div className="flex items-baseline gap-2">
+          <div className="t-small t-muted uppercase tracking-wider">Weekend PM plan · hours budget</div>
+          {!draft && <Stamp iso={updatedAt} />}
+        </div>
         {canEdit && (
           <div className="flex items-center gap-1">
             {draft ? (
@@ -770,6 +789,7 @@ export function BinneyOpsPanel() {
       {rot && week && (
         <RotationBlock
           rot={rot} idx={idx} week={week} now={now} canEdit={canEdit} bldgs={bldgQ.data ?? []}
+          updatedAt={rotQ.data?.updated_at ?? null}
           saving={upsertRef.isPending}
           onSave={async (next) => { await upsertRef.mutateAsync({ key: 'rounds_rotation', value: next }); }}
         />
@@ -784,7 +804,7 @@ export function BinneyOpsPanel() {
         <div className="space-y-4">
           {pm && (
             <PmPlanBlock
-              pm={pm} idx={idx} canEdit={canEdit}
+              pm={pm} idx={idx} canEdit={canEdit} updatedAt={pmQ.data?.updated_at ?? null}
               saving={upsertRef.isPending}
               onSave={async (next) => { await upsertRef.mutateAsync({ key: 'pm_plan', value: next }); }}
             />
