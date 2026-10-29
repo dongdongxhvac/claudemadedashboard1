@@ -71,6 +71,16 @@ export function notesOf(r: Pick<BoardRow, 'note' | 'value'> | null | undefined, 
   return t ? [{ text: t, mark: isMark(r.value?.mark) ? (r.value.mark as BoardMark) : null }] : [];
 }
 export const noteLine = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].short + ' ' : ''}${n.text}`;
+/** The note for reading (log, invite): the mark as a word — "missed · open questions". */
+export const noteText = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].label.toLowerCase() + ' · ' : ''}${n.text}`;
+/** A stored log line ("✗ text", noteLine format) back to words ("missed · text"). */
+export function noteWords(line: string | null): string | null {
+  if (line == null) return null;
+  const m = /^(\S)\s(.*)$/s.exec(line);
+  if (!m) return line;
+  const mark = (Object.keys(MARK_META) as BoardMark[]).find((k) => MARK_META[k].short === m[1]);
+  return mark ? `${MARK_META[mark].label.toLowerCase()} · ${m[2]}` : line;
+}
 /** Every note on an item, newest week last, with its week. */
 export const allNotes = (rows: BoardRow[], itemKey: string) => rows.filter((r) => r.item_key === itemKey).sort((a, b) => a.week - b.week).flatMap((r) => notesOf(r).map((n) => ({ ...n, week: r.week })));
 export const MARK_META: Record<BoardMark, { label: string; short: string; color: string; bg: string }> = {
@@ -279,7 +289,7 @@ export function describeChange(l: Pick<BoardLogRow, 'field' | 'old' | 'new'>): s
     case 'status': return l.old ? `status: ${label(l.old)} → ${label(l.new)}` : `status: ${label(l.new)}`;
     case 'score': return l.old ? `score ${l.old} → ${l.new ?? '—'}` : `score ${l.new ?? '—'}`;
     case 'mark': return l.old ? `mark: ${l.old} → ${l.new ?? '—'}` : `mark: ${l.new ?? '—'}`;
-    case 'note': return l.new ? `note: ${l.new}` : `note cleared${l.old ? ` (was "${l.old}")` : ''}`;
+    case 'note': return l.new ? `note: ${noteWords(l.new)}` : `note cleared${l.old ? ` (was "${noteWords(l.old)}")` : ''}`;
     case 'hours': return l.new ? `hours ${l.new}${l.old ? ` (was ${l.old})` : ''}` : `hours cleared`;
     case 'value': return l.new ?? `cleared${l.old ? ` (was ${l.old})` : ''}`;
     case 'reset': return `reset${l.old ? ` (was ${l.old})` : ''}`;
@@ -376,7 +386,7 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   });
   const review = [
     // notes saved before the change log existed (no logged note line for them)
-    ...wk.filter((r) => byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).flatMap((r) => notesOf(r).map((n) => `${name(r)} — ${noteLine(n)}`)),
+    ...wk.filter((r) => byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).flatMap((r) => notesOf(r).map((n) => `${name(r)} — ${noteText(n)}`)),
     ...changes,
     ...quizzes.filter((q) => q.week === week).map((q) => `quiz passed: ${q.title} ${q.score}/${q.total}`),
   ];
@@ -395,15 +405,24 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const when = typeof meta.when === 'string' ? meta.when : '';
   const title = typeof meta.title === 'string' && meta.title ? meta.title : `8-Week Review · W${week} · ${personName}`;
-  const moreWork = wk.filter((r) => r.status === 'more_work' && byKey.has(r.item_key)).map((r) => { const it = byKey.get(r.item_key)!; const n = notesOf(r).map(noteLine).join(' · '); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}`; });
+  // next week on the tracker (status next week, or a next-week round) — the same rows the log's Focus column lists
+  const isNext = (r: BoardRow) => { const it = byKey.get(r.item_key); if (!it) return false; return r.status === 'next_week' || (it.control.kind === 'rounds8' && roundOf([r], r.item_key, r.week) === 'next_week'); };
+  const nextRows = wk.filter(isNext).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num);
+  // Focus: the next-week items only, with their notes (user 2026-10-29: "set to next week → next week focus only")
+  const noteStr = (r: BoardRow) => notesOf(r).map(noteText).join(' · ');
+  const focus = nextRows.map((r) => { const it = byKey.get(r.item_key)!; const n = noteStr(r); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}`; });
+  // To do: items this week carrying a "missed" note that are not already on next week (something to redo)
+  const toDo = wk.filter((r) => !isNext(r) && byKey.has(r.item_key) && notesOf(r).some((n) => n.mark === 'missed'))
+    .sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)
+    .map((r) => { const it = byKey.get(r.item_key)!; return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text} — ${notesOf(r).filter((n) => n.mark === 'missed').map(noteText).join(' · ')}`; });
   const doneCum = boardProgress(def, rows.filter((r) => r.week <= week));
   const fields = def.inviteFields.length ? def.inviteFields : ['Title', 'When', 'Focus', 'To do', 'Review with Jie', 'Done'];
   const body: Record<string, string[]> = {
     [fields[0] ?? 'Title']: [title],
     [fields[1] ?? 'When']: [when],
-    [fields[2] ?? 'Focus']: log.focus,
-    [fields[3] ?? 'To do']: moreWork,
-    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${itemNum(byKey.get(x.item_key)!)} ${byKey.get(x.item_key)!.text}` === d); const n = r ? notesOf(r).map(noteLine).join(' · ') : ''; return n ? `${d} — ${n}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
+    [fields[2] ?? 'Focus']: focus,
+    [fields[3] ?? 'To do']: toDo,
+    [fields[4] ?? 'Review with Jie']: [...log.done.map((d) => { const r = wk.find((x) => byKey.get(x.item_key) && `${fmtDay(x.entered_on)} · ${itemNum(byKey.get(x.item_key)!)} ${byKey.get(x.item_key)!.text}` === d); const n = r ? noteStr(r) : ''; return n ? `${d} — ${n}` : d; }), ...log.review.filter((r) => r.startsWith('quiz passed'))],
     [fields[5] ?? 'Done']: [`${doneCum.done} / ${doneCum.total} on the board`],
   };
   return fields.map((f) => {

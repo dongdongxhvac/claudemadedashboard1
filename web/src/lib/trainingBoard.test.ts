@@ -85,7 +85,13 @@ assertEq(w2.review, ['Oct 1 · 10 HVAC — retest ok'], 'W2 review');
 // invite body
 const inv = inviteText(def, rows, 2, 'Evan');
 assertEq(inv.split('\n')[0], 'Title: 8-Week Review · W2 · Evan', 'invite title');
-assertEq(inv.includes('Focus: Oct 1 · 11 Plumbing'), true, 'invite focus');
+assertEq(inv.includes('Focus: Oct 1 · 11 Plumbing'), true, 'invite focus = next-week items (matches the log focus)');
+assertEq(inv.includes('To do: \n') || /To do: $/m.test(inv), true, 'next-week items are not repeated under to do');
+const invMissed = inviteText(def, [...rows.filter((r) => r.item_key !== 'plumbing'), row('plumbing', 2, 'next_week', null, { notes: [{ text: 'valve tags', mark: 'missed' }] }), row('hvac', 2, 'done', null, { notes: [{ text: 'relabel panel', mark: 'missed' }] })], 2, 'Evan');
+assertEq(invMissed.includes('Focus: Oct 1 · 11 Plumbing — missed · valve tags'), true, 'focus carries the notes as words');
+assertEq(invMissed.includes('To do: Oct 1 · 10 HVAC — missed · relabel panel'), true, 'to do = missed notes on items not on next week');
+assertEq(describeChange({ field: 'note', old: null, new: '✗ open questions' }), 'note: missed · open questions', 'log note shows the mark as a word');
+assertEq(describeChange({ field: 'note', old: null, new: 'plain' }), 'note: plain', 'unmarked note unchanged');
 assertEq(inv.includes('• Oct 1 · 10 HVAC — retest ok'), true, 'invite review (done + note, dated)');
 assertEq(inv.includes('Done: 1 / 5 on the board'), true, 'invite done');
 const inv1 = inviteText(def, [...rows, row('meta.invite', 1, null, null, { when: 'Fri 2pm', title: 'Kickoff' })], 1, 'Evan');
@@ -132,7 +138,7 @@ assertEq([1, 2, 3, 4].map(statusForScore), ['next_week', 'next_week', 'next_week
 const rn = row('hvac', 3, 'done', null, { notes: [{ text: 'low static switch', mark: 'missed' }, { text: 'refrigerant monitor', mark: 'good' }] });
 assertEq(notesOf(rn).map(noteLine), ['✗ low static switch', '★ refrigerant monitor'], 'notes with marks');
 assertEq(notesOf(row('hvac', 3, null, 'legacy text', { mark: 'good' })).map(noteLine), ['★ legacy text'], 'legacy single note');
-assertEq(weekLog(def, [rn], 3).review, ['Oct 1 · 10 HVAC — ✗ low static switch', 'Oct 1 · 10 HVAC — ★ refrigerant monitor'], 'one review line per note');
+assertEq(weekLog(def, [rn], 3).review, ['Oct 1 · 10 HVAC — missed · low static switch', 'Oct 1 · 10 HVAC — good · refrigerant monitor'], 'one review line per note, mark as a word');
 assertEq(diffRows([row('hvac', 3, 'done', 'legacy text')], [{ item_key: 'hvac', week: 3, status: 'done', note: null, value: { notes: [{ text: 'legacy text', mark: 'good' }, { text: 'second', mark: null }] } }]).map((x) => [x.field, x.old, x.new]),
   [['note', 'legacy text', '★ legacy text'], ['note', null, 'second']], 'note diff per note (legacy seed → marked + added)');
 
@@ -158,7 +164,7 @@ assertEq(itemDone(rdef.items[0], [1, 2, 3, 4, 5, 6, 7, 8].map((w) => row('plantl
 assertEq(weekLog(rdef, rrows, 2).tallies, [{ label: 'PlantLog', value: '7 h · solo' }], 'tally shows hours and round');
 assertEq(weekLog(rdef, rrows, 2).done, ['Oct 1 · 7 PlantLog round · building round — 7 h'], 'solo round is done that week');
 assertEq(weekLog(rdef, rrows, 3).focus, ['Oct 1 · 7 PlantLog round · building round'], 'next-week round is focus');
-assertEq(weekLog(rdef, rrows, 2).review, ['Oct 1 · 7 PlantLog round · building round — ◐ boiler room', 'Oct 1 · 7 PlantLog round · building round — ✓ B2 alone'], 'round notes in review');
+assertEq(weekLog(rdef, rrows, 2).review, ['Oct 1 · 7 PlantLog round · building round — learning · boiler room', 'Oct 1 · 7 PlantLog round · building round — solo · B2 alone'], 'round notes in review');
 assertEq(diffRows([rrows[1]], [{ ...rrows[1], value: { hours: 8, notes: [{ text: 'boiler room', mark: 'solo' }] } }]).map((x) => [x.field, x.old, x.new]), [['note', '◐ boiler room', '✓ boiler room'], ['note', '✓ B2 alone', null], ['hours', '7', '8']], 'round note and hours changes are logged');
 
 if (failures > 0) {
