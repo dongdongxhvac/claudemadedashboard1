@@ -257,19 +257,24 @@ export function BinneyWorkloadPanel() {
           {crew.length === 0 ? (
             <p className="t-small t-muted mt-2">{loading ? 'Loading…' : 'No data.'}</p>
           ) : (
-            <div className="grid gap-x-6 mt-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            /* Two halves, hrs/d before PMs (user 2026-10-29), a clear gutter +
+               hairline between them so col-1 hours never read as col-2 names. */
+            <div className="grid mt-2" style={{ gridTemplateColumns: '1fr 1fr', columnGap: '2.5rem' }}>
               {cols.map((col, i) => (
-                <div key={i} className="grid items-baseline" style={{ gridTemplateColumns: 'max-content auto auto', columnGap: '0.75rem', rowGap: '0.15rem' }}>
+                <div key={i} className="grid items-baseline"
+                  style={{
+                    gridTemplateColumns: 'max-content auto auto', columnGap: '0.75rem', rowGap: '0.15rem',
+                    ...(i > 0 ? { borderLeft: '1px solid var(--color-border)', paddingLeft: '1.25rem' } : {}),
+                  }}>
                   <span className="t-small t-muted uppercase tracking-wider"> </span>
-                  <span className="t-small t-muted uppercase tracking-wider text-right">PMs</span>
                   <span className="t-small t-muted uppercase tracking-wider text-right">hrs/d</span>
+                  <span className="t-small t-muted uppercase tracking-wider text-right">PMs</span>
                   {col.map((c) => (
                     <div key={c.name} className="contents">
                       <span className="t-text inline-flex items-center gap-1">
                         {shortName(c.name)}
                         <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} role={clusterIdx.lookup(c.name)?.role} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
                       </span>
-                      <span className="t-mono text-right">{c.pms}</span>
                       <span className="t-mono text-right">
                         {Math.round(c.hours)}
                         <span
@@ -279,6 +284,7 @@ export function BinneyWorkloadPanel() {
                           /{c.days}
                         </span>
                       </span>
+                      <span className="t-mono text-right">{c.pms}</span>
                     </div>
                   ))}
                 </div>

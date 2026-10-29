@@ -867,7 +867,12 @@ function TodayAttendance({
   }, [allApproved, days]);
 
   // Group active engineers by shift in sort_order; engineers without a
-  // shift go to a trailing "Other" bucket.
+  // shift go to a trailing "Other" bucket. Within a shift: East, then West,
+  // then unclustered, alphabetical inside each (user 2026-10-29 — "schedule
+  // first, then cluster").
+  const clusterRank = (e: EngineerRow) => (e.cluster === 'east' ? 0 : e.cluster === 'west' ? 1 : 2);
+  const byClusterThenName = (a: EngineerRow, b: EngineerRow) =>
+    clusterRank(a) - clusterRank(b) || a.full_name.localeCompare(b.full_name);
   const groups = useMemo(() => {
     const orderedShifts = shifts.slice().sort((a, b) => a.sort_order - b.sort_order);
     const byShift = new Map<string, EngineerRow[]>();
@@ -886,18 +891,18 @@ function TodayAttendance({
       shift_id: s.id,
       label: s.name,
       crew: (s.crew ?? null) as Crew | undefined,
-      engineers: (byShift.get(s.id) ?? []).sort((a, b) => a.full_name.localeCompare(b.full_name)),
+      engineers: (byShift.get(s.id) ?? []).sort(byClusterThenName),
     })).filter((g) => g.engineers.length > 0);
     if (noShift.length > 0) {
       out.push({
         shift_id: '_noshift',
         label: 'No shift',
         crew: undefined,   // unassigned → shown every day
-        engineers: noShift.sort((a, b) => a.full_name.localeCompare(b.full_name)),
+        engineers: noShift.sort(byClusterThenName),
       });
     }
     return out;
-  }, [engineers, shifts]);
+  }, [engineers, shifts]); // eslint-disable-line react-hooks/exhaustive-deps -- comparators are pure
 
   // Rolling counts across the 7-day horizon for the header. Partial-day
   // engineers are counted as "in" (they're around for part of the day) but
