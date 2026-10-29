@@ -13,8 +13,11 @@ const CREW_SHORT: Record<'sunday' | 'saturday' | 'none', string> = { sunday: 'Su
  *  month shown — the shadow row. `role` picks engineers (default) or
  *  managers. Used by the rounds rotation editor and the weekend plan editor. */
 export function EngineerSelect({
-  value, onChange, people, crews, clusterFirst, order = 'name', role = 'engineer', showCrew = true, placeholder = '—',
+  value, onChange, people, crews, clusterFirst, order = 'name', role = 'engineer', showCrew = true, placeholder = '—', heading,
 }: {
+  /** First line of the open menu, e.g. "Week A · Monday · Cluster E1" — the
+   *  menu covers the cell it belongs to, so it says what is being picked. */
+  heading?: string;
   value: string;
   onChange: (userId: string) => void;
   people: ClusterPerson[];
@@ -54,8 +57,9 @@ export function EngineerSelect({
       .map((g) => <optgroup key={g.c ?? 'none'} label={label[g.c ?? 'none']}>{g.list.map(option)}</optgroup>);
   }
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
+    <select value={value} onChange={(e) => onChange(e.target.value)} title={heading}
       className="w-full border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 0, fontSize: 11 }}>
+      {heading && <option disabled value="__heading">▸ {heading}</option>}
       <option value="">{placeholder}</option>
       {body}
     </select>

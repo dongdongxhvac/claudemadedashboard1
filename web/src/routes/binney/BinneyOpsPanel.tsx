@@ -434,6 +434,8 @@ function RotationBlock({
       // Menus follow the column and the day (user 2026-10-29): the column's
       // cluster is listed first; only the crews that work that day appear.
       const colCluster = view.groups.find((x) => x.code === g)?.cluster ?? null;
+      const colLabel = view.groups.find((x) => x.code === g)?.label ?? g;
+      const head = `Week ${w} · ${DAY_LABELS[d]} · ${colLabel}`;
       if (d === 'wed') {
         // Both crews overlap Wednesday: one Sun–Wed pick + one Wed–Sat pick.
         const ps = peopleOf(raw);
@@ -444,9 +446,9 @@ function RotationBlock({
         return (
           <span className="flex flex-col gap-0.5">
             <EngineerSelect value={sun?.user_id ?? ''} people={idx.people} crews={['sunday']} clusterFirst={colCluster} placeholder="— Sun–Wed —"
-              onChange={(id) => write(personById.get(id) ?? null, sat)} />
+              heading={`${head} · Sun–Wed crew`} onChange={(id) => write(personById.get(id) ?? null, sat)} />
             <EngineerSelect value={sat?.user_id ?? ''} people={idx.people} crews={['saturday']} clusterFirst={colCluster} placeholder="— Wed–Sat —"
-              onChange={(id) => write(sun, personById.get(id) ?? null)} />
+              heading={`${head} · Wed–Sat crew`} onChange={(id) => write(sun, personById.get(id) ?? null)} />
           </span>
         );
       }
@@ -454,7 +456,7 @@ function RotationBlock({
       const dayCrews: Crew[] = d === 'mon' || d === 'tue' ? ['sunday', null] : ['saturday', null];
       const p = peopleOf(raw)[0] ?? null;
       return (
-        <EngineerSelect value={p?.user_id ?? ''} people={idx.people} crews={dayCrews} clusterFirst={colCluster}
+        <EngineerSelect value={p?.user_id ?? ''} people={idx.people} crews={dayCrews} clusterFirst={colCluster} heading={head}
           onChange={(id) => setCell(w, d, g, personById.get(id)?.full_name ?? '')} />
       );
     }
@@ -550,6 +552,7 @@ function RotationBlock({
                           <td key={g.code} className="py-0.5 px-1" style={{ background: v ? 'rgba(34,197,94,0.18)' : undefined }}>
                             {draft
                               ? <EngineerSelect value={p?.user_id ?? ''} people={idx.people} order="seniority"
+                                  heading={`Week ${w} · shadow · ${g.label}`}
                                   onChange={(id) => setTrainee(w, g.code, personById.get(id)?.full_name ?? '')} />
                               : <span title={p?.full_name ?? v}>{v ? labelFor(v) : ''}</span>}
                           </td>

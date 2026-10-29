@@ -319,7 +319,7 @@ function WeekendPlanEditor({
           </label>
           <label className="block flex-1">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Manager on call</span>
-            <EngineerSelect value={mgr?.user_id ?? ''} people={people} role="manager" showCrew={false} placeholder="— pick a manager —"
+            <EngineerSelect value={mgr?.user_id ?? ''} people={people} role="manager" showCrew={false} placeholder="— pick a manager —" heading="Manager on call"
               onChange={(id) => onChange({ ...draft, manager_on_call: personById.get(id)?.full_name ?? '' })} />
             {draft.manager_on_call && !mgr && (
               <span className="t-small t-muted block mt-0.5">Sheet says "{draft.manager_on_call}" — pick the manager above to replace it.</span>
@@ -356,9 +356,11 @@ function WeekendPlanEditor({
                       <td key={g.code} className="py-1 px-0.5 align-top">
                         <span className="flex flex-col gap-0.5">
                           <EngineerSelect value={ps[0]?.user_id ?? ''} people={people} clusterFirst={g.cluster}
+                            heading={`${day === 'saturday' ? 'Saturday' : 'Sunday'} · ${g.label}`}
                             onChange={(id) => writeCell(day, g.code, personById.get(id) ?? null, ps[1] ?? null)} />
                           {two ? (
                             <EngineerSelect value={ps[1]?.user_id ?? ''} people={people} clusterFirst={g.cluster} placeholder="— +1 —"
+                              heading={`${day === 'saturday' ? 'Saturday' : 'Sunday'} · ${g.label} · second person`}
                               onChange={(id) => writeCell(day, g.code, ps[0] ?? null, personById.get(id) ?? null)} />
                           ) : (
                             <button type="button" onClick={() => setExtra((s) => new Set(s).add(key))}
