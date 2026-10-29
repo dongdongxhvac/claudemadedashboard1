@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
-  type Cluster, type ClusterRole, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
+  type Cluster, type ClusterRole, type Crew, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
   DAY_KEYS, DAY_LABELS, GROUP_CODES, CLUSTER_LABEL, CLUSTER_STYLE, inputStyle,
   weekLetterFor, otherWeek, upcomingWednesdays, dayKeyOf, sundayOf, splitNames, shortName, fmtMd, traineesFor, uniqueShortName,
 } from '../../lib/binneyRounds';
@@ -431,6 +431,9 @@ function RotationBlock({
     // Sunday / Saturday are floater days on both weeks — fixed, never edited.
     if (d === 'sun' || d === 'sat' || /^floaters?$/i.test(raw.trim())) return <span className="t-muted italic">Floater</span>;
     if (draft) {
+      // Menus follow the column and the day (user 2026-10-29): the column's
+      // cluster is listed first; only the crews that work that day appear.
+      const colCluster = view.groups.find((x) => x.code === g)?.cluster ?? null;
       if (d === 'wed') {
         // Both crews overlap Wednesday: one Sun–Wed pick + one Wed–Sat pick.
         const ps = peopleOf(raw);
@@ -440,16 +443,18 @@ function RotationBlock({
           setCell(w, d, g, [s?.full_name, t?.full_name].filter(Boolean).join('/'));
         return (
           <span className="flex flex-col gap-0.5">
-            <EngineerSelect value={sun?.user_id ?? ''} people={idx.people} crew="sunday" placeholder="— Sun–Wed —"
+            <EngineerSelect value={sun?.user_id ?? ''} people={idx.people} crews={['sunday']} clusterFirst={colCluster} placeholder="— Sun–Wed —"
               onChange={(id) => write(personById.get(id) ?? null, sat)} />
-            <EngineerSelect value={sat?.user_id ?? ''} people={idx.people} crew="saturday" placeholder="— Wed–Sat —"
+            <EngineerSelect value={sat?.user_id ?? ''} people={idx.people} crews={['saturday']} clusterFirst={colCluster} placeholder="— Wed–Sat —"
               onChange={(id) => write(sun, personById.get(id) ?? null)} />
           </span>
         );
       }
+      // Mon/Tue = Sun–Wed crew's days, Thu/Fri = Wed–Sat crew's; the Mon–Fri shift works both.
+      const dayCrews: Crew[] = d === 'mon' || d === 'tue' ? ['sunday', null] : ['saturday', null];
       const p = peopleOf(raw)[0] ?? null;
       return (
-        <EngineerSelect value={p?.user_id ?? ''} people={idx.people}
+        <EngineerSelect value={p?.user_id ?? ''} people={idx.people} crews={dayCrews} clusterFirst={colCluster}
           onChange={(id) => setCell(w, d, g, personById.get(id)?.full_name ?? '')} />
       );
     }
@@ -544,7 +549,7 @@ function RotationBlock({
                         return (
                           <td key={g.code} className="py-0.5 px-1" style={{ background: v ? 'rgba(34,197,94,0.18)' : undefined }}>
                             {draft
-                              ? <EngineerSelect value={p?.user_id ?? ''} people={idx.people}
+                              ? <EngineerSelect value={p?.user_id ?? ''} people={idx.people} order="seniority"
                                   onChange={(id) => setTrainee(w, g.code, personById.get(id)?.full_name ?? '')} />
                               : <span title={p?.full_name ?? v}>{v ? labelFor(v) : ''}</span>}
                           </td>

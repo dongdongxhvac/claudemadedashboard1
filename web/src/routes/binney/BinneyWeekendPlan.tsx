@@ -355,10 +355,10 @@ function WeekendPlanEditor({
                     return (
                       <td key={g.code} className="py-1 px-0.5 align-top">
                         <span className="flex flex-col gap-0.5">
-                          <EngineerSelect value={ps[0]?.user_id ?? ''} people={people}
+                          <EngineerSelect value={ps[0]?.user_id ?? ''} people={people} clusterFirst={g.cluster}
                             onChange={(id) => writeCell(day, g.code, personById.get(id) ?? null, ps[1] ?? null)} />
                           {two ? (
-                            <EngineerSelect value={ps[1]?.user_id ?? ''} people={people} placeholder="— +1 —"
+                            <EngineerSelect value={ps[1]?.user_id ?? ''} people={people} clusterFirst={g.cluster} placeholder="— +1 —"
                               onChange={(id) => writeCell(day, g.code, ps[0] ?? null, personById.get(id) ?? null)} />
                           ) : (
                             <button type="button" onClick={() => setExtra((s) => new Set(s).add(key))}
