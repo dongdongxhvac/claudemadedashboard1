@@ -6,16 +6,22 @@ import { weekLog, fmtDay, WEEKS, MARK_META, type TrainingBoardDef, type BoardRow
 const MARK_BY_WORD = new Map((Object.keys(MARK_META) as BoardMark[]).map((k) => [MARK_META[k].label.toLowerCase(), MARK_META[k]]));
 /** "Oct 28 · 16a Boiler — note: missed · open questions" → the mark word coloured, the note text underlined (user 2026-10-29). */
 function ReviewLine({ line }: { line: string }) {
-  const m = /^(.*?) — (note: |note cleared.*)?(?:(missed|good|checked|learning|solo|next week) · )?(.*)$/s.exec(line);
-  if (!m || m[2] === undefined && m[3] === undefined) return <div>{line}</div>;
-  const [, head, label, word, text] = m;
+  // item texts can contain " — " themselves, so key on the "note: " label (logged notes) or a leading mark word (pre-log notes)
+  const i = line.indexOf(' — note: ');
+  const j = line.lastIndexOf(' — ');
+  if (i < 0 && j < 0) return <div>{line}</div>;
+  const label = i >= 0 ? 'note: ' : '';
+  const head = i >= 0 ? line.slice(0, i) : line.slice(0, j);
+  const rest = i >= 0 ? line.slice(i + ' — note: '.length) : line.slice(j + 3);
+  if (i < 0 && !/^(missed|good|checked|learning|solo|next week) · /.test(rest)) return <div>{line}</div>;
+  const wm = /^(missed|good|checked|learning|solo|next week) · (.*)$/s.exec(rest);
+  const word = wm?.[1]; const text = wm ? wm[2] : rest;
   const meta = word ? MARK_BY_WORD.get(word) : null;
-  const isNote = !!label || !!word;
   return (
-    <div>
+    <div style={{ background: meta ? meta.bg : 'rgba(245,158,11,0.10)', borderRadius: 3, padding: '0 3px', margin: '1px 0' }}>
       {head} — {label}
       {meta && <b style={{ color: meta.color }}>{word} · </b>}
-      <span style={isNote ? { textDecoration: 'underline', textUnderlineOffset: 2 } : undefined}>{text}</span>
+      <span style={{ textDecoration: 'underline', textUnderlineOffset: 2, fontWeight: 600 }}>{text}</span>
     </div>
   );
 }
