@@ -192,8 +192,15 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
   if (q.isLoading) return <p className="t-text t-muted">Loading users...</p>;
   if (q.isError) return <p className="t-text t-danger">Error: {(q.error as Error).message}</p>;
 
+  // Every filter lists people by seniority (user 2026-10-29): earliest hire
+  // first; no hire date sinks to the bottom, alphabetical within ties.
   const rows = applyFilter(allRows, filter,
-    (r) => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null));
+    (r) => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null))
+    .sort((a, b) => {
+      if (a.hiring_date && b.hiring_date && a.hiring_date !== b.hiring_date) return a.hiring_date < b.hiring_date ? -1 : 1;
+      if (!!a.hiring_date !== !!b.hiring_date) return a.hiring_date ? -1 : 1;
+      return a.full_name.localeCompare(b.full_name);
+    });
   const shifts = shiftsQ.data ?? [];
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
   // 0154: cluster mark next to every name; dedicated manager in the tooltip.
