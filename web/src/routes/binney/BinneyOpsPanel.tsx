@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
-  type Cluster, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
+  type Cluster, type ClusterRole, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
   DAY_KEYS, DAY_LABELS, GROUP_CODES, CLUSTER_LABEL, CLUSTER_STYLE, inputStyle,
   weekLetterFor, otherWeek, upcomingWednesdays, dayKeyOf, sundayOf, splitNames, shortName, fmtMd,
 } from '../../lib/binneyRounds';
@@ -77,6 +77,8 @@ function buildRoleTags(idx: ClusterIndex, rot: RoundsRotation | null, pm: PmPlan
     for (const n of floating.saturday) { const p = idx.resolve(n, 'saturday'); if (p) get(p.user_id).floater = true; }
     for (const n of floating.sunday)   { const p = idx.resolve(n, 'sunday');   if (p) get(p.user_id).floater = true; }
   }
+  // 0155: the profile's own designation counts too.
+  for (const p of idx.people) if (p.cluster_role === 'floater') get(p.user_id).floater = true;
   return tags;
 }
 
@@ -84,15 +86,15 @@ const ROUND_GROUPS = new Set<GroupCode>(['E1', 'E2', 'W1', 'W2']);
 const BMS_GROUPS = new Set<GroupCode>(['EBMS', 'WBMS']);
 
 /** Sort bucket for the crews list (user 2026-10-29): floater → round → BMS,
- *  then shadowing, dedicated, untagged. */
-function dutyRank(t: RoleTag | undefined): number {
-  if (!t) return 5;
-  if (t.floater) return 0;
-  if (Array.from(t.groups).some((g) => ROUND_GROUPS.has(g))) return 1;
-  if (Array.from(t.groups).some((g) => BMS_GROUPS.has(g))) return 2;
-  if (t.trainee) return 3;
-  if (t.dedicated.length) return 4;
-  return 5;
+ *  then shadowing, dedicated. The profile's cluster_role (0155) decides
+ *  first; the sheets fill in for anyone without one. */
+function dutyRank(t: RoleTag | undefined, role: ClusterRole | null | undefined): number {
+  if (role === 'floater' || t?.floater) return 0;
+  if (role === 'bms' || (t && Array.from(t.groups).some((g) => BMS_GROUPS.has(g)))) return 2;
+  if (t && Array.from(t.groups).some((g) => ROUND_GROUPS.has(g))) return 1;
+  if (t?.trainee) return 3;
+  if (t?.dedicated.length) return 4;
+  return 1; // designated round engineer not on the sheet yet
 }
 
 /** On the Week A / Week B rounds grids at all (any weekday cell)? */
@@ -158,7 +160,7 @@ function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
                   {/* auto-fill columns; names never truncate — a long tag wraps under the name instead */}
                   <ul className="list-none p-0 m-0 mt-0.5 grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', columnGap: 10, rowGap: 2 }}>
                     {byCrew[k].sort((a, b) =>
-                      dutyRank(tags.get(a.user_id)) - dutyRank(tags.get(b.user_id))
+                      dutyRank(tags.get(a.user_id), a.cluster_role) - dutyRank(tags.get(b.user_id), b.cluster_role)
                       || Number(b.is_lead) - Number(a.is_lead)
                       || a.full_name.localeCompare(b.full_name),
                     ).map((p) => {
@@ -573,7 +575,7 @@ function PmPlanBlock({
           <span key={i} className="inline-flex items-center gap-1 whitespace-nowrap" title={p ? p.full_name : undefined}>
             {p?.is_lead && <span style={{ color: '#d4a017', fontSize: 10 }}>★</span>}
             <span>{p ? shortName(p.full_name) : n}</span>
-            <ClusterBadge cluster={info?.cluster} manager={info?.managerName} size={11} />
+            <ClusterBadge cluster={info?.cluster} role={info?.role} manager={info?.managerName} size={11} />
           </span>
         );
       })}

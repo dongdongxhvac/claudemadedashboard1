@@ -1125,7 +1125,7 @@ function DayChip({
       {out
         ? <span style={{ color: border, fontWeight: 600 }}>● {shortName(engineer.full_name)}</span>
         : <span style={{ color: 'var(--color-text)' }}>○ {shortName(engineer.full_name)}</span>}
-      <ClusterBadge cluster={engineer.cluster} size={isPrimary ? 11 : 10} />
+      <ClusterBadge cluster={engineer.cluster} role={engineer.cluster_role} size={isPrimary ? 11 : 10} />
       {out && (
         <span
           style={{
@@ -2249,7 +2249,7 @@ export function StaffingForecast({ engineers, shifts, requests }: {
                 }}
               >
                 <td style={cellPad}>
-                  <span className="inline-flex items-center gap-1">{shortName(r.eng.full_name)}<ClusterBadge cluster={r.eng.cluster} size={11} /></span>
+                  <span className="inline-flex items-center gap-1">{shortName(r.eng.full_name)}<ClusterBadge cluster={r.eng.cluster} role={r.eng.cluster_role} size={11} /></span>
                 </td>
                 <td className="t-muted" style={{ ...cellPad, fontSize: 10 }}>{r.shiftName}</td>
                 <td className="t-mono" style={{ ...cellPad, textAlign: 'right' }}>{r.sched}</td>
@@ -2597,7 +2597,7 @@ function BalancesGrid({
                         {isOpen ? '▾' : '▸'}
                       </span>
                       <span className="font-medium">{s.user_full_name ?? '?'}</span>
-                      <ClusterBadge cluster={engineers.find((e) => e.user_id === s.user_id)?.cluster} size={12} />
+                      <ClusterBadge cluster={engineers.find((e) => e.user_id === s.user_id)?.cluster} role={engineers.find((e) => e.user_id === s.user_id)?.cluster_role} size={12} />
                       {notSet && (
                         <span
                           className="t-small uppercase tracking-wider"

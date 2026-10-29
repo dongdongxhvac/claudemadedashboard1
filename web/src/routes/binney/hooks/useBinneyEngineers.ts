@@ -53,6 +53,8 @@ export type EngineerRow = {
   /** 0154 — Binney cluster (East = Ed Nardone, West = Andrew Balbo), the
    *  dedicated manager (users.id) and the two HR ids from the roster sheet. */
   cluster: 'east' | 'west' | null;
+  /** 0155 — round engineer (default) / floater / bms; badge suffix F / B. */
+  cluster_role: 'round' | 'floater' | 'bms' | null;
   manager_user_id: string | null;
   employee_id: string | null;
   cw_services_id: string | null;
@@ -72,7 +74,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
       engineer_profiles!inner (
         cmms_assignee_name, plantlog_username, cove_user_id, discipline, level, xp,
         visible_to_self, notes, title, shift_id, is_lead,
-        cluster, manager_user_id, employee_id, cw_services_id, updated_at
+        cluster, cluster_role, manager_user_id, employee_id, cw_services_id, updated_at
       )
     `)
     .eq('engineer_profiles.home_site_id', siteId);
@@ -87,7 +89,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
     level: number; xp: number; visible_to_self: boolean;
     notes: string | null; title: string | null;
     shift_id: string | null; is_lead: boolean;
-    cluster: 'east' | 'west' | null; manager_user_id: string | null;
+    cluster: 'east' | 'west' | null; cluster_role: 'round' | 'floater' | 'bms' | null; manager_user_id: string | null;
     employee_id: string | null; cw_services_id: string | null;
     updated_at: string;
   };
@@ -125,6 +127,7 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
         shift_id: ep.shift_id,
         is_lead: ep.is_lead,
         cluster: ep.cluster ?? null,
+        cluster_role: ep.cluster_role ?? null,
         manager_user_id: ep.manager_user_id ?? null,
         employee_id: ep.employee_id ?? null,
         cw_services_id: ep.cw_services_id ?? null,
@@ -169,7 +172,7 @@ export function useUpdateEngineerProfile() {
     mutationFn: async (input: {
       user_id: string;
       patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'
-        | 'cluster' | 'manager_user_id' | 'employee_id' | 'cw_services_id'>>;
+        | 'cluster' | 'cluster_role' | 'manager_user_id' | 'employee_id' | 'cw_services_id'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')

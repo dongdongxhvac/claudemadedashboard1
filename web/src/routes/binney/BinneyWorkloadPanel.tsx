@@ -267,7 +267,7 @@ export function BinneyWorkloadPanel() {
                     <div key={c.name} className="contents">
                       <span className="t-text inline-flex items-center gap-1">
                         {shortName(c.name)}
-                        <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
+                        <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} role={clusterIdx.lookup(c.name)?.role} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
                       </span>
                       <span className="t-mono text-right">{c.pms}</span>
                       <span className="t-mono text-right">
@@ -313,7 +313,7 @@ export function BinneyWorkloadPanel() {
                   <span className="t-mono" style={{ fontWeight: 700, color: 'var(--color-warn)', fontSize: 16 }}>{c.count}</span>
                   <span className="t-text inline-flex items-center gap-1">
                     {shortName(c.name)}
-                    <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
+                    <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} role={clusterIdx.lookup(c.name)?.role} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
                   </span>
                   {c.overdue > 0 && <span className="t-small t-danger">{c.overdue} overdue</span>}
                 </li>

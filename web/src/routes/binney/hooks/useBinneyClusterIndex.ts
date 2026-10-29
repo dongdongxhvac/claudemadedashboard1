@@ -5,9 +5,9 @@
 import { useMemo } from 'react';
 import { useAllUsers, type EngineerRow } from './useBinneyEngineers';
 import { useShifts } from '../../../hooks/useShifts';
-import { resolveName, type Cluster, type Crew, type NameTarget } from '../../../lib/binneyRounds';
+import { resolveName, type Cluster, type ClusterRole, type Crew, type NameTarget } from '../../../lib/binneyRounds';
 
-export type ClusterInfo = { cluster: Cluster | null; managerName: string | null };
+export type ClusterInfo = { cluster: Cluster | null; role: ClusterRole | null; managerName: string | null };
 
 export type ClusterPerson = NameTarget & EngineerRow;
 
@@ -46,7 +46,7 @@ export function useBinneyClusterIndex(): ClusterIndex {
       const managerName = u.manager_user_id
         ? nameById.get(u.manager_user_id) ?? null
         : u.cluster ? managers[u.cluster][0]?.full_name ?? null : null;
-      const info: ClusterInfo = { cluster: u.cluster ?? null, managerName };
+      const info: ClusterInfo = { cluster: u.cluster ?? null, role: u.cluster_role ?? null, managerName };
       byUserId.set(u.user_id, info);
       byName.set(u.full_name.toLowerCase(), info);
       if (u.cmms_assignee_name) byName.set(u.cmms_assignee_name.toLowerCase(), info);

@@ -118,7 +118,7 @@ export function BinneyWeekendPlanBlock({
             <span key={i} className="inline-flex items-center gap-0.5 whitespace-nowrap" title={p?.full_name}>
               {i > 0 && <span className="t-muted">/</span>}
               <span>{p ? shortName(p.full_name) : t}</span>
-              <ClusterBadge cluster={info?.cluster} manager={info?.managerName} size={11} />
+              <ClusterBadge cluster={info?.cluster} role={info?.role} manager={info?.managerName} size={11} />
             </span>
           );
         })}

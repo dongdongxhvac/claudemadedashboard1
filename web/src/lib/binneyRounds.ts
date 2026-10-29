@@ -25,6 +25,24 @@ export const CLUSTER_STYLE: Record<Cluster, { letter: string; bg: string; fg: st
   west: { letter: 'W', bg: '#fef3c7', fg: '#92400e', border: '#fde68a' },
 };
 
+/** Role inside the cluster (0155): walks rounds, floats (PMs, fills a round
+ *  in a gap), or BMS. Drives the badge suffix and the profile picker. */
+export type ClusterRole = 'round' | 'floater' | 'bms';
+export const CLUSTER_ROLES: ClusterRole[] = ['round', 'floater', 'bms'];
+const ROLE_WORD: Record<ClusterRole, string> = { round: '', floater: 'Floater', bms: 'BMS' };
+const ROLE_SUFFIX: Record<ClusterRole, string> = { round: '', floater: 'F', bms: 'B' };
+
+/** "East", "East Floater", "West BMS". */
+export function clusterRoleLabel(cluster: Cluster, role: ClusterRole | null | undefined): string {
+  const w = ROLE_WORD[role ?? 'round'];
+  return w ? `${CLUSTER_LABEL[cluster]} ${w}` : CLUSTER_LABEL[cluster];
+}
+
+/** "E", "EF", "EB", "W", "WF", "WB". */
+export function clusterBadgeLetters(cluster: Cluster, role: ClusterRole | null | undefined): string {
+  return CLUSTER_STYLE[cluster].letter + ROLE_SUFFIX[role ?? 'round'];
+}
+
 /** Form control border/background used across the Binney ops section. */
 export const inputStyle = { borderColor: 'var(--color-border)', background: 'var(--color-card)' } as const;
 
