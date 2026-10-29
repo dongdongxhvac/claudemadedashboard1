@@ -18,9 +18,11 @@ import { ClusterBadge } from './ClusterBadge';
 import { CLUSTER_LABEL, type Cluster } from '../../lib/binneyRounds';
 
 type Crew = 'saturday' | 'sunday' | null;
-type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew' | 'other_crew';
+type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew' | 'other_crew' | 'east' | 'west';
 const FILTERS_ADMIN: { key: Filter; label: string }[] = [
   { key: 'active',     label: 'All active' },
+  { key: 'east',       label: 'East' },
+  { key: 'west',       label: 'West' },
   { key: 'sat_crew',   label: 'Saturday crew' },
   { key: 'sun_crew',   label: 'Sunday crew' },
   { key: 'other_crew', label: 'Other crew' },
@@ -33,6 +35,8 @@ const FILTERS_ADMIN: { key: Filter; label: string }[] = [
 // Leads only see engineers (active + inactive). No managers / directors / admins.
 const FILTERS_LEAD: { key: Filter; label: string }[] = [
   { key: 'engineer',   label: 'Engineers' },
+  { key: 'east',       label: 'East' },
+  { key: 'west',       label: 'West' },
   { key: 'sat_crew',   label: 'Saturday crew' },
   { key: 'sun_crew',   label: 'Sunday crew' },
   { key: 'other_crew', label: 'Other crew' },
@@ -55,6 +59,9 @@ function applyFilter(rows: EngineerRow[], f: Filter, crewOf: (r: EngineerRow) =>
     // no-shift bucket. Role-restricted so managers/admins (who never have a
     // shift) don't flood the list.
     case 'other_crew': return rows.filter((r) => r.active && r.role === 'engineer' && crewOf(r) === null);
+    // 0154 clusters — managers carry their own cluster, so they show up too.
+    case 'east':  return rows.filter((r) => r.active && r.cluster === 'east');
+    case 'west':  return rows.filter((r) => r.active && r.cluster === 'west');
   }
 }
 
@@ -154,11 +161,13 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
     const crewOf = (r: EngineerRow): Crew => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null);
     const c: Record<Filter, number> = {
       active: 0, engineer: 0, manager: 0, director: 0, admin: 0, inactive: 0,
-      sat_crew: 0, sun_crew: 0, other_crew: 0,
+      sat_crew: 0, sun_crew: 0, other_crew: 0, east: 0, west: 0,
     };
     for (const r of allRows) {
       if (r.active) {
         c.active++;
+        if (r.cluster === 'east') c.east++;
+        else if (r.cluster === 'west') c.west++;
         if (r.role === 'engineer') c.engineer++;
         else if (r.role === 'manager')  c.manager++;
         else if (r.role === 'director') c.director++;

@@ -80,6 +80,26 @@ function buildRoleTags(idx: ClusterIndex, rot: RoundsRotation | null, pm: PmPlan
   return tags;
 }
 
+const ROUND_GROUPS = new Set<GroupCode>(['E1', 'E2', 'W1', 'W2']);
+const BMS_GROUPS = new Set<GroupCode>(['EBMS', 'WBMS']);
+
+/** Sort bucket for the crews list (user 2026-10-29): floater → round → BMS,
+ *  then shadowing, dedicated, untagged. */
+function dutyRank(t: RoleTag | undefined): number {
+  if (!t) return 5;
+  if (t.floater) return 0;
+  if (Array.from(t.groups).some((g) => ROUND_GROUPS.has(g))) return 1;
+  if (Array.from(t.groups).some((g) => BMS_GROUPS.has(g))) return 2;
+  if (t.trainee) return 3;
+  if (t.dedicated.length) return 4;
+  return 5;
+}
+
+/** On the Week A / Week B rounds grids at all (any weekday cell)? */
+function onRoundsSheet(t: RoleTag | undefined): boolean {
+  return !!t && t.groups.size > 0;
+}
+
 function tagLabel(t: RoleTag | undefined): string | null {
   if (!t) return null;
   const parts: string[] = [];
@@ -107,7 +127,13 @@ function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
   const unclustered = idx.people.filter((p) => p.role === 'engineer' && !p.cluster);
   return (
     <div>
-      <div className="t-small t-muted uppercase tracking-wider mb-1">Crews by cluster · dedicated manager</div>
+      <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+        <div className="t-small t-muted uppercase tracking-wider">Crews by cluster · dedicated manager</div>
+        <span className="t-small t-muted">
+          <mark style={{ background: 'rgba(250, 204, 21, 0.45)', color: 'inherit', padding: '0 3px', borderRadius: 2 }}>highlighted</mark>
+          {' '}= not on the Week A / B rounds sheet · sorted floater → round → BMS
+        </span>
+      </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         {CLUSTERS.map((c) => {
           const s = CLUSTER_STYLE[c];
@@ -131,12 +157,26 @@ function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
                   <div className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{CREW_LABEL[k]}</div>
                   {/* auto-fill columns; names never truncate — a long tag wraps under the name instead */}
                   <ul className="list-none p-0 m-0 mt-0.5 grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', columnGap: 10, rowGap: 2 }}>
-                    {byCrew[k].sort((a, b) => Number(b.is_lead) - Number(a.is_lead) || a.full_name.localeCompare(b.full_name)).map((p) => {
-                      const tag = tagLabel(tags.get(p.user_id));
+                    {byCrew[k].sort((a, b) =>
+                      dutyRank(tags.get(a.user_id)) - dutyRank(tags.get(b.user_id))
+                      || Number(b.is_lead) - Number(a.is_lead)
+                      || a.full_name.localeCompare(b.full_name),
+                    ).map((p) => {
+                      const t = tags.get(p.user_id);
+                      const tag = tagLabel(t);
+                      const offSheet = !onRoundsSheet(t);
                       return (
                         <li key={p.user_id} className="t-small flex flex-wrap items-baseline gap-x-1 min-w-0">
                           {p.is_lead && <span style={{ color: '#d4a017', fontSize: 11, lineHeight: 1 }} title="Lead engineer">★</span>}
-                          <span className="t-text" style={{ whiteSpace: 'nowrap' }}>{p.full_name}</span>
+                          <span
+                            className="t-text"
+                            title={offSheet ? 'Not on the Week A / Week B building-rounds sheet' : undefined}
+                            style={offSheet
+                              ? { whiteSpace: 'nowrap', background: 'rgba(250, 204, 21, 0.45)', padding: '0 3px', borderRadius: 2 }
+                              : { whiteSpace: 'nowrap' }}
+                          >
+                            {p.full_name}
+                          </span>
                           {tag && <span className="t-mono t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{tag}</span>}
                         </li>
                       );
@@ -456,38 +496,43 @@ function RotationBlock({
         })}
       </div>
 
-      <div className="grid gap-3 mt-2" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
-        <div>
-          <div className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Wednesday rounds ahead</div>
-          <div className="flex flex-wrap gap-1 mt-0.5">
-            {weds.map((x) => {
-              const isThis = sundayOf(x.date).getTime() === sundayOf(now).getTime();
-              return (
-                <span key={x.date.toISOString()} className="t-small px-1.5 py-0.5 rounded"
-                  style={{ background: isThis ? 'var(--color-accent)' : 'var(--color-bg)', color: isThis ? 'white' : undefined, border: '1px solid var(--color-border)' }}>
-                  {fmtMd(x.date)} · <b>{x.week}</b> · {x.crew}
-                </span>
-              );
-            })}
-          </div>
-          {rot.note && <p className="t-small t-muted mt-1">{rot.note}</p>}
+      <div className="mt-2">
+        <div className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Wednesday rounds ahead</div>
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {weds.map((x) => {
+            const isThis = sundayOf(x.date).getTime() === sundayOf(now).getTime();
+            return (
+              <span key={x.date.toISOString()} className="t-small px-1.5 py-0.5 rounded"
+                style={{ background: isThis ? 'var(--color-accent)' : 'var(--color-bg)', color: isThis ? 'white' : undefined, border: '1px solid var(--color-border)' }}>
+                {fmtMd(x.date)} · <b>{x.week}</b> · {x.crew}
+              </span>
+            );
+          })}
         </div>
-        <div>
-          <div className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Duties · weekend staffing</div>
-          <ul className="list-none p-0 m-0 mt-0.5">
-            {(rot.roles ?? []).map((r) => (
-              <li key={r.role} className="t-small"><b className="t-text">{r.role}</b> <span className="t-muted">— {r.duty}</span></li>
-            ))}
-          </ul>
-          {rot.weekend_staffing && (
-            <p className="t-small t-text mt-1">
-              Sat: <b>{rot.weekend_staffing.saturday.floaters}</b> floaters + <b>{rot.weekend_staffing.saturday.leads}</b> lead{rot.weekend_staffing.saturday.leads === 1 ? '' : 's'}
-              {' · '}
-              Sun: <b>{rot.weekend_staffing.sunday.floaters}</b> floaters + <b>{rot.weekend_staffing.sunday.leads}</b> lead{rot.weekend_staffing.sunday.leads === 1 ? '' : 's'}
-            </p>
-          )}
-        </div>
+        {rot.note && <p className="t-small t-muted mt-1">{rot.note}</p>}
       </div>
+    </div>
+  );
+}
+
+/** Floater / Lead / Engineer duties + weekend floater/lead counts (rounds
+ *  sheet). Lives under the weekend PM plan (user 2026-10-29). */
+function DutiesBlock({ rot }: { rot: RoundsRotation }) {
+  return (
+    <div>
+      <div className="t-small t-muted uppercase tracking-wider">Duties · weekend staffing</div>
+      <ul className="list-none p-0 m-0 mt-0.5">
+        {(rot.roles ?? []).map((r) => (
+          <li key={r.role} className="t-small"><b className="t-text">{r.role}</b> <span className="t-muted">— {r.duty}</span></li>
+        ))}
+      </ul>
+      {rot.weekend_staffing && (
+        <p className="t-small t-text mt-1">
+          Sat: <b>{rot.weekend_staffing.saturday.floaters}</b> floaters + <b>{rot.weekend_staffing.saturday.leads}</b> lead{rot.weekend_staffing.saturday.leads === 1 ? '' : 's'}
+          {' · '}
+          Sun: <b>{rot.weekend_staffing.sunday.floaters}</b> floaters + <b>{rot.weekend_staffing.sunday.leads}</b> lead{rot.weekend_staffing.sunday.leads === 1 ? '' : 's'}
+        </p>
+      )}
     </div>
   );
 }
@@ -666,13 +711,16 @@ export function BinneyOpsPanel() {
       )}
 
       <div className="grid gap-6 mt-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)' }}>
-        {pm ? (
-          <PmPlanBlock
-            pm={pm} idx={idx} canEdit={canEdit}
-            saving={upsertRef.isPending}
-            onSave={async (next) => { await upsertRef.mutateAsync({ key: 'pm_plan', value: next }); }}
-          />
-        ) : <div />}
+        <div className="space-y-4">
+          {pm && (
+            <PmPlanBlock
+              pm={pm} idx={idx} canEdit={canEdit}
+              saving={upsertRef.isPending}
+              onSave={async (next) => { await upsertRef.mutateAsync({ key: 'pm_plan', value: next }); }}
+            />
+          )}
+          {rot && <DutiesBlock rot={rot} />}
+        </div>
         <BinneyWeekendPlanBlock idx={idx} rot={rot} canEdit={canEdit} now={now} />
       </div>
     </section>
