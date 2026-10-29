@@ -52,7 +52,10 @@ export type RoundsRotation = {
   wednesday_rule: Record<WeekLetter, 'saturday' | 'sunday'>; // which crew walks the Wednesday round
   groups: { code: GroupCode; label: string; cluster: Cluster }[];
   weeks: Record<WeekLetter, Record<DayKey, Record<GroupCode, string>>>;
+  /** Legacy single shadow row (applies to both weeks when trainees_by_week is absent). */
   trainees?: Partial<Record<GroupCode, string>>;
+  /** Shadow row per week (user 2026-10-29: Week B gets its own slots). */
+  trainees_by_week?: Record<WeekLetter, Partial<Record<GroupCode, string>>>;
   group_stats?: Partial<Record<GroupCode, { points: number; hours: number }>>;
   cluster_stats?: Partial<Record<Cluster, { points: number; hours: number }>>;
   roles?: { role: string; duty: string }[];
@@ -91,6 +94,27 @@ export type WeekendPlan = {
   created_at: string;
   updated_at: string;
 };
+
+/** The shadow (trainee) row for a week — per-week when set, else the legacy shared row. */
+export function traineesFor(rot: RoundsRotation, w: WeekLetter): Partial<Record<GroupCode, string>> {
+  return rot.trainees_by_week?.[w] ?? rot.trainees ?? {};
+}
+
+/** First name when no one else on the roster shares it, else "First L.",
+ *  else "First Las." — so Justin McCarthy / Justin McGaffigan read
+ *  "Justin McC." / "Justin McG." in a tight grid. */
+export function uniqueShortName(full: string, roster: string[]): string {
+  const parts = full.trim().split(/\s+/);
+  const first = parts[0];
+  const last = parts[parts.length - 1] ?? '';
+  const firstOf = (n: string) => n.trim().split(/\s+/)[0].toLowerCase();
+  const lastOf = (n: string) => { const ps = n.trim().split(/\s+/); return (ps[ps.length - 1] ?? '').toLowerCase(); };
+  const sameFirst = roster.filter((n) => firstOf(n) === first.toLowerCase());
+  if (sameFirst.length <= 1 || parts.length === 1) return first;
+  const sameInitial = sameFirst.filter((n) => lastOf(n)[0] === last[0]?.toLowerCase());
+  if (sameInitial.length <= 1) return `${first} ${last[0]}.`;
+  return `${first} ${last.slice(0, 3)}.`;
+}
 
 export function otherWeek(w: WeekLetter): WeekLetter {
   return w === 'A' ? 'B' : 'A';

@@ -22,9 +22,9 @@ import { useMemo, useState } from 'react';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
-  type Cluster, type ClusterRole, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
+  type Cluster, type ClusterRole, type Crew, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
   DAY_KEYS, DAY_LABELS, GROUP_CODES, CLUSTER_LABEL, CLUSTER_STYLE, inputStyle,
-  weekLetterFor, otherWeek, upcomingWednesdays, dayKeyOf, sundayOf, splitNames, shortName, fmtMd,
+  weekLetterFor, otherWeek, upcomingWednesdays, dayKeyOf, sundayOf, splitNames, shortName, fmtMd, traineesFor, uniqueShortName,
 } from '../../lib/binneyRounds';
 import {
   useBinneyBuildings, useUpdateBuildingCluster, useSiteReference, useUpsertSiteReference, useBinneyDedicated,
@@ -67,9 +67,11 @@ function buildRoleTags(idx: ClusterIndex, rot: RoundsRotation | null, pm: PmPlan
         }
       }
     }
-    for (const [g, name] of Object.entries(rot.trainees ?? {})) {
-      const p = name ? idx.resolve(name) : null;
-      if (p) get(p.user_id).trainee = g as GroupCode;
+    for (const w of ['A', 'B'] as WeekLetter[]) {
+      for (const [g, name] of Object.entries(traineesFor(rot, w))) {
+        const p = name ? idx.resolve(name) : null;
+        if (p) get(p.user_id).trainee = g as GroupCode;
+      }
     }
   }
   const floating = pm?.groups.find((g) => g.key === 'floating');
@@ -358,6 +360,39 @@ function BuildingsBlock({
 
 // ── Rounds rotation (Week A / Week B) ──────────────────────────────────────
 
+const CREW_SHORT: Record<'sunday' | 'saturday' | 'none', string> = { sunday: 'Sun–Wed', saturday: 'Wed–Sat', none: 'Mon–Fri' };
+
+/** The rotation editor's pop-up: a native <select> of engineers grouped by
+ *  cluster (East, then West), alphabetical inside each, crew in the label.
+ *  `crew` narrows it to one crew — Wednesday's two slots. */
+function EngineerSelect({
+  value, onChange, people, crew, placeholder = '—',
+}: {
+  value: string; onChange: (userId: string) => void; people: ClusterPerson[]; crew?: Crew; placeholder?: string;
+}) {
+  const engineers = people.filter((p) => p.role === 'engineer' && (!crew || p.crew === crew));
+  const byCluster = (c: Cluster | null) =>
+    engineers.filter((p) => (p.cluster ?? null) === c).sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const groups = [
+    { label: 'East', list: byCluster('east') },
+    { label: 'West', list: byCluster('west') },
+    { label: 'No cluster', list: byCluster(null) },
+  ].filter((g) => g.list.length > 0);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="w-full border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 0, fontSize: 11 }}>
+      <option value="">{placeholder}</option>
+      {groups.map((g) => (
+        <optgroup key={g.label} label={g.label}>
+          {g.list.map((p) => (
+            <option key={p.user_id} value={p.user_id}>{p.is_lead ? '★ ' : ''}{p.full_name} · {CREW_SHORT[p.crew ?? 'none']}</option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
 function RotationBlock({
   rot, idx, week, now, canEdit, onSave, saving,
 }: {
@@ -372,13 +407,25 @@ function RotationBlock({
 
   const setCell = (w: WeekLetter, d: DayKey, g: GroupCode, v: string) =>
     setDraft((prev) => { const next = clone(prev ?? rot); next.weeks[w][d][g] = v; return next; });
-  const setTrainee = (g: GroupCode, v: string) =>
+  const setTrainee = (w: WeekLetter, g: GroupCode, v: string) =>
     setDraft((prev) => {
       const next = clone(prev ?? rot);
-      next.trainees = { ...(next.trainees ?? {}) };
-      if (v.trim()) next.trainees[g] = v; else delete next.trainees[g];
+      next.trainees_by_week = { A: { ...traineesFor(next, 'A') }, B: { ...traineesFor(next, 'B') } };
+      if (v.trim()) next.trainees_by_week[w][g] = v; else delete next.trainees_by_week[w][g];
       return next;
     });
+
+  // Roster for the pickers + the short names the grid shows. Cells hold the
+  // sheet's names (nicknames or, once edited here, full names); resolve()
+  // maps either to a person.
+  const personById = new Map(idx.people.map((p) => [p.user_id, p]));
+  const engineerNames = idx.people.filter((p) => p.role === 'engineer').map((p) => p.full_name);
+  const peopleOf = (raw: string): ClusterPerson[] =>
+    splitNames(raw).map((t) => idx.resolve(t)).filter((p): p is ClusterPerson => !!p);
+  const labelFor = (token: string): string => {
+    const p = idx.resolve(token);
+    return p ? uniqueShortName(p.full_name, engineerNames) : token;
+  };
 
   const save = async () => {
     if (!draft) { return; }
@@ -388,14 +435,33 @@ function RotationBlock({
 
   const renderCell = (w: WeekLetter, d: DayKey, g: GroupCode) => {
     const raw = view.weeks?.[w]?.[d]?.[g] ?? '';
+    // Sunday / Saturday are floater days on both weeks — fixed, never edited.
+    if (d === 'sun' || d === 'sat' || /^floaters?$/i.test(raw.trim())) return <span className="t-muted italic">Floater</span>;
     if (draft) {
+      if (d === 'wed') {
+        // Both crews overlap Wednesday: one Sun–Wed pick + one Wed–Sat pick.
+        const ps = peopleOf(raw);
+        const sun = ps.find((p) => p.crew === 'sunday') ?? ps.find((p) => p.crew !== 'saturday') ?? null;
+        const sat = ps.find((p) => p.crew === 'saturday' && p !== sun) ?? ps.find((p) => p !== sun) ?? null;
+        const write = (s: ClusterPerson | null, t: ClusterPerson | null) =>
+          setCell(w, d, g, [s?.full_name, t?.full_name].filter(Boolean).join('/'));
+        return (
+          <span className="flex flex-col gap-0.5">
+            <EngineerSelect value={sun?.user_id ?? ''} people={idx.people} crew="sunday" placeholder="— Sun–Wed —"
+              onChange={(id) => write(personById.get(id) ?? null, sat)} />
+            <EngineerSelect value={sat?.user_id ?? ''} people={idx.people} crew="saturday" placeholder="— Wed–Sat —"
+              onChange={(id) => write(sun, personById.get(id) ?? null)} />
+          </span>
+        );
+      }
+      const p = peopleOf(raw)[0] ?? null;
       return (
-        <input value={raw} onChange={(e) => setCell(w, d, g, e.target.value)}
-          className="w-full border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 0 }} />
+        <EngineerSelect value={p?.user_id ?? ''} people={idx.people}
+          onChange={(id) => setCell(w, d, g, personById.get(id)?.full_name ?? '')} />
       );
     }
-    if (/^floaters?$/i.test(raw.trim())) return <span className="t-muted italic">Floater</span>;
     const toks = splitNames(raw);
+    if (toks.length === 0) return <span className="t-muted">—</span>;
     if (d === 'wed' && toks.length > 1) {
       const ruleCrew = rot.wednesday_rule[w];
       return (
@@ -407,14 +473,14 @@ function RotationBlock({
               <span key={i}>
                 {i > 0 && <span className="t-muted">/</span>}
                 <span style={walks ? { fontWeight: 700, textDecoration: 'underline', textDecorationColor: 'var(--color-accent)' } : undefined}
-                  title={walks ? `Walks the Wednesday round in week ${w} (${ruleCrew} crew)` : undefined}>{t}</span>
+                  title={`${p?.full_name ?? t}${walks ? ` — walks the Wednesday round in week ${w} (${ruleCrew} crew)` : ''}`}>{labelFor(t)}</span>
               </span>
             );
           })}
         </span>
       );
     }
-    return <span>{raw}</span>;
+    return <span title={toks.map((t) => idx.resolve(t)?.full_name ?? t).join(' / ')}>{toks.map(labelFor).join(' / ')}</span>;
   };
 
   const groupsFor = (c: Cluster) => view.groups.filter((g) => g.cluster === c);
@@ -476,16 +542,18 @@ function RotationBlock({
                       </tr>
                     );
                   })}
-                  {(draft || Object.keys(view.trainees ?? {}).length > 0) && w === 'A' && (
+                  {(draft || Object.keys(traineesFor(view, w)).length > 0) && (
                     <tr>
                       <td className="py-0.5 pr-1 t-muted italic">shadow</td>
                       {CLUSTERS.map((c) => groupsFor(c).map((g) => {
-                        const v = view.trainees?.[g.code] ?? '';
+                        const v = traineesFor(view, w)[g.code] ?? '';
+                        const p = v ? idx.resolve(v) : null;
                         return (
                           <td key={g.code} className="py-0.5 px-1" style={{ background: v ? 'rgba(34,197,94,0.18)' : undefined }}>
                             {draft
-                              ? <input value={v} onChange={(e) => setTrainee(g.code, e.target.value)} placeholder="—" className="w-full border rounded px-1 t-small" style={inputStyle} />
-                              : v}
+                              ? <EngineerSelect value={p?.user_id ?? ''} people={idx.people}
+                                  onChange={(id) => setTrainee(w, g.code, personById.get(id)?.full_name ?? '')} />
+                              : <span title={p?.full_name ?? v}>{v ? labelFor(v) : ''}</span>}
                           </td>
                         );
                       }))}
