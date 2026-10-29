@@ -1,12 +1,14 @@
 // Binney St manager view: PTO panel + Workload · Performance (Cove PMs/WOs/
-// labor via the Binney pollers, 2026-10-26). Plantlog, BMS alarms, overtime
-// and meters stay deferred until Binney has those data sources.
+// labor via the Binney pollers, 2026-10-26) + Clusters · Rounds · Weekend
+// (0154, 2026-10-29). Plantlog, BMS alarms, overtime and meters stay
+// deferred until Binney has those data sources.
 import { Link } from 'react-router-dom';
 import { DEFAULT_PROGRAM } from '../../lib/programs';
 import { useAuth } from '../../lib/auth';
 import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
 import { BinneyWorkloadPanel } from './BinneyWorkloadPanel';
+import { BinneyOpsPanel } from './BinneyOpsPanel';
 import { SiteSwitcher } from './SiteSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
 import { useBinneySiteId } from './hooks/useBinneySiteId';
@@ -88,6 +90,11 @@ export default function BinneyManager() {
             {/* Workload · Performance + PMs closed · Labor — Binney Cove pollers
                 (COVE_SITE=binney) + migration 0152. Below PTO per user 2026-10-26. */}
             <BinneyWorkloadPanel />
+            {/* Clusters · Rounds · Weekend — the managers' paper sheets
+                (crews by cluster, buildings → rounds group, Week A/B
+                rotation, weekend PM plan, the weekly hand-out). Migration
+                0154. Below Workload per user 2026-10-29. */}
+            <BinneyOpsPanel />
           </>
         )}
       </main>

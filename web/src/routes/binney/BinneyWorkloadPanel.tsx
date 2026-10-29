@@ -24,6 +24,8 @@ import {
 import { woDaysSinceUpdate, WO_STALE_DAYS, type WoRow } from '../../hooks/useCurrentSnapshots';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
+import { ClusterBadge } from './ClusterBadge';
+import { useBinneyClusterIndex } from './hooks/useBinneyClusterIndex';
 
 const WORKLOAD_AHEAD_DAYS = 4;
 const CREW_WINDOW_DAYS = 8;
@@ -97,6 +99,7 @@ export function BinneyWorkloadPanel() {
   const engQ = useEngineers();
   const shiftsQ = useShifts();
   const ptoQ = usePtoRequests();
+  const clusterIdx = useBinneyClusterIndex(); // 0154: E/W mark next to names
 
   // One clock per calendar day: the day-based math below only needs to move
   // when the date does (data refetches drive the rest).
@@ -262,7 +265,10 @@ export function BinneyWorkloadPanel() {
                   <span className="t-small t-muted uppercase tracking-wider text-right">hrs/d</span>
                   {col.map((c) => (
                     <div key={c.name} className="contents">
-                      <span className="t-text">{shortName(c.name)}</span>
+                      <span className="t-text inline-flex items-center gap-1">
+                        {shortName(c.name)}
+                        <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
+                      </span>
                       <span className="t-mono text-right">{c.pms}</span>
                       <span className="t-mono text-right">
                         {Math.round(c.hours)}
@@ -305,7 +311,10 @@ export function BinneyWorkloadPanel() {
                   style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
                 >
                   <span className="t-mono" style={{ fontWeight: 700, color: 'var(--color-warn)', fontSize: 16 }}>{c.count}</span>
-                  <span className="t-text">{shortName(c.name)}</span>
+                  <span className="t-text inline-flex items-center gap-1">
+                    {shortName(c.name)}
+                    <ClusterBadge cluster={clusterIdx.lookup(c.name)?.cluster} manager={clusterIdx.lookup(c.name)?.managerName} size={11} />
+                  </span>
                   {c.overdue > 0 && <span className="t-small t-danger">{c.overdue} overdue</span>}
                 </li>
               ))}

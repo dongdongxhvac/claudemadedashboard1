@@ -50,6 +50,12 @@ export type EngineerRow = {
   title: string | null;
   shift_id: string | null;
   is_lead: boolean;
+  /** 0154 — Binney cluster (East = Ed Nardone, West = Andrew Balbo), the
+   *  dedicated manager (users.id) and the two HR ids from the roster sheet. */
+  cluster: 'east' | 'west' | null;
+  manager_user_id: string | null;
+  employee_id: string | null;
+  cw_services_id: string | null;
   updated_at: string;
 };
 
@@ -65,7 +71,8 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
       id, full_name, email, phone, hiring_date, auth_user_id, active, role, is_manager,
       engineer_profiles!inner (
         cmms_assignee_name, plantlog_username, cove_user_id, discipline, level, xp,
-        visible_to_self, notes, title, shift_id, is_lead, updated_at
+        visible_to_self, notes, title, shift_id, is_lead,
+        cluster, manager_user_id, employee_id, cw_services_id, updated_at
       )
     `)
     .eq('engineer_profiles.home_site_id', siteId);
@@ -80,6 +87,8 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
     level: number; xp: number; visible_to_self: boolean;
     notes: string | null; title: string | null;
     shift_id: string | null; is_lead: boolean;
+    cluster: 'east' | 'west' | null; manager_user_id: string | null;
+    employee_id: string | null; cw_services_id: string | null;
     updated_at: string;
   };
   type Joined = {
@@ -115,6 +124,10 @@ async function fetchUsers(roleFilter: Role | null, siteId: string): Promise<Engi
         title: ep.title,
         shift_id: ep.shift_id,
         is_lead: ep.is_lead,
+        cluster: ep.cluster ?? null,
+        manager_user_id: ep.manager_user_id ?? null,
+        employee_id: ep.employee_id ?? null,
+        cw_services_id: ep.cw_services_id ?? null,
         updated_at: ep.updated_at,
       } satisfies EngineerRow;
     })
@@ -155,7 +168,8 @@ export function useUpdateEngineerProfile() {
   return useMutation({
     mutationFn: async (input: {
       user_id: string;
-      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
+      patch: Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'
+        | 'cluster' | 'manager_user_id' | 'employee_id' | 'cw_services_id'>>;
     }) => {
       const { error, data } = await supabase
         .from('engineer_profiles')

@@ -14,6 +14,8 @@ import {
 import { useShifts } from '../../hooks/useShifts';
 import { useMe, type ManageScope } from '../../hooks/useMe';
 import { supabase } from '../../lib/supabase';
+import { ClusterBadge } from './ClusterBadge';
+import { CLUSTER_LABEL, type Cluster } from '../../lib/binneyRounds';
 
 type Crew = 'saturday' | 'sunday' | null;
 type Filter = 'active' | 'engineer' | 'manager' | 'director' | 'admin' | 'inactive' | 'sat_crew' | 'sun_crew' | 'other_crew';
@@ -178,6 +180,11 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
     (r) => (r.shift_id ? crewByShiftId.get(r.shift_id) ?? null : null));
   const shifts = shiftsQ.data ?? [];
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
+  // 0154: cluster mark next to every name; dedicated manager in the tooltip.
+  const nameById = new Map((q.data ?? []).map((u) => [u.user_id, u.full_name]));
+  const managers = (q.data ?? []).filter((u) => u.active && u.role === 'manager');
+  const managerNameOf = (r: EngineerRow): string | null =>
+    r.manager_user_id ? nameById.get(r.manager_user_id) ?? null : null;
 
   return (
     <div className="space-y-4">
@@ -270,6 +277,7 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
                           <span style={{ color: '#d4a017', fontSize: 14, lineHeight: 1 }} title="Lead engineer">★</span>
                         )}
                         <span>{r.full_name}</span>
+                        <ClusterBadge cluster={r.cluster} manager={managerNameOf(r)} size={13} />
                         {!r.active && (
                           <span className="t-small px-1.5 py-0.5 rounded t-muted ml-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '9px' }}>
                             INACTIVE
@@ -367,6 +375,7 @@ export function BinneyUserProfilesTab({ manageScope = 'all' }: { manageScope?: M
         <EditDrawer
           row={editing}
           shifts={shifts}
+          managers={managers}
           readOnly={!canEditRow(editing)}
           lockRole={!canManageUsers}
           onClose={() => setEditing(null)}
@@ -448,12 +457,14 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: (v: 
   );
 }
 
-type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'>>;
+type ProfilePatch = Partial<Pick<EngineerRow, 'discipline' | 'level' | 'notes' | 'visible_to_self' | 'title' | 'shift_id' | 'is_lead' | 'cmms_assignee_name' | 'plantlog_username'
+  | 'cluster' | 'manager_user_id' | 'employee_id' | 'cw_services_id'>>;
 type UserPatch = { full_name: string; email: string | null; phone: string | null; role: Role; active: boolean; is_manager: boolean };
 
 function EditDrawer({
   row,
   shifts,
+  managers,
   readOnly = false,
   lockRole = false,
   onClose,
@@ -462,6 +473,8 @@ function EditDrawer({
 }: {
   row: EngineerRow;
   shifts: { id: string; name: string }[];
+  /** Active managers at this site — the "dedicated manager" picker (0154). */
+  managers: { user_id: string; full_name: string; cluster: Cluster | null }[];
   readOnly?: boolean;
   /** Manager scope: role picker + Manager-rights toggle are frozen (the DB
    *  policy would reject a change anyway — migration 0124). */
@@ -480,6 +493,10 @@ function EditDrawer({
   const [role, setRole] = useState<Role>(row.role);
   const [shiftId, setShiftId] = useState<string>(row.shift_id ?? '');
   const [isLead, setIsLead] = useState<boolean>(row.is_lead);
+  const [cluster, setCluster] = useState<Cluster | ''>(row.cluster ?? '');
+  const [managerUserId, setManagerUserId] = useState<string>(row.manager_user_id ?? '');
+  const [employeeId, setEmployeeId] = useState<string>(row.employee_id ?? '');
+  const [cwServicesId, setCwServicesId] = useState<string>(row.cw_services_id ?? '');
   const [isManager, setIsManager] = useState<boolean>(row.is_manager);
   const [active, setActive] = useState<boolean>(row.active);
   const [saving, setSaving] = useState(false);
@@ -522,6 +539,10 @@ function EditDrawer({
           title: title.trim() || null,
           shift_id: shiftId || null,
           is_lead: isLead,
+          cluster: cluster || null,
+          manager_user_id: managerUserId || null,
+          employee_id: employeeId.trim() || null,
+          cw_services_id: cwServicesId.trim() || null,
         },
         {
           full_name: fullName.trim() || row.full_name,
@@ -550,8 +571,9 @@ function EditDrawer({
       >
         <div className="flex items-baseline justify-between mb-4">
           <div>
-            <h3 className="t-section-title">
+            <h3 className="t-section-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {row.full_name}
+              <ClusterBadge cluster={row.cluster} manager={managers.find((m) => m.user_id === row.manager_user_id)?.full_name} size={16} />
               {readOnly && (
                 <span className="t-small ml-2 px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,160,23,0.15)', color: '#a16207', fontSize: 11, fontWeight: 500 }}>
                   ★ View only
@@ -561,6 +583,12 @@ function EditDrawer({
             <p className="t-small t-muted">
               CMMS: {row.cmms_assignee_name ?? '—'}
               {' · '}Cove ID: <span className="t-mono">{row.cove_user_id ?? '—'}</span>
+            </p>
+            <p className="t-small t-muted">
+              {row.cluster ? CLUSTER_LABEL[row.cluster] : 'No cluster'}
+              {' · '}Manager: {managers.find((m) => m.user_id === row.manager_user_id)?.full_name ?? '—'}
+              {' · '}Employee ID: <span className="t-mono">{row.employee_id ?? '—'}</span>
+              {' · '}C&W ID: <span className="t-mono">{row.cw_services_id ?? '—'}</span>
             </p>
           </div>
           <button type="button" onClick={onClose} className="t-small t-muted hover:underline">Close</button>
@@ -660,6 +688,73 @@ function EditDrawer({
             ? 'Role and manager rights are set by an admin.'
             : <><strong>Manager</strong> can also publish or reject drafts. Both are independent of Role.</>}
         </p>
+
+        {/* 0154 — cluster + dedicated manager (roster-by-manager sheet) */}
+        <div className="flex items-end gap-3 mb-3">
+          <label className="block">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Cluster</span>
+            <select
+              value={cluster}
+              onChange={(e) => {
+                const c = e.target.value as Cluster | '';
+                setCluster(c);
+                // Default the manager to the cluster's manager when none is set yet.
+                if (c && !managerUserId) {
+                  const m = managers.find((x) => x.cluster === c);
+                  if (m) setManagerUserId(m.user_id);
+                }
+              }}
+              className="border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="">— none —</option>
+              <option value="east">East (Kendall)</option>
+              <option value="west">West (301)</option>
+            </select>
+          </label>
+          <label className="block flex-1">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Dedicated manager</span>
+            <select
+              value={managerUserId}
+              onChange={(e) => setManagerUserId(e.target.value)}
+              className="w-full border rounded px-2 py-1 t-text"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            >
+              <option value="">— none —</option>
+              {managers.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.full_name}{m.cluster ? ` · ${CLUSTER_LABEL[m.cluster]}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ClusterBadge cluster={cluster || null} size={22} className="mb-1" />
+        </div>
+
+        <div className="flex gap-3 mb-3">
+          <label className="block flex-1">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Employee ID</span>
+            <input
+              type="text"
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              placeholder="1001xxxxx"
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+          <label className="block flex-1">
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">C&W Services ID</span>
+            <input
+              type="text"
+              value={cwServicesId}
+              onChange={(e) => setCwServicesId(e.target.value)}
+              placeholder="60xxxxx"
+              className="w-full border rounded px-2 py-1 t-text t-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+            />
+          </label>
+        </div>
 
         <label className="block mb-3">
           <span className="t-small t-muted uppercase tracking-wider block mb-1">

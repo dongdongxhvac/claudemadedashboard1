@@ -24,6 +24,7 @@ import {
 } from './hooks/useBinneyPto';
 import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
+import { ClusterBadge } from './ClusterBadge';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
 import { BmrHolidayNote } from '../../components/BmrHolidayNote';
 import { useShifts } from '../../hooks/useShifts';
@@ -1124,6 +1125,7 @@ function DayChip({
       {out
         ? <span style={{ color: border, fontWeight: 600 }}>● {shortName(engineer.full_name)}</span>
         : <span style={{ color: 'var(--color-text)' }}>○ {shortName(engineer.full_name)}</span>}
+      <ClusterBadge cluster={engineer.cluster} size={isPrimary ? 11 : 10} />
       {out && (
         <span
           style={{
@@ -2246,7 +2248,9 @@ export function StaffingForecast({ engineers, shifts, requests }: {
                   background: short ? 'rgba(217,119,6,0.06)' : undefined,
                 }}
               >
-                <td style={cellPad}>{shortName(r.eng.full_name)}</td>
+                <td style={cellPad}>
+                  <span className="inline-flex items-center gap-1">{shortName(r.eng.full_name)}<ClusterBadge cluster={r.eng.cluster} size={11} /></span>
+                </td>
                 <td className="t-muted" style={{ ...cellPad, fontSize: 10 }}>{r.shiftName}</td>
                 <td className="t-mono" style={{ ...cellPad, textAlign: 'right' }}>{r.sched}</td>
                 <td style={cellPad}>
@@ -2593,6 +2597,7 @@ function BalancesGrid({
                         {isOpen ? '▾' : '▸'}
                       </span>
                       <span className="font-medium">{s.user_full_name ?? '?'}</span>
+                      <ClusterBadge cluster={engineers.find((e) => e.user_id === s.user_id)?.cluster} size={12} />
                       {notSet && (
                         <span
                           className="t-small uppercase tracking-wider"
