@@ -413,10 +413,12 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   // Focus: the next-week items only, with their notes (user 2026-10-29: "set to next week → next week focus only")
   const noteStr = (r: BoardRow) => notesOf(r).map(noteText).join(' · ');
   const focus = nextRows.map((r) => { const it = byKey.get(r.item_key)!; const n = noteStr(r); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}`; });
-  // To do: items this week carrying a "missed" note that are not already on next week (something to redo)
-  const toDo = wk.filter((r) => !isNext(r) && byKey.has(r.item_key) && notesOf(r).some((n) => n.mark === 'missed'))
+  // To do: the week's notes that still ask for something — unmarked or "missed" — on items not already on next week
+  // (a note marked good / solo / learning is a review line, not a to-do)
+  const isTodo = (n: BoardNote) => n.mark == null || n.mark === 'missed';
+  const toDo = wk.filter((r) => !isNext(r) && byKey.has(r.item_key) && notesOf(r).some(isTodo))
     .sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)
-    .map((r) => { const it = byKey.get(r.item_key)!; return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text} — ${notesOf(r).filter((n) => n.mark === 'missed').map(noteText).join(' · ')}`; });
+    .map((r) => { const it = byKey.get(r.item_key)!; return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text} — ${notesOf(r).filter(isTodo).map(noteText).join(' · ')}`; });
   const doneCum = boardProgress(def, rows.filter((r) => r.week <= week));
   const fields = def.inviteFields.length ? def.inviteFields : ['Title', 'When', 'Focus', 'To do', 'Review with Jie', 'Done'];
   const body: Record<string, string[]> = {
