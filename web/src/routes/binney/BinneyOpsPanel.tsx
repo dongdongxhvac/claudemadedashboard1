@@ -34,6 +34,7 @@ import { ClusterBadge } from './ClusterBadge';
 import { useBinneyClusterIndex, type ClusterIndex, type ClusterPerson } from './hooks/useBinneyClusterIndex';
 import { BinneyWeekendPlanBlock } from './BinneyWeekendPlan';
 import { SmallBtn, EngineerSelect } from './BinneyUi';
+import { buildRotationPrintHtml, openPrintHtml } from '../../lib/binneyPrint';
 
 const WEEKDAYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const BUILDING_GROUPS: Record<Cluster, string[]> = { east: ['E1', 'E2'], west: ['W1', 'W2'] };
@@ -361,10 +362,12 @@ function BuildingsBlock({
 // ── Rounds rotation (Week A / Week B) ──────────────────────────────────────
 
 function RotationBlock({
-  rot, idx, week, now, canEdit, onSave, saving,
+  rot, idx, week, now, canEdit, onSave, saving, bldgs,
 }: {
   rot: RoundsRotation; idx: ClusterIndex; week: WeekLetter; now: Date; canEdit: boolean;
   onSave: (next: RoundsRotation) => Promise<void>; saving: boolean;
+  /** For the printed sheet's cluster building lists. */
+  bldgs: BinneyBuilding[];
 }) {
   const [draft, setDraft] = useState<RoundsRotation | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -372,8 +375,17 @@ function RotationBlock({
   const todayKey = dayKeyOf(now);
   const weds = upcomingWednesdays(now, 8, rot);
 
+  // The two weeks are one rotation (user 2026-10-29): Week B is Week A with
+  // the cluster pairs swapped (E1 ↔ E2, W1 ↔ W2; BMS the same). Editing a
+  // cell writes its mirror in the other week too. Shadow rows are independent.
+  const MIRROR: Record<GroupCode, GroupCode> = { E1: 'E2', E2: 'E1', EBMS: 'EBMS', W1: 'W2', W2: 'W1', WBMS: 'WBMS' };
   const setCell = (w: WeekLetter, d: DayKey, g: GroupCode, v: string) =>
-    setDraft((prev) => { const next = clone(prev ?? rot); next.weeks[w][d][g] = v; return next; });
+    setDraft((prev) => {
+      const next = clone(prev ?? rot);
+      next.weeks[w][d][g] = v;
+      next.weeks[otherWeek(w)][d][MIRROR[g]] = v;
+      return next;
+    });
   const setTrainee = (w: WeekLetter, g: GroupCode, v: string) =>
     setDraft((prev) => {
       const next = clone(prev ?? rot);
@@ -392,6 +404,20 @@ function RotationBlock({
   const labelFor = (token: string): string => {
     const p = idx.resolve(token);
     return p ? uniqueShortName(p.full_name, engineerNames) : token;
+  };
+
+  // Printable sheet (landscape) — the paper rotation sheet with today's date.
+  const print = () => {
+    const groupBuildings: Record<string, string[]> = {};
+    for (const b of bldgs) {
+      if (!b.active || !b.rounds_group) continue;
+      (groupBuildings[b.rounds_group] ??= []).push(b.code);
+    }
+    for (const k of Object.keys(groupBuildings)) groupBuildings[k].sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
+    openPrintHtml(buildRotationPrintHtml({
+      rot, now, label: labelFor, groupBuildings,
+      managers: { east: idx.managers.east[0]?.full_name ?? null, west: idx.managers.west[0]?.full_name ?? null },
+    }));
   };
 
   const save = async () => {
@@ -460,20 +486,20 @@ function RotationBlock({
           <span className="t-small t-muted">
             Wednesday round alternates: week A → <b className="t-text">{rot.wednesday_rule.A}</b> crew, week B → <b className="t-text">{rot.wednesday_rule.B}</b> crew.
             Both crews overlap Wednesday; the underlined name walks it.
+            {draft && <> <b className="t-text">Editing:</b> a change in one week mirrors to the other (E1 ↔ E2, W1 ↔ W2, BMS same); shadow rows are independent and may be empty.</>}
           </span>
         </div>
-        {canEdit && (
-          <div className="flex items-center gap-1">
-            {draft ? (
-              <>
-                <SmallBtn onClick={() => { setDraft(null); setErr(null); }} disabled={saving}>Cancel</SmallBtn>
-                <SmallBtn onClick={() => void save()} disabled={saving} primary>{saving ? 'Saving…' : 'Save rotation'}</SmallBtn>
-              </>
-            ) : (
-              <SmallBtn onClick={() => setDraft(clone(rot))}>Edit</SmallBtn>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {!draft && <SmallBtn onClick={print} title="Print the rotation sheet (landscape) with today's date">⎙ Print</SmallBtn>}
+          {canEdit && (draft ? (
+            <>
+              <SmallBtn onClick={() => { setDraft(null); setErr(null); }} disabled={saving}>Cancel</SmallBtn>
+              <SmallBtn onClick={() => void save()} disabled={saving} primary>{saving ? 'Saving…' : 'Save rotation'}</SmallBtn>
+            </>
+          ) : (
+            <SmallBtn onClick={() => setDraft(clone(rot))}>Edit</SmallBtn>
+          ))}
+        </div>
       </div>
       {err && <p className="t-small t-danger mb-1">{err}</p>}
 
@@ -735,7 +761,7 @@ export function BinneyOpsPanel() {
       {/* Rotation first (user 2026-10-29), then crews + buildings, then PM plan + hand-out. */}
       {rot && week && (
         <RotationBlock
-          rot={rot} idx={idx} week={week} now={now} canEdit={canEdit}
+          rot={rot} idx={idx} week={week} now={now} canEdit={canEdit} bldgs={bldgQ.data ?? []}
           saving={upsertRef.isPending}
           onSave={async (next) => { await upsertRef.mutateAsync({ key: 'rounds_rotation', value: next }); }}
         />

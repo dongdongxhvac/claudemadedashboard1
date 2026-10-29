@@ -6,12 +6,13 @@ import { useMemo, useState } from 'react';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
   type GroupCode, type RoundsRotation, type WeekendPlan, type PlanItem, type WeekendRounds, type Cluster,
-  CLUSTER_STYLE, inputStyle, saturdayOnOrAfter, splitNames, shortName, fmtIsoMd, parsePlanItems, planItemsToText, resolveName,
+  CLUSTER_STYLE, inputStyle, saturdayOnOrAfter, splitNames, shortName, fmtIsoMd, parsePlanItems, planItemsToText, resolveName, uniqueShortName,
 } from '../../lib/binneyRounds';
 import { useWeekendPlans, useUpsertWeekendPlan, useDeleteWeekendPlan, type WeekendPlanInput } from './hooks/useBinneyOps';
 import { ClusterBadge } from './ClusterBadge';
 import type { ClusterIndex, ClusterPerson } from './hooks/useBinneyClusterIndex';
 import { SmallBtn, EngineerSelect } from './BinneyUi';
+import { buildWeekendPlanPrintHtml, openPrintHtml } from '../../lib/binneyPrint';
 
 const DEFAULT_GROUPS: { code: GroupCode; label: string; cluster: Cluster }[] = [
   { code: 'E1', label: 'Cluster E1', cluster: 'east' },
@@ -69,6 +70,16 @@ export function BinneyWeekendPlanBlock({
   // "Ed" on the sheet → Edward Nardone: resolve against managers only.
   const managers = idx.people.filter((p) => p.role === 'manager');
   const managerLabel = (v: string | null | undefined) => (v ? resolveName(v, managers)?.full_name ?? v : '—');
+  // Printable hand-out (portrait), laid out like the paper one.
+  const engineerNames = idx.people.filter((p) => p.role === 'engineer').map((p) => p.full_name);
+  const printLabel = (token: string, crew?: 'saturday' | 'sunday') => {
+    const p = idx.resolve(token, crew);
+    return p ? uniqueShortName(p.full_name, engineerNames) : token;
+  };
+  const print = () => {
+    if (!plan) return;
+    openPrintHtml(buildWeekendPlanPrintHtml({ plan, groups, managerLabel: managerLabel(plan.manager_on_call), label: (t) => printLabel(t) }));
+  };
 
   const [editor, setEditor] = useState<{ mode: 'new' | 'edit'; draft: WeekendPlanInput; id?: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -145,12 +156,11 @@ export function BinneyWeekendPlanBlock({
             </select>
           )}
         </div>
-        {canEdit && (
-          <div className="flex items-center gap-1">
-            {plan && <SmallBtn onClick={startEdit}>Edit</SmallBtn>}
-            <SmallBtn onClick={startNew} primary>+ New plan</SmallBtn>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {plan && <SmallBtn onClick={print} title="Print this hand-out (portrait)">⎙ Print</SmallBtn>}
+          {canEdit && plan && <SmallBtn onClick={startEdit}>Edit</SmallBtn>}
+          {canEdit && <SmallBtn onClick={startNew} primary>+ New plan</SmallBtn>}
+        </div>
       </div>
       {err && !editor && <p className="t-small t-danger mb-1">{err}</p>}
 
