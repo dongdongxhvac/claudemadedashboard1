@@ -6,12 +6,12 @@ import { useMemo, useState } from 'react';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
   type GroupCode, type RoundsRotation, type WeekendPlan, type PlanItem, type WeekendRounds, type Cluster,
-  CLUSTER_STYLE, inputStyle, saturdayOnOrAfter, splitNames, shortName, fmtIsoMd, parsePlanItems, planItemsToText,
+  CLUSTER_STYLE, inputStyle, saturdayOnOrAfter, splitNames, shortName, fmtIsoMd, parsePlanItems, planItemsToText, resolveName,
 } from '../../lib/binneyRounds';
 import { useWeekendPlans, useUpsertWeekendPlan, useDeleteWeekendPlan, type WeekendPlanInput } from './hooks/useBinneyOps';
 import { ClusterBadge } from './ClusterBadge';
-import type { ClusterIndex } from './hooks/useBinneyClusterIndex';
-import { SmallBtn } from './BinneyUi';
+import type { ClusterIndex, ClusterPerson } from './hooks/useBinneyClusterIndex';
+import { SmallBtn, EngineerSelect } from './BinneyUi';
 
 const DEFAULT_GROUPS: { code: GroupCode; label: string; cluster: Cluster }[] = [
   { code: 'E1', label: 'Cluster E1', cluster: 'east' },
@@ -66,6 +66,9 @@ export function BinneyWeekendPlanBlock({
   const shownIso = picked ?? (plans.some((p) => p.weekend_start === comingSat) ? comingSat : plans[0]?.weekend_start ?? null);
   const plan = plans.find((p) => p.weekend_start === shownIso) ?? null;
   const comingMissing = !plans.some((p) => p.weekend_start === comingSat);
+  // "Ed" on the sheet → Edward Nardone: resolve against managers only.
+  const managers = idx.people.filter((p) => p.role === 'manager');
+  const managerLabel = (v: string | null | undefined) => (v ? resolveName(v, managers)?.full_name ?? v : '—');
 
   const [editor, setEditor] = useState<{ mode: 'new' | 'edit'; draft: WeekendPlanInput; id?: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -166,7 +169,7 @@ export function BinneyWeekendPlanBlock({
             <h3 className="t-text" style={{ fontWeight: 800, fontSize: 15, textDecoration: 'underline' }}>
               Weekend Plans {fmtIsoMd(plan.weekend_start)} – {fmtIsoMd(localISODate(addDays(new Date(plan.weekend_start + 'T00:00:00'), 1)))}
             </h3>
-            <span className="t-small t-text">Manager on call — <b>{plan.manager_on_call ?? '—'}</b></span>
+            <span className="t-small t-text">Manager on call — <b>{managerLabel(plan.manager_on_call)}</b></span>
           </div>
 
           <div className="mt-2"><ItemList items={plan.notes} /></div>
@@ -219,6 +222,7 @@ export function BinneyWeekendPlanBlock({
           mode={editor.mode}
           draft={editor.draft}
           groups={groups}
+          people={idx.people}
           saving={upsert.isPending || del.isPending}
           error={err}
           onChange={(d) => setEditor({ ...editor, draft: d })}
@@ -232,11 +236,13 @@ export function BinneyWeekendPlanBlock({
 }
 
 function WeekendPlanEditor({
-  mode, draft, groups, saving, error, onChange, onCancel, onSave, onDelete,
+  mode, draft, groups, people, saving, error, onChange, onCancel, onSave, onDelete,
 }: {
   mode: 'new' | 'edit';
   draft: WeekendPlanInput;
   groups: { code: GroupCode; label: string; cluster: Cluster }[];
+  /** Active Binney people (engineers + managers) for the pickers. */
+  people: ClusterPerson[];
   saving: boolean;
   error: string | null;
   onChange: (d: WeekendPlanInput) => void;
@@ -254,6 +260,23 @@ function WeekendPlanEditor({
     const rounds: WeekendRounds = { ...draft.rounds, [day]: { ...(draft.rounds[day] ?? {}), [g]: v } };
     onChange({ ...draft, rounds });
   };
+
+  // Pickers. Cells hold names ("Herb/Kyle" from the sheet, full names once
+  // picked here); resolve maps either to a person, the day as crew hint.
+  const personById = new Map(people.map((p) => [p.user_id, p]));
+  const engineers = people.filter((p) => p.role === 'engineer');
+  const managers = people.filter((p) => p.role === 'manager');
+  const cellPeople = (day: 'saturday' | 'sunday', g: GroupCode): ClusterPerson[] =>
+    splitNames(draft.rounds?.[day]?.[g]).map((t) => resolveName(t, engineers, day)).filter((p): p is ClusterPerson => !!p);
+  const writeCell = (day: 'saturday' | 'sunday', g: GroupCode, a: ClusterPerson | null, b: ClusterPerson | null) =>
+    setRound(day, g, [a?.full_name, b?.full_name].filter(Boolean).join('/'));
+  // Cells showing a second slot (+1): those already holding two people, plus any the user opens.
+  const [extra, setExtra] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const day of ['saturday', 'sunday'] as const) for (const g of groups) if (splitNames(draft.rounds?.[day]?.[g.code]).length > 1) s.add(`${day}:${g.code}`);
+    return s;
+  });
+  const mgr = draft.manager_on_call ? resolveName(draft.manager_on_call, managers) : null;
 
   const sunIso = localISODate(addDays(new Date(draft.weekend_start + 'T00:00:00'), 1));
   const ta = 'w-full border rounded px-2 py-1 t-small t-text';
@@ -286,8 +309,11 @@ function WeekendPlanEditor({
           </label>
           <label className="block flex-1">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">Manager on call</span>
-            <input type="text" value={draft.manager_on_call ?? ''} onChange={(e) => onChange({ ...draft, manager_on_call: e.target.value })}
-              placeholder="Ed / Andrew" className="w-full border rounded px-2 py-1 t-text" style={inputStyle} />
+            <EngineerSelect value={mgr?.user_id ?? ''} people={people} role="manager" showCrew={false} placeholder="— pick a manager —"
+              onChange={(id) => onChange({ ...draft, manager_on_call: personById.get(id)?.full_name ?? '' })} />
+            {draft.manager_on_call && !mgr && (
+              <span className="t-small t-muted block mt-0.5">Sheet says "{draft.manager_on_call}" — pick the manager above to replace it.</span>
+            )}
           </label>
         </div>
 
@@ -312,17 +338,31 @@ function WeekendPlanEditor({
               {(['saturday', 'sunday'] as const).map((day) => (
                 <tr key={day}>
                   <td className="py-1 pr-1 t-text" style={{ fontWeight: 600 }}>{day === 'saturday' ? 'Sat' : 'Sun'}</td>
-                  {groups.map((g) => (
-                    <td key={g.code} className="py-1 px-0.5">
-                      <input value={draft.rounds?.[day]?.[g.code] ?? ''} onChange={(e) => setRound(day, g.code, e.target.value)}
-                        className="w-full border rounded px-1 t-small" style={{ ...inputStyle, minWidth: 0 }} />
-                    </td>
-                  ))}
+                  {groups.map((g) => {
+                    const ps = cellPeople(day, g.code);
+                    const key = `${day}:${g.code}`;
+                    const two = extra.has(key) || ps.length > 1;
+                    return (
+                      <td key={g.code} className="py-1 px-0.5 align-top">
+                        <span className="flex flex-col gap-0.5">
+                          <EngineerSelect value={ps[0]?.user_id ?? ''} people={people}
+                            onChange={(id) => writeCell(day, g.code, personById.get(id) ?? null, ps[1] ?? null)} />
+                          {two ? (
+                            <EngineerSelect value={ps[1]?.user_id ?? ''} people={people} placeholder="— +1 —"
+                              onChange={(id) => writeCell(day, g.code, ps[0] ?? null, personById.get(id) ?? null)} />
+                          ) : (
+                            <button type="button" onClick={() => setExtra((s) => new Set(s).add(key))}
+                              className="t-small t-accent text-left hover:underline" style={{ fontSize: 10, lineHeight: 1.2 }}>+1</button>
+                          )}
+                        </span>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="t-small t-muted mt-0.5">Use "Herb/Kyle" for two people on one round.</p>
+          <p className="t-small t-muted mt-0.5">+1 adds a second person on a round, e.g. a trainee shadowing.</p>
         </div>
 
         <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: '1fr 1fr' }}>

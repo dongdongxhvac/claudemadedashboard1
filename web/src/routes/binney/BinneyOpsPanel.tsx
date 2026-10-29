@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { localISODate, addDays } from '../../lib/dashboard';
 import {
-  type Cluster, type ClusterRole, type Crew, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
+  type Cluster, type ClusterRole, type GroupCode, type RoundsRotation, type PmPlan, type PmPlanGroup, type WeekLetter, type DayKey,
   DAY_KEYS, DAY_LABELS, GROUP_CODES, CLUSTER_LABEL, CLUSTER_STYLE, inputStyle,
   weekLetterFor, otherWeek, upcomingWednesdays, dayKeyOf, sundayOf, splitNames, shortName, fmtMd, traineesFor, uniqueShortName,
 } from '../../lib/binneyRounds';
@@ -33,7 +33,7 @@ import {
 import { ClusterBadge } from './ClusterBadge';
 import { useBinneyClusterIndex, type ClusterIndex, type ClusterPerson } from './hooks/useBinneyClusterIndex';
 import { BinneyWeekendPlanBlock } from './BinneyWeekendPlan';
-import { SmallBtn } from './BinneyUi';
+import { SmallBtn, EngineerSelect } from './BinneyUi';
 
 const WEEKDAYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const BUILDING_GROUPS: Record<Cluster, string[]> = { east: ['E1', 'E2'], west: ['W1', 'W2'] };
@@ -359,39 +359,6 @@ function BuildingsBlock({
 }
 
 // ── Rounds rotation (Week A / Week B) ──────────────────────────────────────
-
-const CREW_SHORT: Record<'sunday' | 'saturday' | 'none', string> = { sunday: 'Sun–Wed', saturday: 'Wed–Sat', none: 'Mon–Fri' };
-
-/** The rotation editor's pop-up: a native <select> of engineers grouped by
- *  cluster (East, then West), alphabetical inside each, crew in the label.
- *  `crew` narrows it to one crew — Wednesday's two slots. */
-function EngineerSelect({
-  value, onChange, people, crew, placeholder = '—',
-}: {
-  value: string; onChange: (userId: string) => void; people: ClusterPerson[]; crew?: Crew; placeholder?: string;
-}) {
-  const engineers = people.filter((p) => p.role === 'engineer' && (!crew || p.crew === crew));
-  const byCluster = (c: Cluster | null) =>
-    engineers.filter((p) => (p.cluster ?? null) === c).sort((a, b) => a.full_name.localeCompare(b.full_name));
-  const groups = [
-    { label: 'East', list: byCluster('east') },
-    { label: 'West', list: byCluster('west') },
-    { label: 'No cluster', list: byCluster(null) },
-  ].filter((g) => g.list.length > 0);
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      className="w-full border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 0, fontSize: 11 }}>
-      <option value="">{placeholder}</option>
-      {groups.map((g) => (
-        <optgroup key={g.label} label={g.label}>
-          {g.list.map((p) => (
-            <option key={p.user_id} value={p.user_id}>{p.is_lead ? '★ ' : ''}{p.full_name} · {CREW_SHORT[p.crew ?? 'none']}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
-  );
-}
 
 function RotationBlock({
   rot, idx, week, now, canEdit, onSave, saving,
@@ -765,20 +732,19 @@ export function BinneyOpsPanel() {
         </p>
       )}
 
-      <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+      {/* Rotation first (user 2026-10-29), then crews + buildings, then PM plan + hand-out. */}
+      {rot && week && (
+        <RotationBlock
+          rot={rot} idx={idx} week={week} now={now} canEdit={canEdit}
+          saving={upsertRef.isPending}
+          onSave={async (next) => { await upsertRef.mutateAsync({ key: 'rounds_rotation', value: next }); }}
+        />
+      )}
+
+      <div className="grid gap-6 mt-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         <CrewsBlock idx={idx} tags={tags} />
         <BuildingsBlock bldgs={bldgQ.data ?? []} rot={rot} canEdit={canEdit} dedicated={dedicated} idx={idx} />
       </div>
-
-      {rot && week && (
-        <div className="mt-5">
-          <RotationBlock
-            rot={rot} idx={idx} week={week} now={now} canEdit={canEdit}
-            saving={upsertRef.isPending}
-            onSave={async (next) => { await upsertRef.mutateAsync({ key: 'rounds_rotation', value: next }); }}
-          />
-        </div>
-      )}
 
       <div className="grid gap-6 mt-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)' }}>
         <div className="space-y-4">
