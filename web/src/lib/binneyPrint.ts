@@ -2,21 +2,25 @@
 //   * the building-rounds rotation sheet — landscape; Wednesday A/B calendar
 //     on the left, Week A / Week B grids, cluster building lists with round
 //     points + hours, duties and weekend staffing on the right; stamped with
-//     the print date;
+//     the print date. NO "this week" highlight (user 2026-10-29): the sheet
+//     is posted for weeks, so the calendar locates the week by itself —
+//     month headers, Sun–Sat span per row, a big A/B letter and a tick box
+//     to check off weeks as they pass;
 //   * the weekend "hand-out" — portrait, laid out like the paper one (title,
 //     manager on call + notes, rounds table, Saturday / Sunday items, red
 //     reminders, WARNING).
 // Same mechanism as printPmList.ts: a new tab, document.write, print().
 import {
   type Cluster, type GroupCode, type RoundsRotation, type WeekLetter, type WeekendPlan, type PlanItem,
-  DAY_KEYS, DAY_LABELS, CLUSTER_LABEL, traineesFor, upcomingWednesdays, weekLetterFor, sundayOf,
+  DAY_KEYS, DAY_LABELS, CLUSTER_LABEL, traineesFor, upcomingWednesdays, sundayOf,
 } from './binneyRounds';
 import { addDays } from './dashboard';
 
 const esc = (s: string | null | undefined) =>
   (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-const longDate = (d: Date) => d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+const monthDay = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const monthYear = (d: Date) => d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 const shortDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: '2-digit' });
 const stamp = () => new Date().toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
@@ -61,13 +65,24 @@ export type RotationPrintArgs = {
 
 export function buildRotationPrintHtml(a: RotationPrintArgs): string {
   const { rot, now, label } = a;
-  const thisWeek = weekLetterFor(now, rot);
-  const thisSunday = sundayOf(now).getTime();
   const weds = upcomingWednesdays(now, a.weeks ?? 36, rot);
 
+  // One row per week, grouped under month headers (the month of the week's
+  // Sunday); a tick box per row lets the office check weeks off as they pass.
+  let lastMonth = '';
   const calendarRows = weds.map((x) => {
-    const cur = sundayOf(x.date).getTime() === thisSunday;
-    return `<tr${cur ? ' class="b" style="background:#eef"' : ''}><td style="text-align:center">${x.week}</td><td>${esc(longDate(x.date))}</td><td>${x.crew === 'saturday' ? 'Saturday' : 'Sunday'}</td></tr>`;
+    const sun = sundayOf(x.date);
+    const sat = addDays(sun, 6);
+    const m = monthYear(sun);
+    const head = m !== lastMonth ? `<tr class="month"><td colspan="5">${esc(m)}</td></tr>` : '';
+    lastMonth = m;
+    return head + `<tr>
+      <td class="tick"><span class="box"></span></td>
+      <td class="letter">${x.week}</td>
+      <td>${esc(monthDay(sun))} – ${esc(monthDay(sat))}</td>
+      <td>Wed ${esc(monthDay(x.date))}</td>
+      <td>${x.crew === 'saturday' ? 'Sat crew' : 'Sun crew'}</td>
+    </tr>`;
   }).join('');
 
   const groupsFor = (c: Cluster) => rot.groups.filter((g) => g.cluster === c);
@@ -81,8 +96,8 @@ export function buildRotationPrintHtml(a: RotationPrintArgs): string {
     const trainees = traineesFor(rot, w);
     const hasTrainees = Object.keys(trainees).length > 0;
     return `
-      <div class="week${w === thisWeek ? ' cur' : ''}">
-        <div class="wk-title">WEEK ${w}${w === thisWeek ? ' <span class="muted" style="font-weight:400">· this week · Wed round: ' + esc(rot.wednesday_rule[w]) + ' crew</span>' : ''}</div>
+      <div class="week">
+        <div class="wk-title">WEEK ${w} <span class="muted" style="font-weight:400">· Wednesday round: ${esc(rot.wednesday_rule[w])} crew</span></div>
         <table class="grid">
           <tr><th></th>${(['east', 'west'] as Cluster[]).map((c) => groupsFor(c).map((g) => `<th class="${c} yellowish">${esc(g.label)}</th>`).join('')).join('')}</tr>
           ${DAY_KEYS.map((d) => `<tr><th class="day">${DAY_LABELS[d]}</th>${(['east', 'west'] as Cluster[]).map((c) => groupsFor(c).map((g) => `<td>${esc(cellText(rot.weeks?.[w]?.[d]?.[g.code]))}</td>`).join('')).join('')}</tr>`).join('')}
@@ -99,7 +114,7 @@ export function buildRotationPrintHtml(a: RotationPrintArgs): string {
       ${codes.map((code) => `
         <div class="grp">
           <div class="grp-title">${esc(code)}${stats[code as GroupCode] ? ` <span class="muted">${stats[code as GroupCode]!.points} pts · ${stats[code as GroupCode]!.hours} hr</span>` : ''}</div>
-          <div class="bldgs">${(a.groupBuildings[code] ?? []).map((b) => `<div>${esc(b)}</div>`).join('') || '<div class="muted">—</div>'}</div>
+          <div class="bldgs${(a.groupBuildings[code] ?? []).length > 6 ? ' two' : ''}">${(a.groupBuildings[code] ?? []).map((b) => `<div>${esc(b)}</div>`).join('') || '<div class="muted">—</div>'}</div>
         </div>`).join('')}
     </div>`;
 
@@ -109,7 +124,6 @@ export function buildRotationPrintHtml(a: RotationPrintArgs): string {
        &nbsp;·&nbsp; Sun: <span class="b">${rot.weekend_staffing.sunday.floaters}</span> floaters + <span class="b">${rot.weekend_staffing.sunday.leads}</span> lead${rot.weekend_staffing.sunday.leads === 1 ? '' : 's'}</div>`
     : '';
 
-  const weekStart = sundayOf(now);
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Building Rounds · Rotation — printed ${esc(stamp())}</title>
 <style>
@@ -118,14 +132,18 @@ export function buildRotationPrintHtml(a: RotationPrintArgs): string {
   body { font-size: 8.5pt; }
   header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 8px; }
   h1 { font-size: 14pt; margin: 0; }
-  .layout { display: grid; grid-template-columns: 2.6in 1fr; gap: 14px; align-items: start; }
-  .cal th, .cal td { padding: 1px 5px; font-size: 7.5pt; }
-  .cal th { background: #eee; }
+  .layout { display: grid; grid-template-columns: 3.1in 1fr; gap: 14px; align-items: start; }
+  .cal { width: 100%; }
+  .cal th, .cal td { padding: 0 3px; font-size: 7pt; line-height: 1.05; white-space: nowrap; }
+  .cal th { background: #eee; text-align: left; }
+  .cal tr.month td { background: #ddd; font-weight: 700; font-size: 7pt; letter-spacing: 0.04em; }
+  .cal td.tick { width: 12px; text-align: center; }
+  .cal .box { display: inline-block; width: 7px; height: 7px; border: 1px solid #000; vertical-align: middle; }
+  .cal td.letter { font-weight: 800; font-size: 8.5pt; text-align: center; width: 16px; }
   .week { margin-bottom: 8px; }
   .wk-title { font-weight: 700; margin: 0 0 2px; font-size: 9.5pt; }
-  .week.cur .grid { outline: 2px solid #000; }
   .grid { width: 100%; table-layout: fixed; }
-  .grid th, .grid td { font-size: 8pt; padding: 2px 4px; }
+  .grid th, .grid td { font-size: 8pt; padding: 1px 4px; }
   .grid th.day { text-align: left; width: 0.8in; background: #f4f4f4; }
   .grid th.yellowish { background: #fff200; }
   .grid td.shadow { background: #c6efce; }
@@ -133,17 +151,18 @@ export function buildRotationPrintHtml(a: RotationPrintArgs): string {
   .cl-title { font-weight: 700; font-size: 9.5pt; padding: 2px 4px; margin-bottom: 4px; }
   .grp { margin-bottom: 5px; } .grp-title { font-weight: 700; background: #fff200; display: inline-block; padding: 0 4px; margin-bottom: 1px; }
   .bldgs { border: 1px solid #999; padding: 2px 5px; }
+  .bldgs.two { column-count: 2; column-gap: 8px; }
   .duties div { margin-bottom: 2px; }
 </style></head><body>
 <header>
   <div><h1>Building Rounds · Rotation — Binney St</h1>
-    <div class="muted">This week: <b>Week ${thisWeek}</b> (${esc(weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))} – ${esc(addDays(weekStart, 6).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}) · Wednesday round alternates: week A → ${esc(rot.wednesday_rule.A)} crew, week B → ${esc(rot.wednesday_rule.B)} crew</div></div>
+    <div class="muted"><b>Find today's date in the calendar:</b> the WEEK letter says which grid applies; the last column says which crew walks that Wednesday's round (week A → ${esc(rot.wednesday_rule.A)} crew, week B → ${esc(rot.wednesday_rule.B)} crew). Tick the box as each week passes.</div></div>
   <div class="stamp">Printed ${esc(stamp())}</div>
 </header>
 <div class="layout">
   <div>
-    <div class="b" style="margin-bottom:3px">Wednesday round rotation — A/B weeks</div>
-    <table class="cal"><tr><th>WEEK</th><th>DATE</th><th>Rounds</th></tr>${calendarRows}</table>
+    <div class="b" style="margin-bottom:3px">A/B weeks — Sunday to Saturday</div>
+    <table class="cal"><tr><th></th><th>WEEK</th><th>Week of</th><th>Wednesday</th><th>Wed round</th></tr>${calendarRows}</table>
     <div class="muted" style="margin-top:6px">Sat/Sun plan from manager week to week.</div>
   </div>
   <div>
