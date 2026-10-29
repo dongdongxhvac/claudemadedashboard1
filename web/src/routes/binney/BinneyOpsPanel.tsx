@@ -138,6 +138,15 @@ const CREW_LABEL: Record<'sunday' | 'saturday' | 'none', string> = {
 function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
   const unclustered = idx.people.filter((p) => p.role === 'engineer' && !p.cluster);
   const updatedAt = latest(idx.people.map((p) => p.updated_at));
+  const engineersOf = (c: Cluster, k: 'sunday' | 'saturday' | 'none') =>
+    idx.people
+      .filter((p) => p.role === 'engineer' && p.cluster === c && (p.crew ?? 'none') === k)
+      .sort((a, b) =>
+        dutyRank(tags.get(a.user_id), a.cluster_role) - dutyRank(tags.get(b.user_id), b.cluster_role)
+        || Number(b.is_lead) - Number(a.is_lead)
+        || a.full_name.localeCompare(b.full_name));
+  const bands = (['sunday', 'saturday', 'none'] as const).filter((k) => CLUSTERS.some((c) => engineersOf(c, k).length > 0));
+
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
@@ -150,59 +159,74 @@ function CrewsBlock({ idx, tags }: { idx: ClusterIndex; tags: RoleTags }) {
           {' '}= not on the Week A / B rounds sheet · sorted floater → round → BMS
         </span>
       </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        {CLUSTERS.map((c) => {
-          const s = CLUSTER_STYLE[c];
-          const mgr = idx.managers[c][0];
-          const people = idx.people.filter((p) => p.role === 'engineer' && p.cluster === c);
-          const byCrew: Record<'sunday' | 'saturday' | 'none', ClusterPerson[]> = { sunday: [], saturday: [], none: [] };
-          for (const p of people) byCrew[p.crew ?? 'none'].push(p);
-          return (
-            <div key={c} className="rounded p-3" style={{ background: `${s.bg}66`, border: `1px solid ${s.border}` }}>
-              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+
+      {/* Crew BANDS across both clusters (user 2026-10-29): the Sun–Wed crew of
+          East and West sit on one row, a rule separates it from the Wed–Sat
+          band, and the crew title is underlined. Columns keep the cluster tint. */}
+      <div className="rounded overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          {CLUSTERS.map((c) => {
+            const s = CLUSTER_STYLE[c];
+            const mgr = idx.managers[c][0];
+            const n = idx.people.filter((p) => p.role === 'engineer' && p.cluster === c).length;
+            return (
+              <div key={c} className="flex items-baseline justify-between gap-2 flex-wrap px-3 py-2"
+                style={{ background: `${s.bg}99`, borderBottom: `1px solid ${s.border}`, ...(c === 'west' ? { borderLeft: '1px solid var(--color-border)' } : {}) }}>
                 <div className="flex items-center gap-2">
                   <ClusterBadge cluster={c} size={18} />
                   <b className="t-text">{CLUSTER_LABEL[c]}</b>
                   <span className="t-small t-muted">· manager</span>
                   <b className="t-text">{mgr?.full_name ?? '—'}</b>
                 </div>
-                <span className="t-small t-muted">{people.length} engineers</span>
+                <span className="t-small t-muted">{n} engineers</span>
               </div>
-              {(['sunday', 'saturday', 'none'] as const).map((k) => byCrew[k].length > 0 && (
-                <div key={k} className="mt-2">
-                  <div className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{CREW_LABEL[k]}</div>
-                  {/* auto-fill columns; names never truncate — a long tag wraps under the name instead */}
-                  <ul className="list-none p-0 m-0 mt-0.5 grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', columnGap: 10, rowGap: 2 }}>
-                    {byCrew[k].sort((a, b) =>
-                      dutyRank(tags.get(a.user_id), a.cluster_role) - dutyRank(tags.get(b.user_id), b.cluster_role)
-                      || Number(b.is_lead) - Number(a.is_lead)
-                      || a.full_name.localeCompare(b.full_name),
-                    ).map((p) => {
-                      const t = tags.get(p.user_id);
-                      const tag = tagLabel(t);
-                      const offSheet = !onRoundsSheet(t);
-                      return (
-                        <li key={p.user_id} className="t-small flex flex-wrap items-baseline gap-x-1 min-w-0">
-                          {p.is_lead && <span style={{ color: '#d4a017', fontSize: 11, lineHeight: 1 }} title="Lead engineer">★</span>}
-                          <span
-                            className="t-text"
-                            title={offSheet ? 'Not on the Week A / Week B building-rounds sheet' : undefined}
-                            style={offSheet
-                              ? { whiteSpace: 'nowrap', background: 'rgba(250, 204, 21, 0.45)', padding: '0 3px', borderRadius: 2 }
-                              : { whiteSpace: 'nowrap' }}
-                          >
-                            {p.full_name}
-                          </span>
-                          {tag && <span className="t-mono t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{tag}</span>}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
+            );
+          })}
+        </div>
+        {bands.map((k, bi) => (
+          <div key={k} style={bi > 0 ? { borderTop: '2px solid var(--color-text-muted)' } : undefined}>
+            <div className="px-3 pt-1.5">
+              <span className="t-small t-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', textDecoration: 'underline', textUnderlineOffset: 3, fontWeight: 600 }}>
+                {CREW_LABEL[k]}
+              </span>
             </div>
-          );
-        })}
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              {CLUSTERS.map((c) => {
+                const list = engineersOf(c, k);
+                return (
+                  <div key={c} className="px-3 pt-1 pb-2" style={{ background: `${CLUSTER_STYLE[c].bg}40`, ...(c === 'west' ? { borderLeft: '1px solid var(--color-border)' } : {}) }}>
+                    {list.length === 0 ? (
+                      <span className="t-small t-muted italic">—</span>
+                    ) : (
+                      <ul className="list-none p-0 m-0 grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', columnGap: 10, rowGap: 2 }}>
+                        {list.map((p) => {
+                          const t = tags.get(p.user_id);
+                          const tag = tagLabel(t);
+                          const offSheet = !onRoundsSheet(t);
+                          return (
+                            <li key={p.user_id} className="t-small flex flex-wrap items-baseline gap-x-1 min-w-0">
+                              {p.is_lead && <span style={{ color: '#d4a017', fontSize: 11, lineHeight: 1 }} title="Lead engineer">★</span>}
+                              <span
+                                className="t-text"
+                                title={offSheet ? 'Not on the Week A / Week B building-rounds sheet' : undefined}
+                                style={offSheet
+                                  ? { whiteSpace: 'nowrap', background: 'rgba(250, 204, 21, 0.45)', padding: '0 3px', borderRadius: 2 }
+                                  : { whiteSpace: 'nowrap' }}
+                              >
+                                {p.full_name}
+                              </span>
+                              {tag && <span className="t-mono t-muted" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{tag}</span>}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       {unclustered.length > 0 && (
         <p className="t-small t-warn mt-2">
