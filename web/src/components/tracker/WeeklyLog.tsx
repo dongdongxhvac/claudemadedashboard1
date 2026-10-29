@@ -1,7 +1,24 @@
 // WeeklyLog — pages 2–3 of the 8-Week Tracker, generated from the board's
 // rows: per week the category tallies, Review (notes + quiz passes), Done
 // (items ticked that week) and Focus (items marked next week).
-import { weekLog, fmtDay, WEEKS, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
+import { weekLog, fmtDay, WEEKS, MARK_META, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass, type BoardMark } from '../../lib/trainingBoard';
+
+const MARK_BY_WORD = new Map((Object.keys(MARK_META) as BoardMark[]).map((k) => [MARK_META[k].label.toLowerCase(), MARK_META[k]]));
+/** "Oct 28 · 16a Boiler — note: missed · open questions" → the mark word coloured, the note text underlined (user 2026-10-29). */
+function ReviewLine({ line }: { line: string }) {
+  const m = /^(.*?) — (note: |note cleared.*)?(?:(missed|good|checked|learning|solo|next week) · )?(.*)$/s.exec(line);
+  if (!m || m[2] === undefined && m[3] === undefined) return <div>{line}</div>;
+  const [, head, label, word, text] = m;
+  const meta = word ? MARK_BY_WORD.get(word) : null;
+  const isNote = !!label || !!word;
+  return (
+    <div>
+      {head} — {label}
+      {meta && <b style={{ color: meta.color }}>{word} · </b>}
+      <span style={isNote ? { textDecoration: 'underline', textUnderlineOffset: 2 } : undefined}>{text}</span>
+    </div>
+  );
+}
 
 export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, currentWeek, onPickWeek }: {
   def: TrainingBoardDef; rows: BoardRow[]; quizzes: QuizPass[]; log?: BoardLogRow[]; dates?: Record<number, string>; currentWeek: number; onPickWeek?: (w: number) => void;
@@ -28,7 +45,7 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
                     {log.tallies.map((t) => <div key={t.label}>{t.label} <b className="t-mono" style={{ color: 'var(--color-text)' }}>{t.value || '—'}</b></div>)}
                   </div>
                 </td>
-                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>{log.review.join('\n')}</td>
+                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.review.map((l, i) => <ReviewLine key={i} line={l} />)}</td>
                 <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>{log.done.join('\n')}</td>
                 <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>{log.focus.join('\n')}</td>
               </tr>

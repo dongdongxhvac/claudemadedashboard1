@@ -362,8 +362,10 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   const wk = rows.filter((r) => r.week === week);
   const byKey = new Map(def.items.map((it) => [it.key, it]));
   const itemName = (key: string) => { const it = byKey.get(key); return it ? `${itemNum(it)} ${it.text}` : key; };
-  // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"; resets live on the Reset log tab
-  const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key)).sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"; resets live on the Reset log tab;
+  // anything set to next week is Focus only (user 2026-10-29), not Review
+  const isNextLine = (l: BoardLogRow) => (l.field === 'status' && l.new === 'next_week') || (l.field === 'note' && (l.new ?? '').startsWith(MARK_META.next_week.short + ' ')) || (l.field === 'value' && /\bnext_week\b/.test(l.new ?? ''));
+  const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key) && !isNextLine(l)).sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
   const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
   // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
@@ -386,7 +388,7 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   });
   const review = [
     // notes saved before the change log existed (no logged note line for them)
-    ...wk.filter((r) => byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).flatMap((r) => notesOf(r).map((n) => `${name(r)} — ${noteText(n)}`)),
+    ...wk.filter((r) => byKey.has(r.item_key) && !noteLogged.has(r.item_key)).sort((a, b) => (byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)).flatMap((r) => notesOf(r).filter((n) => n.mark !== 'next_week').map((n) => `${name(r)} — ${noteText(n)}`)),
     ...changes,
     ...quizzes.filter((q) => q.week === week).map((q) => `quiz passed: ${q.title} ${q.score}/${q.total}`),
   ];

@@ -130,6 +130,13 @@ const logRows: BoardLogRow[] = [
 const w2l = weekLog(def, rows, 2, [], [...logRows, { id: 'l3', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'reset', old: 'done', new: null, changed_on: '2026-10-26', changed_by: null, created_at: '2026-10-26T11:00:00Z' }]);
 assertEq(w2l.review, ['Oct 26 · 10 HVAC — score 2 → 3', 'Oct 26 · 10 HVAC — note: retest ok'], 'review = logged changes minus resets; the logged note replaces the row-note line');
 assertEq(weekLog(def, rows, 1, [], logRows).review, ['Oct 1 · 10 HVAC — missed low static switch'], 'W1 keeps its pre-log note line');
+const nextLog: BoardLogRow[] = [
+  { id: 'n1', user_id: 'u', program_key: 'p', item_key: 'plumbing', week: 2, field: 'status', old: null, new: 'next_week', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:00Z' },
+  { id: 'n2', user_id: 'u', program_key: 'p', item_key: 'plumbing', week: 2, field: 'note', old: null, new: '→ East cluster', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:01Z' },
+  { id: 'n3', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'status', old: null, new: 'done', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:02Z' },
+];
+assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retest ok', 'Oct 28 · 10 HVAC — status: done'], 'next-week status / notes stay out of Review (they are Focus)');
+assertEq(weekLog(def, rows, 2, [], nextLog).focus, ['Oct 1 · 11 Plumbing'], 'and still list under Focus');
 
 assertEq([1, 2, 3, 4, 5, 6].map(isScorable), [false, false, true, true, true, false], 'sections 1 · 2 · 6 are not scored');
 assertEq([1, 2, 3, 4].map(statusForScore), ['next_week', 'next_week', 'next_week', 'done'], 'score → status');
