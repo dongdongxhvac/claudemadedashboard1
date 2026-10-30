@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem,
+  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -153,7 +153,7 @@ assertEq(weekDates([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26
 assertEq(diffRows([], [{ item_key: 'meta.weeks', week: 0, status: null, note: null, value: { dates: { '1': '2026-10-26' } } }]), [], 'meta rows are not logged');
 
 // ── planning board (meta.plan) ──
-assertEq(planOf([]), { weeks: {}, count: 8 }, 'empty plan has 8 weeks');
+assertEq(planOf([]), { weeks: {}, notes: {}, count: 8 }, 'empty plan has 8 weeks');
 const plan0 = planOf([row('meta.plan', 0, null, null, { weeks: { '6': ['hvac', 'plumbing'], '10': ['pm_closed'] }, count: 10 })]);
 assertEq(plan0.count, 10, 'plan weeks run past 8');
 assertEq(planWeekOf(plan0, 'plumbing'), 6, 'item week');
@@ -161,6 +161,12 @@ assertEq(planWeekOf(plan0, 'nothing'), null, 'unplanned item');
 assertEq(togglePlanItem(plan0, 7, 'plumbing').weeks, { 6: ['hvac'], 7: ['plumbing'], 10: ['pm_closed'] }, 'toggle moves an item to the chosen week');
 assertEq(togglePlanItem(plan0, 6, 'hvac').weeks, { 6: ['plumbing'], 10: ['pm_closed'] }, 'toggle again takes it off');
 assertEq(togglePlanItem(plan0, 12, 'week_hours').count, 12, 'planning on a new week extends the count');
+const planN = setPlanNote(setPlanNote(plan0, 6, 'hvac', 'read the overview · quiz next week'), 6, '_week', 'light week');
+assertEq(planNote(planN, 6, 'hvac'), 'read the overview · quiz next week', 'item note');
+assertEq(planNote(planN, 6, '_week'), 'light week', 'week note');
+assertEq(planNote(togglePlanItem(planN, 7, 'hvac'), 7, 'hvac'), 'read the overview · quiz next week', 'note moves with the item');
+assertEq(planNote(togglePlanItem(planN, 6, 'hvac'), 6, 'hvac'), '', 'note dropped when the item is taken off');
+assertEq(planOf([row('meta.plan', 0, null, null, { weeks: {}, notes: { '3': { hvac: 'x', plumbing: '  ' } } })]).notes, { 3: { hvac: 'x' } }, 'blank notes are dropped on load');
 
 // ── rounds (items 7 + 9 merged): hours + learning / solo / next week per round ──
 const rdef: TrainingBoardDef = { ...def, sections: [{ num: 2, key: 'plantlog', title: 'PlantLog', total: 1, items: [

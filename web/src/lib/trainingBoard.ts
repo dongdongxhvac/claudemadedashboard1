@@ -160,16 +160,33 @@ export const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 /** The planning board (user 2026-10-30): which items the new hire should do in which week, reviewed the
  *  week after. One meta row, week 0, value {weeks: {'5': [item keys…]}, count: n} — weeks can run past 8. */
 export const META_PLAN = 'meta.plan';
-export type BoardPlan = { weeks: Record<number, string[]>; count: number };
+/** notes[week][itemKey] = "this week: … · next week review: …"; notes[week][PLAN_WEEK_NOTE] = the week's own note */
+export const PLAN_WEEK_NOTE = '_week';
+export type BoardPlan = { weeks: Record<number, string[]>; notes: Record<number, Record<string, string>>; count: number };
 export function planOf(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]): BoardPlan {
   const v = rows.find((r) => r.item_key === META_PLAN && r.week === 0)?.value ?? {};
   const weeks: Record<number, string[]> = {};
   const raw = v.weeks;
   if (raw && typeof raw === 'object') for (const [k, keys] of Object.entries(raw as Record<string, unknown>)) if (Array.isArray(keys)) weeks[Number(k)] = keys.map(String);
-  const maxWeek = Math.max(0, ...Object.keys(weeks).map(Number));
+  const notes: Record<number, Record<string, string>> = {};
+  const rn = v.notes;
+  if (rn && typeof rn === 'object') for (const [k, m] of Object.entries(rn as Record<string, unknown>)) if (m && typeof m === 'object') {
+    const clean = Object.fromEntries(Object.entries(m as Record<string, unknown>).filter(([, t]) => typeof t === 'string' && t.trim()).map(([ik, t]) => [ik, String(t)]));
+    if (Object.keys(clean).length) notes[Number(k)] = clean;
+  }
+  const maxWeek = Math.max(0, ...Object.keys(weeks).map(Number), ...Object.keys(notes).map(Number));
   const count = Math.max(8, maxWeek, typeof v.count === 'number' ? v.count : 0);
-  return { weeks, count };
+  return { weeks, notes, count };
 }
+/** Set (or clear with '') the note on a planned item, or on the week itself (itemKey = PLAN_WEEK_NOTE). */
+export function setPlanNote(plan: BoardPlan, week: number, itemKey: string, text: string): BoardPlan {
+  const notes: Record<number, Record<string, string>> = { ...plan.notes };
+  const m = { ...(notes[week] ?? {}) };
+  if (text.trim()) m[itemKey] = text; else delete m[itemKey];
+  if (Object.keys(m).length) notes[week] = m; else delete notes[week];
+  return { ...plan, notes, count: Math.max(plan.count, week) };
+}
+export const planNote = (plan: BoardPlan, week: number, itemKey: string): string => plan.notes[week]?.[itemKey] ?? '';
 /** The week an item is planned for, or null. */
 export const planWeekOf = (plan: BoardPlan, itemKey: string): number | null => {
   for (const [w, keys] of Object.entries(plan.weeks)) if (keys.includes(itemKey)) return Number(w);
@@ -177,10 +194,17 @@ export const planWeekOf = (plan: BoardPlan, itemKey: string): number | null => {
 };
 /** Toggle an item in a plan week (an item lives in one week at a time). */
 export function togglePlanItem(plan: BoardPlan, week: number, itemKey: string): BoardPlan {
+  const from = planWeekOf(plan, itemKey);
   const weeks: Record<number, string[]> = {};
   for (const [w, keys] of Object.entries(plan.weeks)) { const rest = keys.filter((k) => k !== itemKey); if (rest.length) weeks[Number(w)] = rest; }
-  if (!plan.weeks[week]?.includes(itemKey)) weeks[week] = [...(weeks[week] ?? []), itemKey];
-  return { weeks, count: Math.max(plan.count, week) };
+  const adding = !plan.weeks[week]?.includes(itemKey);
+  if (adding) weeks[week] = [...(weeks[week] ?? []), itemKey];
+  // the item's note moves with it; taking the item off drops its note
+  let next: BoardPlan = { ...plan, weeks, count: Math.max(plan.count, week) };
+  const note = from != null ? planNote(plan, from, itemKey) : '';
+  if (from != null) next = setPlanNote(next, from, itemKey, '');
+  if (adding && note) next = setPlanNote(next, week, itemKey, note);
+  return next;
 }
 
 // ── parsing ────────────────────────────────────────────────────────────────

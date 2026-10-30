@@ -5,11 +5,15 @@
 // row (meta.plan) — see planOf in lib/trainingBoard.
 import { useState } from 'react';
 import {
-  STATUS_META, MARK_META, currentOf, itemDone, itemNum, planWeekOf, togglePlanItem, allNotes, fmtDay,
+  STATUS_META, MARK_META, currentOf, itemDone, itemNum, planWeekOf, togglePlanItem, setPlanNote, planNote, PLAN_WEEK_NOTE, allNotes, fmtDay,
   type TrainingBoardDef, type BoardRow, type BoardPlan,
 } from '../../lib/trainingBoard';
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' };
+const input: React.CSSProperties = {
+  background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
+  borderRadius: 4, padding: '2px 6px', fontSize: 12, width: '100%',
+};
 
 export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
   def: TrainingBoardDef; rows: BoardRow[]; plan: BoardPlan; setPlan: (p: BoardPlan) => void; canEdit: boolean;
@@ -48,7 +52,12 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
         </div>
         <span className="t-small t-muted" style={{ marginLeft: 'auto' }}>{open.length} open · {unplanned.length} not planned yet</span>
       </div>
-      <p className="t-small t-muted mb-2">Click an item to put it on week {week} (click again to take it off; an item lives on one week). Done items are greyed out. Save the plan with the button above.</p>
+      <p className="t-small t-muted mb-2">Click an item to put it on week {week} (click again to take it off; an item lives on one week), then write its note — this week to do · next week review. Done items are greyed out. Save the plan with the button above.</p>
+      <label className="t-small flex items-center gap-2 mb-3">
+        <span className="t-muted whitespace-nowrap">W{week} note</span>
+        <input value={planNote(plan, week, PLAN_WEEK_NOTE)} disabled={!canEdit} placeholder={`Week ${week} — this week to do · next week review`}
+          onChange={(e) => setPlan(setPlanNote(plan, week, PLAN_WEEK_NOTE, e.target.value))} style={input} />
+      </label>
 
       {/* blank board */}
       <div className="grid gap-x-4 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
@@ -70,18 +79,27 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
                     const pw = planWeekOf(plan, item.key);
                     const here = pw === week;
                     const st = cur.status ? STATUS_META[cur.status] : null;
+                    const otherNote = pw && !here ? planNote(plan, pw, item.key) : '';
                     return (
-                      <button key={item.key} type="button" disabled={!canEdit || done} onClick={() => setPlan(togglePlanItem(plan, week, item.key))}
-                        className="w-full text-left t-small flex items-start gap-2"
-                        style={{ borderBottom: '1px solid var(--color-border)', padding: '5px 6px', opacity: done ? 0.45 : 1, cursor: canEdit && !done ? 'pointer' : 'default',
-                          background: here ? 'rgba(94,106,210,0.10)' : 'transparent', borderLeft: `3px solid ${here ? 'var(--color-accent)' : pw ? 'var(--color-border)' : 'transparent'}` }}>
-                        <span className="t-mono" style={{ flex: '0 0 28px', fontWeight: 700, fontSize: 13, color: 'var(--color-text-muted)' }}>{itemNum(item)}</span>
-                        <span className="flex-1 min-w-0" style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.25 }}>
-                          {item.text}
-                          {st && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, color: st.color }}>{st.short} {st.label}{cur.statusWeek ? ` W${cur.statusWeek}` : ''}</span>}
-                        </span>
-                        <span className="t-mono whitespace-nowrap" style={{ fontSize: 10.5, fontWeight: 700, color: here ? 'var(--color-accent)' : pw ? 'var(--color-text-muted)' : 'transparent' }}>{pw ? `W${pw}` : '·'}</span>
-                      </button>
+                      <div key={item.key} style={{ borderBottom: '1px solid var(--color-border)', opacity: done ? 0.45 : 1,
+                        background: here ? 'rgba(94,106,210,0.10)' : 'transparent', borderLeft: `3px solid ${here ? 'var(--color-accent)' : pw ? 'var(--color-border)' : 'transparent'}` }}>
+                        <button type="button" disabled={!canEdit || done} onClick={() => setPlan(togglePlanItem(plan, week, item.key))}
+                          className="w-full text-left t-small flex items-start gap-2" style={{ padding: '5px 6px', cursor: canEdit && !done ? 'pointer' : 'default' }}>
+                          <span className="t-mono" style={{ flex: '0 0 28px', fontWeight: 700, fontSize: 13, color: 'var(--color-text-muted)' }}>{itemNum(item)}</span>
+                          <span className="flex-1 min-w-0" style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.25 }}>
+                            {item.text}
+                            {st && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, color: st.color }}>{st.short} {st.label}{cur.statusWeek ? ` W${cur.statusWeek}` : ''}</span>}
+                            {otherNote && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>W{pw}: {otherNote}</span>}
+                          </span>
+                          <span className="t-mono whitespace-nowrap" style={{ fontSize: 10.5, fontWeight: 700, color: here ? 'var(--color-accent)' : pw ? 'var(--color-text-muted)' : 'transparent' }}>{pw ? `W${pw}` : '·'}</span>
+                        </button>
+                        {here && (
+                          <div style={{ padding: '0 6px 6px 40px' }}>
+                            <input value={planNote(plan, week, item.key)} disabled={!canEdit} placeholder="this week to do · next week review"
+                              onChange={(e) => setPlan(setPlanNote(plan, week, item.key, e.target.value))} style={{ ...input, fontSize: 11.5 }} />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -112,12 +130,16 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
                     <button type="button" onClick={() => setWeek(x)} className="t-mono font-bold hover:underline" style={{ fontSize: 14, color: isCur ? 'var(--color-accent)' : 'var(--color-text)' }}>W{x}</button>
                     {dates[x] && <div className="t-mono t-muted" style={{ fontSize: 10 }}>{fmtDay(dates[x])}</div>}
                   </td>
-                  <td className="px-2 py-1.5" style={cell}>{items.map((it) => `${itemNum(it)} ${it.text}`).join('\n') || <span className="t-muted">—</span>}</td>
+                  <td className="px-2 py-1.5" style={cell}>
+                    {planNote(plan, x, PLAN_WEEK_NOTE) && <div style={{ fontStyle: 'italic', marginBottom: 2 }}>{planNote(plan, x, PLAN_WEEK_NOTE)}</div>}
+                    {items.length ? items.map((it) => { const n = planNote(plan, x, it.key); return <div key={it.key}>{itemNum(it)} {it.text}{n ? <span className="t-muted"> — {n}</span> : null}</div>; }) : (!planNote(plan, x, PLAN_WEEK_NOTE) && <span className="t-muted">—</span>)}
+                  </td>
                   <td className="px-2 py-1.5" style={cell}>{doneItems.map((it) => { const c = currentOf(rows, it.key); return `✓ ${itemNum(it)} ${it.text}${c.statusWeek ? ` · W${c.statusWeek}` : ''}`; }).join('\n') || <span className="t-muted">—</span>}</td>
                   <td className="px-2 py-1.5" style={cell}>
                     {openItems.length ? openItems.map((it) => {
                       const missed = allNotes(rows, it.key).filter((n) => n.mark === 'missed');
-                      return <div key={it.key}>{itemNum(it)} {it.text}{missed.length ? <span style={{ color: MARK_META.missed.color }}> — ✗ {missed.map((n) => n.text).join(' · ')}</span> : null}</div>;
+                      const n = planNote(plan, x, it.key);
+                      return <div key={it.key}>{itemNum(it)} {it.text}{n ? <span className="t-muted"> — {n}</span> : null}{missed.length ? <span style={{ color: MARK_META.missed.color }}> — ✗ {missed.map((m) => m.text).join(' · ')}</span> : null}</div>;
                     }) : <span className="t-muted">—</span>}
                   </td>
                 </tr>

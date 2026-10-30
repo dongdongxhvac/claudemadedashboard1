@@ -48,7 +48,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const savePlan = () => {
     if (!planDraft) return;
     setErr(null);
-    save.mutate({ user_id: userId, rows: [{ item_key: META_PLAN, week: 0, status: null, note: null, value: { weeks: planDraft.weeks, count: planDraft.count } }], base: b.rows }, {
+    save.mutate({ user_id: userId, rows: [{ item_key: META_PLAN, week: 0, status: null, note: null, value: { weeks: planDraft.weeks, notes: planDraft.notes, count: planDraft.count } }], base: b.rows }, {
       onSuccess: () => setPlanDraft(null),
       onError: (e) => setErr((e as Error).message),
     });
