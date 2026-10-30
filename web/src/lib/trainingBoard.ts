@@ -157,6 +157,31 @@ export function weekDates(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[])
   return out;
 }
 export const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+/** The planning board (user 2026-10-30): which items the new hire should do in which week, reviewed the
+ *  week after. One meta row, week 0, value {weeks: {'5': [item keys…]}, count: n} — weeks can run past 8. */
+export const META_PLAN = 'meta.plan';
+export type BoardPlan = { weeks: Record<number, string[]>; count: number };
+export function planOf(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]): BoardPlan {
+  const v = rows.find((r) => r.item_key === META_PLAN && r.week === 0)?.value ?? {};
+  const weeks: Record<number, string[]> = {};
+  const raw = v.weeks;
+  if (raw && typeof raw === 'object') for (const [k, keys] of Object.entries(raw as Record<string, unknown>)) if (Array.isArray(keys)) weeks[Number(k)] = keys.map(String);
+  const maxWeek = Math.max(0, ...Object.keys(weeks).map(Number));
+  const count = Math.max(8, maxWeek, typeof v.count === 'number' ? v.count : 0);
+  return { weeks, count };
+}
+/** The week an item is planned for, or null. */
+export const planWeekOf = (plan: BoardPlan, itemKey: string): number | null => {
+  for (const [w, keys] of Object.entries(plan.weeks)) if (keys.includes(itemKey)) return Number(w);
+  return null;
+};
+/** Toggle an item in a plan week (an item lives in one week at a time). */
+export function togglePlanItem(plan: BoardPlan, week: number, itemKey: string): BoardPlan {
+  const weeks: Record<number, string[]> = {};
+  for (const [w, keys] of Object.entries(plan.weeks)) { const rest = keys.filter((k) => k !== itemKey); if (rest.length) weeks[Number(w)] = rest; }
+  if (!plan.weeks[week]?.includes(itemKey)) weeks[week] = [...(weeks[week] ?? []), itemKey];
+  return { weeks, count: Math.max(plan.count, week) };
+}
 
 // ── parsing ────────────────────────────────────────────────────────────────
 const txt = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();

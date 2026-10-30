@@ -9,15 +9,16 @@ import { Section } from '../Section';
 import { useTrainingBoard, useSaveTrainingBoard, type BoardRowInput } from '../../hooks/useTrainingBoard';
 import { useEngineers } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
-import { rowKey, WEEKS, STATUS_META, META_WEEKS, weekDates, fmtDay, type BoardRow } from '../../lib/trainingBoard';
+import { rowKey, WEEKS, STATUS_META, META_WEEKS, META_PLAN, weekDates, planOf, fmtDay, type BoardRow, type BoardPlan } from '../../lib/trainingBoard';
 import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
 import { WeeklyLog } from './WeeklyLog';
 import { InviteCard } from './InviteCard';
 import { ResetLog } from './ResetLog';
+import { PlanBoard } from './PlanBoard';
 
 const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '');
-type Tab = 'board' | 'log' | 'invite' | 'resets';
+type Tab = 'board' | 'log' | 'plan' | 'invite' | 'resets';
 
 export function TrainingSection({ userId, canEdit, personName }: { userId: string; canEdit: boolean; personName: string }) {
   const b = useTrainingBoard(userId);
@@ -34,11 +35,24 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const [week, setWeek] = useState<number>(0);
   const [tab, setTab] = useState<Tab>('board');
   const [draft, setDraft] = useState<Map<string, BoardRowInput>>(new Map());
+  /** the planning board's unsaved edits (null = nothing changed since load) */
+  const [planDraft, setPlanDraft] = useState<BoardPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   // week chips are review sessions (user 2026-10-26): exactly one selected at a time, none by default;
   // the log / invite views fall back to the last dated session
   const dates = useMemo(() => weekDates(b.rows), [b.rows]);
+  const savedPlan = useMemo(() => planOf(b.rows), [b.rows]);
+  const plan = planDraft ?? savedPlan;
+  const planDirty = planDraft != null && JSON.stringify(planDraft) !== JSON.stringify(savedPlan);
+  const savePlan = () => {
+    if (!planDraft) return;
+    setErr(null);
+    save.mutate({ user_id: userId, rows: [{ item_key: META_PLAN, week: 0, status: null, note: null, value: { weeks: planDraft.weeks, count: planDraft.count } }], base: b.rows }, {
+      onSuccess: () => setPlanDraft(null),
+      onError: (e) => setErr((e as Error).message),
+    });
+  };
   const lastDated = WEEKS.filter((x) => dates[x]).pop() ?? 1;
   const w = week;
   const wView = week || lastDated;
@@ -169,13 +183,19 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               </button>
             )}
             {canEdit && dirty > 0 && <button type="button" onClick={() => setDraft(new Map())} className="t-small t-muted hover:underline">discard</button>}
+            {canEdit && planDirty && (
+              <>
+                <button type="button" onClick={savePlan} disabled={save.isPending} className="t-small px-3 py-1 rounded font-semibold" style={{ background: 'var(--color-accent)', color: '#fff' }}>{save.isPending ? 'Saving…' : 'Save plan'}</button>
+                <button type="button" onClick={() => setPlanDraft(null)} className="t-small t-muted hover:underline">discard plan</button>
+              </>
+            )}
             <button type="button" onClick={print} className="t-small px-2 py-0.5 rounded border" style={{ color: 'var(--color-accent)', borderColor: 'var(--color-border)', background: 'var(--color-card)' }} title="Open the print-station tracker filled in, in a new tab">Print</button>
             {b.printStationUrl && <a href={b.printStationUrl} target="_blank" rel="noreferrer" className="t-small t-accent hover:underline">Print station ↗</a>}
           </div>
 
           {/* tabs */}
           <div className="flex gap-1 mb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
-            {([['board', 'Board'], ['log', 'Weekly log'], ['invite', 'Invite · first meeting'], ['resets', 'Reset log']] as [Tab, string][]).map(([k, label]) => (
+            {([['board', 'Board'], ['log', 'Weekly log'], ['plan', `Plan${Object.keys(plan.weeks).length ? ` · ${Object.values(plan.weeks).reduce((n, k) => n + k.length, 0)}` : ''}`], ['invite', 'Invite · first meeting'], ['resets', 'Reset log']] as [Tab, string][]).map(([k, label]) => (
               <button key={k} type="button" onClick={() => setTab(k)} className="t-small px-3 py-1.5"
                 style={{ borderBottom: `2px solid ${tab === k ? 'var(--color-accent)' : 'transparent'}`, color: tab === k ? 'var(--color-accent)' : 'var(--color-text-muted)', fontWeight: 600, marginBottom: -1 }}>{label}</button>
             ))}
@@ -192,6 +212,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
           )}
           {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} currentWeek={wView} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
           {tab === 'resets' && <ResetLog def={b.def} log={b.log} />}
+          {tab === 'plan' && <PlanBoard def={b.def} rows={rows} plan={plan} setPlan={setPlanDraft} canEdit={canEdit} dates={dates} />}
           {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={wView} personName={personName} canEdit={canEdit && w > 0} setRow={setRow} />}
         </>
       )}
