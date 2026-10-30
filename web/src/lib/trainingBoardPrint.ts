@@ -4,23 +4,26 @@
 // back the HTML for a new tab → browser print. The printout IS the
 // print-station page, filled in.
 import {
-  currentOf, hoursOf, roundOf, notesOf, allNotes, noteLine, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
+  currentOf, hoursOf, roundOf, notesOf, allNotes, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
   type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
 const FILL_CSS = `
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .box.on{background:#1a1f2b;position:relative}
 .box.on::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .box.half{background:repeating-linear-gradient(45deg,#1a1f2b 0 2px,#fff 2px 5px)}
 .wk.txt,.wk.long.txt,.ln2.txt,.note.txt{height:auto;min-height:1em;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;color:#1a1f2b;padding:0 2px;white-space:normal}
 .ln2.txt{width:auto;min-width:34px;text-align:center}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
-.note.txt{white-space:pre-wrap}
-.fi .t small.notes{display:block;white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;font-size:.72rem;line-height:1.3;color:#1a1f2b;margin-top:2px}
-td.fill{font-size:.84rem;line-height:1.35;white-space:pre-wrap}
-td.fill .rl{margin:1px 0}
-td.fill .rl.note{background:#fdf3e0;border-radius:3px;padding:0 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-td.fill .rl.note u{font-weight:600;text-underline-offset:2px}
+.note.txt{white-space:normal}
+.note.txt div,.fi .t small.notes div{white-space:normal}
+.fi .t small.notes{display:block;font-family:'IBM Plex Mono',monospace;font-size:.72rem;line-height:1.3;color:#1a1f2b;margin-top:2px}
+.fi .t .mk{font-weight:700}
+td.fill{font-size:.84rem;line-height:1.35}
+td.fill .rl{margin:1px 0;white-space:pre-wrap}
+td.fill .rl.nt{background:#fdf3e0;border-radius:3px;padding:0 3px}
+td.fill .rl.nt u{font-weight:600;text-underline-offset:2px}
 td.fill .rl .mk{font-weight:700}
 .fi.st-done .t{color:#047857}.fi.st-more_work .t{color:#b45309}.fi.st-next_week .t{color:#1d4ed8}
 `;
@@ -74,9 +77,22 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       const t = fi.querySelector(':scope > .t');
       const bx = fi.querySelector(':scope > .bx');
       const c = item.control;
-      // every note of every week, like the web board ("W3: ✗ jump out safety"); parts labelled on a shared row
-      const noteLines = parts.flatMap((pt) => allNotes(rows, pt.key).map((n) => `${parts.length > 1 ? `${pt.part === 'tagit' ? 'tag it' : 'overview'} ` : ''}W${n.week}: ${noteLine(n)}`));
+      // under the item, like the web board: the score, each part's status on a shared row, and every note of
+      // every week ("W3: ✗ jump out safety") with the mark symbol in its colour
+      const stText = (st: typeof cur.status, wk: number) => (st ? `${st === 'done' ? '✓' : st === 'next_week' ? '→' : '⟳'} W${wk}` : '—');
       const noteStatusWeek = (st: typeof cur.status, wk: number) => (st && wk ? `${st === 'next_week' ? '→ ' : ''}W${wk}` : '');
+      const noteLines: Node[][] = [];
+      if (parts.length > 1) {
+        for (const { pt, cur: pc } of curs) noteLines.push([doc.createTextNode(`${pt.part === 'tagit' ? 'find it / tag it' : 'overview + quiz'}: ${stText(pc.status, pc.statusWeek)}${pc.score ? ` · score ${pc.score}` : ''}`)]);
+      } else if (cur.score) {
+        noteLines.push([doc.createTextNode(`score ${cur.score}`)]);
+      }
+      for (const pt of parts) for (const n of allNotes(rows, pt.key)) {
+        const nodes: Node[] = [doc.createTextNode(`${parts.length > 1 ? `${pt.part === 'tagit' ? 'tag it' : 'overview'} ` : ''}W${n.week}: `)];
+        if (n.mark) { const b = doc.createElement('b'); b.className = 'mk'; b.style.color = MARK_META[n.mark].color; b.textContent = `${MARK_META[n.mark].short} `; nodes.push(b); }
+        nodes.push(doc.createTextNode(n.text));
+        noteLines.push(nodes);
+      }
       if (c.kind === 'hours8' || c.kind === 'rounds8') {
         const hws = t ? Array.from(t.querySelectorAll('.under .hw .wk')) : [];
         WEEKS.forEach((w, i) => { const h = hoursOf(rows, item.key, w); setText(hws[i], h == null ? '' : String(h)); });
@@ -114,9 +130,10 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         setText(bx?.querySelector('.wk'), on);
       }
       if (c.kind !== 'rounds8' && noteLines.length) {
-        const noteEl = c.kind === 'note' ? t?.querySelector(':scope > .note') : null;
-        if (noteEl) setText(noteEl, noteLines.join('\n'));
-        else if (t) { const small = doc.createElement('small'); small.className = 'notes'; small.textContent = noteLines.join('\n'); t.appendChild(small); }
+        let target: Element | null = c.kind === 'note' ? t?.querySelector(':scope > .note') ?? null : null;
+        if (target) target.classList.add('txt');
+        else if (t) { target = doc.createElement('small'); target.className = 'notes'; t.appendChild(target); }
+        if (target) for (const nodes of noteLines) { const div = doc.createElement('div'); div.append(...nodes); target.appendChild(div); }
       }
     }
   });
@@ -140,7 +157,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         const div = doc.createElement('div'); div.className = 'rl';
         const p = splitReviewLine(line);
         if (!p) { div.textContent = line; td.appendChild(div); continue; }
-        div.classList.add('note');
+        div.classList.add('nt');
         const meta = p.word ? MARK_META[p.word] : null;
         if (meta) div.style.background = meta.bg.replace(/[\d.]+\)$/, '0.18)');
         div.append(`${p.head} — ${p.label}`);
