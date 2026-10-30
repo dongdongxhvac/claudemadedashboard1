@@ -5,7 +5,7 @@
 // row (meta.plan) — see planOf in lib/trainingBoard.
 import { useState } from 'react';
 import {
-  STATUS_META, MARK_META, currentOf, itemDone, itemNum, planWeekOf, togglePlanItem, setPlanNote, planNote, PLAN_WEEK_NOTE, allNotes, fmtDay,
+  STATUS_META, currentOf, itemDone, itemProgress, itemNum, planWeekOf, togglePlanItem, setPlanNote, planNote, PLAN_WEEK_NOTE, fmtDay,
   type TrainingBoardDef, type BoardRow, type BoardPlan,
 } from '../../lib/trainingBoard';
 
@@ -114,7 +114,7 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
         <table className="w-full t-small" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 640 }}>
           <colgroup><col style={{ width: '12%' }} /><col style={{ width: '44%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /></colgroup>
           <thead>
-            <tr>{['Week', 'Planned — for the new hire to do', 'Done since', 'Review next week — still open'].map((c, i) => <th key={i} className="text-left px-2 py-1" style={{ background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 10.5, fontWeight: 700, textAlign: i === 0 ? 'center' : 'left' }}>{c}</th>)}</tr>
+            <tr>{['Week', 'Planned — for the new hire to do', 'Done since', 'Review next week — status on the board'].map((c, i) => <th key={i} className="text-left px-2 py-1" style={{ background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 10.5, fontWeight: 700, textAlign: i === 0 ? 'center' : 'left' }}>{c}</th>)}</tr>
           </thead>
           <tbody>
             {weeks.map((x) => {
@@ -137,9 +137,12 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
                   <td className="px-2 py-1.5" style={cell}>{doneItems.map((it) => { const c = currentOf(rows, it.key); return `✓ ${itemNum(it)} ${it.text}${c.statusWeek ? ` · W${c.statusWeek}` : ''}`; }).join('\n') || <span className="t-muted">—</span>}</td>
                   <td className="px-2 py-1.5" style={cell}>
                     {openItems.length ? openItems.map((it) => {
-                      const missed = allNotes(rows, it.key).filter((n) => n.mark === 'missed');
-                      const n = planNote(plan, x, it.key);
-                      return <div key={it.key}>{itemNum(it)} {it.text}{n ? <span className="t-muted"> — {n}</span> : null}{missed.length ? <span style={{ color: MARK_META.missed.color }}> — ✗ {missed.map((m) => m.text).join(' · ')}</span> : null}</div>;
+                      // the item's status on the real board (not its notes): next week W5 · in progress · not started
+                      const c = currentOf(rows, it.key);
+                      const st = c.status ? STATUS_META[c.status] : null;
+                      const label = st ? `${st.short} ${st.label}${c.statusWeek ? ` W${c.statusWeek}` : ''}` : itemProgress(it, rows) > 0 ? 'in progress' : 'not started';
+                      const color = st ? st.color : itemProgress(it, rows) > 0 ? '#b45309' : 'var(--color-text-muted)';
+                      return <div key={it.key}>{itemNum(it)} {it.text} <span style={{ color, fontWeight: 700, fontSize: 10.5 }}>{label}</span>{c.score ? <span className="t-mono t-muted" style={{ fontSize: 10.5 }}> · score {c.score}</span> : null}</div>;
                     }) : <span className="t-muted">—</span>}
                   </td>
                 </tr>
