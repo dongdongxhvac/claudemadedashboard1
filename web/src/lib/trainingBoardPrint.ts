@@ -4,7 +4,7 @@
 // back the HTML for a new tab → browser print. The printout IS the
 // print-station page, filled in.
 import {
-  currentOf, hoursOf, roundOf, notesOf, weekTicked, weekLog, inviteText, boardProgress, WEEKS, META_FIRST, ROUND_META,
+  currentOf, hoursOf, roundOf, notesOf, allNotes, noteLine, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
   type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
@@ -15,7 +15,13 @@ const FILL_CSS = `
 .wk.txt,.wk.long.txt,.ln2.txt,.note.txt{height:auto;min-height:1em;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;color:#1a1f2b;padding:0 2px;white-space:normal}
 .ln2.txt{width:auto;min-width:34px;text-align:center}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
+.note.txt{white-space:pre-wrap}
+.fi .t small.notes{display:block;white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;font-size:.72rem;line-height:1.3;color:#1a1f2b;margin-top:2px}
 td.fill{font-size:.84rem;line-height:1.35;white-space:pre-wrap}
+td.fill .rl{margin:1px 0}
+td.fill .rl.note{background:#fdf3e0;border-radius:3px;padding:0 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+td.fill .rl.note u{font-weight:600;text-underline-offset:2px}
+td.fill .rl .mk{font-weight:700}
 .fi.st-done .t{color:#047857}.fi.st-more_work .t{color:#b45309}.fi.st-next_week .t{color:#1d4ed8}
 `;
 
@@ -23,7 +29,7 @@ const fmt = (ymd: string | null | undefined) => (ymd ? new Date(ymd + 'T00:00:00
 const setText = (el: Element | null | undefined, text: string) => { if (!el) return; el.textContent = text; if (text) el.classList.add('txt'); };
 const tick = (el: Element | null | undefined, on: boolean) => { if (el && on) el.classList.add('on'); };
 
-export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, rows: BoardRow[], opts: { name: string; startDate: string | null; site?: string; quizzes?: QuizPass[]; log?: BoardLogRow[] }): string {
+export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, rows: BoardRow[], opts: { name: string; startDate: string | null; site?: string; schedule?: string; quizzes?: QuizPass[]; log?: BoardLogRow[] }): string {
   const doc = new DOMParser().parseFromString(docHtml, 'text/html');
   const style = doc.createElement('style');
   style.textContent = FILL_CSS;
@@ -37,7 +43,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     const v = f.querySelector('.v');
     if (lbl.startsWith('trainee')) setText(v, opts.name);
     else if (lbl.startsWith('start')) setText(v, opts.startDate ?? '');
-    else if (lbl.startsWith('site')) setText(v, opts.site ?? '');
+    else if (lbl.startsWith('site')) setText(v, opts.site ?? opts.schedule ?? '');
     else if (lbl.startsWith('progress')) setText(v, `${prog.done} / ${prog.total}`);
   }
 
@@ -68,6 +74,9 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       const t = fi.querySelector(':scope > .t');
       const bx = fi.querySelector(':scope > .bx');
       const c = item.control;
+      // every note of every week, like the web board ("W3: ✗ jump out safety"); parts labelled on a shared row
+      const noteLines = parts.flatMap((pt) => allNotes(rows, pt.key).map((n) => `${parts.length > 1 ? `${pt.part === 'tagit' ? 'tag it' : 'overview'} ` : ''}W${n.week}: ${noteLine(n)}`));
+      const noteStatusWeek = (st: typeof cur.status, wk: number) => (st && wk ? `${st === 'next_week' ? '→ ' : ''}W${wk}` : '');
       if (c.kind === 'hours8' || c.kind === 'rounds8') {
         const hws = t ? Array.from(t.querySelectorAll('.under .hw .wk')) : [];
         WEEKS.forEach((w, i) => { const h = hoursOf(rows, item.key, w); setText(hws[i], h == null ? '' : String(h)); });
@@ -99,17 +108,15 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         boxes.forEach((b, i) => tick(b, i < n));
         setText(bx?.querySelector('.wk'), typeof cur.value.on === 'string' ? fmt(cur.value.on) : '');
       } else {
-        // note / check / date / none
-        if (c.kind === 'note') setText(t?.querySelector(':scope > .note'), cur.note ?? '');
+        // note / check / date / none — the box is the ✓, the date slot says "W3" (done) or "→ W5" (next week)
         tick(bx?.querySelector('.box'), cur.status === 'done');
-        const on = typeof cur.value.on === 'string' ? fmt(cur.value.on) : (cur.status === 'done' && cur.statusWeek ? `W${cur.statusWeek}` : '');
+        const on = typeof cur.value.on === 'string' ? fmt(cur.value.on) : noteStatusWeek(cur.status, cur.statusWeek);
         setText(bx?.querySelector('.wk'), on);
-        if (c.kind !== 'note' && cur.note) {
-          // no note line on this row: append the note under the text
-          const small = doc.createElement('small');
-          small.textContent = cur.note;
-          t?.appendChild(small);
-        }
+      }
+      if (c.kind !== 'rounds8' && noteLines.length) {
+        const noteEl = c.kind === 'note' ? t?.querySelector(':scope > .note') : null;
+        if (noteEl) setText(noteEl, noteLines.join('\n'));
+        else if (t) { const small = doc.createElement('small'); small.className = 'notes'; small.textContent = noteLines.join('\n'); t.appendChild(small); }
       }
     }
   });
@@ -125,7 +132,24 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     // the markup already carries the unit ("COVE __ h") — write the number only
     habs.forEach((d, j) => setText(d.querySelector('.ln2'), (log.tallies[j]?.value ?? '').replace(/\s*h$/, '')));
     const fill = (td: Element | undefined, lines: string[]) => { if (!td) return; td.textContent = lines.join('\n'); if (lines.length) td.classList.add('fill'); };
-    fill(tds[1], log.review);
+    const fillReview = (td: Element | undefined, lines: string[]) => {
+      if (!td) return;
+      td.textContent = '';
+      if (lines.length) td.classList.add('fill');
+      for (const line of lines) {
+        const div = doc.createElement('div'); div.className = 'rl';
+        const p = splitReviewLine(line);
+        if (!p) { div.textContent = line; td.appendChild(div); continue; }
+        div.classList.add('note');
+        const meta = p.word ? MARK_META[p.word] : null;
+        if (meta) div.style.background = meta.bg.replace(/[\d.]+\)$/, '0.18)');
+        div.append(`${p.head} — ${p.label}`);
+        if (meta) { const b = doc.createElement('b'); b.className = 'mk'; b.style.color = meta.color; b.textContent = `${meta.label.toLowerCase()} · `; div.appendChild(b); }
+        const u = doc.createElement('u'); u.textContent = p.text; div.appendChild(u);
+        td.appendChild(div);
+      }
+    };
+    fillReview(tds[1], log.review);
     fill(tds[2], log.done);
     fill(tds[3], log.focus);
   });

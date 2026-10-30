@@ -24,10 +24,12 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const save = useSaveTrainingBoard();
   const engineers = useEngineers();
   const shifts = useShifts();
+  const engineer = engineers.data?.find((e) => e.user_id === userId) ?? null;
   const shift = useMemo(() => {
-    const sid = engineers.data?.find((e) => e.user_id === userId)?.shift_id;
+    const sid = engineer?.shift_id;
     return sid ? shifts.data?.find((s) => s.id === sid) ?? null : null;
-  }, [engineers.data, shifts.data, userId]);
+  }, [engineer?.shift_id, shifts.data]);
+  const scheduleText = shift ? `${shift.name}${shift.start_time ? ` · ${hhmm(shift.start_time)}–${hhmm(shift.end_time)}` : ''}` : '';
   /** the selected review session (0 = none); one at a time, click again to unselect, required to Save */
   const [week, setWeek] = useState<number>(0);
   const [tab, setTab] = useState<Tab>('board');
@@ -107,7 +109,8 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   };
   const print = () => {
     if (!b.def || !b.doc) return;
-    const html = buildTrackerPrintHtml(b.doc.html, b.def, rows, { name: personName, startDate: b.startDate, quizzes: b.quizzes, log: b.log });
+    // header: start date = enrollment start, else the hiring date; the schedule goes in the site field
+    const html = buildTrackerPrintHtml(b.doc.html, b.def, rows, { name: personName, startDate: b.startDate ?? engineer?.hiring_date ?? null, schedule: scheduleText, quizzes: b.quizzes, log: b.log });
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     window.open(url, '_blank', 'noopener');
   };
@@ -132,9 +135,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
             <span className="t-small flex items-center gap-1" title="Schedule — the shift set on the engineer's profile">
               <span className="t-muted">Schedule</span>
               {shift ? (
-                <span className="px-1.5 py-0.5 rounded border t-mono" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11 }}>
-                  {shift.name}{shift.start_time ? <span className="t-muted"> · {hhmm(shift.start_time)}–{hhmm(shift.end_time)}</span> : null}
-                </span>
+                <span className="px-1.5 py-0.5 rounded border t-mono" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11 }}>{scheduleText}</span>
               ) : <span className="t-muted">{engineers.isLoading || shifts.isLoading ? '…' : 'no shift on the profile'}</span>}
             </span>
             <div className="flex items-start gap-1" title="Review session 1–8 · select one to edit and save; click it again to unselect. Save stamps the session's date the first time.">

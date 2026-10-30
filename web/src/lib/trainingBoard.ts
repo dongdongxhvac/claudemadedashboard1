@@ -73,6 +73,19 @@ export function notesOf(r: Pick<BoardRow, 'note' | 'value'> | null | undefined, 
 export const noteLine = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].short + ' ' : ''}${n.text}`;
 /** The note for reading (log, invite): the mark as a word — "missed · open questions". */
 export const noteText = (n: BoardNote) => `${n.mark ? MARK_META[n.mark].label.toLowerCase() + ' · ' : ''}${n.text}`;
+/** A weekly-log Review line split for display: a note line → {head, label, word, text}; anything else → null.
+ *  Item texts can contain " — " themselves, so key on the "note: " label (logged notes) or a leading mark word. */
+export function splitReviewLine(line: string): { head: string; label: string; word: BoardMark | null; text: string } | null {
+  const i = line.indexOf(' — note: ');
+  const j = line.lastIndexOf(' — ');
+  if (i < 0 && j < 0) return null;
+  const head = i >= 0 ? line.slice(0, i) : line.slice(0, j);
+  const rest = i >= 0 ? line.slice(i + ' — note: '.length) : line.slice(j + 3);
+  const wm = /^(missed|good|checked|learning|solo|next week) · (.*)$/s.exec(rest);
+  if (i < 0 && !wm) return null;
+  const word = wm ? (Object.keys(MARK_META) as BoardMark[]).find((k) => MARK_META[k].label.toLowerCase() === wm[1]) ?? null : null;
+  return { head, label: i >= 0 ? 'note: ' : '', word, text: wm ? wm[2] : rest };
+}
 /** A stored log line ("✗ text", noteLine format) back to words ("missed · text"). */
 export function noteWords(line: string | null): string | null {
   if (line == null) return null;
