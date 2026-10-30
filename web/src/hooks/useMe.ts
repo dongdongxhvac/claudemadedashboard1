@@ -17,12 +17,29 @@ export type Me = {
   is_manager: boolean;
 };
 
-/** Fetch the current authenticated user's row in public.users. Null when not linked. */
-export function useMe() {
+/** An auth error that means "nobody is signed in" rather than "couldn't
+ *  ask": no stored session, or the server rejected the token outright.
+ *  Anything else (DNS, Wi-Fi still coming up, a 5xx, a timeout) is
+ *  transient and must surface as a query error so React Query retries —
+ *  returning null for those stranded the wall on the wrong board (2026-10-30:
+ *  the Pi booted with the session not yet refreshable, `me` settled as null,
+ *  TvLayoutGate fell back to the URL's board and never asked again). */
+function isSignedOutError(e: { name?: string; status?: number }): boolean {
+  if (e.name === 'AuthSessionMissingError') return true;
+  return e.name === 'AuthApiError' && (e.status === 401 || e.status === 403);
+}
+
+/** Fetch the current authenticated user's row in public.users. Null when not
+ *  signed in or not linked. `resilient` is for the wall: keep retrying a
+ *  failed lookup (short backoff), re-ask every 30 s until a profile is in
+ *  hand, and again on reconnect, so a flaky boot can't pin the kiosk to a
+ *  board the admin page has switched off. */
+export function useMe(opts?: { resilient?: boolean }) {
   return useQuery({
     queryKey: ['me'],
     queryFn: async (): Promise<Me | null> => {
-      const { data: auth } = await supabase.auth.getUser();
+      const { data: auth, error: authErr } = await supabase.auth.getUser();
+      if (authErr && !isSignedOutError(authErr)) throw authErr;
       if (!auth.user) return null;
       const { data, error } = await supabase
         .from('users')
@@ -38,6 +55,14 @@ export function useMe() {
       return { ...(row as unknown as Me), is_lead: ep?.is_lead ?? false };
     },
     staleTime: 60_000,
+    ...(opts?.resilient ? {
+      retry: 6,
+      retryDelay: (attempt: number) => Math.min(10_000, 1000 * 2 ** attempt),
+      refetchOnReconnect: true,
+      // Poll fast while there is no profile (boot race, network blip); once
+      // one is in hand the realtime subscription + the hourly check carry it.
+      refetchInterval: (q: { state: { data?: Me | null } }) => (q.state.data ? 60 * 60_000 : 30_000),
+    } : {}),
   });
 }
 

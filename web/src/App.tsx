@@ -80,7 +80,10 @@ function tvLayoutPath(me: Me | null | undefined, now: Date = new Date()): string
  *  a spinner or the wrong board because one lookup failed, which is why the
  *  kiosk still boots into its own layout's URL. */
 function TvLayoutGate({ path, children }: { path: string; children: React.ReactNode }) {
-  const me = useMe();
+  // Resilient: the root QueryClient tries once and never re-asks, which left
+  // the Pi on TV0 (its boot URL) when the profile lookup lost the boot race
+  // (2026-10-30) — see useMe.
+  const me = useMe({ resilient: true });
   // Follow the kiosk's own users row (a layout flip from the admin page) and
   // the clock (rotate slots) while the wall is up.
   useTvLayoutLive(me.data?.role === 'tv' ? me.data.id : null);

@@ -46,6 +46,20 @@ EOF
 chmod +x "$HOME/kiosk.sh"
 echo "Wrote $HOME/kiosk.sh (URL: $KIOSK_URL)"
 
+# --- no browser extensions on the wall ----------------------------------------
+# Raspberry Pi OS ships Chromium with uBlock Origin Lite + h264ify preinstalled
+# (external-pref installs the wrapper re-enables; it also strips a
+# --disable-extensions flag). A uBOL filter update (2026-10-26) blocked the
+# dashboard's own profile query (users?auth_user_id=eq.…) while every other
+# request passed, so the wall sat on its boot URL's board and ignored the Shop
+# TV card (found 2026-10-30). A managed policy blocklists every extension, and
+# survives OS updates.
+echo "Installing Chromium policy: no extensions..."
+sudo mkdir -p /etc/chromium/policies/managed
+printf '%s\n' '{' '  "ExtensionInstallBlocklist": ["*"],' '  "BackgroundModeEnabled": false' '}' \
+  | sudo tee /etc/chromium/policies/managed/kiosk-no-extensions.json >/dev/null
+sudo chmod 644 /etc/chromium/policies/managed/kiosk-no-extensions.json
+
 # --- autostart hooks (labwc / wayfire / X11 — only the active one fires) -----
 # labwc (Raspberry Pi OS Bookworm 2024+)
 mkdir -p "$HOME/.config/labwc"
