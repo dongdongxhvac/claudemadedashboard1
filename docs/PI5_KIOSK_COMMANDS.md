@@ -74,3 +74,38 @@ show nothing while you type; that's normal.
 2. **That didn't help:** reboot — `ssh kiosk1@kiosk1.local sudo reboot`
 3. **Can't reach it at all:** pull the Pi's power, count to five, plug back in
 4. **Still broken:** swap in the spare flashed SD card, power on, log in with `tv@cove.local` — recovery in minutes
+
+## Wall stuck on one board / ignores the Shop TV card (2026-10-30)
+
+Symptom: the Pi shows `UPark TV0` (its boot URL's board) with no rotate chip,
+and changes on the admin page's Shop TV card never reach it, while the same
+account in a laptop browser behaves. Cause found with a Chromium NetLog: the
+Pi's browser answered the kiosk's own profile query (`/rest/v1/users?…
+auth_user_id=eq.…`) from its HTTP disk cache — the CORS preflight went out,
+the GET never did — so the layout gate worked from a months-old copy of the
+Shop TV row. Supabase sends no `Cache-Control`; the web app now sends every
+Supabase request with `cache: 'no-store'` (`web/src/lib/supabase.ts`), so a
+current build cannot hit this again. If an old build is stuck:
+
+```bash
+# on the Pi — stop the launcher loop and the browser, drop the HTTP cache, reboot
+pkill -f "kios[k][.]sh"; pkill -x chromium; sleep 3
+rm -rf ~/.config/chromium/Default/Cache "$HOME/.config/chromium/Default/Code Cache"
+sudo reboot
+```
+
+Notes:
+- `~/kiosk.sh` is a `while true` loop started at boot; it relaunches Chromium
+  with the arguments it read back then. Editing the script changes nothing
+  until the loop restarts (reboot).
+- The Pi's `/usr/bin/chromium` wrapper strips `--disable-extensions`. Raspberry
+  Pi OS bundles uBlock Origin Lite and h264ify; `kiosk-setup.sh` now installs
+  `/etc/chromium/policies/managed/kiosk-no-extensions.json` (an
+  `ExtensionInstallBlocklist` for everything) so the wall runs without them.
+- Don't `pkill -f kiosk.sh` from an ssh one-liner that itself contains
+  `kiosk.sh` — it kills your own shell; hence the bracket pattern above.
+- To capture a NetLog: add `--log-net-log=/home/kiosk1/netlog.json
+  --net-log-capture-mode=IncludeSensitive` to the chromium line in kiosk.sh,
+  reboot, wait a minute, read it, then remove the flag and delete the file
+  (it contains tokens).
+
