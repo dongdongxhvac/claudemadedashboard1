@@ -1,16 +1,19 @@
 // WeeklyLog — pages 2–3 of the 8-Week Tracker, generated from the board's
 // rows: per week the category tallies, Review (notes + quiz passes), Done
 // (items ticked that week) and Focus (items marked next week).
-import { weekLog, fmtDay, WEEKS, MARK_META, splitReviewLine, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
+import { weekLog, fmtDay, WEEKS, MARK_META, splitReviewLine, splitLogLine, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
 
-/** "Oct 28 · 16a Boiler — note: missed · open questions" → the mark word coloured, the note text underlined (user 2026-10-29). */
-function ReviewLine({ line }: { line: string }) {
+/** "Oct 28 · 16a Boiler — note: missed · open questions": date + item number small, item name larger (user 2026-11-02),
+ *  a note's mark word coloured and its text underlined (user 2026-10-29). */
+function LogLine({ def, line }: { def: TrainingBoardDef; line: string }) {
+  const q = splitLogLine(def, line);
   const p = splitReviewLine(line);
-  if (!p) return <div>{line}</div>;
-  const meta = p.word ? MARK_META[p.word] : null;
+  const meta = p?.word ? MARK_META[p.word] : null;
+  const head = q ? <><span className="t-mono t-muted" style={{ fontSize: 10 }}>{q.date} · {q.num}</span> <b style={{ fontSize: 13 }}>{q.name}</b></> : null;
+  if (!p) return <div style={{ margin: '1px 0' }}>{head ? <>{head}<span>{q!.rest}</span></> : line}</div>;
   return (
     <div style={{ background: meta ? meta.bg : 'rgba(245,158,11,0.10)', borderRadius: 3, padding: '0 3px', margin: '1px 0' }}>
-      {p.head} — {p.label}
+      {head ?? p.head}{head ? '' : ''} — {p.label}
       {meta && <b style={{ color: meta.color }}>{meta.label.toLowerCase()} · </b>}
       <span style={{ textDecoration: 'underline', textUnderlineOffset: 2, fontWeight: 600 }}>{p.text}</span>
     </div>
@@ -24,7 +27,7 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
   return (
     <div className="overflow-x-auto">
       <table className="w-full t-small" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 640 }}>
-        <colgroup><col style={{ width: '14%' }} /><col style={{ width: '40%' }} /><col style={{ width: '20%' }} /><col style={{ width: '26%' }} /></colgroup>
+        <colgroup><col style={{ width: '14%' }} /><col style={{ width: '40%' }} /><col style={{ width: '28%' }} /><col style={{ width: '18%' }} /></colgroup>
         <thead>
           <tr>{cols.map((c, i) => <th key={i} className="text-left px-2 py-1" style={{ background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 10.5, fontWeight: 700, textAlign: i === 0 ? 'center' : 'left' }}>{c}</th>)}</tr>
         </thead>
@@ -46,9 +49,9 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
                     ))}
                   </div>
                 </td>
-                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.review.map((l, i) => <ReviewLine key={i} line={l} />)}</td>
-                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>{log.done.join('\n')}</td>
-                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>{log.focus.join('\n')}</td>
+                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.review.map((l, i) => <LogLine key={i} def={def} line={l} />)}</td>
+                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.done.map((l, i) => <LogLine key={i} def={def} line={l} />)}</td>
+                <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.focus.map((l, i) => <LogLine key={i} def={def} line={l} />)}</td>
               </tr>
             );
           })}

@@ -4,7 +4,7 @@
 // back the HTML for a new tab → browser print. The printout IS the
 // print-station page, filled in.
 import {
-  currentOf, hoursOf, roundOf, notesOf, allNotes, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
+  currentOf, hoursOf, roundOf, notesOf, allNotes, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, splitLogLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
   type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
@@ -24,6 +24,8 @@ const FILL_CSS = `
 .fi .t .mk{font-weight:700}
 td.fill{font-size:.84rem;line-height:1.35}
 td.fill .rl{margin:1px 0;white-space:pre-wrap}
+td.fill .rl .dt{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:#555}
+td.fill .rl .nm{font-size:.92rem;font-weight:700}
 td.fill .rl.nt{background:#fdf3e0;border-radius:3px;padding:0 3px}
 td.fill .rl.nt u{font-weight:600;text-underline-offset:2px}
 td.fill .rl .mk{font-weight:700}
@@ -140,7 +142,11 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     }
   });
 
-  // weekly log rows (W1..W8 across the two tables)
+  // weekly log rows (W1..W8 across the two tables) — Done wider, Focus narrower (user 2026-11-02)
+  for (const cg of Array.from(doc.querySelectorAll('table colgroup'))) {
+    const cs = Array.from(cg.querySelectorAll('col')) as HTMLElement[];
+    if (cs.length === 4) { cs[2].style.width = '27%'; cs[3].style.width = '18%'; }
+  }
   const trs = Array.from(doc.querySelectorAll('table tbody tr'));
   WEEKS.forEach((w, i) => {
     const tr = trs[i];
@@ -165,25 +171,31 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         setText(el, t.value.replace(/\s*h$/, ''));
       }
     });
-    const fill = (td: Element | undefined, lines: string[]) => { if (!td) return; td.textContent = lines.join('\n'); if (lines.length) td.classList.add('fill'); };
-    const fillReview = (td: Element | undefined, lines: string[]) => {
+    // every line: date + item number small, item name larger; a note line highlighted with its mark coloured and text underlined
+    const fill = (td: Element | undefined, lines: string[]) => {
       if (!td) return;
       td.textContent = '';
       if (lines.length) td.classList.add('fill');
       for (const line of lines) {
         const div = doc.createElement('div'); div.className = 'rl';
+        const q = splitLogLine(def, line);
         const p = splitReviewLine(line);
-        if (!p) { div.textContent = line; td.appendChild(div); continue; }
+        if (q) {
+          const dt = doc.createElement('span'); dt.className = 'dt'; dt.textContent = `${q.date} · ${q.num} `;
+          const nm = doc.createElement('span'); nm.className = 'nm'; nm.textContent = q.name;
+          div.append(dt, nm);
+        }
+        if (!p) { div.append(q ? q.rest : line); td.appendChild(div); continue; }
         div.classList.add('nt');
         const meta = p.word ? MARK_META[p.word] : null;
         if (meta) div.style.background = meta.bg.replace(/[\d.]+\)$/, '0.18)');
-        div.append(`${p.head} — ${p.label}`);
+        div.append(`${q ? '' : p.head} — ${p.label}`);
         if (meta) { const b = doc.createElement('b'); b.className = 'mk'; b.style.color = meta.color; b.textContent = `${meta.label.toLowerCase()} · `; div.appendChild(b); }
         const u = doc.createElement('u'); u.textContent = p.text; div.appendChild(u);
         td.appendChild(div);
       }
     };
-    fillReview(tds[1], log.review);
+    fill(tds[1], log.review);
     fill(tds[2], log.done);
     fill(tds[3], log.focus);
   });

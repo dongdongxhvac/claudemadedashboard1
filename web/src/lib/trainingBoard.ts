@@ -86,6 +86,13 @@ export function splitReviewLine(line: string): { head: string; label: string; wo
   const word = wm ? (Object.keys(MARK_META) as BoardMark[]).find((k) => MARK_META[k].label.toLowerCase() === wm[1]) ?? null : null;
   return { head, label: i >= 0 ? 'note: ' : '', word, text: wm ? wm[2] : rest };
 }
+/** A weekly-log line "Oct 30 · 32 Badges & keys — note: …" split for display: date · item number · item name · the rest. */
+export function splitLogLine(def: TrainingBoardDef, line: string): { date: string; num: string; name: string; rest: string } | null {
+  const m = /^([A-Z][a-z]{2} \d{1,2}) · (\S+) (.*)$/s.exec(line);
+  if (!m) return null;
+  const it = def.items.find((i) => itemNum(i) === m[2] && m[3].startsWith(i.text));
+  return it ? { date: m[1], num: m[2], name: it.text, rest: m[3].slice(it.text.length) } : { date: m[1], num: m[2], name: m[3], rest: '' };
+}
 /** A stored log line ("✗ text", noteLine format) back to words ("missed · text"). */
 export function noteWords(line: string | null): string | null {
   if (line == null) return null;
@@ -446,7 +453,9 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
       const h = hoursOf(rows, rd.key, week); const ro = roundOf(rows, rd.key, week);
       return { label: t.label, value: [h == null ? '' : `${h} h`, ro ? ROUND_META[ro].label.toLowerCase() : ''].filter(Boolean).join(' · ') };
     }
-    const n = sec ? sec.items.filter((it) => wk.some((r) => r.item_key === it.key && r.status === 'done')).length : 0;
+    // accrued (user 2026-11-02): items of the section done by the end of this week / section total
+    const upTo = rows.filter((r) => r.week <= week);
+    const n = sec ? sec.items.filter((it) => itemDone(it, upTo)).length : 0;
     return { label: t.label, value: n ? String(n) : '', total: sec ? (sec.total || sec.items.length) : undefined };
   });
   const review = [

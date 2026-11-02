@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote,
+  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote, splitLogLine,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -78,6 +78,10 @@ assertEq(w1.review, ['Oct 1 · 10 HVAC — missed low static switch', 'quiz pass
 assertEq(w1.done, ['Oct 1 · 2 Week — activity summary logged'], 'W1 done lists the week tick');
 const w2 = weekLog(def, rows, 2);
 assertEq(w2.tallies, [{ label: 'COVE', value: '40 h' }, { label: 'Overview', value: '1', total: 2 }], 'W2 tallies (count / section total)');
+assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 3).tallies[1], { label: 'Overview', value: '2', total: 2 }, 'tallies accrue: W3 counts W2 HVAC + W3 Plumbing');
+assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 1).tallies[1], { label: 'Overview', value: '', total: 2 }, 'nothing done by W1');
+assertEq(splitLogLine(def, 'Oct 30 · 1 Week at ≥35 h in COVE — write hours — hours 35'), { date: 'Oct 30', num: '1', name: 'Week at ≥35 h in COVE — write hours', rest: ' — hours 35' }, 'log line split (item text with a dash)');
+assertEq(splitLogLine(def, 'quiz passed: HVAC 15/16'), null, 'quiz line is not split');
 assertEq(w2.done, ['Oct 1 · 2 Week — activity summary logged', 'Oct 1 · 10 HVAC'], 'W2 done');
 assertEq(w2.focus, ['Oct 1 · 11 Plumbing'], 'W2 focus');
 assertEq(w2.review, ['Oct 1 · 10 HVAC — retest ok'], 'W2 review');
