@@ -1,8 +1,9 @@
-// InviteCard — page 4 of the 8-Week Tracker: the first-meeting checklist,
-// the weekly calendar-invite body (generated from the selected week's rows;
-// Title / When editable and saved with the board) and the report dates.
+// InviteCard — page 4 of the 8-Week Tracker: the weekly calendar-invite body
+// (generated from the selected week's rows; Title / When editable and saved
+// with the board). The first-meeting checklist and report dates moved to the
+// bottom of the Board tab (FirstMeetingCard, user 2026-11-02).
 import { useState } from 'react';
-import { inviteText, META_INVITE, META_FIRST, type TrainingBoardDef, type BoardRow, type BoardLogRow } from '../../lib/trainingBoard';
+import { inviteText, META_INVITE, type TrainingBoardDef, type BoardRow, type BoardLogRow } from '../../lib/trainingBoard';
 import type { SetRow } from './TrainingBoard';
 
 const input: React.CSSProperties = {
@@ -14,39 +15,14 @@ export function InviteCard({ def, rows, log = [], week, personName, canEdit, set
   def: TrainingBoardDef; rows: BoardRow[]; log?: BoardLogRow[]; week: number; personName: string; canEdit: boolean; setRow: SetRow;
 }) {
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
-  const first = rows.find((r) => r.item_key === META_FIRST && r.week === 0)?.value ?? {};
-  const covered = (first.covered as string[] | undefined) ?? [];
-  const dates = (first.dates as Record<string, string> | undefined) ?? {};
   const text = inviteText(def, rows, week, personName, log);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
   };
-  const setFirst = (patch: Record<string, unknown>) => setRow(META_FIRST, 0, { value: { ...first, ...patch } });
 
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-      <div className="t-card" style={{ padding: '0.75rem 0.9rem', borderLeft: '4px solid var(--color-text-muted)' }}>
-        <div className="t-small t-muted uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>First meeting — tick as covered</div>
-        <ul className="space-y-1">
-          {def.firstMeeting.map((f) => (
-            <li key={f} className="t-small flex items-start gap-2">
-              <input type="checkbox" checked={covered.includes(f)} disabled={!canEdit}
-                onChange={(e) => setFirst({ covered: e.target.checked ? [...covered, f] : covered.filter((x) => x !== f) })} />
-              <span>{f}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 space-y-1">
-          {def.signers.map((s) => (
-            <label key={s} className="t-small flex items-center gap-2 flex-wrap">
-              <span className="t-muted" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, minWidth: 170 }}>{s}</span>
-              <input type="date" value={dates[s] ?? ''} disabled={!canEdit} onChange={(e) => setFirst({ dates: { ...dates, [s]: e.target.value } })} style={{ ...input, padding: '1px 4px', fontSize: 11 }} />
-            </label>
-          ))}
-        </div>
-      </div>
-
+    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr' }}>
       <div className="t-card" style={{ padding: '0.75rem 0.9rem' }}>
         <div className="flex items-baseline justify-between gap-2 mb-1">
           <div className="t-small t-muted uppercase tracking-wider" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>Weekly calendar invite · W{week} — copy this body</div>

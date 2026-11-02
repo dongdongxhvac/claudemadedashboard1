@@ -9,13 +9,14 @@ import { Section } from '../Section';
 import { useTrainingBoard, useSaveTrainingBoard, type BoardRowInput } from '../../hooks/useTrainingBoard';
 import { useEngineers } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
-import { rowKey, STATUS_META, META_WEEKS, META_PLAN, weekDates, weekCount, weeksUpTo, weeksMeta, planOf, fmtDay, type BoardRow, type BoardPlan } from '../../lib/trainingBoard';
+import { rowKey, STATUS_META, META_WEEKS, META_PLAN, weekDates, weekCount, weeksUpTo, weeksMeta, planOf, fmtDay, firstMeetingOf, FIRST_MEETING_ID, type BoardRow, type BoardPlan } from '../../lib/trainingBoard';
 import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
 import { WeeklyLog } from './WeeklyLog';
 import { InviteCard } from './InviteCard';
 import { ResetLog } from './ResetLog';
 import { PlanBoard } from './PlanBoard';
+import { FirstMeetingCard } from './FirstMeetingCard';
 
 const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '');
 type Tab = 'board' | 'log' | 'plan' | 'invite' | 'resets';
@@ -102,13 +103,15 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const dirty = draft.size;
   /** A chip selects that session; clicking the selected one unselects it. Nothing is written until Save. */
   const pickWeek = (x: number) => setWeek((cur) => (cur === x ? 0 : x));
-  const canSave = canEdit && dirty > 0 && w > 0 && !save.isPending;
+  /** first-meeting / invite rows are week-0 meta rows: they save without a session selected */
+  const metaOnly = dirty > 0 && [...draft.keys()].every((k) => k.startsWith('meta.'));
+  const canSave = canEdit && dirty > 0 && (w > 0 || metaOnly) && !save.isPending;
   /** Save writes the draft and, the first time a session is saved, stamps today as its date. */
   const doSave = () => {
-    if (!w) { setErr('Select a week (1–8) before saving.'); return; }
+    if (!w && !metaOnly) { setErr('Select a week before saving.'); return; }
     setErr(null);
     const today = new Date().toLocaleDateString('en-CA');
-    const stamp: BoardRowInput[] = dates[w] ? [] : [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: weeksMeta(b.rows, { dates: { ...dates, [w]: today } }) }];
+    const stamp: BoardRowInput[] = !w || dates[w] ? [] : [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: weeksMeta(b.rows, { dates: { ...dates, [w]: today } }) }];
     save.mutate({ user_id: userId, rows: [...draft.values(), ...stamp], base: b.rows }, {
       onSuccess: () => setDraft(new Map()),
       onError: (e) => setErr((e as Error).message),
@@ -192,7 +195,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <button type="button" onClick={doSave} disabled={!canSave} className="t-small px-3 py-1 rounded font-semibold"
                 title={dirty && !w ? 'Select a week (1–8) first' : ''}
                 style={{ background: canSave ? 'var(--color-accent)' : 'var(--color-border)', color: canSave ? '#fff' : 'var(--color-text-muted)' }}>
-                {save.isPending ? 'Saving…' : dirty ? (w ? `Save W${w} (${dirty})` : `Save (${dirty}) · pick a week`) : 'Saved'}
+                {save.isPending ? 'Saving…' : dirty ? (w ? `Save W${w} (${dirty})` : metaOnly ? `Save (${dirty})` : `Save (${dirty}) · pick a week`) : 'Saved'}
               </button>
             )}
             {canEdit && dirty > 0 && <button type="button" onClick={() => setDraft(new Map())} className="t-small t-muted hover:underline">discard</button>}
@@ -220,7 +223,18 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <p className="t-small t-muted mb-2">
                 Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on next week for review, 4 = done; no score on COVE / PlantLog / Setup); add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. {w ? `Edits land on week ${w} until you press Save` : 'Select a week to edit'}; every change is logged with its date in the weekly log.
               </p>
+              {/* section 0 — the first meeting: a bookmark here, the card itself at the bottom of the board (user 2026-11-02) */}
+              {(() => { const fm = firstMeetingOf(rows); return (
+                <a href={`#${FIRST_MEETING_ID}`} onClick={(e) => { e.preventDefault(); document.getElementById(FIRST_MEETING_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                  className="flex items-baseline justify-between px-1.5 py-0.5 rounded mb-2 uppercase tracking-wider no-underline"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, background: 'var(--color-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+                  title="Jump to the first-meeting checklist at the bottom of the board">
+                  <span>0 · First meeting — introduction <span style={{ color: 'var(--color-accent)', textTransform: 'none', letterSpacing: 0 }}>↓ at the bottom</span></span>
+                  <span className="t-mono" style={{ textTransform: 'none', letterSpacing: 0 }}>{fm.covered.length} / {b.def.firstMeeting.length}{fm.dates[b.def.signers[0] ?? ''] ? ` · ${fmtDay(fm.dates[b.def.signers[0]])}` : ''}</span>
+                </a>
+              ); })()}
               <TrainingBoard def={b.def} rows={rows} week={w} weeks={weeksList} canEdit={canEdit && w > 0} setRow={setRow} onReset={resetItem} progress={p} />
+              <FirstMeetingCard def={b.def} rows={rows} canEdit={canEdit} setRow={setRow} />
             </>
           )}
           {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} weeks={weeksList} currentWeek={wView} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}

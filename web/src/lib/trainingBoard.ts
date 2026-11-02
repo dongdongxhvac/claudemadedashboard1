@@ -160,6 +160,12 @@ export type BoardRow = {
 };
 export const META_INVITE = 'meta.invite';
 export const META_FIRST = 'meta.first_meeting';
+/** What the first-meeting row holds: ticked items and the signer dates (section 0 of the board). */
+export function firstMeetingOf(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]) {
+  const first = rows.find((r) => r.item_key === META_FIRST && r.week === 0)?.value ?? {};
+  return { first, covered: (first.covered as string[] | undefined) ?? [], dates: (first.dates as Record<string, string> | undefined) ?? {} };
+}
+export const FIRST_MEETING_ID = 'tracker-first-meeting';
 /** Week chips are review sessions, not calendar weeks (user 2026-10-26): clicking W1 stamps today
  *  as that session's date. Stored once, week 0, value {dates: {'1': 'YYYY-MM-DD', …}}. */
 export const META_WEEKS = 'meta.weeks';
