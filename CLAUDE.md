@@ -42,7 +42,7 @@ Rules the user has fixed — keep them unless told otherwise:
 - **Print** = the real tracker document filled in: board (page 1) + weekly log (pages 2–3) only; page 4
   (invite) is dropped. The first meeting prints as section 0 under section 2 in the board's row style.
   Under each item: a bold header per part ("overview · ✓ W5 · score 4"), then its notes indented with a
-  hanging indent ("W5 ★ text"), proportional 0.7rem font — compact, no wasted rows. Mark symbols print
+  hanging indent ("W5 ★ text"), proportional 0.78rem font (user: "a bit bigger" than 0.7) — compact, no wasted rows. Mark symbols print
   in their colours; next-week items show "→ W5" in the date slot; hours past week 8 print under item 1.
   Verify print changes with a Chromium render (esbuild bundle of the lib + Playwright) before pushing.
 - **Progress reports** (PDF per engineer) are generated from the same lib; header = trainee, title,

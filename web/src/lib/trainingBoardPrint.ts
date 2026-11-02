@@ -19,12 +19,12 @@ const FILL_CSS = `
 .ln2.txt .dl{font-size:.68rem;font-weight:700;color:#047857;margin-left:3px}.ln2.txt .dl.neg{color:#b91c1c}
 .ln2.txt.wide{display:block;margin:0 0 2px;text-align:left;font-size:.74rem;white-space:normal;line-height:1.2}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
-.note.txt,.fi .t small.notes{display:block;font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:500;line-height:1.18;color:#1a1f2b;margin-top:1px;padding:0;white-space:normal}
+.note.txt,.fi .t small.notes{display:block;font-family:'Space Grotesk',sans-serif;font-size:.78rem;font-weight:500;line-height:1.2;color:#1a1f2b;margin-top:1px;padding:0;white-space:normal}
 .note.txt div,.fi .t small.notes div{white-space:normal}
 .fi .t .pt{font-weight:700;margin-top:1px}
 .fi .t .pt .st{font-weight:600;color:#555}
 .fi .t .nt{padding-left:1.9em;text-indent:-1.9em}
-.fi .t .nt .w{font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:#555}
+.fi .t .nt .w{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:#555}
 .fi .t .mk{font-weight:700}
 td.fill{font-size:.84rem;line-height:1.35}
 td.fill .rl{margin:1px 0;white-space:pre-wrap}
