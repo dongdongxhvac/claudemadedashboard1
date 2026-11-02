@@ -19,9 +19,12 @@ const FILL_CSS = `
 .ln2.txt .dl{font-size:.68rem;font-weight:700;color:#047857;margin-left:3px}.ln2.txt .dl.neg{color:#b91c1c}
 .ln2.txt.wide{display:block;margin:0 0 2px;text-align:left;font-size:.74rem;white-space:normal;line-height:1.2}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
-.note.txt{white-space:normal}
+.note.txt,.fi .t small.notes{display:block;font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:500;line-height:1.18;color:#1a1f2b;margin-top:1px;padding:0;white-space:normal}
 .note.txt div,.fi .t small.notes div{white-space:normal}
-.fi .t small.notes{display:block;font-family:'IBM Plex Mono',monospace;font-size:.72rem;line-height:1.3;color:#1a1f2b;margin-top:2px}
+.fi .t .pt{font-weight:700;margin-top:1px}
+.fi .t .pt .st{font-weight:600;color:#555}
+.fi .t .nt{padding-left:1.9em;text-indent:-1.9em}
+.fi .t .nt .w{font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:#555}
 .fi .t .mk{font-weight:700}
 td.fill{font-size:.84rem;line-height:1.35}
 td.fill .rl{margin:1px 0;white-space:pre-wrap}
@@ -92,24 +95,31 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       // every week ("W3: ✗ jump out safety") with the mark symbol in its colour
       const stText = (st: typeof cur.status, wk: number) => (st ? `${st === 'done' ? '✓' : st === 'next_week' ? '→' : '⟳'} W${wk}` : '—');
       const noteStatusWeek = (st: typeof cur.status, wk: number) => (st && wk ? `${st === 'next_week' ? '→ ' : ''}W${wk}` : '');
-      const noteLines: Node[][] = [];
-      if (parts.length > 1) {
-        for (const { pt, cur: pc } of curs) noteLines.push([doc.createTextNode(`${pt.part === 'tagit' ? 'find it / tag it' : 'overview + quiz'}: ${stText(pc.status, pc.statusWeek)}${pc.score ? ` · score ${pc.score}` : ''}`)]);
-      } else if (cur.score) {
-        noteLines.push([doc.createTextNode(`score ${cur.score}`)]);
-      }
-      for (const pt of parts) for (const n of allNotes(rows, pt.key)) {
-        const nodes: Node[] = [doc.createTextNode(`${parts.length > 1 ? `${pt.part === 'tagit' ? 'tag it' : 'overview'} ` : ''}W${n.week}: `)];
+      // compact layout (user 2026-11-02): a bold header line per part ("overview ✓ W8 · score 4"), then that
+      // part's notes indented under it ("W5 ★ Starting and shutdown Seq"), hanging indent so wraps line up
+      const noteLines: { cls: 'pt' | 'nt'; nodes: Node[] }[] = [];
+      const noteLine = (n: { week: number; mark: keyof typeof MARK_META | null; text: string }) => {
+        const w = doc.createElement('span'); w.className = 'w'; w.textContent = `W${n.week} `;
+        const nodes: Node[] = [w];
         if (n.mark) { const b = doc.createElement('b'); b.className = 'mk'; b.style.color = MARK_META[n.mark].color; b.textContent = `${MARK_META[n.mark].short} `; nodes.push(b); }
         nodes.push(doc.createTextNode(n.text));
-        noteLines.push(nodes);
+        return { cls: 'nt' as const, nodes };
+      };
+      for (const { pt, cur: pc } of curs) {
+        const notes = allNotes(rows, pt.key);
+        const head: string[] = [];
+        if (parts.length > 1) head.push(pt.part === 'tagit' ? 'tag it' : 'overview');
+        if (parts.length > 1 && pc.status) head.push(stText(pc.status, pc.statusWeek));
+        if (pc.score) head.push(`score ${pc.score}`);
+        if (head.length && (parts.length > 1 || pc.score)) noteLines.push({ cls: 'pt', nodes: [doc.createTextNode(head.join(' · '))] });
+        for (const n of notes) noteLines.push(noteLine(n));
       }
       if (c.kind === 'hours8' || c.kind === 'rounds8') {
         const hws = t ? Array.from(t.querySelectorAll('.under .hw .wk')) : [];
         WEEKS.forEach((w, i) => { const h = hoursOf(rows, item.key, w); setText(hws[i], h == null ? '' : String(h)); });
         // hours past week 8 have no blank on the paper: they go under the item
         const extraH = extraWeeks.map((w) => { const h = hoursOf(rows, item.key, w); return h == null ? null : `W${w}: ${h} h`; }).filter((x): x is string => !!x);
-        if (extraH.length) noteLines.unshift([doc.createTextNode(extraH.join(' · '))]);
+        if (extraH.length) noteLines.unshift({ cls: 'pt', nodes: [doc.createTextNode(extraH.join(' · '))] });
         // the merged "Building round — each area" row: one line per round, ticked when solo
         const fi2 = item.docIdx2 == null ? null : fis[item.docIdx2];
         if (c.kind === 'rounds8' && fi2) {
@@ -125,7 +135,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         const boxes = t ? Array.from(t.querySelectorAll('.under .wkb .box')) : [];
         WEEKS.forEach((w, i) => tick(boxes[i], weekTicked(rows, item.key, w)));
         const extraT = extraWeeks.filter((w) => weekTicked(rows, item.key, w)).map((w) => `W${w} ✓`);
-        if (extraT.length) noteLines.unshift([doc.createTextNode(extraT.join(' · '))]);
+        if (extraT.length) noteLines.unshift({ cls: 'pt', nodes: [doc.createTextNode(extraT.join(' · '))] });
       } else if (c.kind === 'labels') {
         const ticks = (cur.value.ticks as string[] | undefined) ?? [];
         const wkbs = t ? Array.from(t.querySelectorAll('.under .wkb.lab')) : [];
@@ -149,7 +159,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         let target: Element | null = c.kind === 'note' ? t?.querySelector(':scope > .note') ?? null : null;
         if (target) target.classList.add('txt');
         else if (t) { target = doc.createElement('small'); target.className = 'notes'; t.appendChild(target); }
-        if (target) for (const nodes of noteLines) { const div = doc.createElement('div'); div.append(...nodes); target.appendChild(div); }
+        if (target) for (const { cls, nodes } of noteLines) { const div = doc.createElement('div'); div.className = cls; div.append(...nodes); target.appendChild(div); }
       }
     }
   });
