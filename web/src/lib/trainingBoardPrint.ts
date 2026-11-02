@@ -15,6 +15,8 @@ const FILL_CSS = `
 .box.half{background:repeating-linear-gradient(45deg,#1a1f2b 0 2px,#fff 2px 5px)}
 .wk.txt,.wk.long.txt,.ln2.txt,.note.txt{height:auto;min-height:1em;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;color:#1a1f2b;padding:0 2px;white-space:normal}
 .ln2.txt{width:auto;min-width:34px;text-align:center}
+.ln2.txt .big{font-size:1.05rem;font-weight:700}.ln2.txt .of{font-size:.7rem;font-weight:600;color:#555}
+.ln2.txt.wide{display:block;margin:0 0 2px;text-align:left;font-size:.74rem;white-space:normal;line-height:1.2}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
 .note.txt{white-space:normal}
 .note.txt div,.fi .t small.notes div{white-space:normal}
@@ -147,7 +149,22 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     const tds = Array.from(tr.querySelectorAll(':scope > td'));
     const habs = Array.from(tds[0]?.querySelectorAll('.hab div') ?? []);
     // the markup already carries the unit ("COVE __ h") — write the number only
-    habs.forEach((d, j) => setText(d.querySelector('.ln2'), (log.tallies[j]?.value ?? '').replace(/\s*h$/, '')));
+    habs.forEach((d, j) => {
+      const t = log.tallies[j]; const el = d.querySelector('.ln2');
+      if (!t || !el) return;
+      if (t.total != null) {
+        // "2/6": the count big, the section total small
+        el.textContent = ''; el.classList.add('txt');
+        const big = doc.createElement('span'); big.className = 'big'; big.textContent = t.value || '0';
+        const of = doc.createElement('span'); of.className = 'of'; of.textContent = `/${t.total}`;
+        el.append(big, of);
+      } else if (/[a-z]/i.test(t.value.replace(/\s*h$/, ''))) {
+        // rounds "10 h · solo": its own line under the label, so it never runs over the next line
+        setText(el, t.value); el.classList.add('wide');
+      } else {
+        setText(el, t.value.replace(/\s*h$/, ''));
+      }
+    });
     const fill = (td: Element | undefined, lines: string[]) => { if (!td) return; td.textContent = lines.join('\n'); if (lines.length) td.classList.add('fill'); };
     const fillReview = (td: Element | undefined, lines: string[]) => {
       if (!td) return;

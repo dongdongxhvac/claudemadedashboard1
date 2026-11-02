@@ -415,7 +415,8 @@ export const fmtDay = (ymd: string | null | undefined) => (ymd ? new Date(ymd.sl
 export type QuizPass = { week: number; title: string; score: number; total: number };
 export type WeekLog = {
   week: number;
-  tallies: { label: string; value: string }[];
+  /** value: "38 h" (hours) · "10 h · solo" (rounds) · "2" with total 6 (items done that week / section total) */
+  tallies: { label: string; value: string; total?: number }[];
   review: string[];     // "18 AHU (17) — X missed low static switch", "quiz passed: HVAC 15/16"
   done: string[];       // "10 HVAC"
   focus: string[];      // next-week items
@@ -446,7 +447,7 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
       return { label: t.label, value: [h == null ? '' : `${h} h`, ro ? ROUND_META[ro].label.toLowerCase() : ''].filter(Boolean).join(' · ') };
     }
     const n = sec ? sec.items.filter((it) => wk.some((r) => r.item_key === it.key && r.status === 'done')).length : 0;
-    return { label: t.label, value: n ? String(n) : '' };
+    return { label: t.label, value: n ? String(n) : '', total: sec ? (sec.total || sec.items.length) : undefined };
   });
   const review = [
     // notes saved before the change log existed (no logged note line for them)

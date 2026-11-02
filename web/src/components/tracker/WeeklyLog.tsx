@@ -39,7 +39,11 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
                   <button type="button" onClick={() => onPickWeek?.(w)} className="t-mono font-bold hover:underline" style={{ fontSize: 14, color: isCur ? 'var(--color-accent)' : 'var(--color-text)' }} title="Edit this week on the board">W{w}</button>
                   {dates[w] && <div className="t-mono t-muted" style={{ fontSize: 10 }}>{fmtDay(dates[w])}</div>}
                   <div className="t-muted" style={{ fontSize: 10.5, lineHeight: 1.6 }}>
-                    {log.tallies.map((t) => <div key={t.label}>{t.label} <b className="t-mono" style={{ color: 'var(--color-text)' }}>{t.value || '—'}</b></div>)}
+                    {log.tallies.map((t) => (
+                      <div key={t.label}>{t.label} {t.total != null
+                        ? <><b className="t-mono" style={{ color: 'var(--color-text)', fontSize: 14 }}>{t.value || '0'}</b><span className="t-mono">/{t.total}</span></>
+                        : <b className="t-mono" style={{ color: 'var(--color-text)' }}>{t.value || '—'}</b>}</div>
+                    ))}
                   </div>
                 </td>
                 <td className="px-2 py-1.5 align-top" style={{ border: '1px solid var(--color-border)' }}>{log.review.map((l, i) => <ReviewLine key={i} line={l} />)}</td>
