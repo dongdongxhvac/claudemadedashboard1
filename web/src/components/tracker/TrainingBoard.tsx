@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, WEEKS, MARKS, MARK_META, SCORES, SCORE_LABELS, ROUNDS, ROUND_META, isScorable, statusForScore, currentOf, hoursOf, roundOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
+  STATUS_META, STATUS_CYCLE, MARKS, MARK_META, SCORES, SCORE_LABELS, ROUNDS, ROUND_META, isScorable, statusForScore, currentOf, hoursOf, roundOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress, type BoardNote,
 } from '../../lib/trainingBoard';
 
@@ -29,7 +29,7 @@ function Box({ on, half, onClick, title, disabled }: { on: boolean; half?: boole
   );
 }
 
-export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progress }: {
+export function TrainingBoard({ def, rows, week, weeks, canEdit, setRow, onReset, progress }: {
   def: TrainingBoardDef;
   /** base rows merged with the draft */
   rows: BoardRow[];
@@ -40,6 +40,8 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
   /** clear every saved row of an item (logged as "reset" on Save) */
   onReset: (itemKey: string) => void;
   progress: BoardProgress;
+  /** the review sessions (1..n, n ≥ 8) — the per-week controls show one slot each */
+  weeks: number[];
 }) {
   const rowFor = (item: BoardItem, w = week) => rows.find((r) => r.item_key === item.key && r.week === w) ?? null;
   // a value edit starts from the latest value (cumulative controls carry forward)
@@ -105,7 +107,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
 
                         {/* the item's own control */}
                         <div className="mt-1 ml-7 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          {c.kind === 'hours8' && WEEKS.map((w) => (
+                          {c.kind === 'hours8' && weeks.map((w) => (
                             <label key={w} className="inline-flex items-center gap-0.5" title={`${w}`}>
                               <span className="t-mono t-muted" style={{ fontSize: 10 }}>{w}</span>
                               <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} disabled={!canEdit} value={hoursOf(rows, item.key, w) ?? ''}
@@ -117,7 +119,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                               each note's mark is the round state (learning / solo / next week), not the hours */}
                           {c.kind === 'rounds8' && (
                             <div className="w-full space-y-1">
-                              {WEEKS.map((w) => {
+                              {weeks.map((w) => {
                                 const r = rowFor(item, w);
                                 const h = hoursOf(rows, item.key, w); const ro = roundOf(rows, item.key, w);
                                 const rm = ro ? ROUND_META[ro] : null;
@@ -156,7 +158,7 @@ export function TrainingBoard({ def, rows, week, canEdit, setRow, onReset, progr
                               })}
                             </div>
                           )}
-                          {c.kind === 'weeks8' && WEEKS.map((w) => (
+                          {c.kind === 'weeks8' && weeks.map((w) => (
                             <span key={w} className="inline-flex flex-col items-center" title={`Week ${w}`}>
                               <Box on={weekTicked(rows, item.key, w)} disabled={!canEdit} onClick={() => setRow(item.key, w, { status: weekTicked(rows, item.key, w) ? null : 'done' })} />
                               <span className="t-mono t-muted" style={{ fontSize: 9 }}>{w}</span>

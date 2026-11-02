@@ -86,6 +86,12 @@ export function splitReviewLine(line: string): { head: string; label: string; wo
   const word = wm ? (Object.keys(MARK_META) as BoardMark[]).find((k) => MARK_META[k].label.toLowerCase() === wm[1]) ?? null : null;
   return { head, label: i >= 0 ? 'note: ' : '', word, text: wm ? wm[2] : rest };
 }
+/** "Oct 30" → "10/30" (compact prefix on log lines, user 2026-11-02). */
+export function compactDate(d: string): string {
+  const m = /^([A-Z][a-z]{2}) (\d{1,2})$/.exec(d);
+  const i = m ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(m[1]) : -1;
+  return i >= 0 ? `${i + 1}/${m![2]}` : d;
+}
 /** A weekly-log line "Oct 30 · 32 Badges & keys — note: …" split for display: date · item number · item name · the rest. */
 export function splitLogLine(def: TrainingBoardDef, line: string): { date: string; num: string; name: string; rest: string } | null {
   const m = /^([A-Z][a-z]{2} \d{1,2}) · (\S+) (.*)$/s.exec(line);
@@ -164,6 +170,18 @@ export function weekDates(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[])
   return out;
 }
 export const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+/** Sessions can run past 8 (user 2026-11-02, "+ week"): the count lives on the meta.weeks row (value.count);
+ *  any saved row on a later week also extends it. Never below 8. */
+export function weekCount(rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]): number {
+  const meta = rows.find((r) => r.item_key === META_WEEKS && r.week === 0)?.value;
+  const stored = typeof meta?.count === 'number' ? meta.count : 0;
+  const used = Math.max(0, ...rows.map((r) => r.week));
+  return Math.min(52, Math.max(8, stored, used));
+}
+export const weeksUpTo = (n: number): number[] => Array.from({ length: Math.max(0, n) }, (_, i) => i + 1);
+/** The meta.weeks value to write back: the dates plus the week count (so neither is lost by the other's save). */
+export const weeksMeta = (rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[], patch: { dates?: Record<number, string>; count?: number }) =>
+  ({ dates: patch.dates ?? weekDates(rows), count: patch.count ?? weekCount(rows) });
 /** The planning board (user 2026-10-30): which items the new hire should do in which week, reviewed the
  *  week after. One meta row, week 0, value {weeks: {'5': [item keys…]}, count: n} — weeks can run past 8. */
 export const META_PLAN = 'meta.plan';
@@ -377,9 +395,9 @@ export function itemProgress(item: BoardItem, rows: BoardRow[]): number {
   const cur = currentOf(rows, item.key);
   const c = item.control;
   switch (c.kind) {
-    case 'hours8': return WEEKS.filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0).length / 8;
-    case 'rounds8': return WEEKS.filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0 || roundOf(rows, item.key, w)).length / 8;
-    case 'weeks8': return WEEKS.filter((w) => weekTicked(rows, item.key, w)).length / 8;
+    case 'hours8': return weeksUpTo(weekCount(rows)).filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0).length / weekCount(rows);
+    case 'rounds8': return weeksUpTo(weekCount(rows)).filter((w) => (hoursOf(rows, item.key, w) ?? 0) > 0 || roundOf(rows, item.key, w)).length / weekCount(rows);
+    case 'weeks8': return weeksUpTo(weekCount(rows)).filter((w) => weekTicked(rows, item.key, w)).length / weekCount(rows);
     case 'count': return Math.min(1, (Number(cur.value.n) || 0) / c.n);
     case 'labels': return Math.min(1, ((cur.value.ticks as string[] | undefined)?.length ?? 0) / c.labels.length);
     case 'areas': return Math.min(1, ((cur.value.areas as string[] | undefined)?.filter(Boolean).length ?? 0) / c.n);
@@ -393,7 +411,7 @@ export const itemDone = (item: BoardItem, rows: BoardRow[]) => {
   if (k === 'weeks8') return itemProgress(item, rows) >= 1;
   if (k === 'hours8') return currentOf(rows, item.key).status === 'done' || itemProgress(item, rows) >= 1;
   // rounds: done once every round was solo (or the mentor ticks it)
-  if (k === 'rounds8') return currentOf(rows, item.key).status === 'done' || WEEKS.every((w) => roundOf(rows, item.key, w) === 'solo');
+  if (k === 'rounds8') return currentOf(rows, item.key).status === 'done' || weeksUpTo(weekCount(rows)).every((w) => roundOf(rows, item.key, w) === 'solo');
   return currentOf(rows, item.key).status === 'done';
 };
 
@@ -423,7 +441,7 @@ export type QuizPass = { week: number; title: string; score: number; total: numb
 export type WeekLog = {
   week: number;
   /** value: "38 h" (hours) · "10 h · solo" (rounds) · "2" with total 6 (items done that week / section total) */
-  tallies: { label: string; value: string; total?: number }[];
+  tallies: { label: string; value: string; total?: number; delta?: number }[];   // delta: done this week vs last week ("+2")
   review: string[];     // "18 AHU (17) — X missed low static switch", "quiz passed: HVAC 15/16"
   done: string[];       // "10 HVAC"
   focus: string[];      // next-week items
@@ -455,8 +473,10 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
     }
     // accrued (user 2026-11-02): items of the section done by the end of this week / section total
     const upTo = rows.filter((r) => r.week <= week);
+    const before = rows.filter((r) => r.week < week);
     const n = sec ? sec.items.filter((it) => itemDone(it, upTo)).length : 0;
-    return { label: t.label, value: n ? String(n) : '', total: sec ? (sec.total || sec.items.length) : undefined };
+    const prev = sec ? sec.items.filter((it) => itemDone(it, before)).length : 0;
+    return { label: t.label, value: n ? String(n) : '', total: sec ? (sec.total || sec.items.length) : undefined, delta: n - prev };
   });
   const review = [
     // notes saved before the change log existed (no logged note line for them)

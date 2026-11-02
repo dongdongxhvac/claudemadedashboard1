@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote, splitLogLine,
+  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote, splitLogLine, weekCount, weeksMeta,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -73,13 +73,14 @@ assertEq(p.sections.get('overview'), { done: 1, total: 2 }, 'overview section');
 
 // weekly log rows
 const w1 = weekLog(def, rows, 1, [{ week: 1, title: 'How HVAC Works', score: 15, total: 16 }]);
-assertEq(w1.tallies, [{ label: 'COVE', value: '38 h' }, { label: 'Overview', value: '', total: 2 }], 'W1 tallies');
+assertEq(w1.tallies, [{ label: 'COVE', value: '38 h' }, { label: 'Overview', value: '', total: 2, delta: 0 }], 'W1 tallies');
 assertEq(w1.review, ['Oct 1 · 10 HVAC — missed low static switch', 'quiz passed: How HVAC Works 15/16'], 'W1 review (dated)');
 assertEq(w1.done, ['Oct 1 · 2 Week — activity summary logged'], 'W1 done lists the week tick');
 const w2 = weekLog(def, rows, 2);
-assertEq(w2.tallies, [{ label: 'COVE', value: '40 h' }, { label: 'Overview', value: '1', total: 2 }], 'W2 tallies (count / section total)');
-assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 3).tallies[1], { label: 'Overview', value: '2', total: 2 }, 'tallies accrue: W3 counts W2 HVAC + W3 Plumbing');
-assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 1).tallies[1], { label: 'Overview', value: '', total: 2 }, 'nothing done by W1');
+assertEq(w2.tallies, [{ label: 'COVE', value: '40 h' }, { label: 'Overview', value: '1', total: 2, delta: 1 }], 'W2 tallies (count / section total, +1 vs W1)');
+assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 3).tallies[1], { label: 'Overview', value: '2', total: 2, delta: 1 }, 'tallies accrue: W3 counts W2 HVAC + W3 Plumbing, +1 this week');
+assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 1).tallies[1], { label: 'Overview', value: '', total: 2, delta: 0 }, 'nothing done by W1');
+assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done')], 4).tallies[1].delta, 0, 'no change in W4');
 assertEq(splitLogLine(def, 'Oct 30 · 1 Week at ≥35 h in COVE — write hours — hours 35'), { date: 'Oct 30', num: '1', name: 'Week at ≥35 h in COVE — write hours', rest: ' — hours 35' }, 'log line split (item text with a dash)');
 assertEq(splitLogLine(def, 'quiz passed: HVAC 15/16'), null, 'quiz line is not split');
 assertEq(w2.done, ['Oct 1 · 2 Week — activity summary logged', 'Oct 1 · 10 HVAC'], 'W2 done');
@@ -155,6 +156,12 @@ assertEq(diffRows([row('hvac', 3, 'done', 'legacy text')], [{ item_key: 'hvac', 
 
 assertEq(weekDates([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26', '3': '2026-11-09' } })]), { 1: '2026-10-26', 3: '2026-11-09' }, 'week dates');
 assertEq(diffRows([], [{ item_key: 'meta.weeks', week: 0, status: null, note: null, value: { dates: { '1': '2026-10-26' } } }]), [], 'meta rows are not logged');
+assertEq(weekCount(rows), 8, 'never fewer than 8 sessions');
+assertEq(weekCount([...rows, row('meta.weeks', 0, null, null, { dates: {}, count: 10 })]), 10, 'count from the meta row');
+assertEq(weekCount([...rows, row('hvac', 11, 'done')]), 11, 'a saved row on a later week extends the count');
+assertEq(weeksMeta([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26' }, count: 9 })], { dates: { 1: '2026-10-26', 2: '2026-11-02' } }), { dates: { 1: '2026-10-26', 2: '2026-11-02' }, count: 9 }, 'stamping a date keeps the count');
+assertEq(weeksMeta([row('meta.weeks', 0, null, null, { dates: { '1': '2026-10-26' }, count: 9 })], { count: 10 }), { dates: { 1: '2026-10-26' }, count: 10 }, 'adding a week keeps the dates');
+assertEq(itemProgress(def.items[0], [...rows, row('meta.weeks', 0, null, null, { dates: {}, count: 10 })]), 2 / 10, 'hours progress is over the session count');
 
 // ── planning board (meta.plan) ──
 assertEq(planOf([]), { weeks: {}, notes: {}, count: 8 }, 'empty plan has 8 weeks');

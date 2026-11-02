@@ -4,7 +4,7 @@
 // back the HTML for a new tab → browser print. The printout IS the
 // print-station page, filled in.
 import {
-  currentOf, hoursOf, roundOf, notesOf, allNotes, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, splitLogLine, WEEKS, META_FIRST, ROUND_META, MARK_META,
+  currentOf, hoursOf, roundOf, notesOf, allNotes, weekTicked, weekLog, inviteText, boardProgress, splitReviewLine, splitLogLine, compactDate, WEEKS, META_FIRST, ROUND_META, MARK_META, weekCount, weeksUpTo,
   type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass,
 } from './trainingBoard.ts';
 
@@ -16,6 +16,7 @@ const FILL_CSS = `
 .wk.txt,.wk.long.txt,.ln2.txt,.note.txt{height:auto;min-height:1em;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;color:#1a1f2b;padding:0 2px;white-space:normal}
 .ln2.txt{width:auto;min-width:34px;text-align:center}
 .ln2.txt .big{font-size:1.05rem;font-weight:700}.ln2.txt .of{font-size:.7rem;font-weight:600;color:#555}
+.ln2.txt .dl{font-size:.68rem;font-weight:700;color:#047857;margin-left:3px}.ln2.txt .dl.neg{color:#b91c1c}
 .ln2.txt.wide{display:block;margin:0 0 2px;text-align:left;font-size:.74rem;white-space:normal;line-height:1.2}
 .idrow .v.txt{height:auto;min-height:1.4em;padding:0 2px}
 .note.txt{white-space:normal}
@@ -24,7 +25,7 @@ const FILL_CSS = `
 .fi .t .mk{font-weight:700}
 td.fill{font-size:.84rem;line-height:1.35}
 td.fill .rl{margin:1px 0;white-space:pre-wrap}
-td.fill .rl .dt{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:#555}
+td.fill .rl .dt{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:#555;letter-spacing:-.02em}
 td.fill .rl .nm{font-size:.92rem;font-weight:700}
 td.fill .rl.nt{background:#fdf3e0;border-radius:3px;padding:0 3px}
 td.fill .rl.nt u{font-weight:600;text-underline-offset:2px}
@@ -42,6 +43,8 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
   style.textContent = FILL_CSS;
   doc.head.appendChild(style);
   const prog = boardProgress(def, rows);
+  const nWeeks = weekCount(rows);
+  const extraWeeks = weeksUpTo(nWeeks).filter((w) => w > 8);   // sessions past the printed 8
 
   // header fields
   const fields = Array.from(doc.querySelectorAll('.idrow .f'));
@@ -100,6 +103,9 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       if (c.kind === 'hours8' || c.kind === 'rounds8') {
         const hws = t ? Array.from(t.querySelectorAll('.under .hw .wk')) : [];
         WEEKS.forEach((w, i) => { const h = hoursOf(rows, item.key, w); setText(hws[i], h == null ? '' : String(h)); });
+        // hours past week 8 have no blank on the paper: they go under the item
+        const extraH = extraWeeks.map((w) => { const h = hoursOf(rows, item.key, w); return h == null ? null : `W${w}: ${h} h`; }).filter((x): x is string => !!x);
+        if (extraH.length) noteLines.unshift([doc.createTextNode(extraH.join(' · '))]);
         // the merged "Building round — each area" row: one line per round, ticked when solo
         const fi2 = item.docIdx2 == null ? null : fis[item.docIdx2];
         if (c.kind === 'rounds8' && fi2) {
@@ -114,6 +120,8 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       } else if (c.kind === 'weeks8') {
         const boxes = t ? Array.from(t.querySelectorAll('.under .wkb .box')) : [];
         WEEKS.forEach((w, i) => tick(boxes[i], weekTicked(rows, item.key, w)));
+        const extraT = extraWeeks.filter((w) => weekTicked(rows, item.key, w)).map((w) => `W${w} ✓`);
+        if (extraT.length) noteLines.unshift([doc.createTextNode(extraT.join(' · '))]);
       } else if (c.kind === 'labels') {
         const ticks = (cur.value.ticks as string[] | undefined) ?? [];
         const wkbs = t ? Array.from(t.querySelectorAll('.under .wkb.lab')) : [];
@@ -147,8 +155,18 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     const cs = Array.from(cg.querySelectorAll('col')) as HTMLElement[];
     if (cs.length === 4) { cs[2].style.width = '27%'; cs[3].style.width = '18%'; }
   }
+  // sessions past 8: clone the W8 row onto the end of the last table, relabelled
   const trs = Array.from(doc.querySelectorAll('table tbody tr'));
-  WEEKS.forEach((w, i) => {
+  const last = trs[trs.length - 1];
+  for (const w of extraWeeks) {
+    if (!last?.parentElement) break;
+    const tr = last.cloneNode(true) as Element;
+    const c = tr.querySelector(':scope > td');
+    if (c) { for (const n of Array.from(c.childNodes)) if (n.nodeType === 3 && /W\d+/.test(n.textContent ?? '')) n.textContent = `W${w}`; }
+    last.parentElement.appendChild(tr);
+    trs.push(tr);
+  }
+  weeksUpTo(nWeeks).forEach((w, i) => {
     const tr = trs[i];
     if (!tr) return;
     const log = weekLog(def, rows, w, opts.quizzes ?? [], opts.log ?? []);
@@ -164,6 +182,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         const big = doc.createElement('span'); big.className = 'big'; big.textContent = t.value || '0';
         const of = doc.createElement('span'); of.className = 'of'; of.textContent = `/${t.total}`;
         el.append(big, of);
+        if (t.delta) { const dl = doc.createElement('span'); dl.className = `dl${t.delta < 0 ? ' neg' : ''}`; dl.textContent = `${t.delta > 0 ? '+' : ''}${t.delta}`; el.appendChild(dl); }
       } else if (/[a-z]/i.test(t.value.replace(/\s*h$/, ''))) {
         // rounds "10 h · solo": its own line under the label, so it never runs over the next line
         setText(el, t.value); el.classList.add('wide');
@@ -181,7 +200,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         const q = splitLogLine(def, line);
         const p = splitReviewLine(line);
         if (q) {
-          const dt = doc.createElement('span'); dt.className = 'dt'; dt.textContent = `${q.date} · ${q.num} `;
+          const dt = doc.createElement('span'); dt.className = 'dt'; dt.textContent = `${compactDate(q.date)}·${q.num} `;
           const nm = doc.createElement('span'); nm.className = 'nm'; nm.textContent = q.name;
           div.append(dt, nm);
         }

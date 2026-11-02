@@ -1,7 +1,7 @@
 // WeeklyLog — pages 2–3 of the 8-Week Tracker, generated from the board's
 // rows: per week the category tallies, Review (notes + quiz passes), Done
 // (items ticked that week) and Focus (items marked next week).
-import { weekLog, fmtDay, WEEKS, MARK_META, splitReviewLine, splitLogLine, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
+import { weekLog, fmtDay, compactDate, WEEKS, MARK_META, splitReviewLine, splitLogLine, type TrainingBoardDef, type BoardRow, type BoardLogRow, type QuizPass } from '../../lib/trainingBoard';
 
 /** "Oct 28 · 16a Boiler — note: missed · open questions": date + item number small, item name larger (user 2026-11-02),
  *  a note's mark word coloured and its text underlined (user 2026-10-29). */
@@ -9,7 +9,7 @@ function LogLine({ def, line }: { def: TrainingBoardDef; line: string }) {
   const q = splitLogLine(def, line);
   const p = splitReviewLine(line);
   const meta = p?.word ? MARK_META[p.word] : null;
-  const head = q ? <><span className="t-mono t-muted" style={{ fontSize: 10 }}>{q.date} · {q.num}</span> <b style={{ fontSize: 13 }}>{q.name}</b></> : null;
+  const head = q ? <><span className="t-mono t-muted" style={{ fontSize: 9.5, letterSpacing: '-0.02em' }}>{compactDate(q.date)}·{q.num}</span> <b style={{ fontSize: 13 }}>{q.name}</b></> : null;
   if (!p) return <div style={{ margin: '1px 0' }}>{head ? <>{head}<span>{q!.rest}</span></> : line}</div>;
   return (
     <div style={{ background: meta ? meta.bg : 'rgba(245,158,11,0.10)', borderRadius: 3, padding: '0 3px', margin: '1px 0' }}>
@@ -20,8 +20,8 @@ function LogLine({ def, line }: { def: TrainingBoardDef; line: string }) {
   );
 }
 
-export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, currentWeek, onPickWeek }: {
-  def: TrainingBoardDef; rows: BoardRow[]; quizzes: QuizPass[]; log?: BoardLogRow[]; dates?: Record<number, string>; currentWeek: number; onPickWeek?: (w: number) => void;
+export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, weeks = [...WEEKS], currentWeek, onPickWeek }: {
+  def: TrainingBoardDef; rows: BoardRow[]; quizzes: QuizPass[]; log?: BoardLogRow[]; dates?: Record<number, string>; weeks?: number[]; currentWeek: number; onPickWeek?: (w: number) => void;
 }) {
   const cols = def.logColumns.length === 4 ? def.logColumns : ['Week · by category', 'Review — past week activities · quiz or field exercise', 'Done — ticked on the board (#)', 'Focus — next week'];
   return (
@@ -32,7 +32,7 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
           <tr>{cols.map((c, i) => <th key={i} className="text-left px-2 py-1" style={{ background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 10.5, fontWeight: 700, textAlign: i === 0 ? 'center' : 'left' }}>{c}</th>)}</tr>
         </thead>
         <tbody>
-          {WEEKS.map((w) => {
+          {weeks.map((w) => {
             const log = weekLog(def, rows, w, quizzes, log0);
             const empty = !log.review.length && !log.done.length && !log.focus.length && log.tallies.every((t) => !t.value);
             const isCur = w === currentWeek;
@@ -44,7 +44,7 @@ export function WeeklyLog({ def, rows, quizzes, log: log0 = [], dates = {}, curr
                   <div className="t-muted" style={{ fontSize: 10.5, lineHeight: 1.6 }}>
                     {log.tallies.map((t) => (
                       <div key={t.label}>{t.label} {t.total != null
-                        ? <><b className="t-mono" style={{ color: 'var(--color-text)', fontSize: 14 }}>{t.value || '0'}</b><span className="t-mono">/{t.total}</span></>
+                        ? <><b className="t-mono" style={{ color: 'var(--color-text)', fontSize: 14 }}>{t.value || '0'}</b><span className="t-mono">/{t.total}</span>{t.delta ? <span className="t-mono" style={{ color: t.delta > 0 ? '#047857' : '#b91c1c', fontWeight: 700, marginLeft: 4 }}>{t.delta > 0 ? '+' : ''}{t.delta}</span> : null}</>
                         : <b className="t-mono" style={{ color: 'var(--color-text)' }}>{t.value || '—'}</b>}</div>
                     ))}
                   </div>

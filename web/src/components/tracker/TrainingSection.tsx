@@ -9,7 +9,7 @@ import { Section } from '../Section';
 import { useTrainingBoard, useSaveTrainingBoard, type BoardRowInput } from '../../hooks/useTrainingBoard';
 import { useEngineers } from '../../hooks/useEngineers';
 import { useShifts } from '../../hooks/useShifts';
-import { rowKey, WEEKS, STATUS_META, META_WEEKS, META_PLAN, weekDates, planOf, fmtDay, type BoardRow, type BoardPlan } from '../../lib/trainingBoard';
+import { rowKey, STATUS_META, META_WEEKS, META_PLAN, weekDates, weekCount, weeksUpTo, weeksMeta, planOf, fmtDay, type BoardRow, type BoardPlan } from '../../lib/trainingBoard';
 import { buildTrackerPrintHtml } from '../../lib/trainingBoardPrint';
 import { TrainingBoard, type RowPatch } from './TrainingBoard';
 import { WeeklyLog } from './WeeklyLog';
@@ -53,7 +53,17 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
       onError: (e) => setErr((e as Error).message),
     });
   };
-  const lastDated = WEEKS.filter((x) => dates[x]).pop() ?? 1;
+  const count = useMemo(() => weekCount(b.rows), [b.rows]);
+  const weeksList = weeksUpTo(count);
+  const lastDated = weeksList.filter((x) => dates[x]).pop() ?? 1;
+  /** "+ week": one more review session past 8, saved on the meta.weeks row right away */
+  const addWeek = () => {
+    setErr(null);
+    save.mutate({ user_id: userId, rows: [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: weeksMeta(b.rows, { count: count + 1 }) }], base: b.rows }, {
+      onSuccess: () => setWeek(count + 1),
+      onError: (e) => setErr((e as Error).message),
+    });
+  };
   const w = week;
   const wView = week || lastDated;
 
@@ -98,7 +108,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
     if (!w) { setErr('Select a week (1–8) before saving.'); return; }
     setErr(null);
     const today = new Date().toLocaleDateString('en-CA');
-    const stamp: BoardRowInput[] = dates[w] ? [] : [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: { ...dates, [w]: today } } }];
+    const stamp: BoardRowInput[] = dates[w] ? [] : [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: weeksMeta(b.rows, { dates: { ...dates, [w]: today } }) }];
     save.mutate({ user_id: userId, rows: [...draft.values(), ...stamp], base: b.rows }, {
       onSuccess: () => setDraft(new Map()),
       onError: (e) => setErr((e as Error).message),
@@ -111,7 +121,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
     const items = wkRows.filter((r) => !r.item_key.startsWith('meta.')).length;
     if (!window.confirm(`Reset W${w}? Its date (${fmtDay(dates[w])}) is cleared so the next Save stamps it again.`)) return;
     const rest: Record<number, string> = { ...dates }; delete rest[w];
-    const out: BoardRowInput[] = [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: { dates: rest } }];
+    const out: BoardRowInput[] = [{ item_key: META_WEEKS, week: 0, status: null, note: null, value: weeksMeta(b.rows, { dates: rest }) }];
     if (wkRows.length && window.confirm(`Also clear everything saved on W${w} (${items} item${items === 1 ? '' : 's'})? This is logged as a reset per item.`)) {
       out.push(...wkRows.map((r) => ({ item_key: r.item_key, week: r.week, status: null, note: null, value: {} })));
     }
@@ -152,9 +162,9 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
                 <span className="px-1.5 py-0.5 rounded border t-mono" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', fontSize: 11 }}>{scheduleText}</span>
               ) : <span className="t-muted">{engineers.isLoading || shifts.isLoading ? '…' : 'no shift on the profile'}</span>}
             </span>
-            <div className="flex items-start gap-1" title="Review session 1–8 · select one to edit and save; click it again to unselect. Save stamps the session's date the first time.">
+            <div className="flex items-start gap-1 flex-wrap" title="Review sessions · select one to edit and save; click it again to unselect. Save stamps the session's date the first time. + week adds a session past 8.">
               <span className="t-small t-muted" style={{ paddingTop: 2 }}>Week</span>
-              {WEEKS.map((x) => {
+              {weeksList.map((x) => {
                 const on = x === w;
                 return (
                   <button key={x} type="button" onClick={() => pickWeek(x)} aria-pressed={on} className="t-mono px-1.5 py-0.5 rounded border t-small flex flex-col items-center"
@@ -164,6 +174,9 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
                   </button>
                 );
               })}
+              {canEdit && count < 52 && (
+                <button type="button" onClick={addWeek} disabled={save.isPending} className="t-small px-2 py-1 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-accent)', background: 'var(--color-card)' }} title="Add a review session (week) past 8">+ week</button>
+              )}
               {canEdit && w > 0 && dates[w] && (
                 <button type="button" onClick={resetWeek} disabled={save.isPending} className="t-small t-muted hover:underline whitespace-nowrap" style={{ paddingTop: 4, fontSize: 10.5 }}
                   title={`Clear the date on W${w} (and, if you choose, everything saved on it)`}>↺ reset W{w}</button>
@@ -207,12 +220,12 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
               <p className="t-small t-muted mb-2">
                 Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on next week for review, 4 = done; no score on COVE / PlantLog / Setup); add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. {w ? `Edits land on week ${w} until you press Save` : 'Select a week to edit'}; every change is logged with its date in the weekly log.
               </p>
-              <TrainingBoard def={b.def} rows={rows} week={w} canEdit={canEdit && w > 0} setRow={setRow} onReset={resetItem} progress={p} />
+              <TrainingBoard def={b.def} rows={rows} week={w} weeks={weeksList} canEdit={canEdit && w > 0} setRow={setRow} onReset={resetItem} progress={p} />
             </>
           )}
-          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} currentWeek={wView} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
+          {tab === 'log' && <WeeklyLog def={b.def} rows={rows} quizzes={b.quizzes} log={b.log} dates={dates} weeks={weeksList} currentWeek={wView} onPickWeek={(x) => { setWeek(x); setTab('board'); }} />}
           {tab === 'resets' && <ResetLog def={b.def} log={b.log} />}
-          {tab === 'plan' && <PlanBoard def={b.def} rows={rows} plan={plan} setPlan={setPlanDraft} canEdit={canEdit} dates={dates} />}
+          {tab === 'plan' && <PlanBoard def={b.def} rows={rows} plan={plan.count < count ? { ...plan, count } : plan} setPlan={setPlanDraft} canEdit={canEdit} dates={dates} />}
           {tab === 'invite' && <InviteCard def={b.def} rows={rows} log={b.log} week={wView} personName={personName} canEdit={canEdit && w > 0} setRow={setRow} />}
         </>
       )}
