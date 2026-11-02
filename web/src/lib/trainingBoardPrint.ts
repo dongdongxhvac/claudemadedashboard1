@@ -223,20 +223,29 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     fill(tds[3], log.focus);
   });
 
-  // page 4 — first meeting, invite (current week), report dates
+  // section 0 — the first meeting (user 2026-11-02): on the board itself, in the space under section 2,
+  // as a block in the board's own style: the checklist ticked as covered, then the three report dates
   const first = rows.find((r) => r.item_key === META_FIRST && r.week === 0)?.value ?? {};
   const covered = (first.covered as string[] | undefined) ?? [];
-  for (const li of Array.from(doc.querySelectorAll('ul.c li'))) tick(li.querySelector('.box'), covered.includes((li.textContent ?? '').trim()));
   const dates = (first.dates as Record<string, string> | undefined) ?? {};
-  for (const sig of Array.from(doc.querySelectorAll('.sigrow .sig'))) {
-    const k = (sig.querySelector('.sigk')?.textContent ?? '').trim();
-    const line = sig.querySelector('.sigline');
-    if (line && dates[k]) { line.textContent = fmt(dates[k]); line.classList.add('txt'); (line as HTMLElement).style.height = 'auto'; }
+  const col0 = doc.querySelector('.board .bcol');
+  if (col0 && (def.firstMeeting.length || def.signers.length)) {
+    const fg = doc.createElement('div'); fg.className = 'fg';
+    const fgh = doc.createElement('div'); fgh.className = 'fgh'; fgh.textContent = '0 · First meeting — introduction';
+    const cnt = doc.createElement('span'); cnt.className = 'cnt'; cnt.textContent = `${covered.length} / ${def.firstMeeting.length}`;
+    fgh.appendChild(cnt); fg.appendChild(fgh);
+    const row = (label: string, right: (bx: HTMLElement) => void) => {
+      const fi = doc.createElement('div'); fi.className = 'fi';
+      const num = doc.createElement('span'); num.className = 'num'; num.textContent = '·';
+      const t = doc.createElement('span'); t.className = 't'; t.textContent = label;
+      const bx = doc.createElement('span'); bx.className = 'bx'; right(bx);
+      fi.append(num, t, bx); fg.appendChild(fi);
+    };
+    for (const f of def.firstMeeting) row(f, (bx) => { const box = doc.createElement('i'); box.className = 'box'; bx.appendChild(box); tick(box, covered.includes(f)); });
+    for (const s of def.signers) row(s, (bx) => { const wk = doc.createElement('i'); wk.className = 'wk long'; bx.appendChild(wk); setText(wk, dates[s] ? fmt(dates[s]) : ''); });
+    col0.appendChild(fg);
   }
-  setText(doc.querySelector('.cont .who i'), opts.name);
-  const weekForInvite = Math.max(1, Math.min(8, Math.max(0, ...rows.map((r) => r.week)) || 1));
-  const mail = doc.querySelector('.mail');
-  if (mail) mail.textContent = inviteText(def, rows, weekForInvite, opts.name, opts.log ?? []);
+  void inviteText;   // the invite body is not printed (user 2026-11-02)
 
   return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 }
