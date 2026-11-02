@@ -10,6 +10,21 @@ import {
 
 const FILL_CSS = `
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+/* Filled in, the board is taller than one page. The document's 3-column grid can only break as one row,
+   which pushed the whole board to page 2 and then split it with big gaps (user 2026-11-02). Printed, the
+   board flows as 3 newspaper columns instead: sections run 1 · 2 · 0 · 3 · 4 · 5 · 6, long sections may
+   continue in the next column or page, single items never split. */
+.board{display:block;column-count:3;column-gap:18px;column-fill:balance}
+.bcol{display:contents}
+.fg{break-inside:auto;page-break-inside:auto}
+.fgh{break-inside:avoid;break-after:avoid}
+.fi{break-inside:avoid;page-break-inside:avoid}
+@media print{.board{column-fill:auto}}
+/* weekly-log rows grow with their notes: let a tall week continue on the next page instead of leaving
+   most of a page blank; single lines never split */
+tr{break-inside:auto;page-break-inside:auto}
+thead{display:table-header-group}
+td.fill .rl{break-inside:avoid}
 .box.on{background:#1a1f2b;position:relative}
 .box.on::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .box.half{background:repeating-linear-gradient(45deg,#1a1f2b 0 2px,#fff 2px 5px)}
@@ -169,6 +184,9 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
     const cs = Array.from(cg.querySelectorAll('col')) as HTMLElement[];
     if (cs.length === 4) { cs[2].style.width = '27%'; cs[3].style.width = '18%'; }
   }
+  // the log flows as one run: only the first table starts a new page, the second follows the first
+  const tables = Array.from(doc.querySelectorAll('table'));
+  for (const tb of tables.slice(1)) { const pb = tb.previousElementSibling; if (pb?.classList.contains('pb')) pb.remove(); }
   // sessions past 8: clone the W8 row onto the end of the last table, relabelled
   const trs = Array.from(doc.querySelectorAll('table tbody tr'));
   const last = trs[trs.length - 1];

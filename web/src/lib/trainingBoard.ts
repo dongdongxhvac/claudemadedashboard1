@@ -104,7 +104,8 @@ export function noteWords(line: string | null): string | null {
   if (line == null) return null;
   const m = /^(\S)\s(.*)$/s.exec(line);
   if (!m) return line;
-  const mark = (Object.keys(MARK_META) as BoardMark[]).find((k) => MARK_META[k].short === m[1]);
+  // ✓ is shared by the unused legacy "checked" and the round state "solo": read it as solo
+  const mark = (Object.keys(MARK_META) as BoardMark[]).filter((k) => k !== 'checked').find((k) => MARK_META[k].short === m[1]);
   return mark ? `${MARK_META[mark].label.toLowerCase()} · ${m[2]}` : line;
 }
 /** Every note on an item, newest week last, with its week. */

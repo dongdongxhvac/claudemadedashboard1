@@ -44,7 +44,11 @@ Rules the user has fixed — keep them unless told otherwise:
   Under each item: a bold header per part ("overview · ✓ W5 · score 4"), then its notes indented with a
   hanging indent ("W5 ★ text"), proportional 0.78rem font (user: "a bit bigger" than 0.7) — compact, no wasted rows. Mark symbols print
   in their colours; next-week items show "→ W5" in the date slot; hours past week 8 print under item 1.
-  Verify print changes with a Chromium render (esbuild bundle of the lib + Playwright) before pushing.
+  Page flow (user 2026-11-02, "real print wastes space"): the board prints as 3 flowing newspaper
+  columns (`column-count:3`, sections 1 · 2 · 0 · 3 · 4 · 5 · 6, long sections continue in the next
+  column/page, single items never split); weekly-log rows may break across pages, lines never do; one
+  page break before the log, none between its two tables. Verify print changes with a Chromium render
+  (esbuild bundle of the lib + Playwright, `page.pdf({landscape:true, preferCSSPageSize:true})`) before pushing.
 - **Progress reports** (PDF per engineer) are generated from the same lib; header = trainee, title,
   hired, schedule; KPIs; progress by section; summary (focus, missed, good, hours, rounds); every item;
   weekly log; signature lines.
