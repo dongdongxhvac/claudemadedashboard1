@@ -39,6 +39,10 @@ const tick = (el: Element | null | undefined, on: boolean) => { if (el && on) el
 
 export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, rows: BoardRow[], opts: { name: string; startDate: string | null; site?: string; schedule?: string; quizzes?: QuizPass[]; log?: BoardLogRow[] }): string {
   const doc = new DOMParser().parseFromString(docHtml, 'text/html');
+  // the printout is the board and the weekly log only (user 2026-11-02): drop page 4 (first meeting · invite)
+  for (const sel of ['.cont', '.two']) for (const el of Array.from(doc.querySelectorAll(sel))) { const pb = el.previousElementSibling; el.remove(); if (pb?.classList.contains('pb')) pb.remove(); }
+  const badge = doc.querySelector('.badge');
+  if (badge) badge.textContent = (badge.textContent ?? '').replace(/\s*·\s*PAGE 4.*$/i, '');
   const style = doc.createElement('style');
   style.textContent = FILL_CSS;
   doc.head.appendChild(style);
