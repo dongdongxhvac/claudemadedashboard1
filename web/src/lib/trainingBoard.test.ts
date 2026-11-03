@@ -134,7 +134,13 @@ assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: 'more_work', note:
 assertEq(describeChange({ field: 'score', old: '2', new: '3' }), 'grade R → R', 'legacy score line reads as grades');
 assertEq(describeChange({ field: 'score', old: null, new: 'P+' }), 'grade P+', 'describe grade');
 assertEq(diffRows([row('hvac', 2, 'next_week', null, { grade: 'R' })], [{ item_key: 'hvac', week: 2, status: 'done', note: null, value: { grade: 'P' } }]).map((x) => [x.field, x.old, x.new]), [['score', 'R', 'P']], 'one pill click → one grade line, no separate status line');
-assertEq(describeChange({ field: 'status', old: 'more_work', new: 'done' }), 'status: more work → done', 'describe status');
+assertEq(describeChange({ field: 'status', old: 'more_work', new: 'done' }), 'grade more work → P', 'describe status as a grade');
+assertEq(describeChange({ field: 'status', old: null, new: 'done' }), 'grade P', 'status done reads as grade P');
+const pairLog: BoardLogRow[] = [
+  { id: 'p1', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'status', old: null, new: 'done', changed_on: '2026-10-30', changed_by: null, created_at: '2026-10-30T10:00:00Z' },
+  { id: 'p2', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'score', old: null, new: '4', changed_on: '2026-10-30', changed_by: null, created_at: '2026-10-30T10:00:01Z' },
+];
+assertEq(weekLog(def, rows, 2, [], pairLog).review.filter((l) => l.includes('grade')), ['Oct 30 · 10 HVAC — grade P'], 'old status + score pair collapses to one grade line');
 assertEq(describeChange({ field: 'mark', old: null, new: 'good' }), 'mark: good', 'describe mark');
 assertEq(describeChange({ field: 'reset', old: 'done', new: null }), 'reset (was done)', 'describe reset');
 const logRows: BoardLogRow[] = [
@@ -149,7 +155,7 @@ const nextLog: BoardLogRow[] = [
   { id: 'n2', user_id: 'u', program_key: 'p', item_key: 'plumbing', week: 2, field: 'note', old: null, new: '→ East cluster', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:01Z' },
   { id: 'n3', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'status', old: null, new: 'done', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:02Z' },
 ];
-assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retest ok', 'Oct 28 · 10 HVAC — status: done'], 'next-week status / notes stay out of Review (they are Focus)');
+assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retest ok', 'Oct 28 · 10 HVAC — grade P'], 'next-week status / notes stay out of Review (they are Focus); a done status reads as grade P');
 assertEq(weekLog(def, rows, 2, [], nextLog).focus, ['Oct 1 · 11 Plumbing'], 'and still list under Focus');
 
 assertEq([1, 2, 3, 4, 5, 6].map((n) => isScorable(n)), [true, false, true, true, true, false], 'P+ on sections 1 · 3 · 4 · 5');

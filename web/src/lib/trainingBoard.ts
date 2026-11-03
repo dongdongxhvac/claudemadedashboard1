@@ -401,7 +401,8 @@ export function diffRows(base: BoardRow[], saved: Pick<BoardRow, 'item_key' | 'w
 export function describeChange(l: Pick<BoardLogRow, 'field' | 'old' | 'new'>): string {
   const label = (v: string | null) => (v == null ? '—' : v === 'more_work' ? 'more work' : v === 'next_week' ? 'next week' : v);
   switch (l.field) {
-    case 'status': return l.old ? `status: ${label(l.old)} → ${label(l.new)}` : `status: ${label(l.new)}`;
+    // status lines are read as grades (done = P, next week = R) so old and new log entries use one wording
+    case 'status': { const g = (v: string | null) => (v === 'done' ? 'P' : v === 'next_week' ? 'R' : v == null ? '—' : label(v)); return l.old ? `grade ${g(l.old)} → ${g(l.new)}` : `grade ${g(l.new)}`; }
     case 'score': return l.old ? `grade ${gradeLabel(l.old)} → ${gradeLabel(l.new)}` : `grade ${gradeLabel(l.new)}`;
     case 'mark': return l.old ? `mark: ${l.old} → ${l.new ?? '—'}` : `mark: ${l.new ?? '—'}`;
     case 'note': return l.new ? `note: ${noteWords(l.new)}` : `note cleared${l.old ? ` (was "${noteWords(l.old)}")` : ''}`;
@@ -482,7 +483,9 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"; resets live on the Reset log tab;
   // anything set to next week is Focus only (user 2026-10-29), not Review
   const isNextLine = (l: BoardLogRow) => (l.field === 'status' && l.new === 'next_week') || (l.field === 'score' && gradeLabel(l.new) === 'R') || (l.field === 'note' && (l.new ?? '').startsWith(MARK_META.next_week.short + ' ')) || (l.field === 'value' && /\bnext_week\b/.test(l.new ?? ''));
-  const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key) && !isNextLine(l)).sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // entries written before the one-pill change carry a status line and a score line for the same click: show the grade line only
+  const paired = (l: BoardLogRow) => l.field === 'status' && log.some((o) => o.field === 'score' && o.item_key === l.item_key && o.week === l.week && o.changed_on === l.changed_on);
+  const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key) && !isNextLine(l) && !paired(l)).sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
   const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
   // every line carries the date it was saved ("Oct 24 · 10 HVAC — solo")
