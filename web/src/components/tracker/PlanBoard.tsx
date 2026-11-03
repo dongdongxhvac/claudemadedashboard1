@@ -142,7 +142,7 @@ export function PlanBoard({ def, rows, plan, setPlan, canEdit, dates }: {
                       const st = c.status ? STATUS_META[c.status] : null;
                       const label = st ? `${st.short} ${st.label}${c.statusWeek ? ` W${c.statusWeek}` : ''}` : itemProgress(it, rows) > 0 ? 'in progress' : 'not started';
                       const color = st ? st.color : itemProgress(it, rows) > 0 ? '#b45309' : 'var(--color-text-muted)';
-                      return <div key={it.key}>{itemNum(it)} {it.text} <span style={{ color, fontWeight: 700, fontSize: 10.5 }}>{label}</span>{c.score ? <span className="t-mono t-muted" style={{ fontSize: 10.5 }}> · score {c.score}</span> : null}</div>;
+                      return <div key={it.key}>{itemNum(it)} {it.text} <span style={{ color, fontWeight: 700, fontSize: 10.5 }}>{label}</span>{c.grade ? <span className="t-mono t-muted" style={{ fontSize: 10.5 }}> · {c.grade}</span> : null}</div>;
                     }) : <span className="t-muted">—</span>}
                   </td>
                 </tr>

@@ -4,7 +4,7 @@
 // (hours per week, week boxes, count boxes, date, labelled boxes, areas) and
 // a note. Edits go to a draft (keyed item:week); nothing writes until Save.
 import {
-  STATUS_META, STATUS_CYCLE, MARKS, MARK_META, SCORES, SCORE_LABELS, ROUNDS, ROUND_META, isScorable, statusForScore, currentOf, hoursOf, roundOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
+  STATUS_META, MARKS, MARK_META, ROUNDS, ROUND_META, GRADE_META, isScorable, statusForGrade, gradeCycle, currentOf, hoursOf, roundOf, weekTicked, itemProgress, notesOf, allNotes, itemNum,
   type TrainingBoardDef, type BoardRow, type BoardItem, type BoardStatus, type BoardProgress, type BoardNote,
 } from '../../lib/trainingBoard';
 
@@ -71,13 +71,17 @@ export function TrainingBoard({ def, rows, week, weeks, canEdit, setRow, onReset
                     const pct = itemProgress(item, rows);
                     const st = cur.status;
                     const meta = st ? STATUS_META[st] : null;
+                    const c = item.control;
+                    // one pill = grade + status (user 2026-11-03): none → R → P → P+ (skill sections) → none; no pill on the rounds item
+                    const cyc = gradeCycle(isScorable(sec.num));
+                    const g = cur.grade;
+                    const gm = g ? GRADE_META[g] : null;
                     const cycle = () => {
                       if (!canEdit) return;
-                      const now = wr?.status ?? null;
-                      const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(now) + 1) % STATUS_CYCLE.length];
-                      setRow(item.key, week, { status: next });
+                      const next = cyc[(cyc.indexOf(g) + 1) % cyc.length];
+                      const { score: _s, grade: _g, ...v } = valueBase(item); void _s; void _g;
+                      setRow(item.key, week, next ? { status: statusForGrade(next), value: { ...v, grade: next } } : { status: null, value: v });
                     };
-                    const c = item.control;
                     return (
                       <div key={item.key} className="t-small" style={{ borderBottom: '1px solid var(--color-border)', padding: '5px 2px 6px', background: meta ? meta.bg : 'transparent', borderLeft: `3px solid ${meta ? meta.color : 'transparent'}`, paddingLeft: 6 }}>
                         <div className="flex items-start gap-2">
@@ -86,23 +90,14 @@ export function TrainingBoard({ def, rows, week, weeks, canEdit, setRow, onReset
                             {item.text}
                             {item.hint && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>{item.hint}</span>}
                           </span>
-                          {isScorable(sec.num) && <span className="inline-flex items-center gap-0.5" title="Score 1–4 · 1–3 keeps the item on next week for review, 4 = done">
-                            {SCORES.map((n) => {
-                              const on = cur.score === n;
-                              return (
-                                <button key={n} type="button" disabled={!canEdit} title={`${n} · ${SCORE_LABELS[n]}${n >= 4 ? ' → done' : ' → next week'}`}
-                                  onClick={() => setRow(item.key, week, on ? { value: { ...valueBase(item), score: undefined } } : { value: { ...valueBase(item), score: n }, status: statusForScore(n) })}
-                                  className="t-mono rounded"
-                                  style={{ width: 22, height: 20, fontSize: 11, fontWeight: 700, border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-border)'}`, background: on ? 'var(--color-accent)' : 'var(--color-card)', color: on ? '#fff' : 'var(--color-text-muted)', cursor: canEdit ? 'pointer' : 'default' }}>{n}</button>
-                              );
-                            })}
-                          </span>}
-                          <button type="button" onClick={cycle} disabled={!canEdit}
-                            title={canEdit ? `Week ${week}: click to cycle · none → done → next week` : meta?.label ?? ''}
-                            className="px-1.5 py-0.5 rounded whitespace-nowrap"
-                            style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${meta ? meta.color : 'var(--color-border)'}`, color: meta ? meta.color : 'var(--color-text-muted)', background: 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
-                            {meta ? `${meta.short} ${meta.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}
-                          </button>
+                          {c.kind !== 'rounds8' && (
+                            <button type="button" onClick={cycle} disabled={!canEdit}
+                              title={canEdit ? `Week ${week}: click to cycle · none → R review (next week) → P pass (done)${isScorable(sec.num) ? ' → P+ pass plus (beyond the 8-week coverage)' : ''} → none` : gm?.label ?? ''}
+                              className="px-1.5 py-0.5 rounded whitespace-nowrap"
+                              style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${gm ? gm.color : 'var(--color-border)'}`, color: gm ? gm.color : 'var(--color-text-muted)', background: g === 'P+' ? gm!.bg : 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
+                              {gm ? `${meta?.short ?? ''} ${g} · ${gm.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}
+                            </button>
+                          )}
                         </div>
 
                         {/* the item's own control */}

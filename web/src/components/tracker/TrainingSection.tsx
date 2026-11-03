@@ -145,7 +145,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
   const p = b.progress;
   const subtitle = (
     <span className="t-small t-muted">
-      {p ? <>{p.done}/{p.total} done{w ? ` · W${w}${dates[w] ? ` ${fmtDay(dates[w])}` : ''}` : ''}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
+      {p ? <>{p.done}/{p.total} done{p.plus ? ` · ${p.plus} P+` : ''}{w ? ` · W${w}${dates[w] ? ` ${fmtDay(dates[w])}` : ''}` : ''}{p.moreWork ? ` · ${p.moreWork} more work` : ''}{p.nextWeek ? ` · ${p.nextWeek} next week` : ''}</> : 'from the print station'}
       {dirty > 0 && <> · <span className="px-1.5 rounded" style={{ background: 'rgba(245,158,11,0.18)', color: '#92400e', fontWeight: 600 }}>{dirty} unsaved</span></>}
     </span>
   );
@@ -221,7 +221,7 @@ export function TrainingSection({ userId, canEdit, personName }: { userId: strin
             <>
               {!w && <p className="t-small mb-2 px-2 py-1 rounded" style={{ background: 'rgba(245,158,11,0.14)', color: '#92400e' }}>Select a week (1–8) above to edit this session. Only one can be selected; click it again to unselect.</p>}
               <p className="t-small t-muted mb-2">
-                Click the status pill to cycle <b style={{ color: STATUS_META.done.color }}>done</b> → <b style={{ color: STATUS_META.next_week.color }}>next week</b>; score 1–4 (1–3 keeps the item on next week for review, 4 = done; no score on COVE / PlantLog / Setup); add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. {w ? `Edits land on week ${w} until you press Save` : 'Select a week to edit'}; every change is logged with its date in the weekly log.
+                Click the pill to grade: <b style={{ color: STATUS_META.next_week.color }}>R · review</b> (stays on next week) → <b style={{ color: STATUS_META.done.color }}>P · pass</b> (done) → <b style={{ color: STATUS_META.done.color }}>P+ · pass plus</b> (done, beyond the 8-week coverage; skill sections 3–5 only) → clear. Item 7 is graded by its round notes. Add as many notes as needed, each marked ✗ missed or ★ good; ↺ resets an item. {w ? `Edits land on week ${w} until you press Save` : 'Select a week to edit'}; every change is logged with its date in the weekly log.
               </p>
               {/* section 0 — the first meeting: a bookmark here, the card itself at the bottom of the board (user 2026-11-02) */}
               {(() => { const fm = firstMeetingOf(rows); return (

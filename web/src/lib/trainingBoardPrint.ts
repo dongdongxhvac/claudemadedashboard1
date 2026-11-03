@@ -30,6 +30,7 @@ td.fill .rl{break-inside:avoid}
 .box.half{background:repeating-linear-gradient(45deg,#1a1f2b 0 2px,#fff 2px 5px)}
 .wk.txt,.wk.long.txt,.ln2.txt,.note.txt{height:auto;min-height:1em;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;color:#1a1f2b;padding:0 2px;white-space:normal}
 .ln2.txt{width:auto;min-width:34px;text-align:center}
+.bx .wk.txt{white-space:nowrap;width:auto;min-width:26px;font-size:.72rem;text-align:center}
 .ln2.txt .big{font-size:1.05rem;font-weight:700}.ln2.txt .of{font-size:.7rem;font-weight:600;color:#555}
 .ln2.txt .dl{font-size:.68rem;font-weight:700;color:#047857;margin-left:3px}.ln2.txt .dl.neg{color:#b91c1c}
 .ln2.txt.wide{display:block;margin:0 0 2px;text-align:left;font-size:.74rem;white-space:normal;line-height:1.2}
@@ -100,6 +101,8 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         // done only when every part is done; otherwise the part still open wins
         status: curs.every((c) => c.cur.status === 'done') ? 'done' as const : (curs.find((c) => c.cur.status && c.cur.status !== 'done')?.cur.status ?? curs.find((c) => c.cur.status)?.cur.status ?? null),
         statusWeek: Math.max(...curs.map((c) => c.cur.statusWeek)),
+        // the grade follows the same rule: P+ only when every part is P+, P when all are done, else the open part's R
+        grade: curs.every((c) => c.cur.status === 'done') ? (curs.every((c) => c.cur.grade === 'P+') ? 'P+' as const : 'P' as const) : (curs.find((c) => c.cur.status && c.cur.status !== 'done')?.cur.grade ?? curs.find((c) => c.cur.grade)?.cur.grade ?? null),
         note: curs.filter((c) => c.cur.note).map((c) => `${c.pt.part === 'tagit' ? 'tag it' : 'overview'}: ${c.cur.note}`).join(' · ') || null,
       };
       if (cur.status) fi.classList.add(`st-${cur.status}`);
@@ -108,8 +111,9 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       const c = item.control;
       // under the item, like the web board: the score, each part's status on a shared row, and every note of
       // every week ("W3: ✗ jump out safety") with the mark symbol in its colour
-      const stText = (st: typeof cur.status, wk: number) => (st ? `${st === 'done' ? '✓' : st === 'next_week' ? '→' : '⟳'} W${wk}` : '—');
-      const noteStatusWeek = (st: typeof cur.status, wk: number) => (st && wk ? `${st === 'next_week' ? '→ ' : ''}W${wk}` : '');
+      // "✓ P+ W5" · "→ R W6": the grade travels with the status (user 2026-11-03)
+      const stText = (st: typeof cur.status, wk: number, g: typeof cur.grade) => (st ? `${st === 'done' ? '✓' : st === 'next_week' ? '→' : '⟳'}${g ? ` ${g}` : ''} W${wk}` : '—');
+      const noteStatusWeek = (st: typeof cur.status, wk: number, g: typeof cur.grade) => (st && wk ? `${st === 'next_week' ? '→ ' : ''}${g ? `${g} ` : ''}W${wk}` : '');
       // compact layout (user 2026-11-02): a bold header line per part ("overview ✓ W8 · score 4"), then that
       // part's notes indented under it ("W5 ★ Starting and shutdown Seq"), hanging indent so wraps line up
       const noteLines: { cls: 'pt' | 'nt'; nodes: Node[] }[] = [];
@@ -124,9 +128,8 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
         const notes = allNotes(rows, pt.key);
         const head: string[] = [];
         if (parts.length > 1) head.push(pt.part === 'tagit' ? 'tag it' : 'overview');
-        if (parts.length > 1 && pc.status) head.push(stText(pc.status, pc.statusWeek));
-        if (pc.score) head.push(`score ${pc.score}`);
-        if (head.length && (parts.length > 1 || pc.score)) noteLines.push({ cls: 'pt', nodes: [doc.createTextNode(head.join(' · '))] });
+        if (parts.length > 1 && pc.status) head.push(stText(pc.status, pc.statusWeek, pc.grade));
+        if (parts.length > 1) noteLines.push({ cls: 'pt', nodes: [doc.createTextNode(head.join(' · '))] });
         for (const n of notes) noteLines.push(noteLine(n));
       }
       if (c.kind === 'hours8' || c.kind === 'rounds8') {
@@ -167,7 +170,7 @@ export function buildTrackerPrintHtml(docHtml: string, def: TrainingBoardDef, ro
       } else {
         // note / check / date / none — the box is the ✓, the date slot says "W3" (done) or "→ W5" (next week)
         tick(bx?.querySelector('.box'), cur.status === 'done');
-        const on = typeof cur.value.on === 'string' ? fmt(cur.value.on) : noteStatusWeek(cur.status, cur.statusWeek);
+        const on = typeof cur.value.on === 'string' ? fmt(cur.value.on) : noteStatusWeek(cur.status, cur.statusWeek, cur.grade);
         setText(bx?.querySelector('.wk'), on);
       }
       if (c.kind !== 'rounds8' && noteLines.length) {

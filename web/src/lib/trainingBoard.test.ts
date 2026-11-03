@@ -5,7 +5,7 @@
 declare const process: { exitCode?: number };
 
 import {
-  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForScore, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote, splitLogLine, weekCount, weeksMeta,
+  currentOf, itemProgress, itemDone, boardProgress, weekLog, inviteText, weekOfDate, diffRows, describeChange, summarizeValue, isScorable, statusForGrade, gradeOf, gradeLabel, gradeCycle, notesOf, noteLine, weekDates, roundOf, planOf, planWeekOf, togglePlanItem, setPlanNote, planNote, splitLogLine, weekCount, weeksMeta,
   type TrainingBoardDef, type BoardRow, type BoardLogRow,
 } from './trainingBoard.ts';
 
@@ -109,22 +109,31 @@ assertEq(weekOfDate('2026-09-01T12:00:00Z', '2026-09-28'), 0, 'before start');
 assertEq(weekOfDate('2026-12-30T12:00:00Z', '2026-09-28'), 9, 'after week 8');
 
 // ── change log (0153) ───────────────────────────────────────────────────────
-assertEq(currentOf([...rows, row('hvac', 3, null, null, { score: 3, mark: 'good' })], 'hvac').score, 3, 'score from value');
+assertEq(currentOf([...rows, row('hvac', 3, null, null, { score: 3, mark: 'good' })], 'hvac').grade, 'R', 'legacy score 3 reads as R');
+assertEq(currentOf([...rows, row('hvac', 3, null, null, { grade: 'P+' })], 'hvac').grade, 'P+', 'grade from value');
+assertEq(currentOf(rows, 'hvac').grade, 'P', 'done without a grade reads as P');
+assertEq(currentOf(rows, 'plumbing').grade, 'R', 'next week without a grade reads as R');
+assertEq(gradeOf({ score: 4 }), 'P', 'legacy 4 → P');
+assertEq(gradeLabel('2'), 'R', 'logged legacy score shown as a grade');
+assertEq(gradeCycle(true), [null, 'R', 'P', 'P+'], 'skill-section cycle');
+assertEq(gradeCycle(false), [null, 'R', 'P'], 'activity-section cycle');
 assertEq(currentOf([...rows, row('hvac', 3, null, null, { score: 3, mark: 'good' })], 'hvac').mark, 'good', 'mark from value');
 assertEq(summarizeValue({ n: 2, ticks: ['COVE', 'UKG'], score: 3, mark: 'good', hours: 38 }), 'n: 2 · ticks: COVE, UKG', 'summarize skips score/mark/hours');
 const base = [row('hvac', 2, 'more_work', 'retest', { score: 2 })];
 const d = diffRows(base, [
-  { item_key: 'hvac', week: 2, status: 'done', note: 'retest ok', value: { score: 3, mark: 'good' } },   // three changes + mark
+  { item_key: 'hvac', week: 2, status: 'done', note: 'retest ok', value: { score: 3, mark: 'good' } },   // note + mark (score 2 → 3 is R → R: no grade line, status line skipped only when the grade changes)
   { item_key: 'plumbing', week: 2, status: 'next_week', note: null, value: {} },                       // new row
   { item_key: 'week_hours', week: 1, status: null, note: null, value: { hours: 38 } },                 // hours
 ]);
 assertEq(d.map((x) => [x.item_key, x.field, x.old, x.new]), [
-  ['hvac', 'status', 'more_work', 'done'], ['hvac', 'note', 'retest', '★ retest ok'], ['hvac', 'score', '2', '3'], ['hvac', 'mark', null, 'good'],
+  ['hvac', 'status', 'more_work', 'done'], ['hvac', 'note', 'retest', '★ retest ok'], ['hvac', 'mark', null, 'good'],
   ['plumbing', 'status', null, 'next_week'], ['week_hours', 'hours', null, '38'],
 ], 'diff lines');
 assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: null, note: null, value: {} }]).map((x) => [x.field, x.old]), [['reset', 'more_work · retest']], 'reset line');
 assertEq(diffRows(base, [{ item_key: 'hvac', week: 2, status: 'more_work', note: 'retest', value: { score: 2 } }]), [], 'no change → no lines');
-assertEq(describeChange({ field: 'score', old: '2', new: '3' }), 'score 2 → 3', 'describe score');
+assertEq(describeChange({ field: 'score', old: '2', new: '3' }), 'grade R → R', 'legacy score line reads as grades');
+assertEq(describeChange({ field: 'score', old: null, new: 'P+' }), 'grade P+', 'describe grade');
+assertEq(diffRows([row('hvac', 2, 'next_week', null, { grade: 'R' })], [{ item_key: 'hvac', week: 2, status: 'done', note: null, value: { grade: 'P' } }]).map((x) => [x.field, x.old, x.new]), [['score', 'R', 'P']], 'one pill click → one grade line, no separate status line');
 assertEq(describeChange({ field: 'status', old: 'more_work', new: 'done' }), 'status: more work → done', 'describe status');
 assertEq(describeChange({ field: 'mark', old: null, new: 'good' }), 'mark: good', 'describe mark');
 assertEq(describeChange({ field: 'reset', old: 'done', new: null }), 'reset (was done)', 'describe reset');
@@ -133,7 +142,7 @@ const logRows: BoardLogRow[] = [
   { id: 'l2', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'note', old: null, new: 'retest ok', changed_on: '2026-10-26', changed_by: null, created_at: '2026-10-26T10:00:01Z' },
 ];
 const w2l = weekLog(def, rows, 2, [], [...logRows, { id: 'l3', user_id: 'u', program_key: 'p', item_key: 'hvac', week: 2, field: 'reset', old: 'done', new: null, changed_on: '2026-10-26', changed_by: null, created_at: '2026-10-26T11:00:00Z' }]);
-assertEq(w2l.review, ['Oct 26 · 10 HVAC — score 2 → 3', 'Oct 26 · 10 HVAC — note: retest ok'], 'review = logged changes minus resets; the logged note replaces the row-note line');
+assertEq(w2l.review, ['Oct 26 · 10 HVAC — note: retest ok'], 'review = logged changes minus resets and minus R grades (next week → Focus); the logged note replaces the row-note line');
 assertEq(weekLog(def, rows, 1, [], logRows).review, ['Oct 1 · 10 HVAC — missed low static switch'], 'W1 keeps its pre-log note line');
 const nextLog: BoardLogRow[] = [
   { id: 'n1', user_id: 'u', program_key: 'p', item_key: 'plumbing', week: 2, field: 'status', old: null, new: 'next_week', changed_on: '2026-10-28', changed_by: null, created_at: '2026-10-28T10:00:00Z' },
@@ -144,7 +153,7 @@ assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retes
 assertEq(weekLog(def, rows, 2, [], nextLog).focus, ['Oct 1 · 11 Plumbing'], 'and still list under Focus');
 
 assertEq([1, 2, 3, 4, 5, 6].map(isScorable), [false, false, true, true, true, false], 'sections 1 · 2 · 6 are not scored');
-assertEq([1, 2, 3, 4].map(statusForScore), ['next_week', 'next_week', 'next_week', 'done'], 'score → status');
+assertEq((['R', 'P', 'P+'] as const).map(statusForGrade), ['next_week', 'done', 'done'], 'grade → status');
 
 // multi-notes with marks
 const rn = row('hvac', 3, 'done', null, { notes: [{ text: 'low static switch', mark: 'missed' }, { text: 'refrigerant monitor', mark: 'good' }] });

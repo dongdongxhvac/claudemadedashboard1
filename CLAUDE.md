@@ -16,8 +16,12 @@ InviteCard,FirstMeetingCard,ResetLog}.tsx`, hooks in `useTrainingBoard.ts`, tabl
 
 Rules the user has fixed — keep them unless told otherwise:
 
-- **Status pill** cycles none → done → next week. No "more work". Score 1–4 on sections 3–5 only
-  (1–3 ⇒ next week, 4 ⇒ done). Sections 1, 2, 6 have no score.
+- **One pill = grade + status** (user 2026-11-03, replaced the 1–4 score): click cycles none → **R ·
+  review** (status next week) → **P · pass** (done) → **P+ · pass plus** (done, beyond the 8-week
+  coverage; skill sections 3–5 only) → none. Sections 1, 2, 6 cycle R / P. Item 7 (rounds) has no pill.
+  No "more work". Stored as `value.grade`; legacy `score` 1–3 reads as R, 4 as P (rows were converted
+  on 2026-11-03). The log writes one line per click ("grade R → P", field `score`); an R line is Focus
+  only. Printed: "✓ P+ W5" / "→ R W6" in the date slot and in each part's header line.
 - **Notes**: several per item per week, each with its own mark: ✗ missed · ★ good. On the rounds item
   (7 PlantLog · building round) the marks are ◐ learning · ✓ solo · → next week and the latest note's
   mark is the round's state; the hours box is just hours (whole numbers).
@@ -41,7 +45,7 @@ Rules the user has fixed — keep them unless told otherwise:
   three report dates sit at the bottom of the board (not on the Invite tab).
 - **Print** = the real tracker document filled in: board (page 1) + weekly log (pages 2–3) only; page 4
   (invite) is dropped. The first meeting prints as section 0 under section 2 in the board's row style.
-  Under each item: a bold header per part ("overview · ✓ W5 · score 4"), then its notes indented with a
+  Under each item: a bold header per part ("overview · ✓ P+ W5"), then its notes indented with a
   hanging indent ("W5 ★ text"), proportional 0.78rem font (user: "a bit bigger" than 0.7) — compact, no wasted rows. Mark symbols print
   in their colours; next-week items show "→ W5" in the date slot; hours past week 8 print under item 1.
   Page flow (user 2026-11-02, "real print wastes space"): the board prints as 3 flowing newspaper
@@ -49,9 +53,10 @@ Rules the user has fixed — keep them unless told otherwise:
   column/page, single items never split); weekly-log rows may break across pages, lines never do; one
   page break before the log, none between its two tables. Verify print changes with a Chromium render
   (esbuild bundle of the lib + Playwright, `page.pdf({landscape:true, preferCSSPageSize:true})`) before pushing.
-- **Progress reports** (PDF per engineer) are generated from the same lib; header = trainee, title,
-  hired, schedule; KPIs; progress by section; summary (focus, missed, good, hours, rounds); every item;
-  weekly log; signature lines.
+- **Progress reports** (PDF per engineer) are generated from the same lib (generator script lives in the
+  session scratchpad, rebuilt on request); header = trainee, title, hired, schedule; KPIs incl. P+ count;
+  progress by section; summary (focus, missed, good, hours, rounds); every item with its grade; weekly log;
+  signature lines.
 - Visibility: the board is for managers / directors / admins (`current_user_can_manage_users`), never
   leads or the engineer. Profile and tracker pages use the light theme.
 

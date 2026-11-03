@@ -134,14 +134,33 @@ export const roundOf = (rows: Pick<BoardRow, 'item_key' | 'week' | 'note' | 'val
 const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
 export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
 export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
-/** Score 1–4 per item (value.score). Sections 1 · 2 · 6 (COVE, PlantLog / site /
- *  buildings, Setup) are activity lists, not skills — no score there (user 2026-10-26). */
-export const SCORES = [1, 2, 3, 4] as const;
-export const SCORE_LABELS: Record<number, string> = { 1: 'needs work', 2: 'developing', 3: 'solid', 4: 'strong' };
-export const NO_SCORE_SECTIONS = [1, 2, 6];
-export const isScorable = (sectionNum: number) => !NO_SCORE_SECTIONS.includes(sectionNum);
-/** Scoring sets the status: 1–3 stays on the board as "next week" for review, 4 = done. */
-export const statusForScore = (score: number): BoardStatus => (score >= 4 ? 'done' : 'next_week');
+/** Grade per item (value.grade), one pill with the status (user 2026-11-03): R · review → next week,
+ *  P · pass → done, P+ · pass plus → done, beyond the 8-week coverage. P+ only on the skill sections
+ *  3 · 4 · 5; sections 1 · 2 · 6 (COVE, PlantLog / site / buildings, Setup) are activity lists: R / P.
+ *  The rounds item (7) has no pill — its state lives on each round's note. Legacy score 1–3 = R, 4 = P. */
+export type BoardGrade = 'R' | 'P' | 'P+';
+export const GRADES: BoardGrade[] = ['R', 'P', 'P+'];
+export const GRADE_META: Record<BoardGrade, { label: string; status: BoardStatus; color: string; bg: string }> = {
+  'R':  { label: 'Review',    status: 'next_week', color: '#1d4ed8', bg: 'rgba(59,130,246,0.14)' },
+  'P':  { label: 'Pass',      status: 'done',      color: '#047857', bg: 'rgba(16,185,129,0.14)' },
+  'P+': { label: 'Pass plus', status: 'done',      color: '#047857', bg: 'rgba(16,185,129,0.22)' },
+};
+export const NO_PLUS_SECTIONS = [1, 2, 6];
+/** Sections whose items can take P+ (kept under the old name: "scorable" = skill section). */
+export const isScorable = (sectionNum: number) => !NO_PLUS_SECTIONS.includes(sectionNum);
+export const statusForGrade = (g: BoardGrade): BoardStatus => GRADE_META[g].status;
+const isGrade = (v: unknown): v is BoardGrade => (GRADES as string[]).includes(String(v));
+/** The grade stored on a value: value.grade, else the legacy score (1–3 → R, 4 → P). */
+export function gradeOf(value: Record<string, unknown> | null | undefined): BoardGrade | null {
+  if (!value) return null;
+  if (isGrade(value.grade)) return value.grade;
+  if (typeof value.score === 'number') return value.score >= 4 ? 'P' : 'R';
+  return null;
+}
+/** A logged grade value (new "P+", or a legacy score "3") as the grade word. */
+export const gradeLabel = (v: string | null): string => (v == null ? '—' : isGrade(v) ? v : /^\d$/.test(v) ? (Number(v) >= 4 ? 'P' : 'R') : v);
+/** The pill cycle: none → R → P → P+ (skill sections) → none. */
+export const gradeCycle = (plus: boolean): (BoardGrade | null)[] => (plus ? [null, 'R', 'P', 'P+'] : [null, 'R', 'P']);
 
 /** One change-log line (training_board_log, migration 0153). */
 export type BoardLogField = 'status' | 'score' | 'mark' | 'note' | 'hours' | 'value' | 'reset';
@@ -328,7 +347,7 @@ export const rowKey = (itemKey: string, week: number) => `${itemKey}:${week}`;
 
 /** The board's current view of an item: last non-null status / note by week,
  *  and the latest row's value (cumulative controls). */
-export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardStatus | null; statusWeek: number; note: string | null; value: Record<string, unknown>; week: number; score: number | null; mark: BoardMark | null } {
+export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardStatus | null; statusWeek: number; note: string | null; value: Record<string, unknown>; week: number; grade: BoardGrade | null; mark: BoardMark | null } {
   const mine = rows.filter((r) => r.item_key === itemKey).sort((a, b) => a.week - b.week);
   let status: BoardStatus | null = null, statusWeek = 0, note: string | null = null, value: Record<string, unknown> = {}, week = 0;
   for (const r of mine) {
@@ -337,9 +356,10 @@ export function currentOf(rows: BoardRow[], itemKey: string): { status: BoardSta
     if (r.value && Object.keys(r.value).length) value = r.value;
     week = r.week;
   }
-  const score = typeof value.score === 'number' ? value.score : null;
+  // a status set before grades existed reads as its grade: done → P, next week → R
+  const grade = gradeOf(value) ?? (status === 'done' ? 'P' : status === 'next_week' ? 'R' : null);
   const mark = (MARKS as string[]).includes(String(value.mark)) ? (value.mark as BoardMark) : null;
-  return { status, statusWeek, note, value, week, score, mark };
+  return { status, statusWeek, note, value, week, grade, mark };
 }
 
 // ── change log ─────────────────────────────────────────────────────────────
@@ -349,7 +369,7 @@ export function summarizeValue(v: Record<string, unknown> | null | undefined): s
   if (!v) return null;
   const parts: string[] = [];
   for (const [k, x] of Object.entries(v)) {
-    if (k === 'score' || k === 'mark' || k === 'hours' || k === 'notes' || x == null || x === '') continue;
+    if (k === 'score' || k === 'grade' || k === 'mark' || k === 'hours' || k === 'notes' || x == null || x === '') continue;
     if (Array.isArray(x)) { const arr = x.filter(Boolean); if (arr.length) parts.push(`${k}: ${arr.join(', ')}`); }
     else if (typeof x === 'object') parts.push(`${k}: ${JSON.stringify(x)}`);
     else parts.push(`${k}: ${String(x)}`);
@@ -367,21 +387,23 @@ export function diffRows(base: BoardRow[], saved: Pick<BoardRow, 'item_key' | 'w
     const empty = !r.status && !notes.length && !Object.keys(nv).filter((k) => k !== 'notes').length;
     const line = (field: BoardLogField, o: string | null, n: string | null) => { if (o !== n) out.push({ item_key: r.item_key, week: r.week, field, old: o, new: n }); };
     if (empty) { if (b) line('reset', [b.status, bnotes.map(noteLine).join(' | ') || null, summarizeValue(bv)].filter(Boolean).join(' · ') || null, null); continue; }
-    line('status', b?.status ?? null, r.status ?? null);
+    // one pill = one line: a grade change implies the status, so the status line is only written on its own
+    const g0 = gradeOf(bv), g1 = gradeOf(nv);
+    if (g0 === g1) line('status', b?.status ?? null, r.status ?? null);
     for (let i = 0; i < Math.max(notes.length, bnotes.length); i++) line('note', bnotes[i] ? noteLine(bnotes[i]) : null, notes[i] ? noteLine(notes[i]) : null);
-    line('score', num(bv.score)?.toString() ?? null, num(nv.score)?.toString() ?? null);
+    line('score', g0, g1);
     line('mark', typeof bv.mark === 'string' ? bv.mark : null, typeof nv.mark === 'string' ? nv.mark : null);
     line('hours', num(bv.hours)?.toString() ?? null, num(nv.hours)?.toString() ?? null);
     line('value', summarizeValue(bv), summarizeValue(nv));
   }
   return out;
 }
-/** "score 2 → 3", "mark: good", "status: done", "note: …", "hours 38", "reset". */
+/** "grade R → P+", "mark: good", "status: done", "note: …", "hours 38", "reset". */
 export function describeChange(l: Pick<BoardLogRow, 'field' | 'old' | 'new'>): string {
   const label = (v: string | null) => (v == null ? '—' : v === 'more_work' ? 'more work' : v === 'next_week' ? 'next week' : v);
   switch (l.field) {
     case 'status': return l.old ? `status: ${label(l.old)} → ${label(l.new)}` : `status: ${label(l.new)}`;
-    case 'score': return l.old ? `score ${l.old} → ${l.new ?? '—'}` : `score ${l.new ?? '—'}`;
+    case 'score': return l.old ? `grade ${gradeLabel(l.old)} → ${gradeLabel(l.new)}` : `grade ${gradeLabel(l.new)}`;
     case 'mark': return l.old ? `mark: ${l.old} → ${l.new ?? '—'}` : `mark: ${l.new ?? '—'}`;
     case 'note': return l.new ? `note: ${noteWords(l.new)}` : `note cleared${l.old ? ` (was "${noteWords(l.old)}")` : ''}`;
     case 'hours': return l.new ? `hours ${l.new}${l.old ? ` (was ${l.old})` : ''}` : `hours cleared`;
@@ -422,22 +444,23 @@ export const itemDone = (item: BoardItem, rows: BoardRow[]) => {
   return currentOf(rows, item.key).status === 'done';
 };
 
-export type BoardProgress = { done: number; total: number; pct: number; moreWork: number; nextWeek: number; sections: Map<string, { done: number; total: number }> };
+export type BoardProgress = { done: number; total: number; pct: number; moreWork: number; nextWeek: number; plus: number; sections: Map<string, { done: number; total: number }> };
 export function boardProgress(def: TrainingBoardDef, rows: BoardRow[]): BoardProgress {
   const sections = new Map<string, { done: number; total: number }>();
-  let done = 0, moreWork = 0, nextWeek = 0;
+  let done = 0, moreWork = 0, nextWeek = 0, plus = 0;
   for (const s of def.sections) {
     const d = s.items.filter((it) => itemDone(it, rows)).length;
     sections.set(s.key, { done: d, total: s.total || s.items.length });
     done += d;
   }
   for (const it of def.items) {
-    const st = currentOf(rows, it.key).status;
-    if (st === 'more_work') moreWork++;
-    if (st === 'next_week') nextWeek++;
+    const c = currentOf(rows, it.key);
+    if (c.status === 'more_work') moreWork++;
+    if (c.status === 'next_week') nextWeek++;
+    if (c.grade === 'P+') plus++;
   }
   const total = def.total || def.items.length;
-  return { done, total, pct: total ? Math.round((done / total) * 100) : 0, moreWork, nextWeek, sections };
+  return { done, total, pct: total ? Math.round((done / total) * 100) : 0, moreWork, nextWeek, plus, sections };
 }
 
 /** "Oct 24" for a YYYY-MM-DD (empty when missing). */
@@ -459,7 +482,7 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   const itemName = (key: string) => { const it = byKey.get(key); return it ? `${itemNum(it)} ${it.text}` : key; };
   // every change logged this week (user 2026-10-26) — "Oct 26 · 10 HVAC — score 2 → 3"; resets live on the Reset log tab;
   // anything set to next week is Focus only (user 2026-10-29), not Review
-  const isNextLine = (l: BoardLogRow) => (l.field === 'status' && l.new === 'next_week') || (l.field === 'note' && (l.new ?? '').startsWith(MARK_META.next_week.short + ' ')) || (l.field === 'value' && /\bnext_week\b/.test(l.new ?? ''));
+  const isNextLine = (l: BoardLogRow) => (l.field === 'status' && l.new === 'next_week') || (l.field === 'score' && gradeLabel(l.new) === 'R') || (l.field === 'note' && (l.new ?? '').startsWith(MARK_META.next_week.short + ' ')) || (l.field === 'value' && /\bnext_week\b/.test(l.new ?? ''));
   const changes = log.filter((l) => l.week === week && l.field !== 'reset' && byKey.has(l.item_key) && !isNextLine(l)).sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((l) => `${fmtDay(l.changed_on)} · ${itemName(l.item_key)} — ${describeChange(l)}`);
   const noteLogged = new Set(log.filter((l) => l.week === week && l.field === 'note').map((l) => l.item_key));
