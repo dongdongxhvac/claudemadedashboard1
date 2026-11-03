@@ -152,7 +152,9 @@ const nextLog: BoardLogRow[] = [
 assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retest ok', 'Oct 28 · 10 HVAC — status: done'], 'next-week status / notes stay out of Review (they are Focus)');
 assertEq(weekLog(def, rows, 2, [], nextLog).focus, ['Oct 1 · 11 Plumbing'], 'and still list under Focus');
 
-assertEq([1, 2, 3, 4, 5, 6].map(isScorable), [false, false, true, true, true, false], 'sections 1 · 2 · 6 are not scored');
+assertEq([1, 2, 3, 4, 5, 6].map((n) => isScorable(n)), [true, false, true, true, true, false], 'P+ on sections 1 · 3 · 4 · 5');
+assertEq(isScorable(2, { kind: 'rounds8' }), true, 'item 7 (rounds) reaches P+');
+assertEq(isScorable(2, { kind: 'note', box: false }), false, 'item 8 stays R / P');
 assertEq((['R', 'P', 'P+'] as const).map(statusForGrade), ['next_week', 'done', 'done'], 'grade → status');
 
 // multi-notes with marks

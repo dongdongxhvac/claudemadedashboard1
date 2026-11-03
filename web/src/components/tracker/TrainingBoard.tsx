@@ -72,8 +72,9 @@ export function TrainingBoard({ def, rows, week, weeks, canEdit, setRow, onReset
                     const st = cur.status;
                     const meta = st ? STATUS_META[st] : null;
                     const c = item.control;
-                    // one pill = grade + status (user 2026-11-03): none → R → P → P+ (skill sections) → none; no pill on the rounds item
-                    const cyc = gradeCycle(isScorable(sec.num));
+                    // one pill = grade + status (user 2026-11-03): none → R → P → P+ (sections 1 · 3 · 4 · 5 and item 7) → none
+                    const plus = isScorable(sec.num, c);
+                    const cyc = gradeCycle(plus);
                     const g = cur.grade;
                     const gm = g ? GRADE_META[g] : null;
                     const cycle = () => {
@@ -90,9 +91,9 @@ export function TrainingBoard({ def, rows, week, weeks, canEdit, setRow, onReset
                             {item.text}
                             {item.hint && <span className="block t-muted" style={{ fontWeight: 500, fontSize: 11 }}>{item.hint}</span>}
                           </span>
-                          {c.kind !== 'rounds8' && (
+                          {(
                             <button type="button" onClick={cycle} disabled={!canEdit}
-                              title={canEdit ? `Week ${week}: click to cycle · none → R review (next week) → P pass (done)${isScorable(sec.num) ? ' → P+ pass plus (beyond the 8-week coverage)' : ''} → none` : gm?.label ?? ''}
+                              title={canEdit ? `Week ${week}: click to cycle · none → R review (next week) → P pass (done)${plus ? ' → P+ pass plus (beyond the 8-week coverage)' : ''} → none` : gm?.label ?? ''}
                               className="px-1.5 py-0.5 rounded whitespace-nowrap"
                               style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em', border: `1px solid ${gm ? gm.color : 'var(--color-border)'}`, color: gm ? gm.color : 'var(--color-text-muted)', background: g === 'P+' ? gm!.bg : 'var(--color-card)', cursor: canEdit ? 'pointer' : 'default' }}>
                               {gm ? `${meta?.short ?? ''} ${g} · ${gm.label}` : '○ —'}{st && cur.statusWeek ? <span className="t-mono" style={{ opacity: 0.7 }}> W{cur.statusWeek}</span> : null}

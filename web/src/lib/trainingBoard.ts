@@ -135,9 +135,8 @@ const EQUIPMENT_RE = /^(boiler|cooling tower|ahu|chiller|bms)\b/i;
 export const PART_LABEL = { overview: 'overview + quiz', tagit: 'find it / tag it' } as const;
 export const itemNum = (it: BoardItem) => `${it.num}${it.part === 'overview' ? 'a' : it.part === 'tagit' ? 'b' : ''}`;
 /** Grade per item (value.grade), one pill with the status (user 2026-11-03): R · review → next week,
- *  P · pass → done, P+ · pass plus → done, beyond the 8-week coverage. P+ only on the skill sections
- *  3 · 4 · 5; sections 1 · 2 · 6 (COVE, PlantLog / site / buildings, Setup) are activity lists: R / P.
- *  The rounds item (7) has no pill — its state lives on each round's note. Legacy score 1–3 = R, 4 = P. */
+ *  P · pass → done, P+ · pass plus → done, beyond the 8-week coverage. P+ on sections 1 · 3 · 4 · 5 and on
+ *  the rounds item 7; the rest of section 2 and section 6 cycle R / P. Legacy score 1–3 = R, 4 = P. */
 export type BoardGrade = 'R' | 'P' | 'P+';
 export const GRADES: BoardGrade[] = ['R', 'P', 'P+'];
 export const GRADE_META: Record<BoardGrade, { label: string; status: BoardStatus; color: string; bg: string }> = {
@@ -145,9 +144,9 @@ export const GRADE_META: Record<BoardGrade, { label: string; status: BoardStatus
   'P':  { label: 'Pass',      status: 'done',      color: '#047857', bg: 'rgba(16,185,129,0.14)' },
   'P+': { label: 'Pass plus', status: 'done',      color: '#047857', bg: 'rgba(16,185,129,0.22)' },
 };
-export const NO_PLUS_SECTIONS = [1, 2, 6];
-/** Sections whose items can take P+ (kept under the old name: "scorable" = skill section). */
-export const isScorable = (sectionNum: number) => !NO_PLUS_SECTIONS.includes(sectionNum);
+export const NO_PLUS_SECTIONS = [2, 6];
+/** Whether an item's pill reaches P+ (kept under the old name): section 1, 3, 4, 5, or the rounds item. */
+export const isScorable = (sectionNum: number, control?: BoardControl) => control?.kind === 'rounds8' || !NO_PLUS_SECTIONS.includes(sectionNum);
 export const statusForGrade = (g: BoardGrade): BoardStatus => GRADE_META[g].status;
 const isGrade = (v: unknown): v is BoardGrade => (GRADES as string[]).includes(String(v));
 /** The grade stored on a value: value.grade, else the legacy score (1–3 → R, 4 → P). */

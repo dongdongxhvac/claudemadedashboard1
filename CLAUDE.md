@@ -18,7 +18,8 @@ Rules the user has fixed — keep them unless told otherwise:
 
 - **One pill = grade + status** (user 2026-11-03, replaced the 1–4 score): click cycles none → **R ·
   review** (status next week) → **P · pass** (done) → **P+ · pass plus** (done, beyond the 8-week
-  coverage; skill sections 3–5 only) → none. Sections 1, 2, 6 cycle R / P. Item 7 (rounds) has no pill.
+  coverage; sections 1, 3, 4, 5 and item 7) → none. Item 8 and section 6 cycle R / P. Item 7 (rounds)
+  has the pill *and* its per-round learning / solo / next week notes (user 2026-11-03).
   No "more work". Stored as `value.grade`; legacy `score` 1–3 reads as R, 4 as P (rows were converted
   on 2026-11-03). The log writes one line per click ("grade R → P", field `score`); an R line is Focus
   only. Printed: "✓ P+ W5" / "→ R W6" in the date slot and in each part's header line.
