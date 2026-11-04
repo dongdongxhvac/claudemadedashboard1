@@ -466,10 +466,15 @@ export function boardProgress(def: TrainingBoardDef, rows: BoardRow[]): BoardPro
 /** "Oct 24" for a YYYY-MM-DD (empty when missing). */
 export const fmtDay = (ymd: string | null | undefined) => (ymd ? new Date(ymd.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
 
+/** The latest session reached: the highest week with a saved row or a stamped date (0 when none). */
+export const latestWeek = (rows: Pick<BoardRow, 'item_key' | 'week' | 'value'>[]): number =>
+  Math.max(0, ...rows.filter((r) => !r.item_key.startsWith('meta.')).map((r) => r.week), ...Object.keys(weekDates(rows)).map(Number));
 /** Items still under review at the end of week W (user 2026-11-04): the latest status row of each item up to
  *  W whose status is next week — set this week or carried from an earlier one — plus a next-week round of W.
  *  Returns the row that set it (its week says when). */
 export function reviewRowsAsOf(def: TrainingBoardDef, rows: BoardRow[], week: number): BoardRow[] {
+  // only up to the latest session reached (a saved row or a stamped date): later weeks stay empty (user 2026-11-04)
+  if (week > latestWeek(rows)) return [];
   const byKey = new Map(def.items.map((it) => [it.key, it]));
   const out: BoardRow[] = [];
   for (const it of def.items) {

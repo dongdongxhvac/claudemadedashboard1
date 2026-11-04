@@ -157,11 +157,15 @@ const nextLog: BoardLogRow[] = [
 ];
 assertEq(weekLog(def, rows, 2, [], nextLog).review, ['Oct 1 · 10 HVAC — retest ok', 'Oct 28 · 10 HVAC — grade P'], 'next-week status / notes stay out of Review (they are Focus); a done status reads as grade P');
 assertEq(weekLog(def, rows, 2, [], nextLog).focus, ['Oct 1 · 11 Plumbing'], 'and still list under Focus');
-// review carries forward until the item passes
-assertEq(weekLog(def, rows, 3).focus, ['Oct 1 · 11 Plumbing · since W2'], 'W3 focus still lists the W2 review item');
-assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done', null, { grade: 'P' })], 3).focus, [], 'passed in W3 → no longer in focus');
-assertEq(weekLog(def, [...rows, row('plumbing', 3, 'done', null, { grade: 'P' })], 2).focus, ['Oct 1 · 11 Plumbing'], 'W2 focus unchanged by the later pass');
-assertEq(inviteText(def, rows, 3, 'Evan').includes('Focus: Oct 1 · 11 Plumbing · since W2'), true, 'invite focus carries forward too');
+// review carries forward until the item passes — but only up to the latest session reached
+assertEq(weekLog(def, rows, 3).focus, [], 'W3 not reached yet (latest saved week is 2) → empty focus');
+const w3 = [...rows, row('week_hours', 3, null, null, { hours: 36 })];
+assertEq(weekLog(def, w3, 3).focus, ['Oct 1 · 11 Plumbing · since W2'], 'W3 reached → still lists the W2 review item');
+assertEq(weekLog(def, [...rows, row('meta.weeks', 0, null, null, { dates: { '3': '2026-10-15' } })], 3).focus, ['Oct 1 · 11 Plumbing · since W2'], 'a stamped W3 date also counts as reached');
+assertEq(weekLog(def, w3, 4).focus, [], 'W4 beyond the latest session → empty');
+assertEq(weekLog(def, [...w3, row('plumbing', 3, 'done', null, { grade: 'P' })], 3).focus, [], 'passed in W3 → no longer in focus');
+assertEq(weekLog(def, [...w3, row('plumbing', 3, 'done', null, { grade: 'P' })], 2).focus, ['Oct 1 · 11 Plumbing'], 'W2 focus unchanged by the later pass');
+assertEq(inviteText(def, w3, 3, 'Evan').includes('Focus: Oct 1 · 11 Plumbing · since W2'), true, 'invite focus carries forward too');
 
 assertEq([1, 2, 3, 4, 5, 6].map((n) => isScorable(n)), [true, false, true, true, true, false], 'P+ on sections 1 · 3 · 4 · 5');
 assertEq(isScorable(2, { kind: 'rounds8' }), true, 'item 7 (rounds) reaches P+');
