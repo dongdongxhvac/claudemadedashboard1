@@ -33,7 +33,9 @@ Rules the user has fixed — keep them unless told otherwise:
   the first time. "+ week" adds sessions past 8. "↺ reset W{n}" clears a session's date (and, on a
   second confirm, its rows). Week-0 meta rows (first meeting, invite, plan) save without a week.
 - **Weekly log**: Review lists every logged change *except* anything set to next week (that is Focus
-  only). Note lines read "note: missed · text" (mark as a word), highlighted with the mark's colour and
+  only). Focus carries forward (user 2026-11-04): every item still under review at the end of the week
+  shows, with "· since W5" when it was set earlier; it drops out once it passes. The invite uses the
+  same list. Note lines read "note: missed · text" (mark as a word), highlighted with the mark's colour and
   the text underlined. Every line is `10/30·32` (compact date·item number, small mono) then the item
   name bold, then the rest. Section tallies are **accrued**: items done by the end of the week over the
   section total ("2/5"), count large, with the delta vs the previous week ("+2"). COVE = hours that

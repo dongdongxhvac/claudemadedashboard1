@@ -466,6 +466,24 @@ export function boardProgress(def: TrainingBoardDef, rows: BoardRow[]): BoardPro
 /** "Oct 24" for a YYYY-MM-DD (empty when missing). */
 export const fmtDay = (ymd: string | null | undefined) => (ymd ? new Date(ymd.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
 
+/** Items still under review at the end of week W (user 2026-11-04): the latest status row of each item up to
+ *  W whose status is next week — set this week or carried from an earlier one — plus a next-week round of W.
+ *  Returns the row that set it (its week says when). */
+export function reviewRowsAsOf(def: TrainingBoardDef, rows: BoardRow[], week: number): BoardRow[] {
+  const byKey = new Map(def.items.map((it) => [it.key, it]));
+  const out: BoardRow[] = [];
+  for (const it of def.items) {
+    const mine = rows.filter((r) => r.item_key === it.key && r.week <= week && r.week > 0).sort((a, b) => a.week - b.week);
+    if (it.control.kind === 'rounds8') {
+      const thisWeek = mine.find((r) => r.week === week);
+      if (thisWeek && roundOf([thisWeek], it.key, week) === 'next_week') { out.push(thisWeek); continue; }
+    }
+    const last = [...mine].reverse().find((r) => r.status);
+    if (last?.status === 'next_week') out.push(last);
+  }
+  return out.sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num);
+}
+
 // ── weekly log (pages 2–3) ─────────────────────────────────────────────────
 export type QuizPass = { week: number; title: string; score: number; total: number };
 export type WeekLog = {
@@ -520,7 +538,9 @@ export function weekLog(def: TrainingBoardDef, rows: BoardRow[], week: number, q
   const roundAs = (r: BoardRow): BoardStatus | null => { const it = byKey.get(r.item_key); if (it?.control.kind !== 'rounds8') return null; const ro = roundOf([r], r.item_key, r.week); return ro === 'solo' ? 'done' : ro === 'next_week' ? 'next_week' : null; };
   const list = (st: BoardStatus) => wk.filter((r) => byKey.has(r.item_key) && (r.status === st || roundAs(r) === st)).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num)
     .map((r) => { const h = byKey.get(r.item_key)!.control.kind === 'rounds8' ? hoursOf(rows, r.item_key, r.week) : null; return h == null ? name(r) : `${name(r)} — ${h} h`; });
-  return { week, tallies, review, done: list('done'), focus: list('next_week') };
+  // Focus carries forward (user 2026-11-04): everything still under review at the end of this week, "· since W5" when older
+  const focus = reviewRowsAsOf(def, rows, week).map((r) => `${name(r)}${r.week < week ? ` · since W${r.week}` : ''}`);
+  return { week, tallies, review, done: list('done'), focus };
 }
 
 // ── invite (page 4) ────────────────────────────────────────────────────────
@@ -531,12 +551,12 @@ export function inviteText(def: TrainingBoardDef, rows: BoardRow[], week: number
   const meta = rows.find((r) => r.item_key === META_INVITE && r.week === week)?.value ?? {};
   const when = typeof meta.when === 'string' ? meta.when : '';
   const title = typeof meta.title === 'string' && meta.title ? meta.title : `8-Week Review · W${week} · ${personName}`;
-  // next week on the tracker (status next week, or a next-week round) — the same rows the log's Focus column lists
-  const isNext = (r: BoardRow) => { const it = byKey.get(r.item_key); if (!it) return false; return r.status === 'next_week' || (it.control.kind === 'rounds8' && roundOf([r], r.item_key, r.week) === 'next_week'); };
-  const nextRows = wk.filter(isNext).sort((a, b) => byKey.get(a.item_key)!.num - byKey.get(b.item_key)!.num);
-  // Focus: the next-week items only, with their notes (user 2026-10-29: "set to next week → next week focus only")
+  // under review as of this week (set now or carried from an earlier week) — the same rows the log's Focus column lists
+  const nextRows = reviewRowsAsOf(def, rows, week);
+  const isNext = (r: BoardRow) => nextRows.some((n) => n.item_key === r.item_key);
+  // Focus: the review items only, with their notes (user 2026-10-29: "set to next week → next week focus only")
   const noteStr = (r: BoardRow) => notesOf(r).map(noteText).join(' · ');
-  const focus = nextRows.map((r) => { const it = byKey.get(r.item_key)!; const n = noteStr(r); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}`; });
+  const focus = nextRows.map((r) => { const it = byKey.get(r.item_key)!; const n = noteStr(r); return `${fmtDay(r.entered_on)} · ${itemNum(it)} ${it.text}${n ? ` — ${n}` : ''}${r.week < week ? ` · since W${r.week}` : ''}`; });
   // To do: the week's notes that still ask for something — unmarked or "missed" — on items not already on next week
   // (a note marked good / solo / learning is a review line, not a to-do)
   const isTodo = (n: BoardNote) => n.mark == null || n.mark === 'missed';
