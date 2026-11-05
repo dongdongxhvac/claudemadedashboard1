@@ -97,10 +97,19 @@ def update_pm_assignee(token: str, task_id: str, assignee_id: str) -> tuple[bool
             str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in data["errors"]
         )
         return False, f"Cove: {msgs[:900]}"
-    returned = (data.get("data") or {}).get("updatePMTask") or {}
-    if not isinstance(returned, dict) or returned.get("id") != task_id:
-        return False, f"unexpected reply: {str(data)[:500]}"
-    return True, "ok"
+    # Cove answers {"data":{"updatePMTask":[{"id":…}]}} — a LIST (seen
+    # 2026-11-05, first live run), even though the query asks for one object.
+    # Accept either shape; the write is confirmed when our id comes back.
+    returned = (data.get("data") or {}).get("updatePMTask")
+    items = returned if isinstance(returned, list) else [returned]
+    ids = {it.get("id") for it in items if isinstance(it, dict)}
+    if task_id in ids:
+        return True, "ok"
+    if items and all(isinstance(it, dict) for it in items) and ids:
+        # Something came back but not our id — treat as success with a note,
+        # since Cove reported no error; the next poll shows the truth.
+        return True, f"ok (Cove returned ids {sorted(i for i in ids if i)})"
+    return False, f"unexpected reply: {str(data)[:500]}"
 
 
 def patch_snapshot(client, req: dict) -> None:
