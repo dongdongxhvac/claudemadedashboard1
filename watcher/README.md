@@ -118,3 +118,26 @@ select start_at, title, filled, spaces, status from ot_api_jobs order by start_a
 A failed poll (bad key, off the tailnet, 429 from polling too often) is
 recorded as a `status='error'` row and the manager panel says "last poll
 failed"; the previous mirror stays on screen.
+
+## Cove PM assign watcher (`pm_assign_watcher.py`) — Binney manager page
+
+The only script here that WRITES to Cove. The Binney manager page's
+"Assign PMs · Cove" panel inserts a row into `pm_assign_requests`
+(migration 0156); this watcher (per-minute systemd timer) claims pending rows
+and runs Cove's `UpdatePMTask` mutation for each — captured from
+manage.cove.is DevTools on 2026-11-05:
+
+    mutation UpdatePMTask($id: ID!, $input: GQLPMTaskUpdateInput!) {
+      updatePMTask(id: $id, input: $input) { id }
+    }
+    variables: {"id": "<GQLPMTask.id>", "input": {"assigneeId": "<Cove user id>"}}
+
+`pm_rows.cove_task_id` (same migration) carries the task id the mutation
+wants; `pm12_poller.py` fills it on every run. Uses the pollers' Cove
+session — that account must be allowed to edit PM tasks on the Binney
+network, or every request lands as `error` with Cove's message in `detail`.
+
+    sudo ./install_binney_pm_assign_linux.sh            # install + enable (VM)
+    ./.venv/bin/python pm_assign_watcher.py             # run once by hand
+    journalctl -u binney-pm-assign.service -n 40 --no-pager
+

@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { useCanOpenAdminPage } from '../../hooks/useMe';
 import { BinneyPtoPanel } from './BinneyPtoPanel';
 import { BinneyWorkloadPanel } from './BinneyWorkloadPanel';
+import { BinneyPmAssignPanel } from './BinneyPmAssignPanel';
 import { BinneyOpsPanel } from './BinneyOpsPanel';
 import { SiteSwitcher } from './SiteSwitcher';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -90,6 +91,10 @@ export default function BinneyManager() {
             {/* Workload · Performance + PMs closed · Labor — Binney Cove pollers
                 (COVE_SITE=binney) + migration 0152. Below PTO per user 2026-10-26. */}
             <BinneyWorkloadPanel />
+            {/* Assign PMs · Cove — managers reassign open Binney PMs; the VM's
+                pm_assign_watcher writes UpdatePMTask to Cove. Migration 0156,
+                2026-11-05. Renders nothing for non-managers. */}
+            <BinneyPmAssignPanel />
             {/* Clusters · Rounds · Weekend — the managers' paper sheets
                 (crews by cluster, buildings → rounds group, Week A/B
                 rotation, weekend PM plan, the weekly hand-out). Migration

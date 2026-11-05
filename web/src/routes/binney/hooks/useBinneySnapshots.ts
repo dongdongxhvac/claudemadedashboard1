@@ -12,14 +12,18 @@ import type { PmRow, WoRow, LaborDailyRow, PmCloseEvent } from '../../../hooks/u
 const SITE = 'binney';
 const REFETCH_MS = 60_000;
 
+/** PmRow plus the Cove task id (0156) — what the assign-PM button sends to
+ *  UpdatePMTask. Null on rows the poller wrote before it learned the id. */
+export type BinneyPmRow = PmRow & { cove_task_id: string | null };
+
 /** Open PMs from the latest Binney pm12 snapshot (paginated past the 1000-row cap). */
 export function useBinneyPmRows() {
   return useQuery({
     queryKey: ['binney_pm_snapshot'],
-    queryFn: async (): Promise<PmRow[]> => {
+    queryFn: async (): Promise<BinneyPmRow[]> => {
       const pageSize = 1000;
       let from = 0;
-      const all: PmRow[] = [];
+      const all: BinneyPmRow[] = [];
       while (true) {
         const { data, error } = await supabase
           .from('site_pm_snapshot')
@@ -28,7 +32,7 @@ export function useBinneyPmRows() {
           .range(from, from + pageSize - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
-        all.push(...(data as PmRow[]));
+        all.push(...(data as BinneyPmRow[]));
         if (data.length < pageSize) break;
         from += pageSize;
       }

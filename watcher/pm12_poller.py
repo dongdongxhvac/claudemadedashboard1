@@ -289,6 +289,9 @@ def map_pm_task(item: dict, snapshot_id: str) -> dict:
         "object_id":          safe_get(item, "equipment", "id"),
         "pm_type":            classify_pm(name),
         "cmms_type":          item.get("type"),
+        # Cove's internal task id — what UpdatePMTask takes (0156, the
+        # dashboard's assign-PM button). altId above is the PM-ROG-6743 label.
+        "cove_task_id":       item.get("id"),
     }
 
 
