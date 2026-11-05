@@ -54,14 +54,42 @@ MUTATION = """
 }
     """
 
+# Same mutation, also asking for the assignee as Cove now spells it, so the
+# dashboard can show "Ed Nardone" (Cove's firstName lastName — what the pm12
+# poller writes) rather than whatever name the request carried. Tried
+# first; if Cove rejects the extra selection the bare MUTATION is used.
+MUTATION_WITH_ASSIGNEE = """
+    mutation UpdatePMTask($id: ID!, $input: GQLPMTaskUpdateInput!) {
+  updatePMTask(id: $id, input: $input) {
+    id
+    assignee {
+      id
+      firstName
+      lastName
+    }
+  }
+}
+    """
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def update_pm_assignee(token: str, task_id: str, assignee_id: str) -> tuple[bool, str]:
-    """Run UpdatePMTask. Returns (ok, detail). Mirrors the pollers' post_gql
-    headers: raw JWT in Authorization AND as the cove_manage_auth cookie."""
+def update_pm_assignee(token: str, task_id: str, assignee_id: str) -> tuple[bool, str, str | None]:
+    """Run UpdatePMTask. Returns (ok, detail, cove_assignee_name). The name is
+    Cove's own spelling of the new assignee when the reply carries it, else
+    None. Tries the richer selection first and falls back to the bare one on
+    a GraphQL validation error (which never executes the write)."""
+    ok, detail, name = _run_mutation(token, task_id, assignee_id, MUTATION_WITH_ASSIGNEE)
+    if not ok and "Cannot query field" in detail:
+        ok, detail, name = _run_mutation(token, task_id, assignee_id, MUTATION)
+    return ok, detail, name
+
+
+def _run_mutation(token: str, task_id: str, assignee_id: str, query: str) -> tuple[bool, str, str | None]:
+    """One POST. Mirrors the pollers' post_gql headers: raw JWT in
+    Authorization AND as the cove_manage_auth cookie."""
     headers = {
         "Authorization": token,
         "Cookie": f"cove_manage_auth={token}",
@@ -77,39 +105,48 @@ def update_pm_assignee(token: str, task_id: str, assignee_id: str) -> tuple[bool
     }
     body = {
         "operationName": "UpdatePMTask",
-        "query": MUTATION,
+        "query": query,
         "variables": {"id": task_id, "input": {"assigneeId": assignee_id}},
     }
     try:
         resp = requests.post(GQL_URL, headers=headers, json=body, timeout=30)
     except requests.RequestException as e:
-        return False, f"network: {e}"
+        return False, f"network: {e}", None
     if resp.status_code != 200:
-        return False, f"HTTP {resp.status_code}: {resp.text[:500]}"
+        return False, f"HTTP {resp.status_code}: {resp.text[:500]}", None
     try:
         data = resp.json()
     except ValueError:
-        return False, f"non-JSON reply: {resp.text[:500]}"
+        return False, f"non-JSON reply: {resp.text[:500]}", None
     if not isinstance(data, dict):
-        return False, f"unexpected reply: {str(data)[:500]}"
+        return False, f"unexpected reply: {str(data)[:500]}", None
     if data.get("errors"):
         msgs = "; ".join(
             str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in data["errors"]
         )
-        return False, f"Cove: {msgs[:900]}"
+        return False, f"Cove: {msgs[:900]}", None
     # Cove answers {"data":{"updatePMTask":[{"id":…}]}} — a LIST (seen
     # 2026-11-05, first live run), even though the query asks for one object.
     # Accept either shape; the write is confirmed when our id comes back.
     returned = (data.get("data") or {}).get("updatePMTask")
-    items = returned if isinstance(returned, list) else [returned]
-    ids = {it.get("id") for it in items if isinstance(it, dict)}
-    if task_id in ids:
-        return True, "ok"
-    if items and all(isinstance(it, dict) for it in items) and ids:
+    items = [it for it in (returned if isinstance(returned, list) else [returned]) if isinstance(it, dict)]
+    mine = next((it for it in items if it.get("id") == task_id), None)
+    if mine is not None:
+        return True, "ok", _assignee_name(mine.get("assignee"))
+    ids = sorted(str(it.get("id")) for it in items if it.get("id"))
+    if ids:
         # Something came back but not our id — treat as success with a note,
         # since Cove reported no error; the next poll shows the truth.
-        return True, f"ok (Cove returned ids {sorted(i for i in ids if i)})"
-    return False, f"unexpected reply: {str(data)[:500]}"
+        return True, f"ok (Cove returned ids {ids})", _assignee_name(items[0].get("assignee"))
+    return False, f"unexpected reply: {str(data)[:500]}", None
+
+
+def _assignee_name(assignee) -> str | None:
+    """'Ed Nardone' from Cove's assignee object — same rule as pm12_poller."""
+    if not isinstance(assignee, dict):
+        return None
+    name = f"{(assignee.get('firstName') or '').strip()} {(assignee.get('lastName') or '').strip()}".strip()
+    return name or None
 
 
 def patch_snapshot(client, req: dict) -> None:
@@ -200,10 +237,15 @@ def main() -> int:
         # Nothing may leave a row in 'running': any surprise becomes an error
         # row with the exception text, and the loop moves on.
         try:
-            ok, detail = update_pm_assignee(token, r["cove_task_id"], r["assignee_cove_id"])
+            ok, detail, cove_name = update_pm_assignee(token, r["cove_task_id"], r["assignee_cove_id"])
         except Exception as e:
-            ok, detail = False, f"watcher exception: {type(e).__name__}: {e}"
+            ok, detail, cove_name = False, f"watcher exception: {type(e).__name__}: {e}", None
         outcome = {"status": "done" if ok else "error", "finished_at": _now(), "detail": detail[:1000]}
+        if ok and cove_name:
+            # Cove's spelling wins — it is what the poller writes, so the
+            # patched snapshot row and the log read like every other row.
+            outcome["assignee_name"] = cove_name
+            r["assignee_name"] = cove_name
         try:
             client.table("pm_assign_requests").update(outcome).eq("id", r["id"]).execute()
         except Exception as e:

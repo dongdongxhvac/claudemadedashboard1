@@ -119,8 +119,9 @@ export function BinneyPmAssignPanel() {
       task_name: r.name,
       assignee_user_id: u.user_id,
       assignee_cove_id: u.cove_user_id,
-      // Cove's own spelling, so the patched snapshot row reads like a polled one.
-      assignee_name: u.cmms_assignee_name ?? u.full_name,
+      // Readable name for the log; the watcher overwrites it with Cove's own
+      // spelling ("Ed Nardone") from the mutation reply once the write lands.
+      assignee_name: u.full_name,
       previous_assignee_name: r.assigned_to_name,
       requested_by: session?.user.email ?? null,
     }, {
