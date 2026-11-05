@@ -40,7 +40,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
-from cove_session import get_fresh_token, SessionError  # noqa: E402
+from cove_session import get_fresh_token  # noqa: E402
 
 GQL_URL = "https://api.cove.is/gql"
 
@@ -90,11 +90,15 @@ def update_pm_assignee(token: str, task_id: str, assignee_id: str) -> tuple[bool
         data = resp.json()
     except ValueError:
         return False, f"non-JSON reply: {resp.text[:500]}"
+    if not isinstance(data, dict):
+        return False, f"unexpected reply: {str(data)[:500]}"
     if data.get("errors"):
-        msgs = "; ".join(str(e.get("message", e)) for e in data["errors"])
+        msgs = "; ".join(
+            str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in data["errors"]
+        )
         return False, f"Cove: {msgs[:900]}"
     returned = (data.get("data") or {}).get("updatePMTask") or {}
-    if returned.get("id") != task_id:
+    if not isinstance(returned, dict) or returned.get("id") != task_id:
         return False, f"unexpected reply: {str(data)[:500]}"
     return True, "ok"
 
@@ -119,8 +123,40 @@ def patch_snapshot(client, req: dict) -> None:
     ).eq("snapshot_id", latest.data[0]["id"]).eq("cove_task_id", req["cove_task_id"]).execute()
 
 
+# A request left in 'running' longer than this is a watcher that died mid-run
+# (crash, VM reboot, systemd timeout). Stamp it as error so the dashboard's
+# chip stops saying "writing to Cove…" forever and the PM can be retried.
+STALE_RUNNING_MINUTES = 5
+
+
+def reap_stale_running(client) -> None:
+    cutoff = datetime.fromtimestamp(
+        datetime.now(timezone.utc).timestamp() - STALE_RUNNING_MINUTES * 60, tz=timezone.utc
+    ).isoformat()
+    stale = (
+        client.table("pm_assign_requests")
+        .select("id, task_no")
+        .eq("status", "running")
+        .lt("started_at", cutoff)
+        .execute()
+    )
+    ids = [r["id"] for r in (stale.data or [])]
+    if not ids:
+        return
+    print(f"  reaping {len(ids)} stale running request(s): {[r.get('task_no') for r in stale.data]}")
+    client.table("pm_assign_requests").update({
+        "status": "error", "finished_at": _now(),
+        "detail": f"watcher died mid-run (no result after {STALE_RUNNING_MINUTES} min) — check journalctl -u binney-pm-assign and retry",
+    }).in_("id", ids).execute()
+
+
 def main() -> int:
     client = get_client()
+
+    try:
+        reap_stale_running(client)
+    except Exception as e:
+        print(f"WARN: stale reap failed: {e}", file=sys.stderr)
 
     pending = (
         client.table("pm_assign_requests")
@@ -141,8 +177,8 @@ def main() -> int:
 
     try:
         token = get_fresh_token()
-    except SessionError as e:
-        detail = f"cove_session: {e}"
+    except Exception as e:  # SessionError, a missing session file, a network error on refresh…
+        detail = f"cove_session: {type(e).__name__}: {e}"
         print(f"ERROR: {detail}", file=sys.stderr)
         client.table("pm_assign_requests").update(
             {"status": "error", "finished_at": _now(), "detail": detail[:1000]}
@@ -151,10 +187,20 @@ def main() -> int:
 
     failures = 0
     for r in reqs:
-        ok, detail = update_pm_assignee(token, r["cove_task_id"], r["assignee_cove_id"])
-        outcome = {"status": "done" if ok else "error", "finished_at": _now(), "detail": detail[:1000]}
-        client.table("pm_assign_requests").update(outcome).eq("id", r["id"]).execute()
         label = f"{r.get('task_no') or r['cove_task_id']} → {r.get('assignee_name') or r['assignee_cove_id']}"
+        # Nothing may leave a row in 'running': any surprise becomes an error
+        # row with the exception text, and the loop moves on.
+        try:
+            ok, detail = update_pm_assignee(token, r["cove_task_id"], r["assignee_cove_id"])
+        except Exception as e:
+            ok, detail = False, f"watcher exception: {type(e).__name__}: {e}"
+        outcome = {"status": "done" if ok else "error", "finished_at": _now(), "detail": detail[:1000]}
+        try:
+            client.table("pm_assign_requests").update(outcome).eq("id", r["id"]).execute()
+        except Exception as e:
+            failures += 1
+            print(f"  ERROR {label}: could not stamp outcome ({outcome['status']}): {e}", file=sys.stderr)
+            continue
         if ok:
             print(f"  done  {label}")
             try:
