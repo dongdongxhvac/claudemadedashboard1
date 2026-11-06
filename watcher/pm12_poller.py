@@ -177,17 +177,19 @@ UNASSIGNED_VALUES: list[list] = [[None], [{"id": None}]]
 
 
 def build_pm_filter(statuses: list[str], assignee_ids: list[str] | None = None,
-                    assignee_value: list | None = None) -> dict:
-    """assignee_value overrides the id list (used for the unassigned fetch)."""
-    return {
-        "items": [
-            {"field": "status",   "operator": "CONTAINED_IN", "value": statuses},
-            {"field": "assignee", "operator": "CONTAINED_IN",
-             "value": assignee_value if assignee_value is not None else (assignee_ids or PM_ASSIGNEE_IDS)},
-            {"field": "dueDate",  "operator": "DATE_RANGE",   "value": {"start": compute_due_date_start()}},
-        ],
-        "orItems": [],
-    }
+                    assignee_value: list | None = None, due_floor: bool = True) -> dict:
+    """assignee_value overrides the id list (used for the unassigned fetch).
+    due_floor=False drops the rolling 60-day dueDate floor — the unassigned
+    fetch wants every open unassigned PM however old (2026-11-06: Cove
+    showed 138 unassigned, the floor let through 88)."""
+    items = [
+        {"field": "status",   "operator": "CONTAINED_IN", "value": statuses},
+        {"field": "assignee", "operator": "CONTAINED_IN",
+         "value": assignee_value if assignee_value is not None else (assignee_ids or PM_ASSIGNEE_IDS)},
+    ]
+    if due_floor:
+        items.append({"field": "dueDate", "operator": "DATE_RANGE", "value": {"start": compute_due_date_start()}})
+    return {"items": items, "orItems": []}
 
 
 # ---------- helpers ----------
@@ -365,7 +367,7 @@ def fetch_unassigned_pm_tasks(statuses: list[str]) -> list[dict]:
     last_err: Exception | None = None
     for value in UNASSIGNED_VALUES:
         try:
-            items = fetch_all_pm_tasks(statuses, None, assignee_value=value)
+            items = fetch_all_pm_tasks(statuses, None, assignee_value=value, due_floor=False)
         except RuntimeError as e:
             last_err = e
             print(f"  unassigned filter {value!r} rejected: {e}", file=sys.stderr)
@@ -380,11 +382,12 @@ def fetch_unassigned_pm_tasks(statuses: list[str]) -> list[dict]:
 
 
 def fetch_all_pm_tasks(statuses: list[str], ids: list[str] | None = None,
-                       assignee_value: list | None = None) -> list[dict]:
+                       assignee_value: list | None = None, due_floor: bool = True) -> list[dict]:
     """Paginate through every PM task matching the bookmark filter. Cove's UI
     sends limit=25 but for a poller we want fewer round-trips, so PAGE_LIMIT=100."""
-    pm_filter = build_pm_filter(statuses, ids, assignee_value)
-    print(f"  status={statuses}  dueDate >= {pm_filter['items'][2]['value']['start']} (rolling {PM_DUE_LOOKBACK_DAYS}d)")
+    pm_filter = build_pm_filter(statuses, ids, assignee_value, due_floor)
+    due_note = f"dueDate >= {pm_filter['items'][2]['value']['start']} (rolling {PM_DUE_LOOKBACK_DAYS}d)" if due_floor else "no dueDate floor"
+    print(f"  status={statuses}  {due_note}")
     out: list[dict] = []
     skip = 0
     while True:
