@@ -8,6 +8,12 @@
 // watcher also patches the snapshot row, so the assignee column updates
 // without waiting for the next poll.
 //
+// Bulk (month start, ~300 new PMs landing unassigned): tick rows (or "all
+// shown"), pick one person, "Assign N" — one insert of N requests; the VM
+// drains them 60 a minute. The poller pulls unassigned Binney PMs since
+// cove_sites.fetch_unassigned, so "unassigned only" + a building search is
+// the usual starting point.
+//
 // Managers only (manageScopeFor !== 'none') — the DB policy says the same.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../lib/auth';
@@ -15,7 +21,7 @@ import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAllUsers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { useBinneyPmRows, useBinneySnapshotAges, type BinneyPmRow } from './hooks/useBinneySnapshots';
-import { usePmAssignRequests, useRequestPmAssign, type PmAssignRequest } from './hooks/useBinneyPmAssign';
+import { usePmAssignRequests, useRequestPmAssign, useRequestPmAssignMany, type PmAssignInput, type PmAssignRequest } from './hooks/useBinneyPmAssign';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 import { inputStyle } from '../../lib/binneyRounds';
 import { SmallBtn } from './BinneyUi';
@@ -57,8 +63,11 @@ export function BinneyPmAssignPanel() {
   const usersQ = useAllUsers();
   const reqQ = usePmAssignRequests();
   const request = useRequestPmAssign();
+  const requestMany = useRequestPmAssignMany();
 
   const [showAll, setShowAll] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set()); // cove_task_id
+  const [bulkPick, setBulkPick] = useState('');                             // user_id
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [picks, setPicks] = useState<Record<string, string>>({}); // cove_task_id → user_id
@@ -107,8 +116,6 @@ export function BinneyPmAssignPanel() {
 
   const missingIds = useMemo(() => ((pmQ.data ?? []) as BinneyPmRow[]).some((r) => !r.cove_task_id), [pmQ.data]);
 
-  if (!canAssign) return null;
-
   const assign = (r: BinneyPmRow) => {
     const uid = picks[r.cove_task_id ?? ''];
     const u = uid ? roster.byId.get(uid) : undefined;
@@ -128,6 +135,76 @@ export function BinneyPmAssignPanel() {
       onSuccess: () => setPicks((p) => { const n = { ...p }; delete n[r.cove_task_id!]; return n; }),
     });
   };
+
+  const rosterOptions = (
+    <>
+      <option value="">—</option>
+      {roster.engineers.length > 0 && (
+        <optgroup label="Engineers">
+          {roster.engineers.map((u) => (
+            <option key={u.user_id} value={u.user_id}>
+              {u.full_name}{u.cluster ? ` · ${u.cluster === 'east' ? 'E' : 'W'}` : ''}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {roster.managers.length > 0 && (
+        <optgroup label="Managers">
+          {roster.managers.map((u) => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
+        </optgroup>
+      )}
+    </>
+  );
+
+  // Selection is by cove_task_id; rows without one can't be selected.
+  const selectable = rows.filter((r) => !!r.cove_task_id);
+  const allShownSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.cove_task_id!));
+  const toggleAllShown = () => setSelected((prev) => {
+    const n = new Set(prev);
+    if (allShownSelected) selectable.forEach((r) => n.delete(r.cove_task_id!));
+    else selectable.forEach((r) => n.add(r.cove_task_id!));
+    return n;
+  });
+  const toggleOne = (id: string) => setSelected((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const bulkTarget = bulkPick ? roster.byId.get(bulkPick) : undefined;
+  // What "Assign N" will actually send: selected rows that have an id, are
+  // not already on that person, and have no request in flight.
+  const bulkRows = useMemo(() => {
+    if (!bulkTarget) return [] as BinneyPmRow[];
+    const all = (pmQ.data ?? []) as BinneyPmRow[];
+    return all.filter((r) => {
+      if (!r.cove_task_id || !selected.has(r.cove_task_id)) return false;
+      const req = latestReq.get(r.cove_task_id);
+      if (req?.status === 'pending' || req?.status === 'running') return false;
+      const cur = roster.byCmms.get((r.assigned_to_name ?? '').trim());
+      return cur?.user_id !== bulkTarget.user_id;
+    });
+  }, [pmQ.data, selected, bulkTarget, latestReq, roster.byCmms]);
+
+  const assignMany = () => {
+    if (!bulkTarget || !bulkTarget.cove_user_id || bulkRows.length === 0) return;
+    const inputs: PmAssignInput[] = bulkRows.map((r) => ({
+      cove_task_id: r.cove_task_id!,
+      task_no: r.task_no,
+      task_name: r.name,
+      assignee_user_id: bulkTarget.user_id,
+      assignee_cove_id: bulkTarget.cove_user_id!,
+      assignee_name: bulkTarget.full_name,
+      previous_assignee_name: r.assigned_to_name,
+      requested_by: session?.user.email ?? null,
+    }));
+    requestMany.mutate(inputs, {
+      onSuccess: () => { setSelected(new Set()); setBulkPick(''); },
+    });
+  };
+
+  // All hooks are above this line (rules-of-hooks).
+  if (!canAssign) return null;
 
   const recent = (reqQ.data ?? []).slice(0, 8);
   const pmAge = agesQ.data?.pm12 ? fmtWhen(agesQ.data.pm12) : 'never';
@@ -163,6 +240,28 @@ export function BinneyPmAssignPanel() {
         <span className="t-small t-muted">{rows.length} shown</span>
       </div>
 
+      {/* Bulk bar — appears once something is ticked. */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 flex-wrap mb-2 rounded px-3 py-1.5"
+          style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+          <span className="t-small t-text" style={{ fontWeight: 600 }}>{selected.size} selected</span>
+          <span className="t-small t-muted">→ assign all to</span>
+          <select value={bulkPick} onChange={(e) => setBulkPick(e.target.value)}
+            className="border rounded px-1 t-small t-text" style={{ ...inputStyle, minWidth: 180, fontSize: 11 }}>
+            {rosterOptions}
+          </select>
+          <SmallBtn primary disabled={!bulkTarget || bulkRows.length === 0 || requestMany.isPending} onClick={assignMany}
+            title={bulkTarget && bulkRows.length < selected.size ? `${selected.size - bulkRows.length} skipped: already on ${bulkTarget.full_name} or in flight` : undefined}>
+            Assign {bulkTarget ? bulkRows.length : selected.size}
+          </SmallBtn>
+          {bulkTarget && bulkRows.length < selected.size && (
+            <span className="t-small t-muted">{selected.size - bulkRows.length} skipped (already theirs / in flight)</span>
+          )}
+          <button type="button" className="t-small t-accent hover:underline" onClick={() => { setSelected(new Set()); setBulkPick(''); }}>clear</button>
+          {requestMany.error && <span className="t-small t-danger">{(requestMany.error as Error).message}</span>}
+        </div>
+      )}
+
       {pmQ.error && <p className="t-small t-danger mb-2">Couldn't load PMs: {(pmQ.error as Error).message}</p>}
       {reqQ.error && <p className="t-small t-danger mb-2">Couldn't load assign requests: {(reqQ.error as Error).message}</p>}
       {request.error && <p className="t-small t-danger mb-2">Couldn't queue the assignment: {(request.error as Error).message}</p>}
@@ -184,6 +283,10 @@ export function BinneyPmAssignPanel() {
           <table className="w-full t-small" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr className="t-muted uppercase tracking-wider text-left" style={{ fontSize: 10 }}>
+                <th className="py-1 pr-2">
+                  <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
+                    disabled={selectable.length === 0} title="select all shown" />
+                </th>
                 <th className="py-1 pr-3">PM</th>
                 <th className="py-1 pr-3">Due</th>
                 <th className="py-1 pr-3">Bldg</th>
@@ -204,7 +307,12 @@ export function BinneyPmAssignPanel() {
                 const current = roster.byCmms.get((r.assigned_to_name ?? '').trim());
                 const samePerson = !!pick && current?.user_id === pick;
                 return (
-                  <tr key={key} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <tr key={key} style={{ borderTop: '1px solid var(--color-border)', ...(r.cove_task_id && selected.has(r.cove_task_id) ? { background: 'var(--color-bg)' } : {}) }}>
+                    <td className="py-1 pr-2">
+                      <input type="checkbox" disabled={!r.cove_task_id}
+                        checked={!!r.cove_task_id && selected.has(r.cove_task_id)}
+                        onChange={() => r.cove_task_id && toggleOne(r.cove_task_id)} />
+                    </td>
                     <td className="py-1 pr-3 t-mono whitespace-nowrap">{r.task_no ?? '—'}</td>
                     <td className="py-1 pr-3 whitespace-nowrap" style={overdue ? { color: 'var(--color-danger)', fontWeight: 600 } : undefined}>
                       {fmtDue(r.due_date)}
@@ -224,21 +332,7 @@ export function BinneyPmAssignPanel() {
                           className="border rounded px-1 t-small t-text"
                           style={{ ...inputStyle, minWidth: 160, fontSize: 11 }}
                         >
-                          <option value="">—</option>
-                          {roster.engineers.length > 0 && (
-                            <optgroup label="Engineers">
-                              {roster.engineers.map((u) => (
-                                <option key={u.user_id} value={u.user_id}>
-                                  {u.full_name}{u.cluster ? ` · ${u.cluster === 'east' ? 'E' : 'W'}` : ''}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {roster.managers.length > 0 && (
-                            <optgroup label="Managers">
-                              {roster.managers.map((u) => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
-                            </optgroup>
-                          )}
+                          {rosterOptions}
                         </select>
                       ) : (
                         <span className="t-muted" title="pm_rows.cove_task_id is empty for this row — it fills on the next poll">id on next poll</span>

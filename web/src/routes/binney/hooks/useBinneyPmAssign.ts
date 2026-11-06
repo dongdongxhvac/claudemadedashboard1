@@ -76,3 +76,18 @@ export function useRequestPmAssign() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PM_ASSIGN }),
   });
 }
+
+/** Bulk: one insert of many requests (the month-start hand-out). */
+export function useRequestPmAssignMany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (inputs: PmAssignInput[]) => {
+      if (inputs.length === 0) return;
+      const { error } = await supabase
+        .from('pm_assign_requests')
+        .insert(inputs.map((i) => ({ ...i, site_code: SITE })));
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY_PM_ASSIGN }),
+  });
+}

@@ -15,7 +15,9 @@ Binney specifics:
     network: BioMed Realty staff, janitorial, security…);
   * managers included — Andrew Balbo / Ed Nardone carry and close PMs;
   * no Sunday skip — the Sun–Wed crew works Sundays;
-  * WO status 'scheduled' is open there (absent from UPark's WO12).
+  * WO status 'scheduled' is open there (absent from UPark's WO12);
+  * unassigned open PMs are fetched too (fetch_unassigned) so the manager
+    page can hand out the month's new PMs.
 """
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ _SITES: dict[str, dict] = {
         "sunday_skip":   True,
         "use_legacy":    True,
         "wo_extra_open": [],
+        "fetch_unassigned": False,
     },
     "binney": {
         "network_id":    os.environ.get("COVE_BINNEY_NETWORK_ID", "moBABfC2ZR").strip(),
@@ -39,6 +42,11 @@ _SITES: dict[str, dict] = {
         "sunday_skip":   False,
         "use_legacy":    False,
         "wo_extra_open": ["scheduled"],
+        # Also pull open PMs with NO assignee (0156 assign-PM panel): on the
+        # 1st the new month's PMs land unassigned and the managers hand them
+        # out from the dashboard. Filter shape from the Cove UI's URL
+        # (2026-11-06): assignee CONTAINED_IN [{"id": null}].
+        "fetch_unassigned": True,
     },
 }
 
@@ -61,3 +69,7 @@ def filename_label(base: str) -> str:
 
 def sunday_skip() -> bool:
     return bool(CFG["sunday_skip"])
+
+
+def fetch_unassigned() -> bool:
+    return bool(CFG.get("fetch_unassigned"))

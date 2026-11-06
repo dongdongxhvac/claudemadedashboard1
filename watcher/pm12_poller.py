@@ -34,7 +34,7 @@ from supabase_client import get_client  # noqa: E402
 from classify import classify_pm  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
 from cove_roster import assignee_ids, backfill_cove_ids, roster_gap_check  # noqa: E402
-from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip  # noqa: E402
+from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip, fetch_unassigned  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
@@ -169,11 +169,20 @@ def compute_due_date_start() -> str:
     return start_eastern.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def build_pm_filter(statuses: list[str], assignee_ids: list[str] | None = None) -> dict:
+# How the Cove UI spells "Assignee = Unassigned" in its filter URL
+# (captured 2026-11-06): CONTAINED_IN [{"id": null}]. The web app may send
+# the API a plain [null] instead; fetch_all_pm_tasks tries both.
+UNASSIGNED_VALUES: list[list] = [[{"id": None}], [None]]
+
+
+def build_pm_filter(statuses: list[str], assignee_ids: list[str] | None = None,
+                    assignee_value: list | None = None) -> dict:
+    """assignee_value overrides the id list (used for the unassigned fetch)."""
     return {
         "items": [
             {"field": "status",   "operator": "CONTAINED_IN", "value": statuses},
-            {"field": "assignee", "operator": "CONTAINED_IN", "value": assignee_ids or PM_ASSIGNEE_IDS},
+            {"field": "assignee", "operator": "CONTAINED_IN",
+             "value": assignee_value if assignee_value is not None else (assignee_ids or PM_ASSIGNEE_IDS)},
             {"field": "dueDate",  "operator": "DATE_RANGE",   "value": {"start": compute_due_date_start()}},
         ],
         "orItems": [],
@@ -347,10 +356,33 @@ def post_gql(body: dict) -> dict:
     return resp.status_code, resp
 
 
-def fetch_all_pm_tasks(statuses: list[str], ids: list[str] | None = None) -> list[dict]:
+def fetch_unassigned_pm_tasks(statuses: list[str]) -> list[dict]:
+    """Open PMs with no assignee. Tries each UNASSIGNED_VALUES spelling until
+    one is accepted; whatever comes back is filtered client-side to items
+    whose assignee really is empty, so a misread filter can never leak the
+    rest of the network into the snapshot."""
+    last_err: Exception | None = None
+    for value in UNASSIGNED_VALUES:
+        try:
+            items = fetch_all_pm_tasks(statuses, None, assignee_value=value)
+        except RuntimeError as e:
+            last_err = e
+            print(f"  unassigned filter {value!r} rejected: {e}", file=sys.stderr)
+            continue
+        kept = [it for it in items if not (it.get("assignee") or {}).get("id")]
+        if len(kept) != len(items):
+            print(f"  WARN: unassigned filter {value!r} returned {len(items) - len(kept)} assigned task(s) — "
+                  f"filter not honoured as expected; kept the {len(kept)} truly unassigned", file=sys.stderr)
+        print(f"  unassigned open PMs: {len(kept)} (filter {value!r})")
+        return kept
+    raise RuntimeError(f"every unassigned-filter spelling was rejected: {last_err}")
+
+
+def fetch_all_pm_tasks(statuses: list[str], ids: list[str] | None = None,
+                       assignee_value: list | None = None) -> list[dict]:
     """Paginate through every PM task matching the bookmark filter. Cove's UI
     sends limit=25 but for a poller we want fewer round-trips, so PAGE_LIMIT=100."""
-    pm_filter = build_pm_filter(statuses, ids)
+    pm_filter = build_pm_filter(statuses, ids, assignee_value)
     print(f"  status={statuses}  dueDate >= {pm_filter['items'][2]['value']['start']} (rolling {PM_DUE_LOOKBACK_DAYS}d)")
     out: list[dict] = []
     skip = 0
@@ -444,6 +476,19 @@ def main() -> int:
         _log_error(filename, msg)
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
+
+    # Binney (cove_sites.fetch_unassigned): the month's new PMs land with no
+    # assignee; pull them too so the manager page can hand them out. Best
+    # effort — a failure here is logged, the roster snapshot still lands.
+    if fetch_unassigned():
+        try:
+            seen = {it.get("id") for it in open_items}
+            extra = [it for it in fetch_unassigned_pm_tasks(OPEN_STATUSES) if it.get("id") not in seen]
+            open_items = open_items + extra
+            print(f"  + {len(extra)} unassigned open PM(s) added to the snapshot")
+        except Exception as e:  # noqa: BLE001
+            print(f"WARN: unassigned PM fetch failed, snapshot is roster-only this run: {e}", file=sys.stderr)
+            _log_error(filename, f"unassigned PM fetch failed (snapshot still written): {e}")
 
     all_items = open_items + closed_items
     # Learn Cove IDs for roster profiles that lack one (legacy 12 self-populate

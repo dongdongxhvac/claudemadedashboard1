@@ -174,6 +174,11 @@ def patch_snapshot(client, req: dict) -> None:
 # chip stops saying "writing to Cove…" forever and the PM can be retried.
 STALE_RUNNING_MINUTES = 5
 
+# Writes per tick. Each takes ~1 s against Cove; 60 keeps one run well under
+# the unit's 5-minute TimeoutStartSec, and the next minute's tick takes the
+# rest — a 300-PM month-start batch drains in about five minutes.
+MAX_PER_RUN = 60
+
 
 def reap_stale_running(client) -> None:
     cutoff = datetime.fromtimestamp(
@@ -209,6 +214,7 @@ def main() -> int:
         .select("id, site_code, cove_task_id, task_no, assignee_cove_id, assignee_name")
         .eq("status", "pending")
         .order("requested_at")
+        .limit(MAX_PER_RUN)
         .execute()
     )
     reqs = pending.data or []
@@ -216,7 +222,7 @@ def main() -> int:
         return 0
 
     ids = [r["id"] for r in reqs]
-    print(f"[{_now()}] {len(reqs)} pending assign request(s)")
+    print(f"[{_now()}] {len(reqs)} pending assign request(s) this tick (max {MAX_PER_RUN})")
     client.table("pm_assign_requests").update(
         {"status": "running", "started_at": _now()}
     ).in_("id", ids).execute()
