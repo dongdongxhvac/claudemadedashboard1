@@ -169,10 +169,11 @@ def compute_due_date_start() -> str:
     return start_eastern.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-# How the Cove UI spells "Assignee = Unassigned" in its filter URL
-# (captured 2026-11-06): CONTAINED_IN [{"id": null}]. The web app may send
-# the API a plain [null] instead; fetch_all_pm_tasks tries both.
-UNASSIGNED_VALUES: list[list] = [[{"id": None}], [None]]
+# "Assignee = Unassigned": the Cove UI's URL spells it CONTAINED_IN
+# [{"id": null}], but the API wants a plain [null] (first live run,
+# 2026-11-06: the object form was rejected, [null] returned 88). [null]
+# first; the URL form stays as a fallback.
+UNASSIGNED_VALUES: list[list] = [[None], [{"id": None}]]
 
 
 def build_pm_filter(statuses: list[str], assignee_ids: list[str] | None = None,
