@@ -68,7 +68,7 @@ export function BinneyPmAssignPanel() {
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set()); // cove_task_id
   const [bulkPick, setBulkPick] = useState('');                             // user_id
-  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [unassignedOnly, setUnassignedOnly] = useState(true); // default on (user 2026-11-06): the panel's job is the unassigned pile
   const [search, setSearch] = useState('');
   const [picks, setPicks] = useState<Record<string, string>>({}); // cove_task_id → user_id
 
