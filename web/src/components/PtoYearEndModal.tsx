@@ -8,7 +8,7 @@
 // is use-it-or-lose-it (no carry, no payout). Every run is written to
 // pto_year_end_closeouts; a re-run or undo voids the prior row, so the log
 // below keeps the whole history.
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { PtoSummary } from '../hooks/usePto';
 import {
   usePtoCloseouts, usePtoDailyHoursMap, useClosePtoYear, useUndoPtoCloseout, useMarkPayoutPaid,
@@ -69,9 +69,6 @@ export function PtoYearEndModal({
   });
   const [busy, setBusy]       = useState<string | null>(null);
   const [err, setErr]         = useState<string | null>(null);
-  // Set by Cancel so a running "close out all" stops after the current one.
-  const cancelRef = useRef(false);
-  const [bulkRunning, setBulkRunning] = useState(false);
 
   const rosterIds = useMemo(() => new Set(roster.map((r) => r.user_id)), [roster]);
   const nameOf = useMemo(() => {
@@ -168,31 +165,11 @@ export function PtoYearEndModal({
     }
   };
 
-  const openRows = rows.filter((r) => !r.active);
-  const runAllOpen = async () => {
-    if (!confirm(`Close out ${openRows.length} engineer(s) for ${fromYear} with the choices shown?`)) return;
-    cancelRef.current = false;
-    setBulkRunning(true);
-    try {
-      for (const r of openRows) {
-        if (cancelRef.current) break;
-        await runOne(r);
-      }
-    } finally {
-      setBulkRunning(false);
-    }
-  };
+  const closedCount = rows.filter((r) => r.active).length;
 
-  // Cancel: close without saving the unsaved vacation choices. Mid-run it
-  // stops the batch instead — anyone already closed out stays (undo per row).
-  const onCancel = () => {
-    if (bulkRunning) {
-      cancelRef.current = true;
-      setErr('Stopped — anyone already closed out stays closed (use undo on their row).');
-      return;
-    }
-    onClose();
-  };
+  // Cancel: close the drawer. Vacation choices not yet closed out are
+  // dropped; anyone already closed out stays (undo per row).
+  const onCancel = () => onClose();
 
   const downloadCsv = () => {
     const head = [
@@ -436,7 +413,7 @@ export function PtoYearEndModal({
 
         <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
           <span className="t-small t-muted">
-            {rows.length - openRows.length} of {rows.length} closed
+            {closedCount} of {rows.length} closed
             {totalPayout > 0 && <> · payout logged: <strong>{fmtH(totalPayout)}</strong></>}
           </span>
           <div className="flex gap-2 items-center">
@@ -451,19 +428,9 @@ export function PtoYearEndModal({
               onClick={onCancel}
               className="t-small px-3 py-1 rounded border"
               style={{ borderColor: 'var(--color-border)' }}
-              title={bulkRunning
-                ? 'Stop after the current engineer'
-                : 'Close without saving — nothing changes for rows you haven’t closed out'}
+              title="Close without saving — nothing changes for rows you haven’t closed out"
             >
-              {bulkRunning ? 'Stop' : 'Cancel'}
-            </button>
-            <button
-              onClick={runAllOpen}
-              disabled={openRows.length === 0 || busy !== null || migrationMissing}
-              className="t-small px-3 py-1 rounded font-medium text-white disabled:opacity-50"
-              style={{ background: 'var(--color-accent)' }}
-            >
-              Close out all remaining ({openRows.length})
+              Cancel
             </button>
           </div>
         </div>
