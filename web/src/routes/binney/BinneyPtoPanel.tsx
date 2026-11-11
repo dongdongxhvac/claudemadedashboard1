@@ -25,7 +25,7 @@ import {
 import { useEngineerPtoDailyHours, SICK_ACCRUAL } from '../../hooks/usePto';
 import { useEngineers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { ClusterBadge } from './ClusterBadge';
-import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
+import { BMR_HOLIDAYS, chargeableDays } from '../../lib/bmrHolidays';
 import { BmrHolidayNote } from '../../components/BmrHolidayNote';
 import { useShifts } from '../../hooks/useShifts';
 import {
@@ -2964,11 +2964,12 @@ function AddPtoModal({
   const dailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
 
   // Auto-compute hours: rate × every day in range. Binney's two 4×10 crews
-  // cover all 7 days, so weekends are working days here.
+  // cover all 7 days, so weekends are working days here. BMR holidays are
+  // skipped — a holiday is already a paid day off (2026-11-11).
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
     if (days <= 0) return 0;
-    return days * dailyHours;
+    return chargeableDays(startsOn, endsOn) * dailyHours;
   }, [startsOn, endsOn, dailyHours]);
   const finalHours = hoursOverride === '' ? computedHours : Number(hoursOverride);
 
@@ -3167,7 +3168,7 @@ function AddPtoModal({
             />
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
-            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={false} />
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
           </div>
 
           <label className="block col-span-2">
@@ -3347,7 +3348,7 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
   const dailyHours = dailyHoursQ.data != null ? dailyHoursQ.data : 10;
   const computedHours = useMemo(() => {
     const days = daysBetween(startsOn, endsOn);
-    return days <= 0 ? 0 : days * dailyHours;
+    return days <= 0 ? 0 : chargeableDays(startsOn, endsOn) * dailyHours;
   }, [startsOn, endsOn, dailyHours]);
   const datesChanged = startsOn !== request.starts_on || endsOn !== request.ends_on;
   useEffect(() => {
@@ -3519,7 +3520,7 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
             />
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
-            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={false} />
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
           </div>
 
           <label className="block col-span-2">

@@ -3,10 +3,11 @@
 // engineer's one Floating Holiday, tracked as PTO type 'holiday'). BMR is
 // the client at BOTH campuses, so this list is shared: the UPark and Binney
 // PTO cap heatmaps outline these dates so managers see them while
-// booking/checking PTO; they do NOT affect the vacation cap. Since
-// 2026-10-07 UPark's (Mon–Fri) PTO hours auto-fill skips them via
-// chargeableWeekdays() — a holiday is already a paid day off. Binney's 7-day
-// crews still count every day; their forms only warn (BmrHolidayNote). (Moved from routes/binney/ 2026-07-25 when the Binney panel layout
+// booking/checking PTO; they do NOT affect the vacation cap. A BMR holiday
+// is already a paid day off, so NEITHER site charges it against PTO: the
+// hours auto-fill skips it via chargeableWeekdays() at UPark (Mon–Fri,
+// since 2026-10-07) and chargeableDays() at Binney (7-day crews, since
+// 2026-11-11 per user). (Moved from routes/binney/ 2026-07-25 when the Binney panel layout
 // was ported to UPark. Still separate from lib/holidays.ts — that file
 // drives UPark's on-call pay logic and must not change meaning.)
 //
@@ -71,6 +72,21 @@ export function chargeableWeekdays(startsOn: string, endsOn: string): number {
     const dow = cur.getDay();
     const iso = cur.toLocaleDateString('en-CA');
     if (dow !== 0 && dow !== 6 && !BMR_HOLIDAY_BY_DATE.has(iso)) n++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return n;
+}
+
+/** Every day in [startsOn, endsOn] that is NOT a BMR holiday — the days a
+ *  Binney (7-day, 4×10 crews) PTO request costs. Weekends count; BMR
+ *  holidays don't. */
+export function chargeableDays(startsOn: string, endsOn: string): number {
+  if (!startsOn || !endsOn || endsOn < startsOn) return 0;
+  let n = 0;
+  const cur = new Date(startsOn + 'T00:00:00');
+  const end = new Date(endsOn + 'T00:00:00');
+  while (cur <= end) {
+    if (!BMR_HOLIDAY_BY_DATE.has(cur.toLocaleDateString('en-CA'))) n++;
     cur.setDate(cur.getDate() + 1);
   }
   return n;

@@ -297,8 +297,8 @@ export function buildManual(site: ManualSite): Chapter[] {
                 'Set From and To. Both dates count: Monday to Friday is 5 days off, not 4. For a single day, put the same date in both. Past dates are allowed, so you can file yesterday’s sick day. If you already have a pending or approved request covering any of those dates, Submit is refused and the clashing request is named — if it is pending you can cancel it yourself below; an approved one needs a manager. The exception: an existing PARTIAL-day entry does not refuse — your request stacks on it with an orange warning instead.',
                 'Leave Hours blank to accept the automatic figure. The grey number in the box is only a placeholder — the Submit button always shows the hours that will actually be filed. ' +
                   (s.binney
-                    ? 'At Binney it fills ' + s.day + 'h for every day in the range, weekends included, because both crews work weekends.'
-                    : 'At UPark it fills ' + s.day + 'h per weekday and counts Saturday and Sunday as zero.'),
+                    ? 'At Binney it fills ' + s.day + 'h for every day in the range, weekends included, because both crews work weekends. BMR holidays are skipped — they are not charged against PTO.'
+                    : 'At UPark it fills ' + s.day + 'h per weekday and counts Saturday, Sunday and BMR holidays as zero.'),
                 'For a half day, type the hours (e.g. 4) into the Hours box. It accepts quarter-hour steps. You cannot say WHICH half of the day — the out/return time boxes are manager-only.',
                 'Reason is optional free text. Remember everyone with a login can read it.',
                 'Click Submit. The form closes itself and the request appears in the amber "Awaiting manager approval" block above your year log. If it fails, the form stays open with the error in red underneath.',
@@ -425,8 +425,8 @@ export function buildManual(site: ManualSite): Chapter[] {
               tone: s.binney ? 'warn' : 'info',
               title: 'How the Hours auto-fill works',
               text: s.binney
-                ? 'Add PTO uses the engineer’s own day length — ' + s.day + 'h for everyone except Justin McCarthy, who is on 8h — times EVERY day in the range, weekends included, because both crews work weekends. The quick call-out log matches: a full day is their day length, a partial day is half of it. One thing to watch: it counts calendar days, not the days that engineer is actually rostered. A Mon–Sun span auto-fills 70h even though a 4×10 crew only works 40h of it. Set From and To to the days they are actually scheduled, or type the hours in yourself.'
-                : 'Add PTO uses the engineer’s own day length — ' + s.day + 'h unless someone has a custom day length set — times the number of Mon–Fri days in the range; Saturday and Sunday count as zero. The quick call-out log matches: a full day is their day length, a partial day is half of it.',
+                ? 'Add PTO uses the engineer’s own day length — ' + s.day + 'h for everyone except Justin McCarthy, who is on 8h — times EVERY day in the range, weekends included, because both crews work weekends — except BMR holidays, which are skipped and not charged. The quick call-out log matches: a full day is their day length, a partial day is half of it. One thing to watch: it counts calendar days, not the days that engineer is actually rostered. A Mon–Sun span auto-fills 70h even though a 4×10 crew only works 40h of it. Set From and To to the days they are actually scheduled, or type the hours in yourself.'
+                : 'Add PTO uses the engineer’s own day length — ' + s.day + 'h unless someone has a custom day length set — times the number of Mon–Fri days in the range; Saturday, Sunday and BMR holidays count as zero. The quick call-out log matches: a full day is their day length, a partial day is half of it.',
             },
             {
               kind: 'note',

@@ -3018,7 +3018,7 @@ function AddPtoModal({
             />
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
-            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={true} />
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
           </div>
 
           <label className="block col-span-2">
@@ -3372,7 +3372,7 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
             />
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
-            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} excluded={true} />
+            <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
           </div>
 
           <label className="block col-span-2">
