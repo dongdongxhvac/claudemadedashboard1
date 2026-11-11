@@ -2,7 +2,7 @@
 // Binney manager PTO panels — each passes its own site-scoped roster and
 // summaries, so a manager only ever closes out their own building.
 //
-// Per engineer: sick carries at most 2 days and the rest is paid out;
+// Per engineer: sick carries at most 10 days and the rest is paid out;
 // vacation is the manager's call (carry +/−, lose, or custom hours).
 // Floating holiday never carries. Every run is written to
 // pto_year_end_closeouts; a re-run or undo voids the prior row, so the log

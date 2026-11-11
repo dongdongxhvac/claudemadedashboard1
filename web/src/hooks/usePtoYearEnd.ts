@@ -4,7 +4,7 @@
 // invalidates both sites' summary caches.
 //
 // Rules (set 2026-09-26):
-//   Sick     — carry at most 2 days (2 × daily hours), pay out the rest.
+//   Sick     — carry at most 10 days (10 × daily hours), pay out the rest.
 //   Vacation — manager picks per engineer: carry as-is (+/−), lose, or a
 //              custom carry with the rest forfeited.
 //   Floating holiday — never carries.

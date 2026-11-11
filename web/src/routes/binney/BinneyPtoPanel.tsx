@@ -2521,7 +2521,7 @@ function BalancesGrid({
           onClick={() => setShowCloseout(true)}
           className="t-accent hover:underline ml-3"
           style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
-          title={`Close out ${thisYear}: sick carries max 2 days (rest paid out), vacation carry/lose per engineer — logged`}
+          title={`Close out ${thisYear}: sick carries max 10 days (rest paid out), vacation carry/lose per engineer — logged`}
         >
           ⇥ {thisYear} year-end close-out
         </button>

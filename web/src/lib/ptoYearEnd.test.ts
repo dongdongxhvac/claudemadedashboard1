@@ -35,9 +35,11 @@ assert.deepEqual(pick('2020-05-01', 2027, 8, 16), { vacation: 120, sick: 64, hol
 assert.equal(pick('2020-05-01', 2027, 8, 0)!.holiday, 0);  // 0 last year stays 0
 assert.equal(cbaAllotment(null, 2027, 8), null);
 
-assert.deepEqual(sickCloseoutPreview(40, 8), { cap: 16, carry: 16, payout: 24 });
-assert.deepEqual(sickCloseoutPreview(10, 10), { cap: 20, carry: 10, payout: 0 });
-assert.deepEqual(sickCloseoutPreview(-8, 8), { cap: 16, carry: -8, payout: 0 });
+// 10-day carry cap. User's example: 15 days left → carry 10, pay out 5.
+assert.deepEqual(sickCloseoutPreview(120, 8), { cap: 80, carry: 80, payout: 40 });
+assert.deepEqual(sickCloseoutPreview(40, 8), { cap: 80, carry: 40, payout: 0 });
+assert.deepEqual(sickCloseoutPreview(150, 10), { cap: 100, carry: 100, payout: 50 });
+assert.deepEqual(sickCloseoutPreview(-8, 8), { cap: 80, carry: -8, payout: 0 });
 assert.deepEqual(vacationCloseoutPreview(-12, 'carry', null), { carry: -12, forfeit: 0 });
 assert.deepEqual(vacationCloseoutPreview(30, 'lose', null), { carry: 0, forfeit: 30 });
 assert.deepEqual(vacationCloseoutPreview(30, 'custom', 16), { carry: 16, forfeit: 14 });

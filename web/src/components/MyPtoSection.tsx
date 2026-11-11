@@ -124,7 +124,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
   );
   // Until the manager saves next year's row, show an estimate: CBA rule by
   // hire date, minus next-year PTO already approved, plus the sick hours
-  // that would carry (max 2 days). Vacation carry is the manager's call, so
+  // that would carry (max 10 days). Vacation carry is the manager's call, so
   // it's left out of the estimate.
   const hireQ = useQuery({
     queryKey: ['my_hiring_date', userId],
@@ -144,7 +144,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
     const booked = (t: string) => myRequests
       .filter((r) => r.status === 'approved' && r.type === t && r.starts_on.startsWith(String(year + 1)))
       .reduce((n, r) => n + Number(r.hours), 0);
-    // Sick carry follows the close-out rule: up to 2 days carry, and a
+    // Sick carry follows the close-out rule: up to 10 days carry, and a
     // negative balance carries as owed.
     const sickCarry = mySummary
       ? sickCloseoutPreview(Number(mySummary.sick_remaining), dailyHours).carry

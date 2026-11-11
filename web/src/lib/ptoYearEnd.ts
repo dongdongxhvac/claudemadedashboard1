@@ -4,7 +4,10 @@
 
 export type VacationAction = 'carry' | 'lose' | 'custom';
 
-export const SICK_CARRY_MAX_DAYS = 2;
+// Raised from 2 to 10 days on 2026-11-11 (rule change, both sites): up to
+// 10 unused sick days carry into the next year on top of that year's fresh
+// allotment; anything over 10 days is paid out.
+export const SICK_CARRY_MAX_DAYS = 10;
 
 export const VACATION_ACTION_LABELS: Record<VacationAction, string> = {
   carry:  'Carry balance',
