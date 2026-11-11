@@ -11,7 +11,7 @@ const assert = {
   },
   equal(actual: unknown, expected: unknown) { this.deepEqual(actual, expected); },
 };
-import { cbaAllotment, sickCloseoutPreview, vacationCloseoutPreview } from './ptoYearEnd.ts';
+import { cbaAllotment, sickCloseoutPreview, vacationCloseoutPreview, floaterDays, fmtDays } from './ptoYearEnd.ts';
 
 const pick = (h: string | null, y: number, d: number, prev?: number) => {
   const a = cbaAllotment(h, y, d, prev);
@@ -46,6 +46,12 @@ assert.deepEqual(vacationCloseoutPreview(30, 'payout'), { payout: 30, forfeit: 0
 // Over-used vacation is deducted from next year (negative carry), never paid.
 assert.deepEqual(vacationCloseoutPreview(-12, 'lose'), { payout: 0, forfeit: 0, carry: -12 });
 assert.deepEqual(vacationCloseoutPreview(-12, 'payout'), { payout: 0, forfeit: 0, carry: -12 });
+
+// Floating holiday is shown in days: hours ÷ the engineer's day length.
+assert.equal(fmtDays(floaterDays(8, 8)), '1 day');
+assert.equal(fmtDays(floaterDays(10, 10)), '1 day');
+assert.equal(fmtDays(floaterDays(0, 10)), '0 days');
+assert.equal(fmtDays(floaterDays(8, 10)), '0.8 days');
 
 if (failed) process.exitCode = 1;
 else console.log('ptoYearEnd: all assertions pass');

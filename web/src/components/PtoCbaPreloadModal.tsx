@@ -2,6 +2,7 @@
 // Shows what each not-yet-set engineer would get, lets the manager untick
 // or adjust anyone, and only writes when they press Preload.
 import { useState } from 'react';
+import { floaterDays } from '../lib/ptoYearEnd';
 
 export type CbaPreloadRow = {
   user_id: string;
@@ -12,6 +13,8 @@ export type CbaPreloadRow = {
   vacation: number;
   sick: number;
   holiday: number;
+  /** The engineer's day length — the floater is shown/entered in days. */
+  daily: number;
 };
 
 export type CbaPreloadWrite = {
@@ -41,7 +44,8 @@ export function PtoCbaPreloadModal({
   );
   const [vals, setVals] = useState<Record<string, { vacation: string; sick: string; holiday: string }>>(
     () => Object.fromEntries(ready.map((r) => [r.user_id, {
-      vacation: String(r.vacation), sick: String(r.sick), holiday: String(r.holiday),
+      // vacation + sick in hours; holiday (floater) in DAYS.
+      vacation: String(r.vacation), sick: String(r.sick), holiday: String(floaterDays(r.holiday, r.daily)),
     }])),
   );
   const [err, setErr] = useState<string | null>(null);
@@ -57,7 +61,7 @@ export function PtoCbaPreloadModal({
         year,
         vacation_alloted: Number(vals[r.user_id].vacation) || 0,
         sick_alloted:     Number(vals[r.user_id].sick) || 0,
-        holiday_alloted:  Number(vals[r.user_id].holiday) || 0,
+        holiday_alloted:  (Number(vals[r.user_id].holiday) || 0) * r.daily,
       })));
       onClose();
     } catch (e) {
@@ -69,7 +73,9 @@ export function PtoCbaPreloadModal({
     setVals((m) => ({ ...m, [uid]: { ...m[uid], [k]: v } }));
 
   const input = (uid: string, k: 'vacation' | 'sick' | 'holiday', r: CbaPreloadRow) => {
-    const changed = Number(vals[uid][k]) !== r[k];
+    const rule = k === 'holiday' ? floaterDays(r.holiday, r.daily) : r[k];
+    const unit = k === 'holiday' ? ' day(s)' : 'h';
+    const changed = Number(vals[uid][k]) !== rule;
     return (
       <input
         type="number" min={0} step={1}
@@ -81,7 +87,7 @@ export function PtoCbaPreloadModal({
           width: 64, background: 'var(--color-card)',
           borderColor: changed ? 'var(--color-accent)' : 'var(--color-border)',
         }}
-        title={changed ? `CBA rule: ${r[k]}h — you changed it` : 'CBA rule value'}
+        title={changed ? `CBA rule: ${rule}${unit} — you changed it` : 'CBA rule value'}
       />
     );
   };
@@ -106,7 +112,7 @@ export function PtoCbaPreloadModal({
         </div>
         <p className="t-small t-muted mb-3">
           Service is counted on 1/1/{year}. Vacation by years of service, sick by the sick-day schedule × daily hours,
-          floater keeps last year’s. Untick anyone to skip, or adjust a number before preloading. Nothing is saved until you press Preload.
+          floater (counted in days) keeps last year’s. Untick anyone to skip, or adjust a number before preloading. Nothing is saved until you press Preload.
         </p>
 
         <table className="t-text t-small border-collapse" style={{ width: '100%' }}>
@@ -122,9 +128,9 @@ export function PtoCbaPreloadModal({
               <th className="py-1 pr-2">Engineer</th>
               <th className="py-1 pr-2">Hired</th>
               <th className="py-1 pr-2">Basis</th>
-              <th className="py-1 px-1 text-right">Vacation</th>
-              <th className="py-1 px-1 text-right">Sick</th>
-              <th className="py-1 px-1 text-right">Floater</th>
+              <th className="py-1 px-1 text-right">Vacation (h)</th>
+              <th className="py-1 px-1 text-right">Sick (h)</th>
+              <th className="py-1 px-1 text-right">Floater (days)</th>
             </tr>
           </thead>
           <tbody>

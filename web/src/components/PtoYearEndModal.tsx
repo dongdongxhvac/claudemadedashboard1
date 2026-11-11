@@ -13,6 +13,7 @@ import type { PtoSummary } from '../hooks/usePto';
 import {
   usePtoCloseouts, usePtoDailyHoursMap, useClosePtoYear, useUndoPtoCloseout, useMarkPayoutPaid,
   sickCloseoutPreview, vacationCloseoutPreview, VACATION_ACTION_LABELS, SICK_CARRY_MAX_DAYS,
+  floaterDays, fmtDays,
   type PtoCloseout, type VacationAction,
 } from '../hooks/usePtoYearEnd';
 
@@ -164,7 +165,7 @@ export function PtoYearEndModal({
       'Engineer', 'From year', 'To year', 'Closed', 'Status',
       'Vacation left', 'Vacation decision', 'Vacation lost', 'Vacation payout', 'Vacation owed (deducted next year)',
       'Sick left', 'Sick carry cap', 'Sick carried', 'Sick payout', 'Total payout', 'Payout paid',
-      'Floater lost', 'Notes',
+      'Floater lost (days)', 'Notes',
     ];
     const lines = siteLog.map((c) => [
       nameOf.get(c.user_id) ?? c.user_id, c.from_year, c.to_year, fmtDate(c.closed_at),
@@ -175,7 +176,7 @@ export function PtoYearEndModal({
       c.sick_remaining, c.sick_carry_cap, c.sick_carryover_hours, c.sick_payout_hours,
       payoutOf(c),
       c.payout_paid_at ? fmtDate(c.payout_paid_at) : '',
-      c.holiday_forfeit_hours, c.notes ?? '',
+      floaterDays(c.holiday_forfeit_hours, Number(c.daily_hours)), c.notes ?? '',
     ].map(csvCell).join(','));
     const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -296,7 +297,7 @@ export function PtoYearEndModal({
                 <td className={td} style={{ ...sep, color: r.sickRem < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.sickRem)}</td>
                 <td className={td} title={`Max ${SICK_CARRY_MAX_DAYS} days × ${r.daily}h = ${r.sick.cap}h`}>{fmtH(r.sick.carry)}</td>
                 <td className={`${td} t-muted`} style={sep} title="Floating holiday: use it or lose it — no carry, no payout">
-                  {r.floaterLost > 0 ? `${fmtH(r.floaterLost)} lost` : '—'}
+                  {r.floaterLost > 0 ? `${fmtDays(floaterDays(r.floaterLost, r.daily))} lost` : '—'}
                 </td>
                 <td
                   className={td}
@@ -423,7 +424,7 @@ export function PtoYearEndModal({
                         {fmtH(c.sick_remaining)} left → carried {fmtH(c.sick_carryover_hours)}
                         {Number(c.sick_payout_hours) > 0 && <>, <strong>paid out {fmtH(c.sick_payout_hours)}</strong></>}
                       </td>
-                      <td className="py-1 pr-2">{Number(c.holiday_forfeit_hours) > 0 ? `${fmtH(c.holiday_forfeit_hours)} lost` : '—'}</td>
+                      <td className="py-1 pr-2">{Number(c.holiday_forfeit_hours) > 0 ? `${fmtDays(floaterDays(c.holiday_forfeit_hours, Number(c.daily_hours)))} lost` : '—'}</td>
                       <td className="py-1 pr-2 t-muted">
                         {c.voided_at ? `voided ${fmtDate(c.voided_at)}` : 'active'}
                         {!c.voided_at && payoutOf(c) > 0 && (c.payout_paid_at ? ' · paid' : ' · payout pending')}

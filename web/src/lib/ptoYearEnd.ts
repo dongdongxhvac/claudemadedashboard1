@@ -37,6 +37,24 @@ export function vacationCloseoutPreview(remaining: number, action: VacationActio
   return { payout, forfeit: unused - payout, carry: Math.min(remaining, 0) };
 }
 
+// ── Floating holiday is counted in DAYS (2026-11-11, both sites)
+//
+// It is one whole day, not a pool of hours, and a separate pool from
+// vacation and sick. The database still stores hours (pto_balances.
+// holiday_alloted, pto_requests.hours), so every screen converts with the
+// engineer's own day length (UPark 8h, Binney 10h, per-engineer override).
+
+/** Floater hours → days, rounded to 2 places. */
+export function floaterDays(hours: number | string | null | undefined, dailyHours: number): number {
+  if (!dailyHours) return 0;
+  return Math.round((Number(hours ?? 0) / dailyHours) * 100) / 100;
+}
+
+/** 1 → "1 day", 0 → "0 days", 0.5 → "0.5 days". */
+export function fmtDays(days: number): string {
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 // ── CBA allotment rule (preload for a year's allotment)
 //
 // Service is measured on Jan 1 of the target year.

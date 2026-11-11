@@ -41,7 +41,7 @@ import { downloadPtoWorkbook } from '../../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from '../../components/PtoCalRecipientsEditor';
 import { PtoYearEndModal } from '../../components/PtoYearEndModal';
 import { PtoCbaPreloadModal, type CbaPreloadRow } from '../../components/PtoCbaPreloadModal';
-import { useCopyAllotments, usePtoDailyHoursMap, cbaAllotment } from '../../hooks/usePtoYearEnd';
+import { useCopyAllotments, usePtoDailyHoursMap, cbaAllotment, floaterDays, fmtDays } from '../../hooks/usePtoYearEnd';
 
 // ───────────────────────────── helpers
 
@@ -527,6 +527,7 @@ function PendingQueue({
  *  approval would leave, red when it would overdraw. Only the three tracked
  *  balance types; other leave kinds have no allotment to check. */
 function BalanceHint({ req, summaries }: { req: PtoRequest; summaries: PtoSummary[] }) {
+  const dailyMapQ = usePtoDailyHoursMap();
   if (req.type !== 'vacation' && req.type !== 'sick' && req.type !== 'holiday') return null;
   const reqYear = Number(req.starts_on.slice(0, 4));
   const s = summaries.find((x) => x.user_id === req.user_id && x.year === reqYear);
@@ -546,12 +547,15 @@ function BalanceHint({ req, summaries }: { req: PtoRequest; summaries: PtoSummar
     req.type === 'sick'     ? s.sick_alloted     : s.holiday_alloted,
   );
   const after = remaining - Number(req.hours);
+  // Floating holiday is counted in days, not hours.
+  const daily = dailyMapQ.data?.get(req.user_id) ?? 10;
+  const show = (h: number) => (req.type === 'holiday' ? fmtDays(floaterDays(h, daily)) : `${h}h`);
   return (
     <p className="t-small mt-1" style={{ color: after < 0 ? 'var(--color-danger)' : undefined }}>
       <span className="t-muted">{ptoTypeLabel(req.type)} balance:</span>{' '}
-      <strong>{remaining}h</strong> of {alloted}h left
+      <strong>{show(remaining)}</strong> of {show(alloted)} left
       <span className="t-muted"> → </span>
-      <strong>{after}h</strong> after approval
+      <strong>{show(after)}</strong> after approval
       {after < 0 && <strong> — exceeds balance</strong>}
     </p>
   );
@@ -2452,6 +2456,7 @@ function BalancesGrid({
       hire_date: eng?.hiring_date ?? null,
       basis: a?.basis ?? null,
       vacation: a?.vacation ?? 0, sick: a?.sick ?? 0, holiday: a?.holiday ?? 0,
+      daily: override != null ? override : 10,
     };
   });
   const preloadable = preloadRows.filter((r) => r.basis);
@@ -2576,7 +2581,7 @@ function BalancesGrid({
               <button type="button" onClick={() => onSort('sick')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Sick{sortArrow('sick')}</button>
             </th>
             <th className="py-1 px-1.5 text-right" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
-              <button type="button" onClick={() => onSort('holiday')} className="hover:t-accent" title="Balance · used/allotted — click to sort by balance, lowest first">Fl. Holiday{sortArrow('holiday')}</button>
+              <button type="button" onClick={() => onSort('holiday')} className="hover:t-accent" title="Days left · used/allotted — counted in days, not hours. Click to sort, lowest first">Fl. Holiday{sortArrow('holiday')}</button>
             </th>
             <th className="py-1 pl-2" style={{ whiteSpace: 'nowrap' }}></th>
           </tr>
@@ -2621,7 +2626,7 @@ function BalancesGrid({
                   </td>
                   <BalanceCell remaining={s.vacation_remaining} used={s.vacation_used} alloted={s.vacation_alloted} carry={Number(s.vacation_carryover ?? 0)} />
                   <BalanceCell remaining={s.sick_remaining}     used={s.sick_used}     alloted={s.sick_alloted} carry={Number(s.sick_carryover ?? 0)} />
-                  <BalanceCell remaining={s.holiday_remaining}  used={s.holiday_used}  alloted={s.holiday_alloted} />
+                  <BalanceCell remaining={s.holiday_remaining}  used={s.holiday_used}  alloted={s.holiday_alloted} dayHours={dailyMapQ.data?.get(s.user_id) ?? 10} />
                   <td className="py-1 pl-2 text-right align-top" style={{ whiteSpace: 'nowrap' }}>
                     <button onClick={() => onEdit(s)} className="t-small t-accent hover:underline" title={notSet ? 'Set allotment' : 'Edit allotment'}>{notSet ? 'set' : 'edit'}</button>
                   </td>
@@ -2673,7 +2678,11 @@ function BalancesGrid({
 /** One compact cell per PTO type: emphasized balance + muted used/allotted
  *  ("34h 8/42"). Single-cell keeps each half-table narrow enough for the
  *  split two-column balances layout to fit side by side. */
-function BalanceCell({ remaining, used, alloted, carry = 0 }: { remaining: number; used: number; alloted: number; carry?: number }) {
+function BalanceCell({ remaining, used, alloted, carry = 0, dayHours }: {
+  remaining: number; used: number; alloted: number; carry?: number;
+  /** Set for the floating holiday: show days (hours ÷ this) instead of hours. */
+  dayHours?: number;
+}) {
   if (alloted === 0 && carry === 0) {
     return (
       <td className="py-1 px-1.5 text-right t-muted align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>—</td>
@@ -2683,6 +2692,14 @@ function BalanceCell({ remaining, used, alloted, carry = 0 }: { remaining: numbe
   // user 2026-07-12. No amber tier.
   const low = remaining < 4;
   const color = low ? 'var(--color-danger)' : 'var(--color-text)';
+  if (dayHours) {
+    return (
+      <td className="py-1 px-1.5 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
+        <span style={{ color, fontWeight: low ? 600 : 400 }}>{fmtDays(floaterDays(remaining, dayHours))}</span>
+        <span className="t-muted" style={{ fontSize: '0.72rem', marginLeft: 4 }}>{floaterDays(used, dayHours)}/{floaterDays(alloted, dayHours)}</span>
+      </td>
+    );
+  }
   return (
     <td className="py-1 px-1.5 text-right t-mono align-top" style={{ borderLeft: '1px solid var(--color-border-soft)', whiteSpace: 'nowrap' }}>
       <span style={{ color, fontWeight: low ? 600 : 400 }}>{remaining}h</span>
@@ -3677,7 +3694,7 @@ function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
         {cba ? (
           <div className="t-small mb-3" style={{ padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid var(--color-border-soft)' }}>
             <div>
-              <strong>CBA rule:</strong> vacation {cba.vacation}h · sick {cba.sick}h · floater {cba.holiday}h
+              <strong>CBA rule:</strong> vacation {cba.vacation}h · sick {cba.sick}h · floater {fmtDays(floaterDays(cba.holiday, sickDailyHours))}
               {notSet && !touched && <span className="t-muted"> — preloaded</span>}
             </div>
             <div className="t-muted" style={{ fontSize: '0.7rem' }}>{cba.basis}</div>
@@ -3775,11 +3792,14 @@ function EditBalanceModal({ summary, hireDate, prevHoliday, onClose }: {
             </details>
           </label>
           <label className="block">
-            <span className="t-small t-muted uppercase tracking-wider block mb-1">Floating Holiday Allotted</span>
-            <input type="number" min={0} value={holiday} onChange={(e) => { setTouched(true); setHoliday(e.target.value); }}
+            <span className="t-small t-muted uppercase tracking-wider block mb-1">Floating Holiday Allotted <span className="normal-case" style={{ textTransform: 'none' }}>(days)</span></span>
+            {/* Counted in days; stored as days × this engineer's day length. */}
+            <input type="number" min={0} step={1}
+              value={holiday === '' ? '' : String(floaterDays(holiday, sickDailyHours))}
+              onChange={(e) => { setTouched(true); setHoliday(e.target.value === '' ? '' : String(Number(e.target.value) * sickDailyHours)); }}
               className="w-full border rounded px-2 py-1 t-text t-mono"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }} />
-            <p className="t-small t-muted mt-1">Used: {summary.holiday_used}h</p>
+            <p className="t-small t-muted mt-1">Used: {fmtDays(floaterDays(summary.holiday_used, sickDailyHours))} · use it or lose it — no carry-over, no payout</p>
           </label>
         </div>
 

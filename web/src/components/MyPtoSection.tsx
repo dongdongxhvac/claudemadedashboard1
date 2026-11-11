@@ -31,7 +31,7 @@ import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
 import { BmrHolidayNote } from './BmrHolidayNote';
 import { chargeableWeekdays } from '../lib/bmrHolidays';
-import { cbaAllotment, sickCloseoutPreview } from '../lib/ptoYearEnd';
+import { cbaAllotment, sickCloseoutPreview, floaterDays, fmtDays } from '../lib/ptoYearEnd';
 
 /** user_ids homed at the given site — scopes the vacation-cap warning to the
  *  requester's OWN building, so a Binney engineer is never warned about two
@@ -201,11 +201,11 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             <BalanceChip label="Vacation" remaining={mySummary.vacation_remaining} used={mySummary.vacation_used} alloted={mySummary.vacation_alloted} />
             <BalanceChip label="Sick"     remaining={mySummary.sick_remaining}     used={mySummary.sick_used}     alloted={mySummary.sick_alloted} />
             {mySummary.holiday_alloted > 0 && (
-              <BalanceChip label="Floating Holiday" remaining={mySummary.holiday_remaining} used={mySummary.holiday_used} alloted={mySummary.holiday_alloted} />
+              <BalanceChip label="Floating Holiday" remaining={mySummary.holiday_remaining} used={mySummary.holiday_used} alloted={mySummary.holiday_alloted} dayHours={dailyHours} />
             )}
           </div>
         )}
-        {myNextYear && <NextYearLine s={myNextYear} />}
+        {myNextYear && <NextYearLine s={myNextYear} dailyHours={dailyHours} />}
         {nextYearEstimate && (
           <p
             className="t-small t-muted mt-2"
@@ -219,8 +219,8 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             {nextYearEstimate.sickCarry > 0 && ` (incl. up to ${nextYearEstimate.sickCarry}h carried)`}
             {nextYearEstimate.sickCarry < 0 && ` (after ${-nextYearEstimate.sickCarry}h owed from ${year})`}
             {nextYearEstimate.sickBooked > 0 && ` (${nextYearEstimate.sickBooked}h booked)`}
-            {nextYearEstimate.holiday > 0 && ` · Floater ${nextYearEstimate.holiday}h`}
-            {nextYearEstimate.holidayBooked > 0 && ` (${nextYearEstimate.holidayBooked}h booked)`}
+            {nextYearEstimate.holiday > 0 && ` · Floater ${fmtDays(floaterDays(nextYearEstimate.holiday, dailyHours))}`}
+            {nextYearEstimate.holidayBooked > 0 && ` (${fmtDays(floaterDays(nextYearEstimate.holidayBooked, dailyHours))} booked)`}
             <span className="block italic" style={{ fontSize: '0.68rem' }}>
               Estimate only — not guaranteed. Final {nextYearEstimate.year} hours are set at year-end and may change.
             </span>
@@ -283,7 +283,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
 /** "2027 projected · Vacation 96h (16h carried) · Sick 80h" — muted, one
  *  line, so engineers can plan ahead without it competing with this
  *  year's balances. Remaining already nets out approved next-year PTO. */
-function NextYearLine({ s }: { s: PtoSummary }) {
+function NextYearLine({ s, dailyHours }: { s: PtoSummary; dailyHours: number }) {
   const part = (label: string, rem: number, carry: number) => {
     const c = Number(carry ?? 0);
     return `${label} ${Number(rem)}h left${c !== 0 ? ` (${Math.abs(c)}h ${c > 0 ? 'carried' : 'owed'})` : ''}`;
@@ -292,7 +292,7 @@ function NextYearLine({ s }: { s: PtoSummary }) {
     part('Vacation', s.vacation_remaining, s.vacation_carryover ?? 0),
     part('Sick', s.sick_remaining, s.sick_carryover ?? 0),
   ];
-  if (Number(s.holiday_alloted) > 0) bits.push(`Floater ${Number(s.holiday_remaining)}h left`);
+  if (Number(s.holiday_alloted) > 0) bits.push(`Floater ${fmtDays(floaterDays(s.holiday_remaining, dailyHours))} left`);
   return (
     <p className="t-small t-muted mt-2" style={{ fontSize: '0.72rem' }}>
       {s.year} projected · {bits.join(' · ')}
@@ -304,9 +304,11 @@ function NextYearLine({ s }: { s: PtoSummary }) {
 }
 
 function BalanceChip({
-  label, remaining, used, alloted,
+  label, remaining, used, alloted, dayHours,
 }: {
   label: string; remaining: number; used: number; alloted: number;
+  /** Set for the floating holiday: show days (hours ÷ this) instead of hours. */
+  dayHours?: number;
 }) {
   if (alloted === 0) {
     return (
@@ -319,8 +321,9 @@ function BalanceChip({
       </div>
     );
   }
+  // A floater is one day — a full day left is normal, not "running low".
   const color = remaining <= 0 ? 'var(--color-danger)'
-              : remaining <= 8 ? 'var(--color-warn, #d97706)'
+              : !dayHours && remaining <= 8 ? 'var(--color-warn, #d97706)'
               : 'var(--color-text)';
   return (
     <div style={{
@@ -331,9 +334,14 @@ function BalanceChip({
       <div className="t-small t-muted" style={{ marginBottom: 4 }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
         <span style={{ color, fontSize: '1.6rem', fontWeight: 700, lineHeight: 1 }}>
-          {remaining}<span style={{ fontSize: '0.95rem', fontWeight: 600 }}>h</span>
+          {dayHours ? floaterDays(remaining, dayHours) : remaining}
+          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+            {dayHours ? (floaterDays(remaining, dayHours) === 1 ? ' day' : ' days') : 'h'}
+          </span>
         </span>
-        <span className="t-muted t-mono" style={{ fontSize: '0.7rem' }}>{used}/{alloted} used</span>
+        <span className="t-muted t-mono" style={{ fontSize: '0.7rem' }}>
+          {dayHours ? `${floaterDays(used, dayHours)}/${floaterDays(alloted, dayHours)} used` : `${used}/${alloted} used`}
+        </span>
       </div>
     </div>
   );
