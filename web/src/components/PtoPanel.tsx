@@ -31,7 +31,7 @@ import { useBuildings, type Building } from '../hooks/useBuildings';
 import { useRounds, type Round } from '../hooks/useRounds';
 import { useUparkUserIds } from '../hooks/useSiteScope';
 import { BMR_HOLIDAYS, chargeableWeekdays } from '../lib/bmrHolidays';
-import { BmrHolidayNote } from './BmrHolidayNote';
+import { BmrHolidayNote, SickNextToHolidayNote } from './BmrHolidayNote';
 import { Section } from './Section';
 import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
@@ -682,6 +682,7 @@ function PendingRow({
       {req.reason && <p className="t-small t-muted mt-1">{req.reason}</p>}
 
       <BalanceHint req={req} summaries={summaries} />
+      <SickNextToHolidayNote type={req.type} startsOn={req.starts_on} endsOn={req.ends_on} weekdaysOnly={true} />
 
       {cap.exceeded && (
         <div
@@ -1464,6 +1465,9 @@ function QuickPtoModal({
               <PtoTypeOptions options={PTO_MANAGER_TYPE_OPTIONS} ensure={type} />
             </select>
           </label>
+          <div className="col-span-2" style={{ marginTop: -6 }}>
+            <SickNextToHolidayNote type={type} startsOn={dateIso} endsOn={dateIso} weekdaysOnly={true} onUseUnpaid={() => setType('unpaid')} />
+          </div>
 
           <label className="block">
             <span className="t-small t-muted uppercase tracking-wider block mb-1">
@@ -3019,6 +3023,7 @@ function AddPtoModal({
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
             <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
+            <SickNextToHolidayNote type={type} startsOn={startsOn} endsOn={endsOn} weekdaysOnly={true} onUseUnpaid={() => setType('unpaid')} />
           </div>
 
           <label className="block col-span-2">
@@ -3373,6 +3378,7 @@ function EditPtoModal({ request, onClose }: { request: PtoRequest; onClose: () =
           </label>
           <div className="col-span-2" style={{ marginTop: -6 }}>
             <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
+            <SickNextToHolidayNote type={type} startsOn={startsOn} endsOn={endsOn} weekdaysOnly={true} onUseUnpaid={() => setType('unpaid')} />
           </div>
 
           <label className="block col-span-2">

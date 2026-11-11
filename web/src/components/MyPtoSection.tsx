@@ -29,7 +29,7 @@ import {
 } from '../hooks/usePto';
 import { useMySiteAccess, type SiteCode } from '../hooks/useSiteScope';
 import { PtoYearLog } from './PtoPanel';
-import { BmrHolidayNote } from './BmrHolidayNote';
+import { BmrHolidayNote, SickNextToHolidayNote } from './BmrHolidayNote';
 import { chargeableWeekdays, chargeableDays } from '../lib/bmrHolidays';
 import { cbaAllotment, sickCloseoutPreview, floaterDays, fmtDays } from '../lib/ptoYearEnd';
 
@@ -486,6 +486,7 @@ function RequestForm({
         </Field>
       </div>
       <BmrHolidayNote startsOn={startsOn} endsOn={endsOn} />
+      <SickNextToHolidayNote type={type} startsOn={startsOn} endsOn={endsOn} weekdaysOnly={!countAllDays} forEngineer />
       <Field label="Reason (optional)">
         <input
           type="text" value={reason} onChange={(e) => setReason(e.target.value)}

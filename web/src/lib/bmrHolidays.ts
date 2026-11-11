@@ -91,3 +91,28 @@ export function chargeableDays(startsOn: string, endsOn: string): number {
   }
   return n;
 }
+
+/** BMR holidays that a [startsOn, endsOn] absence sits right next to: the
+ *  last working day before the holiday or the first working day after it
+ *  falls inside the range. "Working day" skips other BMR holidays, and
+ *  weekends too when weekdaysOnly (UPark Mon–Fri; Binney's 7-day crews use
+ *  calendar days). Rule (user, 2026-11-11): a sick call-out the day before
+ *  or after a holiday is not paid — the manager logs it as Unpaid. */
+export function bmrHolidaysAdjacent(startsOn: string, endsOn: string, weekdaysOnly: boolean): BmrHoliday[] {
+  if (!startsOn || !endsOn || endsOn < startsOn) return [];
+  const step = (iso: string, dir: 1 | -1): string => {
+    const d = new Date(iso + 'T00:00:00');
+    for (let i = 0; i < 10; i++) {
+      d.setDate(d.getDate() + dir);
+      const cur = d.toLocaleDateString('en-CA');
+      const dow = d.getDay();
+      if (BMR_HOLIDAY_BY_DATE.has(cur)) continue;
+      if (weekdaysOnly && (dow === 0 || dow === 6)) continue;
+      return cur;
+    }
+    return d.toLocaleDateString('en-CA');
+  };
+  const inRange = (iso: string) => iso >= startsOn && iso <= endsOn;
+  return BMR_HOLIDAYS.filter((h) => inRange(step(h.date, -1)) || inRange(step(h.date, 1)));
+}
+
