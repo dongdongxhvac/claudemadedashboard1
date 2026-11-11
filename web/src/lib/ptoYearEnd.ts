@@ -1,10 +1,12 @@
 // Pure PTO year-end + CBA allotment rules (no Supabase import, so the
 // node test in ptoYearEnd.test.ts can run it). Hooks: hooks/usePtoYearEnd.ts.
-// The close-out math mirrors pto_close_year() (migrations 0135, 0157, 0158).
+// The close-out math mirrors pto_close_year() (migrations 0135, 0157–0159).
 
 // Vacation never carries (rule change 2026-11-11). Unused hours are lost;
 // 'payout' is the rare manager exception — e.g. 30h left in November but the
 // engineer is out on FMLA for the rest of the year and can't use it.
+// An over-used (negative) balance is the one thing that does cross the year:
+// it is deducted from next year's vacation (2026-11-11).
 export type VacationAction = 'lose' | 'payout';
 
 // Raised from 2 to 10 days on 2026-11-11 (rule change, both sites): up to
@@ -29,8 +31,10 @@ export function sickCloseoutPreview(sickRemaining: number, dailyHours: number) {
 
 /** Client-side preview of the vacation split — same rule as pto_close_year(). */
 export function vacationCloseoutPreview(remaining: number, action: VacationAction) {
-  const payout = action === 'payout' ? Math.max(remaining, 0) : 0;
-  return { payout, forfeit: remaining - payout };
+  const unused = Math.max(remaining, 0);
+  const payout = action === 'payout' ? unused : 0;
+  // carry is 0 or negative: hours owed, deducted from next year's vacation.
+  return { payout, forfeit: unused - payout, carry: Math.min(remaining, 0) };
 }
 
 // ── CBA allotment rule (preload for a year's allotment)

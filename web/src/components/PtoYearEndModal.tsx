@@ -162,7 +162,7 @@ export function PtoYearEndModal({
   const downloadCsv = () => {
     const head = [
       'Engineer', 'From year', 'To year', 'Closed', 'Status',
-      'Vacation left', 'Vacation decision', 'Vacation lost', 'Vacation payout',
+      'Vacation left', 'Vacation decision', 'Vacation lost', 'Vacation payout', 'Vacation owed (deducted next year)',
       'Sick left', 'Sick carry cap', 'Sick carried', 'Sick payout', 'Total payout', 'Payout paid',
       'Floater lost', 'Notes',
     ];
@@ -171,6 +171,7 @@ export function PtoYearEndModal({
       c.voided_at ? `voided ${fmtDate(c.voided_at)}` : 'active',
       c.vacation_remaining, VACATION_ACTION_LABELS[c.vacation_action] ?? c.vacation_action,
       c.vacation_forfeit_hours, c.vacation_payout_hours,
+      Number(c.vacation_carryover_hours) < 0 ? -Number(c.vacation_carryover_hours) : 0,
       c.sick_remaining, c.sick_carry_cap, c.sick_carryover_hours, c.sick_payout_hours,
       payoutOf(c),
       c.payout_paid_at ? fmtDate(c.payout_paid_at) : '',
@@ -214,7 +215,7 @@ export function PtoYearEndModal({
 
         <p className="t-small t-muted mb-1">
           <strong>Sick:</strong> up to {SICK_CARRY_MAX_DAYS} days carry into {fromYear + 1}; anything over is paid out.{' '}
-          <strong>Vacation:</strong> doesn’t carry — unused hours are lost. In a special case (e.g. out on FMLA to year-end) switch that engineer to “pay out”.{' '}
+          <strong>Vacation:</strong> doesn’t carry — unused hours are lost. In a special case (e.g. out on FMLA to year-end) switch that engineer to “pay out”. Over-used (negative) vacation is deducted from {fromYear + 1}.{' '}
           <strong>Floating holiday:</strong> use it or lose it — no carry, no payout.
         </p>
         <p className="t-small t-muted mb-3">
@@ -282,7 +283,12 @@ export function PtoYearEndModal({
                       </select>
                     </>
                   ) : r.vacRem < 0 ? (
-                    <span className="t-muted" title="Over-used vacation doesn’t carry — written off">written off</span>
+                    <span
+                      style={{ color: 'var(--color-danger)' }}
+                      title={`Over-used vacation: ${fmtH(-r.vac.carry)} comes off the ${fromYear + 1} vacation balance`}
+                    >
+                      −{fmtH(-r.vac.carry)} off {fromYear + 1}
+                    </span>
                   ) : (
                     <span className="t-muted">—</span>
                   )}
@@ -324,7 +330,7 @@ export function PtoYearEndModal({
                   {r.active && (
                     <button
                       onClick={() => {
-                        if (confirm(`Undo ${r.name}'s ${fromYear} close-out? Their ${fromYear + 1} sick carryover goes back to 0.`)) {
+                        if (confirm(`Undo ${r.name}'s ${fromYear} close-out? Their ${fromYear + 1} carryover goes back to 0.`)) {
                           undo.mutate({ user_id: r.user_id, from_year: fromYear }, {
                             onError: (e) => setErr((e as Error).message),
                           });
@@ -409,7 +415,9 @@ export function PtoYearEndModal({
                         {Number(c.vacation_payout_hours ?? 0) > 0
                           ? <> → <strong>paid out {fmtH(c.vacation_payout_hours)}</strong></>
                           : Number(c.vacation_remaining) > 0 ? ' → lost'
-                          : Number(c.vacation_remaining) < 0 ? ' → written off' : ''}
+                          : Number(c.vacation_carryover_hours) < 0
+                            ? ` → ${fmtH(-Number(c.vacation_carryover_hours))} deducted from ${c.to_year}`
+                          : ''}
                       </td>
                       <td className="py-1 pr-2">
                         {fmtH(c.sick_remaining)} left → carried {fmtH(c.sick_carryover_hours)}

@@ -7,6 +7,7 @@
 //   Sick     — carry at most 10 days (10 × daily hours), pay out the rest.
 //   Vacation — never carries (2026-11-11). Lost by default; the manager can
 //              pay it out in a special case (e.g. out on FMLA to year-end).
+//              A negative balance is deducted from next year's vacation.
 //   Floating holiday — use it or lose it: never carries, never paid out.
 // The math lives in the pto_close_year() SQL function; sickCloseoutPreview
 // below mirrors it only to preview numbers before the manager commits.

@@ -149,10 +149,13 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
     const sickCarry = mySummary
       ? sickCloseoutPreview(Number(mySummary.sick_remaining), dailyHours).carry
       : 0;
+    // Vacation never carries, except over-used (negative) hours, which are
+    // deducted from next year.
+    const vacOwed = mySummary ? Math.max(-Number(mySummary.vacation_remaining), 0) : 0;
     const round = (n: number) => Math.round(n * 100) / 100;
     return {
       year: year + 1,
-      vacation: cba.vacation, vacationBooked: booked('vacation'),
+      vacation: round(cba.vacation - vacOwed), vacationBooked: booked('vacation'), vacOwed: round(vacOwed),
       sick: round(cba.sick + sickCarry), sickBooked: booked('sick'),
       holiday: cba.holiday, holidayBooked: booked('holiday'),
       sickCarry: round(sickCarry),
@@ -210,6 +213,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
             title="Estimated from the CBA schedule by your hire date. Final once your manager sets next year's allotment."
           >
             {nextYearEstimate.year} estimate · Vacation {nextYearEstimate.vacation}h
+            {nextYearEstimate.vacOwed > 0 && ` (after ${nextYearEstimate.vacOwed}h owed from ${year})`}
             {nextYearEstimate.vacationBooked > 0 && ` (${nextYearEstimate.vacationBooked}h booked)`}
             {' · '}Sick {nextYearEstimate.sick}h
             {nextYearEstimate.sickCarry > 0 && ` (incl. up to ${nextYearEstimate.sickCarry}h carried)`}
