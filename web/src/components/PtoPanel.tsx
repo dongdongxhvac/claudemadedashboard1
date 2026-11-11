@@ -2365,11 +2365,11 @@ function BalancesGrid({
             type="button"
             onClick={() => setShowPreload(true)}
             disabled={copyAllot.isPending}
-            className="t-accent hover:underline ml-3"
-            style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
-            title={`Fill each unset ${viewYear} row from the CBA schedule by hire date`}
+            className="t-muted hover:underline ml-3"
+            style={{ textTransform: 'none', fontWeight: 400, letterSpacing: 0, fontSize: '0.72rem' }}
+            title={`The year-end close-out saves next year's allotment for you. Use this only for engineers who don't go through a close-out (mid-year hires) or to set ${viewYear} early — fills each unset row from the CBA schedule by hire date.`}
           >
-            {copyAllot.isPending ? 'Preloading…' : `⧉ Preload by CBA (${preloadable.length})…`}
+            {copyAllot.isPending ? 'Preloading…' : `preload by CBA (${preloadable.length})…`}
           </button>
         )}
         <button

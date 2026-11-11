@@ -37,6 +37,11 @@ export type PtoCloseout = {
   /** Migration 0158 — the rare manager-approved vacation payout. */
   vacation_payout_hours: number;
   holiday_forfeit_hours: number;
+  /** Migration 0160 — next year's allotment this close-out saved (hours);
+   *  null when it saved none (one was already set). */
+  next_vacation_alloted: number | null;
+  next_sick_alloted: number | null;
+  next_holiday_alloted: number | null;
   notes: string | null;
   closed_by: string | null;
   closed_at: string;
@@ -97,6 +102,9 @@ export function useClosePtoYear() {
       from_year: number;
       vacation_action: VacationAction;
       notes?: string | null;
+      /** Next year's allotment (hours) to save with the close-out. The
+       *  database ignores it when an allotment is already set. */
+      allot?: { vacation: number; sick: number; holiday: number } | null;
     }) => {
       const { error } = await supabase.rpc('pto_close_year', {
         p_user_id:         input.user_id,
@@ -104,6 +112,9 @@ export function useClosePtoYear() {
         p_vacation_action: input.vacation_action,
         p_vacation_custom: null,
         p_notes:           input.notes ?? null,
+        p_vacation_alloted: input.allot ? input.allot.vacation : null,
+        p_sick_alloted:     input.allot ? input.allot.sick : null,
+        p_holiday_alloted:  input.allot ? input.allot.holiday : null,
       });
       if (error) throw error;
     },

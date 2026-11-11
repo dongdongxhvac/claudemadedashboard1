@@ -67,6 +67,11 @@ export function PtoYearEndModal({
     if (next.has(uid)) next.delete(uid); else next.add(uid);
     return next;
   });
+  // Manager edits to the projected allotment, per engineer. Vacation and
+  // sick in hours, floater in days. Unset fields fall back to the CBA rule.
+  const [allotEdits, setAllotEdits] = useState<Record<string, { vacation?: string; sick?: string; holiday?: string }>>({});
+  const setAllot = (uid: string, k: 'vacation' | 'sick' | 'holiday', v: string) =>
+    setAllotEdits((m) => ({ ...m, [uid]: { ...m[uid], [k]: v } }));
   const [busy, setBusy]       = useState<string | null>(null);
   const [err, setErr]         = useState<string | null>(null);
 
@@ -128,12 +133,26 @@ export function PtoYearEndModal({
         Number(next.vacation_alloted) > 0 || Number(next.sick_alloted) > 0 || Number(next.holiday_alloted) > 0
       );
       const cba = cbaAllotment(r.hire_date, fromYear + 1, daily, s ? Number(s.holiday_alloted) : null);
+      // CBA rule values (0 / last year's floater when there's no hire date).
+      const rule = {
+        vacation: cba?.vacation ?? 0,
+        sick: cba?.sick ?? 0,
+        holiday: cba?.holiday ?? (s ? Number(s.holiday_alloted) : daily),
+      };
+      const ed = allotEdits[r.user_id] ?? {};
+      const num = (v: string | undefined, fallback: number) =>
+        v === undefined ? fallback : (Number(v) || 0);
       const allot = nextSet
         ? { vacation: Number(next!.vacation_alloted), sick: Number(next!.sick_alloted), holiday: Number(next!.holiday_alloted) }
-        : cba ? { vacation: cba.vacation, sick: cba.sick, holiday: cba.holiday } : null;
-      const proj = allot && {
+        : {
+            vacation: num(ed.vacation, rule.vacation),
+            sick: num(ed.sick, rule.sick),
+            holiday: ed.holiday === undefined ? rule.holiday : (Number(ed.holiday) || 0) * daily,
+          };
+      const proj = {
         source: nextSet ? 'set' as const : 'cba' as const,
-        basis: nextSet ? null : cba!.basis,
+        basis: cba?.basis ?? null,
+        rule,
         allot,
         vacation: allot.vacation + vac.carry,
         sick: allot.sick + sick.carry,
@@ -157,6 +176,8 @@ export function PtoYearEndModal({
         user_id: row.user_id,
         from_year: fromYear,
         vacation_action: row.action,
+        // Saves next year's allotment with the close-out unless one is set.
+        allot: row.proj.source === 'set' ? null : row.proj.allot,
       });
     } catch (e) {
       setErr(`${row.name}: ${(e as Error).message}`);
@@ -176,7 +197,8 @@ export function PtoYearEndModal({
       'Engineer', 'From year', 'To year', 'Closed', 'Status',
       'Vacation left', 'Vacation decision', 'Vacation lost', 'Vacation payout', 'Vacation owed (deducted next year)',
       'Sick left', 'Sick carry cap', 'Sick carried', 'Sick payout', 'Total payout', 'Payout paid',
-      'Floater lost (days)', 'Notes',
+      'Floater lost (days)',
+      'Next-year vacation allotment saved', 'Next-year sick allotment saved', 'Next-year floater saved (days)', 'Notes',
     ];
     const lines = siteLog.map((c) => [
       nameOf.get(c.user_id) ?? c.user_id, c.from_year, c.to_year, fmtDate(c.closed_at),
@@ -187,7 +209,10 @@ export function PtoYearEndModal({
       c.sick_remaining, c.sick_carry_cap, c.sick_carryover_hours, c.sick_payout_hours,
       payoutOf(c),
       c.payout_paid_at ? fmtDate(c.payout_paid_at) : '',
-      floaterDays(c.holiday_forfeit_hours, Number(c.daily_hours)), c.notes ?? '',
+      floaterDays(c.holiday_forfeit_hours, Number(c.daily_hours)),
+      c.next_vacation_alloted ?? '', c.next_sick_alloted ?? '',
+      c.next_holiday_alloted != null ? floaterDays(c.next_holiday_alloted, Number(c.daily_hours)) : '',
+      c.notes ?? '',
     ].map(csvCell).join(','));
     const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -231,7 +256,7 @@ export function PtoYearEndModal({
           <strong>Floating holiday:</strong> use it or lose it — no carry, no payout.
         </p>
         <p className="t-small t-muted mb-3">
-          Click <strong>Calculate</strong> on an engineer to see their projected {fromYear + 1} balances, then <strong>Close out</strong> on that row to confirm. Each close-out is logged; you can redo or undo one any time — the old entry is kept as “voided”.
+          Click <strong>Calculate</strong> on an engineer to see their projected {fromYear + 1} balances, then <strong>Close out</strong> on that row to confirm. Closing out also saves the {fromYear + 1} allotment shown (CBA rule — adjust it first if needed), unless one is already set. Each close-out is logged; you can redo or undo one any time — the old entry is kept as “voided”.
         </p>
 
         {early && (
@@ -365,36 +390,59 @@ export function PtoYearEndModal({
                       <span className="t-muted uppercase tracking-wider" style={{ fontSize: '0.68rem' }}>
                         {fromYear + 1} projection
                       </span>
-                      {r.proj ? (
-                        <>
-                          {' · '}Vacation <strong style={{ color: r.proj.vacation < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.vacation)}</strong>
-                          <span className="t-muted">
-                            {' '}({fmtH(r.proj.allot.vacation)} allotment{r.vac.carry < 0 ? ` − ${fmtH(-r.vac.carry)} over-used in ${fromYear}` : ''})
-                          </span>
-                          {' · '}Sick <strong style={{ color: r.proj.sick < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.sick)}</strong>
-                          <span className="t-muted">
-                            {' '}({fmtH(r.proj.allot.sick)} allotment
-                            {r.sick.carry > 0 ? ` + ${fmtH(r.sick.carry)} carried` : r.sick.carry < 0 ? ` − ${fmtH(-r.sick.carry)} over-used in ${fromYear}` : ''})
-                          </span>
-                          {' · '}Floater <strong>{fmtDays(r.proj.floater)}</strong>
-                        </>
-                      ) : (
-                        <span className="t-muted"> · no hire date on file and no {fromYear + 1} allotment set — can’t project the allotment</span>
-                      )}
+                      {' · '}Vacation <strong style={{ color: r.proj.vacation < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.vacation)}</strong>
+                      <span className="t-muted">
+                        {' '}({fmtH(r.proj.allot.vacation)} allotment{r.vac.carry < 0 ? ` − ${fmtH(-r.vac.carry)} over-used in ${fromYear}` : ''})
+                      </span>
+                      {' · '}Sick <strong style={{ color: r.proj.sick < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.sick)}</strong>
+                      <span className="t-muted">
+                        {' '}({fmtH(r.proj.allot.sick)} allotment
+                        {r.sick.carry > 0 ? ` + ${fmtH(r.sick.carry)} carried` : r.sick.carry < 0 ? ` − ${fmtH(-r.sick.carry)} over-used in ${fromYear}` : ''})
+                      </span>
+                      {' · '}Floater <strong>{fmtDays(r.proj.floater)}</strong>
                     </div>
-                    <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+                    {r.proj.source === 'set' ? (
+                      <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+                        {fromYear + 1} allotment is already set — close-out keeps it and only adds the carry-over. Change it with “edit” in Balances.
+                      </div>
+                    ) : (
+                      <div className="t-small flex items-center flex-wrap" style={{ gap: 8, marginTop: 3 }}>
+                        <span className="t-muted" style={{ fontSize: '0.7rem' }}>{fromYear + 1} allotment to save:</span>
+                        {([
+                          ['vacation', 'Vacation', 'h', r.proj.rule.vacation, r.proj.allot.vacation],
+                          ['sick', 'Sick', 'h', r.proj.rule.sick, r.proj.allot.sick],
+                          ['holiday', 'Floater', 'days', floaterDays(r.proj.rule.holiday, r.daily), floaterDays(r.proj.allot.holiday, r.daily)],
+                        ] as const).map(([k, label, unit, ruleVal, cur]) => (
+                          <label key={k} className="t-muted" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                            {label}{' '}
+                            <input
+                              type="number" min={0} step={1}
+                              value={allotEdits[r.user_id]?.[k] ?? String(ruleVal)}
+                              onChange={(e) => setAllot(r.user_id, k, e.target.value)}
+                              className="border rounded px-1 t-mono text-right"
+                              style={{
+                                width: 56, height: 20, fontSize: '0.72rem', background: 'var(--color-card)',
+                                borderColor: cur !== ruleVal ? 'var(--color-accent)' : 'var(--color-border)',
+                              }}
+                              title={cur !== ruleVal ? `CBA rule: ${ruleVal} ${unit} — you changed it` : 'CBA rule value — edit to override'}
+                            />{' '}{unit}
+                          </label>
+                        ))}
+                        <span className="t-muted" style={{ fontSize: '0.7rem' }}>
+                          {r.proj.basis ? `CBA rule: ${r.proj.basis}` : 'no hire date on file — enter the allotment by hand'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="t-small t-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>
                       At close-out: {r.payout > 0 ? <strong>{fmtH(r.payout)} paid out</strong> : 'nothing paid out'}
                       {r.vac.forfeit > 0 && ` · ${fmtH(r.vac.forfeit)} vacation lost`}
                       {r.floaterLost > 0 && ` · ${fmtDays(floaterDays(r.floaterLost, r.daily))} floater lost`}
-                      {r.proj && (r.proj.source === 'set'
-                        ? ` · ${fromYear + 1} allotment already set`
-                        : ` · allotment by CBA rule (${r.proj.basis}) — not saved until you preload ${fromYear + 1}`)}
                     </div>
                   </td>
                   <td className="py-1.5 pl-2 text-right align-top" style={{ ...sep, whiteSpace: 'nowrap' }}>
                     <button
                       onClick={() => runOne(r)}
-                      disabled={busy !== null || migrationMissing}
+                      disabled={busy !== null || migrationMissing || dailyQ.isLoading}
                       className="t-small px-2 py-0.5 rounded font-medium text-white disabled:opacity-50"
                       style={{ background: 'var(--color-accent)' }}
                       title={r.active ? 'Close out again with the numbers shown — the earlier entry is kept as voided' : 'Confirm the projection and close out this engineer'}
@@ -484,6 +532,9 @@ export function PtoYearEndModal({
                       </td>
                       <td className="py-1 pr-2">{Number(c.holiday_forfeit_hours) > 0 ? `${fmtDays(floaterDays(c.holiday_forfeit_hours, Number(c.daily_hours)))} lost` : '—'}</td>
                       <td className="py-1 pr-2 t-muted">
+                        {c.next_vacation_alloted != null && (
+                          <>{c.to_year} allotment saved: {fmtH(c.next_vacation_alloted)} vac, {fmtH(c.next_sick_alloted ?? 0)} sick, {fmtDays(floaterDays(c.next_holiday_alloted ?? 0, Number(c.daily_hours)))} floater · </>
+                        )}
                         {c.voided_at ? `voided ${fmtDate(c.voided_at)}` : 'active'}
                         {!c.voided_at && payoutOf(c) > 0 && (c.payout_paid_at ? ' · paid' : ' · payout pending')}
                       </td>
