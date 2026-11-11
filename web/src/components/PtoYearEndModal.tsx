@@ -13,11 +13,11 @@ import type { PtoSummary } from '../hooks/usePto';
 import {
   usePtoCloseouts, usePtoDailyHoursMap, useClosePtoYear, useUndoPtoCloseout, useMarkPayoutPaid,
   sickCloseoutPreview, vacationCloseoutPreview, VACATION_ACTION_LABELS, SICK_CARRY_MAX_DAYS,
-  floaterDays, fmtDays,
+  floaterDays, fmtDays, cbaAllotment,
   type PtoCloseout, type VacationAction,
 } from '../hooks/usePtoYearEnd';
 
-type Roster = { user_id: string; full_name: string | null }[];
+type Roster = { user_id: string; full_name: string | null; hire_date?: string | null }[];
 
 function fmtH(n: number): string {
   const v = Math.round(Number(n) * 100) / 100;
@@ -60,6 +60,13 @@ export function PtoYearEndModal({
   const markPaid   = useMarkPayoutPaid();
 
   const [actions, setActions] = useState<Record<string, VacationAction>>({});
+  // Rows whose next-year projection is open ("Calculate" → review → "Close out").
+  const [calcOpen, setCalcOpen] = useState<Set<string>>(new Set());
+  const toggleCalc = (uid: string) => setCalcOpen((cur) => {
+    const next = new Set(cur);
+    if (next.has(uid)) next.delete(uid); else next.add(uid);
+    return next;
+  });
   const [busy, setBusy]       = useState<string | null>(null);
   const [err, setErr]         = useState<string | null>(null);
   // Set by Cancel so a running "close out all" stops after the current one.
@@ -77,6 +84,14 @@ export function PtoYearEndModal({
   const byUser = useMemo(() => {
     const m = new Map<string, PtoSummary>();
     for (const s of summaries) if (s.year === fromYear) m.set(s.user_id, s);
+    return m;
+  }, [summaries, fromYear]);
+
+  // Next year's rows — an allotment the manager already set wins over the
+  // CBA rule in the projection.
+  const nextByUser = useMemo(() => {
+    const m = new Map<string, PtoSummary>();
+    for (const s of summaries) if (s.year === fromYear + 1) m.set(s.user_id, s);
     return m;
   }, [summaries, fromYear]);
 
@@ -109,7 +124,26 @@ export function PtoYearEndModal({
       const action: VacationAction = vacRem > 0 ? picked : 'lose';
       const sick = sickCloseoutPreview(sickRem, daily);
       const vac = vacationCloseoutPreview(vacRem, action);
+      // Next-year projection: allotment (already set, else the CBA rule by
+      // hire date) plus what this close-out carries in.
+      const next = nextByUser.get(r.user_id);
+      const nextSet = !!next && (
+        Number(next.vacation_alloted) > 0 || Number(next.sick_alloted) > 0 || Number(next.holiday_alloted) > 0
+      );
+      const cba = cbaAllotment(r.hire_date, fromYear + 1, daily, s ? Number(s.holiday_alloted) : null);
+      const allot = nextSet
+        ? { vacation: Number(next!.vacation_alloted), sick: Number(next!.sick_alloted), holiday: Number(next!.holiday_alloted) }
+        : cba ? { vacation: cba.vacation, sick: cba.sick, holiday: cba.holiday } : null;
+      const proj = allot && {
+        source: nextSet ? 'set' as const : 'cba' as const,
+        basis: nextSet ? null : cba!.basis,
+        allot,
+        vacation: allot.vacation + vac.carry,
+        sick: allot.sick + sick.carry,
+        floater: floaterDays(allot.holiday, daily),
+      };
       return {
+        proj,
         user_id: r.user_id,
         name: r.full_name ?? '?',
         hasBalance: !!s,
@@ -220,7 +254,7 @@ export function PtoYearEndModal({
           <strong>Floating holiday:</strong> use it or lose it — no carry, no payout.
         </p>
         <p className="t-small t-muted mb-3">
-          Each close-out is logged. You can re-run or undo one any time — the old entry is kept as “voided”.
+          Click <strong>Calculate</strong> on an engineer to see their projected {fromYear + 1} balances, then <strong>Close out</strong> on that row to confirm. Each close-out is logged; you can redo or undo one any time — the old entry is kept as “voided”.
         </p>
 
         {early && (
@@ -249,7 +283,8 @@ export function PtoYearEndModal({
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.user_id} style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
+              <Fragment key={r.user_id}>
+              <tr style={{ borderBottom: calcOpen.has(r.user_id) ? 'none' : '1px solid var(--color-border-soft)' }}>
                 <td className="py-1 pr-2 align-top">
                   <div className="font-medium">{r.name}</div>
                   {!r.hasBalance && <div className="t-muted" style={{ fontSize: '0.7rem' }}>no {fromYear} balance</div>}
@@ -318,15 +353,17 @@ export function PtoYearEndModal({
                   )}
                 </td>
                 <td className="py-1 pl-2 text-right align-top" style={{ ...sep, whiteSpace: 'nowrap' }}>
+                  {/* Step 1: Calculate shows the next-year projection under the
+                      name; step 2 (Close out) lives on that projection row. */}
                   <button
-                    onClick={() => runOne(r)}
-                    disabled={busy !== null || migrationMissing}
-                    className="t-small px-2 py-0.5 rounded font-medium disabled:opacity-50"
-                    style={r.active
+                    onClick={() => toggleCalc(r.user_id)}
+                    className="t-small px-2 py-0.5 rounded font-medium"
+                    style={r.active || calcOpen.has(r.user_id)
                       ? { border: '1px solid var(--color-border)' }
                       : { background: 'var(--color-accent)', color: '#fff' }}
+                    title={`Show ${r.name}'s projected ${fromYear + 1} balances before closing out`}
                   >
-                    {busy === r.user_id ? '…' : r.active ? 'Re-run' : 'Close out'}
+                    {calcOpen.has(r.user_id) ? 'Hide' : r.active ? 'Recalculate' : 'Calculate'}
                   </button>
                   {r.active && (
                     <button
@@ -344,6 +381,53 @@ export function PtoYearEndModal({
                   )}
                 </td>
               </tr>
+              {calcOpen.has(r.user_id) && (
+                <tr style={{ borderBottom: '1px solid var(--color-border-soft)', background: 'rgba(0,0,0,0.025)' }}>
+                  <td colSpan={7} className="py-1.5 pr-2" style={{ paddingLeft: 12 }}>
+                    <div className="t-small">
+                      <span className="t-muted uppercase tracking-wider" style={{ fontSize: '0.68rem' }}>
+                        {fromYear + 1} projection
+                      </span>
+                      {r.proj ? (
+                        <>
+                          {' · '}Vacation <strong style={{ color: r.proj.vacation < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.vacation)}</strong>
+                          <span className="t-muted">
+                            {' '}({fmtH(r.proj.allot.vacation)} allotment{r.vac.carry < 0 ? ` − ${fmtH(-r.vac.carry)} over-used in ${fromYear}` : ''})
+                          </span>
+                          {' · '}Sick <strong style={{ color: r.proj.sick < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.proj.sick)}</strong>
+                          <span className="t-muted">
+                            {' '}({fmtH(r.proj.allot.sick)} allotment
+                            {r.sick.carry > 0 ? ` + ${fmtH(r.sick.carry)} carried` : r.sick.carry < 0 ? ` − ${fmtH(-r.sick.carry)} over-used in ${fromYear}` : ''})
+                          </span>
+                          {' · '}Floater <strong>{fmtDays(r.proj.floater)}</strong>
+                        </>
+                      ) : (
+                        <span className="t-muted"> · no hire date on file and no {fromYear + 1} allotment set — can’t project the allotment</span>
+                      )}
+                    </div>
+                    <div className="t-small t-muted" style={{ fontSize: '0.7rem' }}>
+                      At close-out: {r.payout > 0 ? <strong>{fmtH(r.payout)} paid out</strong> : 'nothing paid out'}
+                      {r.vac.forfeit > 0 && ` · ${fmtH(r.vac.forfeit)} vacation lost`}
+                      {r.floaterLost > 0 && ` · ${fmtDays(floaterDays(r.floaterLost, r.daily))} floater lost`}
+                      {r.proj && (r.proj.source === 'set'
+                        ? ` · ${fromYear + 1} allotment already set`
+                        : ` · allotment by CBA rule (${r.proj.basis}) — not saved until you preload ${fromYear + 1}`)}
+                    </div>
+                  </td>
+                  <td className="py-1.5 pl-2 text-right align-top" style={{ ...sep, whiteSpace: 'nowrap' }}>
+                    <button
+                      onClick={() => runOne(r)}
+                      disabled={busy !== null || migrationMissing}
+                      className="t-small px-2 py-0.5 rounded font-medium text-white disabled:opacity-50"
+                      style={{ background: 'var(--color-accent)' }}
+                      title={r.active ? 'Close out again with the numbers shown — the earlier entry is kept as voided' : 'Confirm the projection and close out this engineer'}
+                    >
+                      {busy === r.user_id ? '…' : r.active ? 'Close out again' : 'Close out'}
+                    </button>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -355,7 +439,14 @@ export function PtoYearEndModal({
             {rows.length - openRows.length} of {rows.length} closed
             {totalPayout > 0 && <> · payout logged: <strong>{fmtH(totalPayout)}</strong></>}
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setCalcOpen(calcOpen.size === rows.length ? new Set() : new Set(rows.map((r) => r.user_id)))}
+              className="t-small t-accent hover:underline"
+              title={`Show or hide every engineer's ${fromYear + 1} projection`}
+            >
+              {calcOpen.size === rows.length ? 'Hide all projections' : 'Calculate all'}
+            </button>
             <button
               onClick={onCancel}
               className="t-small px-3 py-1 rounded border"

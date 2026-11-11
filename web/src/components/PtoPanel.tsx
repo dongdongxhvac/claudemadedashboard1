@@ -2313,7 +2313,7 @@ function BalancesGrid({
   const preloadable = preloadRows.filter((r) => r.basis);
   const roster = engineers
     .filter((e) => e.active && e.role === 'engineer')
-    .map((e) => ({ user_id: e.user_id, full_name: e.full_name }));
+    .map((e) => ({ user_id: e.user_id, full_name: e.full_name, hire_date: e.hiring_date }));
 
   if (rows.length === 0) return null;
 
