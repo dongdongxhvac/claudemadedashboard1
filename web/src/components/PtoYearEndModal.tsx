@@ -3,8 +3,9 @@
 // summaries, so a manager only ever closes out their own building.
 //
 // Per engineer: sick carries at most 10 days and the rest is paid out;
-// vacation is the manager's call (carry +/−, lose, or custom hours).
-// Floating holiday never carries. Every run is written to
+// vacation never carries — lost by default, with a small "pay out" override
+// for the rare special case (e.g. out on FMLA to year-end); floating holiday
+// is use-it-or-lose-it (no carry, no payout). Every run is written to
 // pto_year_end_closeouts; a re-run or undo voids the prior row, so the log
 // below keeps the whole history.
 import { Fragment, useMemo, useRef, useState } from 'react';
@@ -26,6 +27,11 @@ function fmtDate(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+
+/** Total hours owed to the engineer: sick over the cap + any vacation payout. */
+function payoutOf(c: PtoCloseout): number {
+  return Number(c.sick_payout_hours) + Number(c.vacation_payout_hours ?? 0);
 }
 
 function csvCell(v: unknown): string {
@@ -53,7 +59,6 @@ export function PtoYearEndModal({
   const markPaid   = useMarkPayoutPaid();
 
   const [actions, setActions] = useState<Record<string, VacationAction>>({});
-  const [customs, setCustoms] = useState<Record<string, string>>({});
   const [busy, setBusy]       = useState<string | null>(null);
   const [err, setErr]         = useState<string | null>(null);
   // Set by Cancel so a running "close out all" stops after the current one.
@@ -94,26 +99,25 @@ export function PtoYearEndModal({
       const daily = override != null ? override : siteDefaultDaily;
       const vacRem = Number(s?.vacation_remaining ?? 0);
       const sickRem = Number(s?.sick_remaining ?? 0);
+      // Floater: use it or lose it — whatever is left is lost.
+      const floaterLost = Math.max(Number(s?.holiday_remaining ?? 0), 0);
       const active = activeByUser.get(r.user_id) ?? null;
-      const action: VacationAction = actions[r.user_id] ?? active?.vacation_action ?? 'carry';
-      const customStr = customs[r.user_id]
-        ?? (active?.vacation_action === 'custom' ? String(active.vacation_carryover_hours) : '');
-      const custom = customStr === '' ? null : Number(customStr);
+      // Default is always "lose"; "payout" only when the manager picks it
+      // (or an earlier close-out of this engineer already chose it).
+      const picked = actions[r.user_id] ?? (active?.vacation_action === 'payout' ? 'payout' : 'lose');
+      const action: VacationAction = vacRem > 0 ? picked : 'lose';
+      const sick = sickCloseoutPreview(sickRem, daily);
+      const vac = vacationCloseoutPreview(vacRem, action);
       return {
         user_id: r.user_id,
         name: r.full_name ?? '?',
         hasBalance: !!s,
-        daily, vacRem, sickRem, active, action, customStr, custom,
-        sick: sickCloseoutPreview(sickRem, daily),
-        vac: vacationCloseoutPreview(vacRem, action, custom),
+        daily, vacRem, sickRem, floaterLost, active, action, sick, vac,
+        payout: sick.payout + vac.payout,
       };
     });
 
   const runOne = async (row: typeof rows[number]) => {
-    if (row.action === 'custom' && (row.custom == null || Number.isNaN(row.custom))) {
-      setErr(`${row.name}: enter the custom vacation hours to carry.`);
-      return;
-    }
     setErr(null);
     setBusy(row.user_id);
     try {
@@ -121,7 +125,6 @@ export function PtoYearEndModal({
         user_id: row.user_id,
         from_year: fromYear,
         vacation_action: row.action,
-        vacation_custom: row.action === 'custom' ? row.custom : null,
       });
     } catch (e) {
       setErr(`${row.name}: ${(e as Error).message}`);
@@ -159,16 +162,17 @@ export function PtoYearEndModal({
   const downloadCsv = () => {
     const head = [
       'Engineer', 'From year', 'To year', 'Closed', 'Status',
-      'Vacation left', 'Vacation decision', 'Vacation carried', 'Vacation forfeited',
-      'Sick left', 'Sick carry cap', 'Sick carried', 'Sick payout', 'Payout paid',
-      'Floater forfeited', 'Notes',
+      'Vacation left', 'Vacation decision', 'Vacation lost', 'Vacation payout',
+      'Sick left', 'Sick carry cap', 'Sick carried', 'Sick payout', 'Total payout', 'Payout paid',
+      'Floater lost', 'Notes',
     ];
     const lines = siteLog.map((c) => [
       nameOf.get(c.user_id) ?? c.user_id, c.from_year, c.to_year, fmtDate(c.closed_at),
       c.voided_at ? `voided ${fmtDate(c.voided_at)}` : 'active',
-      c.vacation_remaining, VACATION_ACTION_LABELS[c.vacation_action],
-      c.vacation_carryover_hours, c.vacation_forfeit_hours,
+      c.vacation_remaining, VACATION_ACTION_LABELS[c.vacation_action] ?? c.vacation_action,
+      c.vacation_forfeit_hours, c.vacation_payout_hours,
       c.sick_remaining, c.sick_carry_cap, c.sick_carryover_hours, c.sick_payout_hours,
+      payoutOf(c),
       c.payout_paid_at ? fmtDate(c.payout_paid_at) : '',
       c.holiday_forfeit_hours, c.notes ?? '',
     ].map(csvCell).join(','));
@@ -182,7 +186,7 @@ export function PtoYearEndModal({
 
   const now = new Date();
   const early = now.getFullYear() === fromYear && now.getMonth() < 11;
-  const totalPayout = rows.reduce((t, r) => t + (r.active ? Number(r.active.sick_payout_hours) : 0), 0);
+  const totalPayout = rows.reduce((t, r) => t + (r.active ? payoutOf(r.active) : 0), 0);
   const migrationMissing = !!closeoutsQ.error;
 
   const th = 'py-1 px-1.5 text-right';
@@ -210,8 +214,8 @@ export function PtoYearEndModal({
 
         <p className="t-small t-muted mb-1">
           <strong>Sick:</strong> up to {SICK_CARRY_MAX_DAYS} days carry into {fromYear + 1}; anything over is paid out.{' '}
-          <strong>Vacation:</strong> your call per engineer — carry the balance (even if negative), lose it, or carry a custom amount.{' '}
-          <strong>Floating holiday</strong> doesn’t carry.
+          <strong>Vacation:</strong> doesn’t carry — unused hours are lost. In a special case (e.g. out on FMLA to year-end) switch that engineer to “pay out”.{' '}
+          <strong>Floating holiday:</strong> use it or lose it — no carry, no payout.
         </p>
         <p className="t-small t-muted mb-3">
           Each close-out is logged. You can re-run or undo one any time — the old entry is kept as “voided”.
@@ -233,12 +237,11 @@ export function PtoYearEndModal({
             <tr className="t-muted text-left" style={{ borderBottom: '1px solid var(--color-border-soft)' }}>
               <th className="py-1 pr-2">Engineer</th>
               <th className={th} style={sep}>Vac left</th>
-              <th className="py-1 px-1.5">Vacation decision</th>
-              <th className={th}>Carries</th>
-              <th className={th}>Forfeit</th>
+              <th className={th}>Unused vacation</th>
               <th className={th} style={sep}>Sick left</th>
               <th className={th}>Carries</th>
-              <th className={th}>Payout</th>
+              <th className={th} style={sep}>Floater</th>
+              <th className={th} style={sep}>Payout</th>
               <th className="py-1 pl-2" style={sep}></th>
             </tr>
           </thead>
@@ -255,34 +258,47 @@ export function PtoYearEndModal({
                   )}
                 </td>
                 <td className={td} style={{ ...sep, color: r.vacRem < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.vacRem)}</td>
-                <td className="py-1 px-1.5 align-top" style={{ whiteSpace: 'nowrap' }}>
-                  <select
-                    value={r.action}
-                    onChange={(e) => setActions((a) => ({ ...a, [r.user_id]: e.target.value as VacationAction }))}
-                    className="border rounded px-1 py-0.5 t-small"
-                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-                  >
-                    {(Object.keys(VACATION_ACTION_LABELS) as VacationAction[]).map((k) => (
-                      <option key={k} value={k}>{VACATION_ACTION_LABELS[k]}</option>
-                    ))}
-                  </select>
-                  {r.action === 'custom' && (
-                    <input
-                      type="number" step={0.5} value={r.customStr} placeholder="h"
-                      onChange={(e) => setCustoms((c) => ({ ...c, [r.user_id]: e.target.value }))}
-                      className="border rounded px-1 py-0.5 t-small t-mono ml-1"
-                      style={{ width: 64, borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-                      title="Hours to carry — can be negative"
-                    />
+                <td className={td} style={{ whiteSpace: 'nowrap' }}>
+                  {r.vacRem > 0 ? (
+                    <>
+                      {r.action === 'payout'
+                        ? <strong>{fmtH(r.vac.payout)}</strong>
+                        : <span className="t-muted">{fmtH(r.vac.forfeit)}</span>}
+                      {/* Deliberately small + muted: paying vacation out is the rare exception. */}
+                      <select
+                        value={r.action}
+                        onChange={(e) => setActions((a) => ({ ...a, [r.user_id]: e.target.value as VacationAction }))}
+                        className="rounded ml-1"
+                        style={{
+                          fontSize: '0.68rem', padding: '0 2px', height: 18,
+                          border: '1px solid ' + (r.action === 'payout' ? 'var(--color-accent)' : 'var(--color-border-soft)'),
+                          background: 'transparent',
+                          color: r.action === 'payout' ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                        }}
+                        title="Unused vacation is lost. Pay out only in a special case (e.g. out on FMLA to year-end)."
+                      >
+                        <option value="lose">lost</option>
+                        <option value="payout">pay out</option>
+                      </select>
+                    </>
+                  ) : r.vacRem < 0 ? (
+                    <span className="t-muted" title="Over-used vacation doesn’t carry — written off">written off</span>
+                  ) : (
+                    <span className="t-muted">—</span>
                   )}
                 </td>
-                <td className={td} style={{ color: r.vac.carry < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.vac.carry)}</td>
-                <td className={`${td} t-muted`}>{r.vac.forfeit === 0 ? '—' : fmtH(r.vac.forfeit)}</td>
                 <td className={td} style={{ ...sep, color: r.sickRem < 0 ? 'var(--color-danger)' : undefined }}>{fmtH(r.sickRem)}</td>
                 <td className={td} title={`Max ${SICK_CARRY_MAX_DAYS} days × ${r.daily}h = ${r.sick.cap}h`}>{fmtH(r.sick.carry)}</td>
-                <td className={td}>
-                  {r.sick.payout > 0 ? <strong>{fmtH(r.sick.payout)}</strong> : <span className="t-muted">—</span>}
-                  {r.active && Number(r.active.sick_payout_hours) > 0 && (
+                <td className={`${td} t-muted`} style={sep} title="Floating holiday: use it or lose it — no carry, no payout">
+                  {r.floaterLost > 0 ? `${fmtH(r.floaterLost)} lost` : '—'}
+                </td>
+                <td
+                  className={td}
+                  style={sep}
+                  title={r.payout > 0 ? `Sick ${fmtH(r.sick.payout)} + vacation ${fmtH(r.vac.payout)}` : undefined}
+                >
+                  {r.payout > 0 ? <strong>{fmtH(r.payout)}</strong> : <span className="t-muted">—</span>}
+                  {r.active && payoutOf(r.active) > 0 && (
                     <label className="block t-muted" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
                       <input
                         type="checkbox"
@@ -308,7 +324,7 @@ export function PtoYearEndModal({
                   {r.active && (
                     <button
                       onClick={() => {
-                        if (confirm(`Undo ${r.name}'s ${fromYear} close-out? Their ${fromYear + 1} carryover goes back to 0.`)) {
+                        if (confirm(`Undo ${r.name}'s ${fromYear} close-out? Their ${fromYear + 1} sick carryover goes back to 0.`)) {
                           undo.mutate({ user_id: r.user_id, from_year: fromYear }, {
                             onError: (e) => setErr((e as Error).message),
                           });
@@ -330,7 +346,7 @@ export function PtoYearEndModal({
         <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
           <span className="t-small t-muted">
             {rows.length - openRows.length} of {rows.length} closed
-            {totalPayout > 0 && <> · sick payout logged: <strong>{fmtH(totalPayout)}</strong></>}
+            {totalPayout > 0 && <> · payout logged: <strong>{fmtH(totalPayout)}</strong></>}
           </span>
           <div className="flex gap-2">
             <button
@@ -389,8 +405,11 @@ export function PtoYearEndModal({
                       <td className="py-1 pr-2 t-mono">{fmtDate(c.closed_at)}</td>
                       <td className="py-1 pr-2">{nameOf.get(c.user_id) ?? '?'}</td>
                       <td className="py-1 pr-2">
-                        {fmtH(c.vacation_remaining)} left · {VACATION_ACTION_LABELS[c.vacation_action].toLowerCase()} → carried {fmtH(c.vacation_carryover_hours)}
-                        {Number(c.vacation_forfeit_hours) !== 0 && <>, forfeited {fmtH(c.vacation_forfeit_hours)}</>}
+                        {fmtH(c.vacation_remaining)} left
+                        {Number(c.vacation_payout_hours ?? 0) > 0
+                          ? <> → <strong>paid out {fmtH(c.vacation_payout_hours)}</strong></>
+                          : Number(c.vacation_remaining) > 0 ? ' → lost'
+                          : Number(c.vacation_remaining) < 0 ? ' → written off' : ''}
                       </td>
                       <td className="py-1 pr-2">
                         {fmtH(c.sick_remaining)} left → carried {fmtH(c.sick_carryover_hours)}
@@ -399,7 +418,7 @@ export function PtoYearEndModal({
                       <td className="py-1 pr-2">{Number(c.holiday_forfeit_hours) > 0 ? `${fmtH(c.holiday_forfeit_hours)} lost` : '—'}</td>
                       <td className="py-1 pr-2 t-muted">
                         {c.voided_at ? `voided ${fmtDate(c.voided_at)}` : 'active'}
-                        {!c.voided_at && Number(c.sick_payout_hours) > 0 && (c.payout_paid_at ? ' · paid' : ' · payout pending')}
+                        {!c.voided_at && payoutOf(c) > 0 && (c.payout_paid_at ? ' · paid' : ' · payout pending')}
                       </td>
                     </tr>
                   </Fragment>

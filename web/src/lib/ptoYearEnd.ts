@@ -1,8 +1,11 @@
 // Pure PTO year-end + CBA allotment rules (no Supabase import, so the
 // node test in ptoYearEnd.test.ts can run it). Hooks: hooks/usePtoYearEnd.ts.
-// The close-out math mirrors pto_close_year() in migration 0135.
+// The close-out math mirrors pto_close_year() (migrations 0135, 0157, 0158).
 
-export type VacationAction = 'carry' | 'lose' | 'custom';
+// Vacation never carries (rule change 2026-11-11). Unused hours are lost;
+// 'payout' is the rare manager exception — e.g. 30h left in November but the
+// engineer is out on FMLA for the rest of the year and can't use it.
+export type VacationAction = 'lose' | 'payout';
 
 // Raised from 2 to 10 days on 2026-11-11 (rule change, both sites): up to
 // 10 unused sick days carry into the next year on top of that year's fresh
@@ -10,9 +13,8 @@ export type VacationAction = 'carry' | 'lose' | 'custom';
 export const SICK_CARRY_MAX_DAYS = 10;
 
 export const VACATION_ACTION_LABELS: Record<VacationAction, string> = {
-  carry:  'Carry balance',
-  lose:   'Lose (forfeit)',
-  custom: 'Carry custom hours',
+  lose:   'Lose',
+  payout: 'Pay out',
 };
 
 /** Client-side preview of the sick split — same rule as pto_close_year(). */
@@ -26,9 +28,9 @@ export function sickCloseoutPreview(sickRemaining: number, dailyHours: number) {
 }
 
 /** Client-side preview of the vacation split — same rule as pto_close_year(). */
-export function vacationCloseoutPreview(remaining: number, action: VacationAction, custom: number | null) {
-  const carry = action === 'carry' ? remaining : action === 'lose' ? 0 : (custom ?? 0);
-  return { carry, forfeit: remaining - carry };
+export function vacationCloseoutPreview(remaining: number, action: VacationAction) {
+  const payout = action === 'payout' ? Math.max(remaining, 0) : 0;
+  return { payout, forfeit: remaining - payout };
 }
 
 // ── CBA allotment rule (preload for a year's allotment)

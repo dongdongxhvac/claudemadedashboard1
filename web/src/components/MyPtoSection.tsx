@@ -124,7 +124,7 @@ export function MyPtoSection({ userId, compact = false }: { userId: string; comp
   );
   // Until the manager saves next year's row, show an estimate: CBA rule by
   // hire date, minus next-year PTO already approved, plus the sick hours
-  // that would carry (max 10 days). Vacation carry is the manager's call, so
+  // that would carry (max 10 days). Vacation never carries, so
   // it's left out of the estimate.
   const hireQ = useQuery({
     queryKey: ['my_hiring_date', userId],

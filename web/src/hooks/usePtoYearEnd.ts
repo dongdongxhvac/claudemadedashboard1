@@ -5,9 +5,9 @@
 //
 // Rules (set 2026-09-26):
 //   Sick     — carry at most 10 days (10 × daily hours), pay out the rest.
-//   Vacation — manager picks per engineer: carry as-is (+/−), lose, or a
-//              custom carry with the rest forfeited.
-//   Floating holiday — never carries.
+//   Vacation — never carries (2026-11-11). Lost by default; the manager can
+//              pay it out in a special case (e.g. out on FMLA to year-end).
+//   Floating holiday — use it or lose it: never carries, never paid out.
 // The math lives in the pto_close_year() SQL function; sickCloseoutPreview
 // below mirrors it only to preview numbers before the manager commits.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +33,8 @@ export type PtoCloseout = {
   vacation_action: VacationAction;
   vacation_carryover_hours: number;
   vacation_forfeit_hours: number;
+  /** Migration 0158 — the rare manager-approved vacation payout. */
+  vacation_payout_hours: number;
   holiday_forfeit_hours: number;
   notes: string | null;
   closed_by: string | null;
@@ -93,14 +95,13 @@ export function useClosePtoYear() {
       user_id: string;
       from_year: number;
       vacation_action: VacationAction;
-      vacation_custom?: number | null;
       notes?: string | null;
     }) => {
       const { error } = await supabase.rpc('pto_close_year', {
         p_user_id:         input.user_id,
         p_from_year:       input.from_year,
         p_vacation_action: input.vacation_action,
-        p_vacation_custom: input.vacation_custom ?? null,
+        p_vacation_custom: null,
         p_notes:           input.notes ?? null,
       });
       if (error) throw error;

@@ -40,9 +40,11 @@ assert.deepEqual(sickCloseoutPreview(120, 8), { cap: 80, carry: 80, payout: 40 }
 assert.deepEqual(sickCloseoutPreview(40, 8), { cap: 80, carry: 40, payout: 0 });
 assert.deepEqual(sickCloseoutPreview(150, 10), { cap: 100, carry: 100, payout: 50 });
 assert.deepEqual(sickCloseoutPreview(-8, 8), { cap: 80, carry: -8, payout: 0 });
-assert.deepEqual(vacationCloseoutPreview(-12, 'carry', null), { carry: -12, forfeit: 0 });
-assert.deepEqual(vacationCloseoutPreview(30, 'lose', null), { carry: 0, forfeit: 30 });
-assert.deepEqual(vacationCloseoutPreview(30, 'custom', 16), { carry: 16, forfeit: 14 });
+// Vacation never carries: lost by default, paid out only as an exception.
+assert.deepEqual(vacationCloseoutPreview(30, 'lose'), { payout: 0, forfeit: 30 });
+assert.deepEqual(vacationCloseoutPreview(30, 'payout'), { payout: 30, forfeit: 0 });
+assert.deepEqual(vacationCloseoutPreview(-12, 'lose'), { payout: 0, forfeit: -12 });
+assert.deepEqual(vacationCloseoutPreview(-12, 'payout'), { payout: 0, forfeit: -12 });
 
 if (failed) process.exitCode = 1;
 else console.log('ptoYearEnd: all assertions pass');
