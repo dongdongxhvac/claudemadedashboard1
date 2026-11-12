@@ -127,12 +127,33 @@ anyone at the TV change the board. The wall page handles it
 - The override is local to the kiosk browser; the admin card's settings are
   never changed, and the pad cannot reach a board switched off there.
 
-Is the Pi seeing the pad?
+**This pad crashes a Pi 5's USB controller unless the Pi is set up for it.**
+It never answers the keyboard-LED request Linux sends every keyboard; five
+seconds later the kernel cancels the stuck request and the Pi 5's controller
+hangs on the cancel: `xHCI host controller not responding, assume dead`, ten
+seconds after plug-in, and every port on that controller is gone until a
+reboot. Two things on the Pi prevent it (installed by `kiosk-setup.sh`,
+done by hand on kiosk1 on 2026-11-12):
+
+- `usbhid.quirks=0x5131:0x5345:0x4` at the end of `/boot/firmware/cmdline.txt`
+  — the kernel's keyboard driver ignores this one device, so the request is
+  never sent (backup: `cmdline.txt.bak-20261112`);
+- `wallpad.service` (`/usr/local/bin/wallpad.py`, source in
+  `web/public/wallpad.py`) — reads the pad directly and replays each physical
+  key as F13, F14 … on a virtual keyboard. First key ever pressed = F13.
+  It never sends the pad anything.
+
+Checks:
 
 ```bash
-ssh kiosk1@kiosk1.local 'lsusb | grep -i 5131 || echo "pad not connected"; sudo dmesg -T | grep -E "FQ-K002|USB disconnect" | tail -4'
+ssh kiosk1@kiosk1.local 'lsusb | grep -i 5131 || echo "pad not on the bus"; sudo dmesg | grep -c "HC died"; systemctl is-active wallpad; sudo journalctl -u wallpad -b --no-pager | tail -5'
 ```
 
-No line from `lsusb` means the Pi does not see it (unplugged, a charge-only
-cable, or a loose plug) — the wall cannot react to a pad the Pi cannot see.
-
+- Pad on the bus, `0` controller deaths, service `active`, and a
+  `pad attached: reading 4 interface(s)` line = healthy. Each key press logs
+  a `press …` line.
+- `HC died` in the kernel log = the quirk is missing from the running kernel
+  (`cat /proc/cmdline`). Fix the cmdline and reboot.
+- To forget which physical key is F13/F14 on the Pi side:
+  `sudo rm /var/lib/wallpad/keys.json && sudo systemctl restart wallpad`
+  (restarting the service is safe).

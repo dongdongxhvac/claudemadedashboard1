@@ -86,6 +86,38 @@ X-GNOME-Autostart-enabled=true
 EOF
 echo "Autostart hooks installed (labwc, wayfire, X11)."
 
+# --- two-key pad beside the wall (FQ-K002 RGB, USB 5131:5345) -----------------
+# The pad never answers the keyboard-LED request the kernel's HID driver sends
+# every keyboard, and on a Pi 5 the cancel of that stuck request kills the USB
+# controller ("HC died") ten seconds after the pad is plugged in (2026-11-12).
+# So: tell usbhid to ignore this one device, and read it with a small service
+# that replays its keys as F13/F14 on a virtual keyboard (see wallpad.py).
+# Harmless on a Pi without the pad.
+echo "Installing wall keypad bridge..."
+KIOSK_ORIGIN="$(echo "$KIOSK_URL" | sed -E 's#^(https?://[^/]+).*#\1#')"
+sudo apt-get install -y python3-usb python3-evdev
+curl -fsSL "$KIOSK_ORIGIN/wallpad.py" -o /tmp/wallpad.py
+sudo install -m 755 /tmp/wallpad.py /usr/local/bin/wallpad.py
+sudo tee /etc/systemd/system/wallpad.service >/dev/null <<'UNIT'
+[Unit]
+Description=Wall keypad bridge (FQ-K002 5131:5345 -> virtual F13/F14 keys)
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/wallpad.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable wallpad.service
+if ! grep -q "usbhid.quirks" /boot/firmware/cmdline.txt; then
+  sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.bak-wallpad
+  sudo sed -i '1 s/$/ usbhid.quirks=0x5131:0x5345:0x4/' /boot/firmware/cmdline.txt
+fi
+
 # --- system settings ----------------------------------------------------------
 echo "Enabling desktop auto-login..."
 sudo raspi-config nonint do_boot_behaviour B4
