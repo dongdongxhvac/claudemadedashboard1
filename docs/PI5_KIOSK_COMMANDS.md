@@ -121,9 +121,14 @@ anyone at the TV change the board. The wall page handles it
 - **HOLD** — pins the board now on screen for 30 minutes; press again to
   release. The header chip shows `MANUAL · back in m:ss` or `HOLD · m:ss`.
 - **Which key is which is learned**: the first key ever pressed becomes NEXT,
-  the second different key becomes HOLD, and the wall says so. To swap them,
-  hold either key down for 5 seconds (the wall says "Keypad reset"), then
-  press the one you want as NEXT first.
+  the second different key becomes HOLD. On kiosk1 (2026-11-12) the pad's
+  Ctrl+V key is NEXT and its Ctrl+C key is HOLD.
+- **To swap them on this pad**, reset the Pi-side map and press the key you
+  want as NEXT first:
+  `ssh kiosk1@kiosk1.local 'sudo rm /var/lib/wallpad/keys.json && sudo systemctl restart wallpad'`.
+  (The wall also forgets its keys when one is held down for 5 seconds, but
+  this pad sends a 0.1 s tap however long a key is held, so that gesture
+  never fires here.)
 - The override is local to the kiosk browser; the admin card's settings are
   never changed, and the pad cannot reach a board switched off there.
 
@@ -141,7 +146,9 @@ done by hand on kiosk1 on 2026-11-12):
 - `wallpad.service` (`/usr/local/bin/wallpad.py`, source in
   `web/public/wallpad.py`) — reads the pad directly and replays each physical
   key as F13, F14 … on a virtual keyboard. First key ever pressed = F13.
-  It never sends the pad anything.
+  It does the HID handshake the ignored kernel driver no longer does
+  (SET_IDLE + reading each interface's report descriptor — the pad sends
+  nothing until then) and never the LED request that hangs.
 
 Checks:
 
