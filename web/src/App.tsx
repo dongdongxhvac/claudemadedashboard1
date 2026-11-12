@@ -26,7 +26,8 @@ import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
-import { resolveTvLayout, parseTvLayoutsOff, parseRotateMinutes, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS } from './hooks/useTvLayout';
+import { resolveTvLayout, parseTvLayoutsOff, parseRotateMinutes, enabledTvLayouts, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS, TV_ROTATION_ORDER } from './hooks/useTvLayout';
+import { useTvKeypad, useTvKeypadState } from './hooks/useTvKeypad';
 
 /** Reset scroll to the top on every route change. Without this, navigating
  *  from a long page (e.g. the manager dashboard) to another route leaves the
@@ -86,14 +87,55 @@ function TvLayoutGate({ path, children }: { path: string; children: React.ReactN
   const me = useMe({ resilient: true });
   // Follow the kiosk's own users row (a layout flip from the admin page) and
   // the clock (rotate slots) while the wall is up.
-  useTvLayoutLive(me.data?.role === 'tv' ? me.data.id : null);
+  const isKiosk = me.data?.role === 'tv';
+  useTvLayoutLive(isKiosk ? me.data!.id : null);
   const now = useMinuteTick();
+  // The two-key pad beside the wall (2026-11-12): NEXT shows another enabled
+  // board for a while, HOLD pins the one on screen — a local override that
+  // wins over the account's setting until it runs out (see useTvKeypad).
+  const pad = useTvKeypadState();
+  const enabled = enabledTvLayouts(parseTvLayoutsOff(me.data?.preferences?.tv_layouts_off));
+  const current = TV_ROTATION_ORDER.find((l) => TV_LAYOUT_PATHS[l] === path) ?? null;
+  // The account's own board when its setting is a fixed one (null = rotating).
+  const prefs = me.data?.preferences;
+  const home = !isKiosk || prefs?.tv_layout === 'rotate'
+    ? null
+    : resolveTvLayout(prefs?.tv_layout, now, parseTvLayoutsOff(prefs?.tv_layouts_off));
+  useTvKeypad(isKiosk, current, enabled.join(','), home);
   if (me.isLoading) return <div className="p-8 text-gray-500">Loading...</div>;
-  if (me.data?.role === 'tv') {
-    const own = tvLayoutPath(me.data, now);
+  if (isKiosk) {
+    // The store clears an override the moment it expires, so a non-null one
+    // is in force; one for a board since switched off on the card is ignored.
+    const forced = pad.override && enabled.includes(pad.override.layout) ? pad.override.layout : null;
+    const own = forced ? TV_LAYOUT_PATHS[forced] : tvLayoutPath(me.data, now);
     if (own !== path) return <Navigate to={own} replace />;
   }
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {isKiosk && pad.toast && <TvKeyToast text={pad.toast.text} />}
+    </>
+  );
+}
+
+/** The pad's on-screen note ("This key is now NEXT BOARD"), sized for the
+ *  wall and drawn over whichever board is up. */
+function TvKeyToast({ text }: { text: string }) {
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed', left: '50%', bottom: '7vh', transform: 'translateX(-50%)', zIndex: 1000,
+        maxWidth: '90vw', padding: '0.8vw 1.8vw',
+        background: 'rgba(15, 23, 42, 0.97)', color: '#f8fafc',
+        border: '2px solid #38bdf8', borderRadius: '0.6vw',
+        boxShadow: '0 0.6vw 2vw rgba(0, 0, 0, 0.55)',
+        fontSize: '1.7vw', fontWeight: 700, textAlign: 'center',
+      }}
+    >
+      {text}
+    </div>
+  );
 }
 
 function PublicOnly({ children }: { children: React.ReactNode }) {

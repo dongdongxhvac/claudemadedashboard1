@@ -78,6 +78,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUparkUserIds, useUparkBuildingIds, useMySiteAccess } from '../../hooks/useSiteScope';
 import { TV_LAYOUT_LABELS, TV_LAYOUT_SHORT, parseTvLayoutsOff, parseRotateMinutes, nextRotateLayout, msToNextRotateFlip, type TvLayout } from '../../hooks/useTvLayout';
 import { useMe } from '../../hooks/useMe';
+import { useTvKeypadState, TV_KEY_NEXT_MINUTES, TV_KEY_HOLD_MINUTES } from '../../hooks/useTvKeypad';
 import { isClosed, addDays, localISODate, mondayOf } from '../../lib/dashboard';
 import { BMR_HOLIDAYS } from '../../lib/bmrHolidays';
 import { daysWorkedByName, workdaysInWindow, type PtoDayRow } from '../../lib/daysWorked';
@@ -351,12 +352,33 @@ function TvLayoutBadge({ layout }: { layout: TvLayout }) {
   const me = useMe().data;
   const prefs = (me?.preferences ?? {}) as Record<string, unknown>;
   const rotating = me?.role === 'tv' && prefs.tv_layout === 'rotate';
+  // The two-key pad's override (NEXT / HOLD) outranks the rotation chip:
+  // while one is in force the wall is not following the account's setting.
+  const pad = useTvKeypadState();
+  const override = me?.role === 'tv' ? pad.override : null;
+  const live = rotating || !!override;
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
-    if (!rotating) return;
+    if (!live) return;
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [rotating]);
+  }, [live]);
+  if (override) {
+    // Clamped to the override's own length: the 1 s ticker only starts once
+    // an override exists, so the first frame may hold an older clock reading.
+    const span = (override.kind === 'hold' ? TV_KEY_HOLD_MINUTES : TV_KEY_NEXT_MINUTES) * 60_000;
+    const left = Math.min(span, Math.max(0, override.until - tick));
+    const mm = Math.floor(left / 60_000);
+    const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, '0');
+    return (
+      <div
+        className={`tv-h-layout tv-h-layout-${override.kind}`}
+        title={override.kind === 'hold' ? 'Held from the keypad — press HOLD again to release' : 'Switched from the keypad — returns to the Shop TV setting when the time runs out'}
+      >
+        {override.kind === 'hold' ? `HOLD · ${mm}:${ss}` : `MANUAL · back in ${mm}:${ss}`}
+      </div>
+    );
+  }
   if (!rotating) return null;
   const at = new Date(tick);
   const next = nextRotateLayout(layout, parseTvLayoutsOff(prefs.tv_layouts_off));
@@ -3565,6 +3587,16 @@ function TvStyles() {
         flex: 0 0 auto;
         font-variant-numeric: tabular-nums;
         align-self: center;
+      }
+      /* Keypad override chips: blue while a NEXT press is showing another
+         board, red while a board is on HOLD. */
+      .tv-h-layout-next {
+        color: #bae6fd; background: rgba(56, 189, 248, 0.14);
+        border-color: rgba(56, 189, 248, 0.65); box-shadow: 0 0 0.6vw rgba(56, 189, 248, 0.3);
+      }
+      .tv-h-layout-hold {
+        color: #fecdd3; background: rgba(244, 63, 94, 0.18);
+        border-color: rgba(244, 63, 94, 0.7); box-shadow: 0 0 0.6vw rgba(244, 63, 94, 0.3);
       }
 
       /* Center: top-2 announcements pulled from the focus board */

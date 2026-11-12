@@ -109,3 +109,30 @@ Notes:
   reboot, wait a minute, read it, then remove the flag and delete the file
   (it contains tokens).
 
+## Two-key pad beside the wall (2026-11-12)
+
+A USB keypad (FQ-K002 RGB, USB id `5131:5345`, a plain HID keyboard) lets
+anyone at the TV change the board. The wall page handles it
+(`web/src/hooks/useTvKeypad.ts`); nothing is installed on the Pi.
+
+- **NEXT** — shows the next board that is switched on for this screen (Shop TV
+  card) for 10 minutes, then the wall goes back to its own setting. With a
+  fixed board and two boards on, it is a toggle: other board, then back.
+- **HOLD** — pins the board now on screen for 30 minutes; press again to
+  release. The header chip shows `MANUAL · back in m:ss` or `HOLD · m:ss`.
+- **Which key is which is learned**: the first key ever pressed becomes NEXT,
+  the second different key becomes HOLD, and the wall says so. To swap them,
+  hold either key down for 5 seconds (the wall says "Keypad reset"), then
+  press the one you want as NEXT first.
+- The override is local to the kiosk browser; the admin card's settings are
+  never changed, and the pad cannot reach a board switched off there.
+
+Is the Pi seeing the pad?
+
+```bash
+ssh kiosk1@kiosk1.local 'lsusb | grep -i 5131 || echo "pad not connected"; sudo dmesg -T | grep -E "FQ-K002|USB disconnect" | tail -4'
+```
+
+No line from `lsusb` means the Pi does not see it (unplugged, a charge-only
+cable, or a loose plug) — the wall cannot react to a pad the Pi cannot see.
+
