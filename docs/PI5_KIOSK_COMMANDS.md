@@ -121,11 +121,13 @@ anyone at the TV change the board. The wall page handles it
 - **HOLD** — pins the board now on screen for 30 minutes; press again to
   release. The header chip shows `MANUAL · back in m:ss` or `HOLD · m:ss`.
 - **Which key is which is learned**: the first key ever pressed becomes NEXT,
-  the second different key becomes HOLD. On kiosk1 (2026-11-12) the pad's
-  Ctrl+V key is NEXT and its Ctrl+C key is HOLD.
-- **To swap them on this pad**, reset the Pi-side map and press the key you
-  want as NEXT first:
-  `ssh kiosk1@kiosk1.local 'sudo rm /var/lib/wallpad/keys.json && sudo systemctl restart wallpad'`.
+  the second different key becomes HOLD. On kiosk1 the pad's copy key
+  (Ctrl+C) is NEXT and its paste key (Ctrl+V) is HOLD (set 2026-11-12).
+- **To swap them on this pad**, rewrite the Pi-side map — first entry is
+  NEXT, second is HOLD (`k01:06` = Ctrl+C, `k01:19` = Ctrl+V):
+  `ssh kiosk1@kiosk1.local 'echo "[\"k01:19\", \"k01:06\"]" | sudo tee /var/lib/wallpad/keys.json && sudo systemctl restart wallpad'`
+  makes the paste key NEXT again. Deleting the file instead makes the next
+  key pressed NEXT.
   (The wall also forgets its keys when one is held down for 5 seconds, but
   this pad sends a 0.1 s tap however long a key is held, so that gesture
   never fires here.)
