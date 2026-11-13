@@ -27,6 +27,8 @@ import { inputStyle } from '../../lib/binneyRounds';
 import { SmallBtn } from './BinneyUi';
 
 const DEFAULT_AHEAD_DAYS = 14;
+/** 'starting soon' filter: |start − today| ≤ this many days (user 2026-11-13). */
+const START_WINDOW_DAYS = 5;
 
 function fmtDue(iso: string | null): string {
   if (!iso) return '—';
@@ -70,6 +72,7 @@ export function BinneyPmAssignPanel() {
   const [bulkPick, setBulkPick] = useState('');                             // user_id
   const [unassignedOnly, setUnassignedOnly] = useState(true); // default on (user 2026-11-06): the panel's job is the unassigned pile
   const [search, setSearch] = useState('');
+  const [startSoon, setStartSoon] = useState(false); // start date within ±START_WINDOW_DAYS of today
   const [picks, setPicks] = useState<Record<string, string>>({}); // cove_task_id → user_id
 
   // Roster = active Binney people with a Cove ID. Engineers and managers
@@ -105,16 +108,25 @@ export function BinneyPmAssignPanel() {
   const todayIso = localISODate(new Date());
   const rows = useMemo(() => {
     const aheadIso = localISODate(addDays(new Date(), DEFAULT_AHEAD_DAYS));
+    const startFrom = localISODate(addDays(new Date(), -START_WINDOW_DAYS));
+    const startTo = localISODate(addDays(new Date(), START_WINDOW_DAYS));
     const q = search.trim().toLowerCase();
     return ((pmQ.data ?? []) as BinneyPmRow[])
       .filter((r) => !isClosed(r.status))
       .filter((r) => showAll || !r.due_date || r.due_date <= aheadIso)
       .filter((r) => !unassignedOnly || !(r.assigned_to_name ?? '').trim())
+      .filter((r) => !startSoon || (!!r.start_date && r.start_date >= startFrom && r.start_date <= startTo))
       .filter((r) => !q || [r.task_no, r.name, r.building_code, r.equipment, r.assigned_to_name].some((v) => (v ?? '').toLowerCase().includes(q)))
       .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.task_no ?? '').localeCompare(b.task_no ?? ''));
-  }, [pmQ.data, showAll, unassignedOnly, search]);
+  }, [pmQ.data, showAll, unassignedOnly, startSoon, search]);
 
   const missingIds = useMemo(() => ((pmQ.data ?? []) as BinneyPmRow[]).some((r) => !r.cove_task_id), [pmQ.data]);
+  // No row has a start date yet = the poller hasn't found Cove's field (or
+  // hasn't run since 0157). Say so instead of a silently empty filter.
+  const noStartDates = useMemo(() => {
+    const all = (pmQ.data ?? []) as BinneyPmRow[];
+    return all.length > 0 && all.every((r) => !r.start_date);
+  }, [pmQ.data]);
 
   const assign = (r: BinneyPmRow) => {
     const uid = picks[r.cove_task_id ?? ''];
@@ -237,6 +249,10 @@ export function BinneyPmAssignPanel() {
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
           all open PMs (not just due within {DEFAULT_AHEAD_DAYS} days)
         </label>
+        <label className="t-small t-text inline-flex items-center gap-1" title={`start date between ${START_WINDOW_DAYS} days ago and ${START_WINDOW_DAYS} days from now`}>
+          <input type="checkbox" checked={startSoon} onChange={(e) => setStartSoon(e.target.checked)} disabled={noStartDates} />
+          start within {START_WINDOW_DAYS} days
+        </label>
         <span className="t-small t-muted">{rows.length} shown</span>
       </div>
 
@@ -265,6 +281,11 @@ export function BinneyPmAssignPanel() {
       {pmQ.error && <p className="t-small t-danger mb-2">Couldn't load PMs: {(pmQ.error as Error).message}</p>}
       {reqQ.error && <p className="t-small t-danger mb-2">Couldn't load assign requests: {(reqQ.error as Error).message}</p>}
       {request.error && <p className="t-small t-danger mb-2">Couldn't queue the assignment: {(request.error as Error).message}</p>}
+      {noStartDates && (
+        <p className="t-small t-muted mb-2">
+          No start dates yet — they arrive with the next Binney PM poll once the poller finds Cove's start-date field (see its log line "start-date field:").
+        </p>
+      )}
       {missingIds && (
         <p className="t-small t-warn mb-2">
           Some PMs have no Cove task id yet — they get one on the next pm12 poll (the poller was updated for this). Those rows can't be assigned until then.
@@ -288,6 +309,7 @@ export function BinneyPmAssignPanel() {
                     disabled={selectable.length === 0} title="select all shown" />
                 </th>
                 <th className="py-1 pr-3">PM</th>
+                <th className="py-1 pr-3">Start</th>
                 <th className="py-1 pr-3">Due</th>
                 <th className="py-1 pr-3">Bldg</th>
                 <th className="py-1 pr-3">Task</th>
@@ -303,6 +325,7 @@ export function BinneyPmAssignPanel() {
                 const req = r.cove_task_id ? latestReq.get(r.cove_task_id) : undefined;
                 const inFlight = req?.status === 'pending' || req?.status === 'running';
                 const overdue = !!r.due_date && r.due_date < todayIso;
+                const startsSoon = !!r.start_date && Math.abs((new Date(r.start_date + 'T00:00:00').getTime() - new Date(todayIso + 'T00:00:00').getTime()) / 86_400_000) <= START_WINDOW_DAYS;
                 const pick = picks[r.cove_task_id ?? ''] ?? '';
                 const current = roster.byCmms.get((r.assigned_to_name ?? '').trim());
                 const samePerson = !!pick && current?.user_id === pick;
@@ -314,6 +337,10 @@ export function BinneyPmAssignPanel() {
                         onChange={() => r.cove_task_id && toggleOne(r.cove_task_id)} />
                     </td>
                     <td className="py-1 pr-3 t-mono whitespace-nowrap">{r.task_no ?? '—'}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap" style={startsSoon ? { fontWeight: 600 } : undefined}
+                      title={r.start_date ? `starts ${r.start_date}` : 'no start date from Cove'}>
+                      {fmtDue(r.start_date)}
+                    </td>
                     <td className="py-1 pr-3 whitespace-nowrap" style={overdue ? { color: 'var(--color-danger)', fontWeight: 600 } : undefined}>
                       {fmtDue(r.due_date)}
                     </td>
