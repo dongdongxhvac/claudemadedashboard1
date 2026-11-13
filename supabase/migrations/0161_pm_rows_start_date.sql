@@ -1,4 +1,4 @@
--- Migration 0157 — PM start date on the Assign PMs panel.
+-- Migration 0161 — PM start date (applied to Supabase under the name 0157_pm_rows_start_date before the renumber) on the Assign PMs panel.
 --
 -- pm12_poller discovers Cove's start-date field on GQLPMTask each run
 -- (introspection, else a probe of candidate names) and writes it here;

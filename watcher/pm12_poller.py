@@ -305,7 +305,7 @@ def map_pm_task(item: dict, snapshot_id: str) -> dict:
         # Cove's internal task id — what UpdatePMTask takes (0156, the
         # dashboard's assign-PM button). altId above is the PM-ROG-6743 label.
         "cove_task_id":       item.get("id"),
-        # 0157 — Cove's start date, under whatever name detect_start_field found.
+        # 0161 — Cove's start date, under whatever name detect_start_field found.
         "start_date":         iso_date(item.get(START_FIELD)) if START_FIELD else None,
     }
 
@@ -340,7 +340,7 @@ def map_close_event(item: dict, snapshot_id: str) -> dict:
     }
 
 
-# ---------- start date (0157) ----------
+# ---------- start date (0161) ----------
 #
 # The assign panel wants each PM's START date next to its due date. The
 # captured GetPMTasksPage never asked for it, and the field's name on
