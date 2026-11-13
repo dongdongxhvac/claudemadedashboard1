@@ -25,6 +25,9 @@ import { usePmAssignRequests, useRequestPmAssign, useRequestPmAssignMany, type P
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 import { inputStyle } from '../../lib/binneyRounds';
 import { SmallBtn } from './BinneyUi';
+import { useBinneyBuildings } from './hooks/useBinneyOps';
+import { makeBuildingClusterLookup } from '../../lib/binneyBuildingMatch';
+import { CLUSTER_STYLE, type Cluster } from '../../lib/binneyRounds';
 
 const DEFAULT_AHEAD_DAYS = 14;
 /** 'start within N days' filter: |open_date − today| ≤ N (user 2026-11-13).
@@ -76,6 +79,9 @@ export function BinneyPmAssignPanel() {
   const [unassignedOnly, setUnassignedOnly] = useState(true); // default on (user 2026-11-06): the panel's job is the unassigned pile
   const [search, setSearch] = useState('');
   const [startSoon, setStartSoon] = useState(false); // open_date within ±START_WINDOW_DAYS of today
+  const [clusterPick, setClusterPick] = useState<'all' | Cluster | 'none'>('all'); // East / West by the PM's building
+  const buildingsQ = useBinneyBuildings();
+  const clusters = useMemo(() => makeBuildingClusterLookup(buildingsQ.data ?? []), [buildingsQ.data]);
   const [picks, setPicks] = useState<Record<string, string>>({}); // cove_task_id → user_id
 
   // Roster = active Binney people with a Cove ID. Engineers and managers
@@ -119,9 +125,10 @@ export function BinneyPmAssignPanel() {
       .filter((r) => showAll || !r.due_date || r.due_date <= aheadIso)
       .filter((r) => !unassignedOnly || !(r.assigned_to_name ?? '').trim())
       .filter((r) => !startSoon || (!!r.open_date && r.open_date >= startFrom && r.open_date <= startTo))
+      .filter((r) => clusterPick === 'all' || (clusters.clusterOf(r.building_code) ?? 'none') === clusterPick)
       .filter((r) => !q || [r.task_no, r.name, r.building_code, r.equipment, r.assigned_to_name].some((v) => (v ?? '').toLowerCase().includes(q)))
       .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.task_no ?? '').localeCompare(b.task_no ?? ''));
-  }, [pmQ.data, showAll, unassignedOnly, startSoon, search]);
+  }, [pmQ.data, showAll, unassignedOnly, startSoon, clusterPick, clusters, search]);
 
   const missingIds = useMemo(() => ((pmQ.data ?? []) as BinneyPmRow[]).some((r) => !r.cove_task_id), [pmQ.data]);
 
@@ -250,6 +257,16 @@ export function BinneyPmAssignPanel() {
           <input type="checkbox" checked={startSoon} onChange={(e) => setStartSoon(e.target.checked)} />
           start within {START_WINDOW_DAYS} days
         </label>
+        <label className="t-small t-text inline-flex items-center gap-1" title="by the PM's building — East = Kendall side (Ed Nardone), West = 301 side (Andrew Balbo)">
+          cluster
+          <select value={clusterPick} onChange={(e) => setClusterPick(e.target.value as 'all' | Cluster | 'none')}
+            className="border rounded px-1 t-small t-text" style={{ ...inputStyle, fontSize: 11 }}>
+            <option value="all">all</option>
+            <option value="east">East</option>
+            <option value="west">West</option>
+            <option value="none">no cluster</option>
+          </select>
+        </label>
         <span className="t-small t-muted">{rows.length} shown</span>
       </div>
 
@@ -336,7 +353,18 @@ export function BinneyPmAssignPanel() {
                     <td className="py-1 pr-3 whitespace-nowrap" style={overdue ? { color: 'var(--color-danger)', fontWeight: 600 } : undefined}>
                       {fmtDue(r.due_date)}
                     </td>
-                    <td className="py-1 pr-3 whitespace-nowrap">{r.building_code ?? '—'}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap">
+                      {(() => {
+                        const c = clusters.clusterOf(r.building_code);
+                        return c ? (
+                          <span className="t-mono mr-1 rounded px-1" style={{ fontSize: 10, fontWeight: 700, background: CLUSTER_STYLE[c].bg, color: CLUSTER_STYLE[c].fg, border: `1px solid ${CLUSTER_STYLE[c].border}` }}
+                            title={c === 'east' ? 'East cluster' : 'West cluster'}>
+                            {CLUSTER_STYLE[c].letter}
+                          </span>
+                        ) : null;
+                      })()}
+                      {r.building_code ?? '—'}
+                    </td>
                     <td className="py-1 pr-3" style={{ maxWidth: 360 }} title={r.equipment ?? undefined}>
                       <span className="t-text">{r.name ?? '—'}</span>
                       {r.equipment && <span className="t-muted"> · {r.equipment}</span>}
