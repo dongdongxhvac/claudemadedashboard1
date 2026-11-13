@@ -1,8 +1,10 @@
 -- Migration 0161 — PM start date (applied to Supabase under the name 0157_pm_rows_start_date before the renumber) on the Assign PMs panel.
 --
--- pm12_poller discovers Cove's start-date field on GQLPMTask each run
--- (introspection, else a probe of candidate names) and writes it here;
--- the Binney site view exposes it. Null until the poller finds the field.
+-- OUTCOME (2026-11-13): Cove's GQLPMTask has NO start date — the detail
+-- page's PMTaskBase fragment carries only createdAt / dueDate / completedOn
+-- / updatedAt. The panel's "Start" column shows open_date (= createdAt),
+-- which pm_rows already had. This column stays, unused and null, in case
+-- Cove adds one; the view change is harmless.
 
 begin;
 

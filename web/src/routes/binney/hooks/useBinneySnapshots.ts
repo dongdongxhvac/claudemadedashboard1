@@ -14,7 +14,9 @@ const REFETCH_MS = 60_000;
 
 /** PmRow plus the Cove task id (0156) — what the assign-PM button sends to
  *  UpdatePMTask. Null on rows the poller wrote before it learned the id. */
-export type BinneyPmRow = PmRow & { cove_task_id: string | null; /** 0161 — Cove start date, null until the poller finds the field */ start_date: string | null };
+/** PmRow plus the Cove task id (0156) and open_date (= Cove createdAt, the
+ *  day the PM landed — the panel's "Start"; Cove has no separate start date). */
+export type BinneyPmRow = PmRow & { cove_task_id: string | null; open_date: string | null };
 
 /** Open PMs from the latest Binney pm12 snapshot (paginated past the 1000-row cap). */
 export function useBinneyPmRows() {

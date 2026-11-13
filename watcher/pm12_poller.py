@@ -47,7 +47,7 @@ UTC = ZoneInfo("UTC")
 
 # Same query string the Cove web app sends. Preserved verbatim (whitespace
 # included) so the operation hash matches if Cove ever switches to APQ.
-QUERY_TEMPLATE = """
+QUERY = """
     query GetPMTasksPage($networkId: ID!, $page: GQLPageInput, $sortBy: GQLSortByInput, $filter: GQLFilterInput) {
   siteNetwork(id: $networkId) {
     pmTasks(page: $page, sortBy: $sortBy, filter: $filter) {
@@ -80,7 +80,6 @@ QUERY_TEMPLATE = """
   completedOn
   createdAt
   dueDate
-  __START_FIELD__
   equipment {
     building {
       id
@@ -305,8 +304,6 @@ def map_pm_task(item: dict, snapshot_id: str) -> dict:
         # Cove's internal task id — what UpdatePMTask takes (0156, the
         # dashboard's assign-PM button). altId above is the PM-ROG-6743 label.
         "cove_task_id":       item.get("id"),
-        # 0161 — Cove's start date, under whatever name detect_start_field found.
-        "start_date":         iso_date(item.get(START_FIELD)) if START_FIELD else None,
     }
 
 
@@ -340,66 +337,9 @@ def map_close_event(item: dict, snapshot_id: str) -> dict:
     }
 
 
-# ---------- start date (0161) ----------
-#
-# The assign panel wants each PM's START date next to its due date. The
-# captured GetPMTasksPage never asked for it, and the field's name on
-# GQLPMTask isn't known, so each run discovers it: introspection first (one
-# request), else a 1-row probe per candidate name. Whatever is found is
-# spliced into the fragment at __START_FIELD__; nothing found → the column
-# is simply left null and the poll runs exactly as before.
-START_FIELD_CANDIDATES = ["startDate", "scheduledStartDate", "startAt", "scheduledDate", "scheduledAt", "startsAt", "plannedStartDate"]
-START_FIELD: str | None = None   # resolved in main()
-QUERY: str = ""                  # QUERY_TEMPLATE with the field spliced in
-
-
-def _splice_query(start_field: str | None) -> str:
-    return QUERY_TEMPLATE.replace("__START_FIELD__", start_field or "")
-
-
-def detect_start_field() -> str | None:
-    # 1. introspection: every scalar field on GQLPMTask
-    try:
-        status, resp = post_gql({
-            "operationName": "PmTaskFields",
-            "query": 'query PmTaskFields { __type(name: "GQLPMTask") { fields { name type { name kind ofType { name kind } } } } }',
-            "variables": {},
-        })
-        data = resp.json() if status == 200 else {}
-        fields = safe_get(data, "data", "__type", "fields") or []
-        names = [f.get("name") for f in fields if isinstance(f, dict)]
-        if names:
-            print(f"  GQLPMTask fields ({len(names)}): {', '.join(n for n in names if n)}")
-            for cand in START_FIELD_CANDIDATES:
-                if cand in names:
-                    return cand
-            # anything with "start" in it that isn't an object
-            for f in fields:
-                n = f.get("name") or ""
-                t = f.get("type") or {}
-                kind = t.get("kind") or (t.get("ofType") or {}).get("kind")
-                if "start" in n.lower() and kind in ("SCALAR", "ENUM"):
-                    return n
-            return None
-    except Exception as e:  # noqa: BLE001
-        print(f"  introspection unavailable ({e}); probing candidate names", file=sys.stderr)
-    # 2. probe: a 1-row query per candidate; a validation error means "no such field"
-    for cand in START_FIELD_CANDIDATES:
-        body = {
-            "operationName": "ProbeStart",
-            "query": "query ProbeStart($networkId: ID!) { siteNetwork(id: $networkId) { pmTasks(page: {limit: 1, skip: 0}) { items { id " + cand + " } } } }",
-            "variables": {"networkId": NETWORK_ID},
-        }
-        try:
-            status, resp = post_gql(body)
-            data = resp.json() if status == 200 else {"errors": [{"message": f"HTTP {status}"}]}
-        except Exception as e:  # noqa: BLE001
-            print(f"  probe {cand}: {e}", file=sys.stderr)
-            continue
-        if not data.get("errors"):
-            return cand
-    return None
-
+# No start date on GQLPMTask: the Cove detail page's PMTaskBase fragment
+# (captured 2026-11-13) has only createdAt / dueDate / completedOn /
+# updatedAt. The dashboard's "Start" is open_date (= createdAt, below).
 
 def post_gql(body: dict) -> dict:
     headers = {
@@ -500,14 +440,6 @@ def main() -> int:
     global TOKEN
     try:
         TOKEN = get_fresh_token()
-        global START_FIELD, QUERY
-        try:
-            START_FIELD = detect_start_field()
-        except Exception as e:  # noqa: BLE001
-            START_FIELD = None
-            print(f"WARN: start-date field detection failed: {e}", file=sys.stderr)
-        QUERY = _splice_query(START_FIELD)
-        print(f"  start-date field: {START_FIELD or 'none found — start_date stays null'}")
     except SessionError as e:
         msg = f"cove_session: {e}"
         _log_error(filename, msg)
