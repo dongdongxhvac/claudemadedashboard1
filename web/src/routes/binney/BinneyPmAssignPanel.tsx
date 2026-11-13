@@ -27,7 +27,7 @@ import { inputStyle } from '../../lib/binneyRounds';
 import { SmallBtn } from './BinneyUi';
 import { useBinneyBuildings } from './hooks/useBinneyOps';
 import { makeBuildingClusterLookup } from '../../lib/binneyBuildingMatch';
-import { CLUSTER_STYLE, type Cluster } from '../../lib/binneyRounds';
+import { CLUSTER_STYLE, CLUSTER_LABEL, type Cluster } from '../../lib/binneyRounds';
 
 const DEFAULT_AHEAD_DAYS = 14;
 /** 'start within N days' filter: |open_date − today| ≤ N (user 2026-11-13).
@@ -79,7 +79,13 @@ export function BinneyPmAssignPanel() {
   const [unassignedOnly, setUnassignedOnly] = useState(true); // default on (user 2026-11-06): the panel's job is the unassigned pile
   const [search, setSearch] = useState('');
   const [startSoon, setStartSoon] = useState(false); // open_date within ±START_WINDOW_DAYS of today
-  const [clusterPick, setClusterPick] = useState<'all' | Cluster | 'none'>('all'); // East / West by the PM's building
+  // Cluster → building drill-down (user 2026-11-13: "more prominent, easier"):
+  // big East / West switch with live counts, then building chips with counts
+  // under it. cluster → building → all shown → Assign N is the month-start loop.
+  type ClusterPick = 'all' | Cluster | 'none';
+  const [clusterPick, setClusterPickRaw] = useState<ClusterPick>('all');
+  const [buildingPick, setBuildingPick] = useState<string | null>(null); // Cove building name
+  const setClusterPick = (c: ClusterPick) => { setClusterPickRaw(c); setBuildingPick(null); };
   const buildingsQ = useBinneyBuildings();
   const clusters = useMemo(() => makeBuildingClusterLookup(buildingsQ.data ?? []), [buildingsQ.data]);
   const [picks, setPicks] = useState<Record<string, string>>({}); // cove_task_id → user_id
@@ -115,7 +121,9 @@ export function BinneyPmAssignPanel() {
   }, [doneCount, qc]);
 
   const todayIso = localISODate(new Date());
-  const rows = useMemo(() => {
+  // Every filter except cluster / building — the switch and the chips count
+  // against this, so their numbers always say "how many if I click here".
+  const baseRows = useMemo(() => {
     const aheadIso = localISODate(addDays(new Date(), DEFAULT_AHEAD_DAYS));
     const startFrom = localISODate(addDays(new Date(), -START_WINDOW_DAYS));
     const startTo = localISODate(addDays(new Date(), START_WINDOW_DAYS));
@@ -125,10 +133,32 @@ export function BinneyPmAssignPanel() {
       .filter((r) => showAll || !r.due_date || r.due_date <= aheadIso)
       .filter((r) => !unassignedOnly || !(r.assigned_to_name ?? '').trim())
       .filter((r) => !startSoon || (!!r.open_date && r.open_date >= startFrom && r.open_date <= startTo))
-      .filter((r) => clusterPick === 'all' || (clusters.clusterOf(r.building_code) ?? 'none') === clusterPick)
       .filter((r) => !q || [r.task_no, r.name, r.building_code, r.equipment, r.assigned_to_name].some((v) => (v ?? '').toLowerCase().includes(q)))
       .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.task_no ?? '').localeCompare(b.task_no ?? ''));
-  }, [pmQ.data, showAll, unassignedOnly, startSoon, clusterPick, clusters, search]);
+  }, [pmQ.data, showAll, unassignedOnly, startSoon, search]);
+
+  const clusterOfRow = (r: BinneyPmRow): ClusterPick => clusters.clusterOf(r.building_code) ?? 'none';
+
+  const clusterCounts = useMemo(() => {
+    const c: Record<ClusterPick, number> = { all: baseRows.length, east: 0, west: 0, none: 0 };
+    for (const r of baseRows) c[clusterOfRow(r)]++;
+    return c;
+  }, [baseRows, clusters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inCluster = useMemo(
+    () => (clusterPick === 'all' ? baseRows : baseRows.filter((r) => clusterOfRow(r) === clusterPick)),
+    [baseRows, clusterPick, clusters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Buildings inside the chosen cluster, busiest first.
+  const buildingChips = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of inCluster) { const k = r.building_code ?? '(no building)'; m.set(k, (m.get(k) ?? 0) + 1); }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [inCluster]);
+
+  const rows = useMemo(
+    () => (buildingPick === null ? inCluster : inCluster.filter((r) => (r.building_code ?? '(no building)') === buildingPick)),
+    [inCluster, buildingPick]);
 
   const missingIds = useMemo(() => ((pmQ.data ?? []) as BinneyPmRow[]).some((r) => !r.cove_task_id), [pmQ.data]);
 
@@ -152,17 +182,22 @@ export function BinneyPmAssignPanel() {
     });
   };
 
+  // The chosen cluster's engineers come first in every picker.
+  const engOption = (u: EngineerRow) => (
+    <option key={u.user_id} value={u.user_id}>
+      {u.full_name}{u.cluster ? ` · ${u.cluster === 'east' ? 'E' : 'W'}` : ''}
+    </option>
+  );
+  const ownEngineers = clusterPick === 'east' || clusterPick === 'west' ? roster.engineers.filter((u) => u.cluster === clusterPick) : [];
+  const otherEngineers = ownEngineers.length ? roster.engineers.filter((u) => u.cluster !== clusterPick) : roster.engineers;
   const rosterOptions = (
     <>
       <option value="">—</option>
-      {roster.engineers.length > 0 && (
-        <optgroup label="Engineers">
-          {roster.engineers.map((u) => (
-            <option key={u.user_id} value={u.user_id}>
-              {u.full_name}{u.cluster ? ` · ${u.cluster === 'east' ? 'E' : 'W'}` : ''}
-            </option>
-          ))}
-        </optgroup>
+      {ownEngineers.length > 0 && (
+        <optgroup label={`${CLUSTER_LABEL[clusterPick as Cluster]} engineers`}>{ownEngineers.map(engOption)}</optgroup>
+      )}
+      {otherEngineers.length > 0 && (
+        <optgroup label={ownEngineers.length ? 'Other engineers' : 'Engineers'}>{otherEngineers.map(engOption)}</optgroup>
       )}
       {roster.managers.length > 0 && (
         <optgroup label="Managers">
@@ -257,18 +292,60 @@ export function BinneyPmAssignPanel() {
           <input type="checkbox" checked={startSoon} onChange={(e) => setStartSoon(e.target.checked)} />
           start within {START_WINDOW_DAYS} days
         </label>
-        <label className="t-small t-text inline-flex items-center gap-1" title="by the PM's building — East = Kendall side (Ed Nardone), West = 301 side (Andrew Balbo)">
-          cluster
-          <select value={clusterPick} onChange={(e) => setClusterPick(e.target.value as 'all' | Cluster | 'none')}
-            className="border rounded px-1 t-small t-text" style={{ ...inputStyle, fontSize: 11 }}>
-            <option value="all">all</option>
-            <option value="east">East</option>
-            <option value="west">West</option>
-            <option value="none">no cluster</option>
-          </select>
-        </label>
         <span className="t-small t-muted">{rows.length} shown</span>
       </div>
+
+      {/* Cluster switch — counts are "how many if I click here" under the
+          filters above. Then the cluster's buildings as chips, busiest first. */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <span className="t-small t-muted uppercase tracking-wider" style={{ fontSize: 10 }}>Cluster</span>
+        <div className="inline-flex rounded overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+          {(['all', 'east', 'west', 'none'] as ClusterPick[]).map((c) => {
+            const on = clusterPick === c;
+            const st = c === 'east' || c === 'west' ? CLUSTER_STYLE[c] : null;
+            const label = c === 'all' ? 'All' : c === 'none' ? 'No cluster' : CLUSTER_LABEL[c];
+            return (
+              <button key={c} type="button" onClick={() => setClusterPick(c)}
+                className="t-small px-3 py-1"
+                title={c === 'east' ? 'Kendall side · Ed Nardone' : c === 'west' ? '301 side · Andrew Balbo' : c === 'none' ? 'PMs whose building has no cluster' : 'every cluster'}
+                style={{
+                  fontWeight: on ? 700 : 500,
+                  background: on ? (st ? st.bg : 'var(--color-accent)') : 'var(--color-card)',
+                  color: on ? (st ? st.fg : 'white') : 'var(--color-text)',
+                  borderLeft: c === 'all' ? 'none' : '1px solid var(--color-border)',
+                  borderBottom: on && st ? `2px solid ${st.fg}` : '2px solid transparent',
+                }}>
+                {st && <span className="t-mono mr-1" style={{ fontWeight: 800 }}>{st.letter}</span>}
+                {label}
+                <span className="t-mono ml-1.5" style={{ opacity: 0.75 }}>{clusterCounts[c]}</span>
+              </button>
+            );
+          })}
+        </div>
+        {(buildingPick !== null || clusterPick !== 'all') && (
+          <button type="button" className="t-small t-accent hover:underline" onClick={() => setClusterPick('all')}>reset</button>
+        )}
+      </div>
+      {clusterPick !== 'all' && buildingChips.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+          <span className="t-small t-muted uppercase tracking-wider mr-1" style={{ fontSize: 10 }}>Building</span>
+          <button type="button" onClick={() => setBuildingPick(null)}
+            className="t-small rounded px-2 py-0.5"
+            style={{ border: '1px solid var(--color-border)', background: buildingPick === null ? 'var(--color-accent)' : 'var(--color-card)', color: buildingPick === null ? 'white' : 'var(--color-text)', fontWeight: buildingPick === null ? 700 : 500 }}>
+            all <span className="t-mono ml-1" style={{ opacity: 0.8 }}>{inCluster.length}</span>
+          </button>
+          {buildingChips.map(([b, n]) => {
+            const on = buildingPick === b;
+            return (
+              <button key={b} type="button" onClick={() => setBuildingPick(on ? null : b)}
+                className="t-small rounded px-2 py-0.5"
+                style={{ border: '1px solid var(--color-border)', background: on ? 'var(--color-accent)' : 'var(--color-card)', color: on ? 'white' : 'var(--color-text)', fontWeight: on ? 700 : 500 }}>
+                {b} <span className="t-mono ml-1" style={{ opacity: 0.8 }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bulk bar — appears once something is ticked. */}
       {selected.size > 0 && (
