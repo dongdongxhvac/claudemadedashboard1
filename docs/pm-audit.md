@@ -46,7 +46,8 @@ Migrations: `pm_audit_schema`, `pm_audit_flags_batch_close_requires_no_photos`,
 ### Functions / cron
 
 - `classify_pm(name)` — SQL twin of `classifyPM` (JS) / `classify_pm` (Python). Keep all three in sync.
-- `build_pm_audit_queue(week_start date, random_per_site int)` — idempotent; random picks are seeded by week.
+- `build_pm_audit_queue(week_start date, random_per_site int = 5, flagged_per_tech int = 2, flagged_per_site int = 20)` —
+  idempotent; random picks are seeded by week. Flagged rows are capped (migration 0162, see §8).
 - `prune_pm_task_history(days)` — nulls `history` JSONB after 180 d unless the task was ever queued.
 - cron `pm_audit_weekly` — `5 4 * * 1` UTC = Sunday 23:05 ET. Runs both of the above.
 
@@ -224,3 +225,7 @@ CRUD on `pm_audit_rules`. Not in scope for the first PR.
 - **Review card** opens any closed recurring PM of the week, queued or not ("spot check").
 - **Flags shown are live** (`v_pm_audit_flags`), so a queue frozen before the backfill shows more flags per
   row than it was queued for. The queue itself is not rebuilt by the UI.
+- **Queue cap** (migration `0162_pm_audit_queue_cap`, applied 2026-11-17): with details loaded, 322 of the 338
+  closes in the week of Nov 9 carried a flag, so the builder now queues each tech's worst 2 flagged closes and at
+  most 20 per site (every tech's worst one first; worst = most flags, then Majors, then longest estimate), plus the
+  5 random per site. That week comes to 45 rows. Re-runs no longer add rows. The scorecard still counts every close.
