@@ -35,6 +35,7 @@ from classify import classify_pm  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
 from cove_roster import assignee_ids, backfill_cove_ids, roster_gap_check  # noqa: E402
 from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip, fetch_unassigned  # noqa: E402
+import cove_task_details  # noqa: E402  (PM audit evidence: steps / photos / notes / history)
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
@@ -547,7 +548,115 @@ def main() -> int:
     }).execute()
 
     print(f"[ok] {filename}: {len(rows)} open rows, {len(events)} new closes")
+
+    # ----- pm_task_details: audit evidence for the closes just logged -----
+    # docs/pm-audit.md §3. After the snapshot's bookkeeping on purpose: a slow
+    # or failing detail pull must never cost the poll its snapshot.
+    pull_close_details(client, closed_items, events)
     return 0
+
+
+# ---------- PM audit: task details ----------
+
+# Per-run ceiling on inline detail pulls (~1 s each). A normal poll logs a
+# handful of closes; a first run for a site logs the whole window, and those
+# belong to `pm12_poller.py backfill-details`, not to the hourly poll.
+DETAILS_INLINE_MAX = 150
+
+
+def _details_session() -> requests.Session:
+    """requests.Session carrying the Cove auth cookie (the same token post_gql
+    sends), for cove_task_details."""
+    s = cove_task_details.make_session(TOKEN)
+    s.headers["User-Agent"] = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/148.0.0.0 Safari/537.36"
+    )
+    return s
+
+
+def pull_close_details(client, closed_items: list[dict], events: list[dict]) -> None:
+    """Fetch steps / attachments / history for the recurring PMs this run just
+    logged as closed and upsert them into pm_task_details. The closed fetch
+    already carries Cove's internal id per task, so no pm_rows lookup."""
+    try:
+        id_by_task = {it.get("altId"): it.get("id") for it in closed_items}
+        ids = [
+            id_by_task[ev["task_no"]] for ev in events
+            if ev.get("cmms_type") == "recurring" and id_by_task.get(ev["task_no"])
+        ]
+        if not ids:
+            return
+        if len(ids) > DETAILS_INLINE_MAX:
+            print(f"  task details: {len(ids)} new recurring closes — pulling the newest "
+                  f"{DETAILS_INLINE_MAX}; run `pm12_poller.py backfill-details` for the rest")
+            ids = ids[:DETAILS_INLINE_MAX]   # closed_items is createdAt-desc
+        print(f"  task details: pulling {len(ids)} closed PM(s)")
+        cove_task_details.on_close_events(_details_session(), client, ids)
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: task-details pull failed (snapshot unaffected): {e}", file=sys.stderr)
+
+
+def _all_values(client, table: str, column: str, **eq) -> set[str]:
+    """Every value of one column, paged past PostgREST's 1000-row cap."""
+    out: set[str] = set()
+    start = 0
+    while True:
+        q = client.table(table).select(column)
+        for k, v in eq.items():
+            q = q.eq(k, v)
+        got = q.range(start, start + 999).execute().data or []
+        out.update(r[column] for r in got if r.get(column))
+        if len(got) < 1000:
+            return out
+        start += 1000
+
+
+def backfill_details(days: int = 180) -> int:
+    """One-time: detail rows for closed recurring PMs that pm12 logged before
+    pm_rows carried cove_task_id (0156, 2026-11-06) — those never appear in
+    v_pm_task_details_backlog, which finds the Cove id through pm_rows.
+
+    Re-reads the site's closed list from Cove with a `days` due-date floor
+    (wider than the hourly poll's 60), keeps the recurring tasks this site has
+    a pm_close_events row for and no pm_task_details row yet, newest close
+    first. Safe to re-run; it only fetches what is still missing.
+
+        COVE_SITE=binney .venv/bin/python pm12_poller.py backfill-details 180
+    """
+    global TOKEN, PM_DUE_LOOKBACK_DAYS
+    TOKEN = get_fresh_token()
+    PM_DUE_LOOKBACK_DAYS = days
+    client = get_client()
+    ids = assignee_ids(client, PM_ASSIGNEE_IDS, "pm12")
+    closed = fetch_all_pm_tasks(CLOSED_STATUSES, ids)
+
+    logged = _all_values(client, "pm_close_events", "task_no", site_code=SITE, cmms_type="recurring")
+    have = _all_values(client, "pm_task_details", "task_no")
+    todo = [it for it in closed
+            if it.get("id") and it.get("completedOn")
+            and it.get("altId") in logged and it.get("altId") not in have]
+    todo.sort(key=lambda it: it["completedOn"], reverse=True)
+    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} logged recurring={len(logged)} "
+          f"already have={len(have & logged)} to fetch={len(todo)}")
+
+    session = _details_session()
+    sleep = float(os.environ.get("COVE_RATE_SLEEP", "0.5"))
+    ok = err = 0
+    for i, it in enumerate(todo, 1):
+        try:
+            row = cove_task_details.normalize(cove_task_details.fetch_task(session, it["id"]))
+            cove_task_details.upsert(client, row)
+            ok += 1
+            if i % 25 == 0 or i == len(todo):
+                print(f"  {i}/{len(todo)} ok={ok} err={err} (last {row['task_no']})", flush=True)
+        except Exception as e:  # noqa: BLE001
+            err += 1
+            print(f"  {i}/{len(todo)} {it.get('altId')} ERROR {e}", file=sys.stderr, flush=True)
+        time.sleep(sleep)
+    print(f"[backfill-details] done ok={ok} err={err}")
+    return 0 if err == 0 else 1
 
 
 def _log_error(filename: str, error_msg: str) -> None:
@@ -564,4 +673,6 @@ def _log_error(filename: str, error_msg: str) -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "backfill-details":
+        sys.exit(backfill_details(int(sys.argv[2]) if len(sys.argv) > 2 else 180))
     sys.exit(main())
