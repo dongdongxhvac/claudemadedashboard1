@@ -206,3 +206,21 @@ CRUD on `pm_audit_rules`. Not in scope for the first PR.
 - [ ] Review card: all 12 photos for PM-ROG-7497 render; Save & next writes `pm_audit_reviews` and advances.
 - [ ] Engineer login sees only their own rows; director sees everything read-only.
 - [ ] Cron ran Sunday night (check `cron.job_run_details` for `pm_audit_weekly`).
+
+---
+
+## 8. As built (2026-11-17)
+
+- **Hook**: `pm12_poller.py` calls `pull_close_details()` after the snapshot's bookkeeping; it takes the Cove
+  ids straight from the closed fetch (no `pm_rows` lookup) and is capped at 150 tasks per run.
+- **Backfill**: `v_pm_task_details_backlog` only sees closes whose task appeared in `pm_rows` after
+  `cove_task_id` was added (0156, 2026-11-06) — 472 tasks, not ~5,900. Older closes are covered by
+  `pm12_poller.py backfill-details [days]` (per site: `COVE_SITE=binney …`), which re-reads the closed list
+  from Cove to get the ids. Safe to re-run; it fetches only what is still missing.
+- **UI**: `web/src/routes/audit/` (`Queue`, `Review`, `Scorecard`), logic in `web/src/lib/pmAudit.ts`
+  (tests: `node --experimental-strip-types web/src/lib/pmAudit.test.ts`), data in `web/src/hooks/usePmAudit.ts`.
+  Routes `/audit`, `/audit/:week/:taskNo`, `/audit/scorecard`; the manager pages carry a `§05 PM audit` card.
+- **Cove link**: network ids are a constant in `pmAudit.ts` (`COVE_NETWORK`), not a `sites` column — no schema change.
+- **Review card** opens any closed recurring PM of the week, queued or not ("spot check").
+- **Flags shown are live** (`v_pm_audit_flags`), so a queue frozen before the backfill shows more flags per
+  row than it was queued for. The queue itself is not rebuilt by the UI.

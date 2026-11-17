@@ -21,6 +21,7 @@ import { MonthlyMeterReadingsPanel } from '../../components/MonthlyMeterReadings
 import { EquipmentDownPanel } from '../../components/EquipmentDownPanel';
 import { WinterizationPanel } from '../../components/WinterizationPanel';
 import { ChillersPanel } from '../../components/ChillersPanel';
+import { PmAuditPanel } from '../../components/PmAuditPanel';
 import { JumpNav } from '../../components/JumpNav';
 import { useSnapshotRealtime } from '../../hooks/useRealtime';
 import { FocusBoardBanner } from '../../components/FocusBoardBanner';
@@ -236,6 +237,9 @@ export default function ManagerPc() {
           <DueThisMonth />
           <OpenPmsBreakdown />
           <WeeklyCompletions period={period} onPeriodChange={setPeriod} />
+          {/* §05 — PM audit: where this week's review queue stands + the way
+              into /audit (queue, review card, scorecard). */}
+          <PmAuditPanel siteCode="upark" />
           <PlantlogRoundsPanel />
           <PlantlogWeeklyTestsPanel />
           <EmailAlarmsPanel />

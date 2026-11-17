@@ -24,6 +24,10 @@ import BinneyAdmin from './routes/binney/Admin';
 import BinneyEscortExp from './routes/binney/EscortExp';
 import MroReceipts from './routes/mro/Receipts';
 import FieldReceipt from './routes/field/Receipt';
+import AuditQueue from './routes/audit/Queue';
+import AuditReview from './routes/audit/Review';
+import AuditScorecard from './routes/audit/Scorecard';
+import { RequireAudit } from './routes/audit/AuditUi';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
 import { resolveTvLayout, parseTvLayoutsOff, parseRotateMinutes, enabledTvLayouts, useTvLayoutLive, useMinuteTick, TV_LAYOUT_PATHS, TV_ROTATION_ORDER } from './hooks/useTvLayout';
@@ -268,6 +272,13 @@ export default function App() {
         {/* Experimental escort schedule — deliberately unlinked from nav. */}
         <Route path="/binney/exp"     element={<Protected><RequireSite site="binney"><BinneyEscortExp /></RequireSite></Protected>} />
         <Route path="/binney/engineer" element={<Protected><RequireSite site="binney"><EngineerMe /></RequireSite></Protected>} />
+        {/* §05 PM Audit (docs/pm-audit.md): weekly review queue, review card,
+            scorecard. One tree for both sites — the page carries its own
+            UPark / Binney / Both toggle (admin + director; everyone else is
+            held to their home site). Gate mirrors the queue's RLS. */}
+        <Route path="/audit" element={<Protected><RequireAudit><AuditQueue /></RequireAudit></Protected>} />
+        <Route path="/audit/scorecard" element={<Protected><RequireAudit><AuditScorecard /></RequireAudit></Protected>} />
+        <Route path="/audit/:week/:taskNo" element={<Protected><RequireAudit><AuditReview /></RequireAudit></Protected>} />
         <Route path="/mro/receipts" element={<Protected><RequireSite site="upark"><MroReceipts /></RequireSite></Protected>} />
         <Route path="/upark/mro/receipts" element={<Navigate to="/mro/receipts" replace />} />
         <Route path="/"        element={<Protected><Home /></Protected>} />
