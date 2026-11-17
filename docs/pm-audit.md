@@ -31,7 +31,7 @@ Migrations: `pm_audit_schema`, `pm_audit_flags_batch_close_requires_no_photos`,
 | `pm_task_details` | VM (service role) | One row per Cove task: steps, attachments, history, notes, derived timestamps |
 | `pm_audit_rules` | manager (UI later) | Photo / note minimums by template regex or pm_type |
 | `pm_audit_note_stoplist` | seed | Boilerplate notes that count as empty |
-| `pm_audit_queue` | cron | `(week_start, task_no)` → reason `flagged`/`random`, `flags[]` |
+| `pm_audit_queue` | cron | `(week_start, task_no)` → reason `flagged`/`good`/`random`, `flags[]` |
 | `pm_audit_reviews` | UI | `(week_start, task_no)` → verdict, reason_tags[], note, reviewer_id |
 
 ### Views
@@ -46,8 +46,9 @@ Migrations: `pm_audit_schema`, `pm_audit_flags_batch_close_requires_no_photos`,
 ### Functions / cron
 
 - `classify_pm(name)` — SQL twin of `classifyPM` (JS) / `classify_pm` (Python). Keep all three in sync.
-- `build_pm_audit_queue(week_start date, random_per_site int = 5, flagged_per_tech int = 2, flagged_per_site int = 20)` —
-  idempotent; random picks are seeded by week. Flagged rows are capped (migration 0162, see §8).
+- `build_pm_audit_queue(week_start date, random_per_site int = 5, flagged_per_tech int = 2, flagged_per_site int = 20,
+  good_per_site int = 5)` — idempotent; random picks are seeded by week. Flagged rows are capped (0162) and the
+  best good PMs are added, every tech's best one first (0163). See §8.
 - `prune_pm_task_history(days)` — nulls `history` JSONB after 180 d unless the task was ever queued.
 - cron `pm_audit_weekly` — `5 4 * * 1` UTC = Sunday 23:05 ET. Runs both of the above.
 
@@ -66,16 +67,22 @@ f_low_photos, f_steps_incomplete, f_thin_note, f_desk_close, f_low_labor, f_batc
 flags text[], flag_count
 ```
 
-### Flag rules (as implemented)
+### Flag rules (v2 — migration 0163, manager's call 2026-11-17)
 
 | Flag | Fires when |
 |---|---|
-| `low_photos` | has_details AND photo_count < min_photos |
-| `steps_incomplete` | has_details AND steps_checked < steps_total |
-| `thin_note` | has_details AND (note < min_note_chars OR note in stoplist OR fails `note_must_match`) |
-| `desk_close` | has_details AND photo_count = 0 AND completed − started < 2 min |
+| `no_photos` | has_details AND the PM expects photos (min_photos > 0) AND no photo AND no thick note |
+| `steps_unexplained` | has_details AND steps_checked < steps_total AND the note does not say why (under `greatest(min_note_chars, 15)`, on the stoplist, or fails `note_must_match`) |
 | `low_labor` | est ≥ 0.5 h AND labor < 25 % est **AND tech_week_hours < 30** |
-| `batch_close` | est ≥ 0.5 h AND ≥ 4 other closes by same tech within ±5 min AND photo_count < min_photos |
+| `batch_close` | est ≥ 0.5 h AND ≥ 4 other closes by same tech within ±5 min AND no photo AND no thick note |
+
+- **Thick note** = 100+ characters across every note on the task (`note_thick`). It is evidence on its own.
+- **Good PM** (`good`) = a photo or a thick note, and no flag. Model: PM-UNP-23356 (no photos, 7 of 8 steps,
+  499-character note saying what was done and why the strainer waits).
+- One photo is enough; the per-type minimum counts in `pm_audit_rules` now only mean "expects photos" (> 0).
+- `desk_close` is gone — nobody runs the Cove timer (median start → complete was 0.7 min). A thin note alone
+  (`note_thin`) and unchecked steps with a real note (`steps_open`) are shown, not flagged.
+- v1 (until 2026-11-17) was: `low_photos` (count < minimum), `steps_incomplete`, `thin_note`, `desk_close`.
 
 Scope: `pm_close_events.cmms_type = 'recurring'` only. On-demand tasks are excluded.
 
@@ -229,3 +236,7 @@ CRUD on `pm_audit_rules`. Not in scope for the first PR.
   closes in the week of Nov 9 carried a flag, so the builder now queues each tech's worst 2 flagged closes and at
   most 20 per site (every tech's worst one first; worst = most flags, then Majors, then longest estimate), plus the
   5 random per site. That week comes to 45 rows. Re-runs no longer add rows. The scorecard still counts every close.
+- **Rules v2** (migration `0163_pm_audit_flag_rules_v2`): see "Flag rules" in §2. Week of Nov 9 under v2: 272 of 338
+  flagged, 46 good, 20 neither; the queue builds to 55 rows (35 flagged, 10 good, 10 random). Both audit views are
+  now `security_invoker` with no `anon` grant — before, the public key could read them without a login — and the
+  scorecard view no longer counts a close once per flag.

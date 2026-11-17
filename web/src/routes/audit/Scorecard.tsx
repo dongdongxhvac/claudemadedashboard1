@@ -53,6 +53,7 @@ function TechRow({ t, weeks, showSite }: { t: TechScore; weeks: string[]; showSi
       <td style={{ ...num, fontWeight: 600, ...rateStyle(t.photoRate, 60) }}>{fmtPct(t.photoRate)}</td>
       <td style={{ ...num, ...rateStyle(t.stepsRate, 80) }}>{fmtPct(t.stepsRate)}</td>
       <td style={{ ...num, ...(t.flagRate !== null && t.flagRate >= 25 ? { color: A.red, fontWeight: 600 } : undefined) }}>{fmtPct(t.flagRate)}</td>
+      <td style={{ ...num, ...(t.good > 0 ? { color: A.greenDark, fontWeight: 600 } : { color: A.faint }) }}>{t.good}</td>
       <td style={{ ...num, color: t.weekHours === null ? A.faint : undefined }}>{t.weekHours === null ? '—' : t.weekHours.toFixed(1)}</td>
       <td style={{ ...num, fontWeight: 600, color: t.passRate === null ? A.faint : t.passRate < 70 ? A.orangeDark : A.blueDark }}>
         {fmtPct(t.passRate)}{t.reviewed > 0 && <span style={{ color: A.muted, fontWeight: 400 }}> of {t.reviewed}</span>}
@@ -117,9 +118,11 @@ export default function AuditScorecard() {
           {grey && <Notice>Needs backfill — no closed PM in this window has its task details loaded yet, so photo, steps and note rates are blank.</Notice>}
           <div style={{ ...tileGrid, ...dim }}>
             <StatTile label="Photo rate (team)" value={fmtPct(team.photoRate)} valueColor={team.photoRate === null ? A.faint : undefined}
-              sub={trend(team.photoRate, team.firstWeekPhotoRate, true) ?? 'enough photos, of PMs that need one'} />
+              sub={trend(team.photoRate, team.firstWeekPhotoRate, true) ?? 'at least one photo, of PMs that expect one'} />
             <StatTile label="Checklist complete" value={fmtPct(team.stepsRate)} valueColor={team.stepsRate === null ? A.faint : undefined} sub="every step checked" />
             <StatTile label="Note rate" value={fmtPct(team.noteRate)} valueColor={team.noteRate === null ? A.faint : undefined} sub="a real note, not thin or boilerplate" />
+            <StatTile label="Good PMs" value={<>{team.good} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>· {fmtPct(team.goodRate)}</span></>}
+              valueColor={team.good ? A.green : undefined} sub="a photo or a thick note, and no flag" />
             <StatTile label="Flag rate" value={fmtPct(team.flagRate)}
               sub={trend(team.flagRate, team.firstWeekFlagRate, false) ?? `${team.flagged} of ${team.closed} closes`} />
             <StatTile label="Reviewed · pass"
@@ -133,7 +136,7 @@ export default function AuditScorecard() {
           )}
 
           <div style={{ ...cardStyle, overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 1040, borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Tech</th>
@@ -141,6 +144,7 @@ export default function AuditScorecard() {
                   <th style={{ ...thStyle, textAlign: 'right' }}>Photo rate</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Steps</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Flagged</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }} title="Closes with a photo or a thick note, and no flag">Good</th>
                   <th style={{ ...thStyle, textAlign: 'right' }} title="Average labor hours logged per week">Hrs / wk</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Pass</th>
                   <th style={thStyle}>Photo rate · 8 wk</th>
@@ -149,7 +153,7 @@ export default function AuditScorecard() {
               </thead>
               <tbody>
                 {card.techs.length === 0
-                  ? <tr><td colSpan={9} style={{ ...tdStyle, color: A.muted }}>No recurring PM was closed in this window.</td></tr>
+                  ? <tr><td colSpan={10} style={{ ...tdStyle, color: A.muted }}>No recurring PM was closed in this window.</td></tr>
                   : card.techs.map((t) => <TechRow key={`${t.site_code}|${t.tech}`} t={t} weeks={card.sparkWeeks} showSite={p.site === 'both'} />)}
               </tbody>
             </table>
@@ -162,20 +166,20 @@ export default function AuditScorecard() {
                   <BarRow key={f.flag} label={FLAG_LABEL[f.flag]} frac={f.count / maxFlag} value={String(f.count)} color={A.orange} />
                 ))}
               </div>
-              <div style={{ fontSize: 12, color: A.muted }}>One PM can carry several flags. Photo, steps, note and desk-close flags only fire on closes with details loaded.</div>
+              <div style={{ fontSize: 12, color: A.muted }}>One PM can carry several flags. A thick note clears No photos; a note that says why clears unchecked steps.</div>
             </Panel>
             <Panel title="Photo rate by PM type" style={{ flex: '1 1 420px', gap: 14, ...dim }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
                 {card.photoByType.map((t) => (
                   <BarRow key={t.pmType}
-                    label={<>{t.pmType} <span style={{ color: A.muted }}>(min {t.minPhotos})</span></>}
+                    label={<>{t.pmType}{!t.expects && <span style={{ color: A.muted }}> (none expected)</span>}</>}
                     frac={t.rate === null ? 0 : t.rate / 100}
                     value={t.rate === null ? 'n/a' : `${t.rate}%`}
                     color={A.blue}
                     valueColor={t.rate === null ? A.muted : undefined} />
                 ))}
               </div>
-              <div style={{ fontSize: 12, color: A.muted }}>Share of closes that met their photo minimum. Types with no minimum show n/a.</div>
+              <div style={{ fontSize: 12, color: A.muted }}>Share of closes with at least one photo. Types that expect none show n/a.</div>
             </Panel>
           </div>
         </>

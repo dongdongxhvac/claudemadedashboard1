@@ -7,9 +7,10 @@
 
 export type AuditSite = 'upark' | 'binney';
 export type SiteFilter = AuditSite | 'both';
-export type FlagKey = 'low_photos' | 'steps_incomplete' | 'thin_note' | 'desk_close' | 'low_labor' | 'batch_close';
+export type FlagKey = 'no_photos' | 'steps_unexplained' | 'low_labor' | 'batch_close';
 export type Verdict = 'pass' | 'coach' | 'fail';
-export type QueuePill = 'all' | 'flagged' | 'random' | 'open';
+export type QueuePill = 'all' | 'flagged' | 'good' | 'random' | 'open';
+export type QueueReason = 'flagged' | 'good' | 'random';
 
 /** One close event as v_pm_audit_flags returns it. Photo / steps / note
  *  columns are null until the task's pm_task_details row is loaded
@@ -43,15 +44,25 @@ export type FlagRow = {
   min_note_chars: number;
   note_must_match: string | null;
   closes_within_5m: number | null;
+  /** At least one photo attached. */
+  has_photo: boolean | null;
+  /** THICK_NOTE_CHARS or more across every note on the task. */
+  note_thick: boolean | null;
+  /** Under the PM's own note minimum, boilerplate, or missing its reading. Not a flag by itself. */
+  note_thin: boolean | null;
+  /** Some step left unchecked (flagged only when the note doesn't say why). */
+  steps_open: boolean | null;
   flags: string[] | null;
   flag_count: number | null;
+  /** A photo or a thick note, and no flag — queued for recognition. */
+  good: boolean | null;
 };
 
 export type QueueEntry = {
   week_start: string;
   task_no: string;
   site_code: string;
-  reason: 'flagged' | 'random';
+  reason: QueueReason;
   flags: string[] | null;
 };
 
@@ -71,7 +82,7 @@ export type QueueRow = {
   task_no: string;
   week_start: string;
   site_code: string;
-  reason: 'flagged' | 'random';
+  reason: QueueReason;
   /** Missing only if the close event is no longer visible to this viewer. */
   f: FlagRow | null;
   /** Live flags from the view; the queue's frozen list when the row is gone. */
@@ -86,16 +97,24 @@ export const COVE_NETWORK: Record<AuditSite, string> = { upark: 'OoxMP8BZJF', bi
 
 export const SITE_LABEL: Record<SiteFilter, string> = { upark: 'UPark', binney: 'Binney', both: 'Both' };
 
-export const FLAG_KEYS: FlagKey[] = ['low_photos', 'steps_incomplete', 'thin_note', 'desk_close', 'low_labor', 'batch_close'];
+/** Flag rules v2 (migration 0163, manager's call 2026-11-17):
+ *    no_photos          a PM that expects photos has none AND no thick note
+ *    steps_unexplained  steps left unchecked AND the note doesn't say why
+ *    low_labor          under 25 % of the estimate in a light week
+ *    batch_close        5+ closes within minutes, with no photo and no thick note
+ *  Desk close is gone (nobody runs the Cove timer); a thin note alone and
+ *  unchecked steps with a real note no longer flag. */
+export const FLAG_KEYS: FlagKey[] = ['no_photos', 'steps_unexplained', 'low_labor', 'batch_close'];
 
 export const FLAG_LABEL: Record<FlagKey, string> = {
-  low_photos: 'Low photos',
-  steps_incomplete: 'Steps incomplete',
-  thin_note: 'Thin note',
-  desk_close: 'Desk close',
+  no_photos: 'No photos',
+  steps_unexplained: 'Steps unexplained',
   low_labor: 'Low labor',
   batch_close: 'Batch close',
 };
+
+/** A note this long is evidence on its own (same number as the view). */
+export const THICK_NOTE_CHARS = 100;
 
 export const REASON_TAGS: { key: string; label: string }[] = [
   { key: 'missing_photos', label: 'Missing photos' },
@@ -104,6 +123,7 @@ export const REASON_TAGS: { key: string; label: string }[] = [
   { key: 'steps_skipped', label: 'Steps skipped' },
   { key: 'timing', label: 'Timing' },
   { key: 'follow_up_wo', label: 'Follow-up WO' },
+  { key: 'good_example', label: 'Good example' },
 ];
 
 export const VERDICT_LABEL: Record<Verdict, string> = { pass: 'Pass', coach: 'Coach', fail: 'Fail' };
@@ -207,17 +227,6 @@ export function fmtPct(p: number | null | undefined): string {
   return p === null || p === undefined ? '—' : `${p}%`;
 }
 
-/** Whole minutes between started and completed; null when either is missing. */
-export function closeMinutes(startedAt: string | null | undefined, completedAt: string | null | undefined): number | null {
-  if (!startedAt || !completedAt) return null;
-  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  return Number.isFinite(ms) && ms >= 0 ? ms / 60000 : null;
-}
-
-function minutesText(m: number): string {
-  return m < 1 ? 'under 1 min' : `${Math.round(m)} min`;
-}
-
 /** Cove's task page. Without a loaded detail row there is no Cove id yet, so
  *  the link goes to the site's PM list instead. */
 export function coveTaskUrl(site: string, coveTaskId: string | null | undefined): string {
@@ -230,32 +239,17 @@ export function coveTaskUrl(site: string, coveTaskId: string | null | undefined)
 
 // ---------- flag chips ----------
 
-export type ChipTone = 'red' | 'orange' | 'blue' | 'grey';
+export type ChipTone = 'red' | 'orange' | 'blue' | 'green' | 'grey';
 export type Chip = { key: string; label: string; tone: ChipTone };
 
-/** One chip per flag, worded with the number behind it. Red = no photos at
- *  all and desk closes; orange = the rest (spec §4.1). */
+/** One chip per flag, worded with the number behind it. Red = no evidence
+ *  at all (no photo, no thick note); orange = the rest. */
 export function flagChip(flag: FlagKey, f: FlagRow | null): Chip {
   switch (flag) {
-    case 'low_photos': {
-      if (!f) return { key: flag, label: FLAG_LABEL[flag], tone: 'orange' };
-      const n = f.photo_count ?? 0;
-      return n === 0
-        ? { key: flag, label: `No photos 0 / ${f.min_photos}`, tone: 'red' }
-        : { key: flag, label: `Low photos ${n} / ${f.min_photos}`, tone: 'orange' };
-    }
-    case 'steps_incomplete':
-      return { key: flag, label: f ? `Steps ${f.steps_checked ?? 0} / ${f.steps_total ?? 0}` : FLAG_LABEL[flag], tone: 'orange' };
-    case 'thin_note': {
-      if (!f) return { key: flag, label: FLAG_LABEL[flag], tone: 'orange' };
-      if (f.note_boilerplate) return { key: flag, label: 'Boilerplate note', tone: 'orange' };
-      if ((f.note_chars ?? 0) < f.min_note_chars) return { key: flag, label: `Thin note ${f.note_chars ?? 0} / ${f.min_note_chars}`, tone: 'orange' };
-      return { key: flag, label: 'Thin note · no reading', tone: 'orange' };
-    }
-    case 'desk_close': {
-      const m = f ? closeMinutes(f.started_at, f.completed_at) : null;
-      return { key: flag, label: m === null ? FLAG_LABEL[flag] : `Desk close · ${minutesText(m)}`, tone: 'red' };
-    }
+    case 'no_photos':
+      return { key: flag, label: 'No photos', tone: 'red' };
+    case 'steps_unexplained':
+      return { key: flag, label: f ? `Steps ${f.steps_checked ?? 0} / ${f.steps_total ?? 0} · no explanation` : FLAG_LABEL[flag], tone: 'orange' };
     case 'low_labor': {
       const p = f && f.labor_hours !== null && f.est_labor_hours ? pct(Number(f.labor_hours), Number(f.est_labor_hours)) : null;
       return { key: flag, label: p === null ? FLAG_LABEL[flag] : `Low labor ${p}%`, tone: 'orange' };
@@ -267,8 +261,21 @@ export function flagChip(flag: FlagKey, f: FlagRow | null): Chip {
   }
 }
 
+/** "Good PM · 3 photos + 499-char note" — what earned it. Null when the close isn't a good one. */
+export function goodChip(f: FlagRow | null): Chip | null {
+  if (!f?.good) return null;
+  const parts: string[] = [];
+  const n = f.photo_count ?? 0;
+  if (f.has_photo) parts.push(`${n} photo${n === 1 ? '' : 's'}`);
+  if (f.note_thick) parts.push(`${f.note_chars ?? 0}-char note`);
+  return { key: 'good', label: `Good PM · ${parts.join(' + ')}`, tone: 'green' };
+}
+
 export function rowChips(row: QueueRow): Chip[] {
   const chips = row.flags.map((k) => flagChip(k, row.f));
+  const good = goodChip(row.f);
+  if (good) chips.push(good);
+  else if (row.reason === 'good') chips.push({ key: 'good', label: 'Queued as good', tone: 'grey' });
   if (row.reason === 'random') chips.push({ key: 'random', label: 'Random sample', tone: 'blue' });
   return chips;
 }
@@ -299,7 +306,7 @@ export function joinQueue(entries: QueueEntry[], flags: FlagRow[], reviews: Revi
   return sortQueue(rows);
 }
 
-/** Spec order: unreviewed first, flagged before random, by tech, newest close first. */
+/** Spec order: unreviewed first, flagged then good then random, by tech, newest close first. */
 export function sortQueue(rows: QueueRow[]): QueueRow[] {
   return [...rows].sort((a, b) => {
     const open = Number(!!a.review) - Number(!!b.review);
@@ -319,6 +326,7 @@ export type QueueFilter = { pill: QueuePill; tech: string; flag: FlagKey | '' };
 export function filterQueue(rows: QueueRow[], q: QueueFilter): QueueRow[] {
   return rows.filter((r) => {
     if (q.pill === 'flagged' && r.reason !== 'flagged') return false;
+    if (q.pill === 'good' && r.reason !== 'good') return false;
     if (q.pill === 'random' && r.reason !== 'random') return false;
     if (q.pill === 'open' && r.review) return false;
     if (q.tech && (r.f?.assigned_to_name ?? '') !== q.tech) return false;
@@ -328,7 +336,7 @@ export function filterQueue(rows: QueueRow[], q: QueueFilter): QueueRow[] {
 }
 
 export function parsePill(s: string | null): QueuePill {
-  return s === 'flagged' || s === 'random' || s === 'open' ? s : 'all';
+  return s === 'flagged' || s === 'good' || s === 'random' || s === 'open' ? s : 'all';
 }
 
 export function parseFlag(s: string | null): FlagKey | '' {
@@ -347,14 +355,16 @@ export function nextOpen(rows: QueueRow[], current: string): QueueRow | null {
 // ---------- week stats (queue tiles) ----------
 
 /** The slice of a flags row the week tiles need — every close, queued or not. */
-export type WeekClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'has_details' | 'min_photos' | 'photo_count'>;
+export type WeekClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'has_details' | 'min_photos' | 'has_photo' | 'good'>;
 
 export type WeekStats = {
   closed: number;
   bySite: Record<string, number>;
   techs: number;
   withDetails: number;
-  /** Closes with enough photos over closes that need any; null until details load. */
+  /** Good PMs that week (a photo or a thick note, no flag), queued or not. */
+  good: number;
+  /** Closes with a photo over closes that expect one; null until details load. */
   photoRate: number | null;
 };
 
@@ -362,6 +372,7 @@ export function weekStats(closes: WeekClose[]): WeekStats {
   const bySite: Record<string, number> = {};
   const techs = new Set<string>();
   let withDetails = 0;
+  let good = 0;
   let need = 0;
   let ok = 0;
   for (const c of closes) {
@@ -369,12 +380,13 @@ export function weekStats(closes: WeekClose[]): WeekStats {
     if (c.assigned_to_name) techs.add(c.assigned_to_name);
     if (!c.has_details) continue;
     withDetails++;
+    if (c.good) good++;
     if (c.min_photos > 0) {
       need++;
-      if ((c.photo_count ?? 0) >= c.min_photos) ok++;
+      if (c.has_photo) ok++;
     }
   }
-  return { closed: closes.length, bySite, techs: techs.size, withDetails, photoRate: withDetails === 0 ? null : pct(ok, need) };
+  return { closed: closes.length, bySite, techs: techs.size, withDetails, good, photoRate: withDetails === 0 ? null : pct(ok, need) };
 }
 
 // ---------- scorecard ----------
@@ -387,6 +399,7 @@ export type ScoreRow = {
   closed: number;
   with_details: number;
   flagged: number;
+  good: number;
   photo_rate_pct: number | null;
   steps_rate_pct: number | null;
   note_rate_pct: number | null;
@@ -403,38 +416,45 @@ export type ScoreRow = {
  *  (the view only carries rounded per-week percentages). */
 export type ScoreClose = Pick<FlagRow,
   'task_no' | 'site_code' | 'assigned_to_name' | 'week_start' | 'pm_type' | 'has_details'
-  | 'min_photos' | 'photo_count' | 'steps_total' | 'steps_checked' | 'flags' | 'flag_count'
-> & { f_thin_note: boolean | null };
+  | 'min_photos' | 'has_photo' | 'steps_total' | 'steps_checked' | 'note_thin' | 'flags' | 'flag_count' | 'good'
+>;
 
 export type Rates = {
   closed: number;
   withDetails: number;
   flagged: number;
+  good: number;
+  /** Share with a photo, of closes that expect one. */
   photoRate: number | null;
   stepsRate: number | null;
+  /** Share whose note is not thin. */
   noteRate: number | null;
   flagRate: number | null;
+  goodRate: number | null;
 };
 
 export function ratesOf(closes: ScoreClose[]): Rates {
-  let withDetails = 0, flagged = 0, pNeed = 0, pOk = 0, sNeed = 0, sOk = 0, nOk = 0;
+  let withDetails = 0, flagged = 0, good = 0, pNeed = 0, pOk = 0, sNeed = 0, sOk = 0, nOk = 0;
   for (const c of closes) {
     if ((c.flag_count ?? 0) > 0) flagged++;
     if (!c.has_details) continue;
     withDetails++;
-    if (c.min_photos > 0) { pNeed++; if ((c.photo_count ?? 0) >= c.min_photos) pOk++; }
+    if (c.good) good++;
+    if (c.min_photos > 0) { pNeed++; if (c.has_photo) pOk++; }
     if ((c.steps_total ?? 0) > 0) { sNeed++; if (c.steps_checked === c.steps_total) sOk++; }
-    if (!c.f_thin_note) nOk++;
+    if (!c.note_thin) nOk++;
   }
   const none = withDetails === 0;
   return {
     closed: closes.length,
     withDetails,
     flagged,
+    good,
     photoRate: none ? null : pct(pOk, pNeed),
     stepsRate: none ? null : pct(sOk, sNeed),
     noteRate: none ? null : pct(nOk, withDetails),
     flagRate: pct(flagged, closes.length),
+    goodRate: none ? null : pct(good, withDetails),
   };
 }
 
@@ -457,7 +477,8 @@ export type Scorecard = {
   techs: TechScore[];
   flagsByReason: { flag: FlagKey; count: number }[];
   flagTotal: number;
-  photoByType: { pmType: string; minPhotos: number; rate: number | null; n: number }[];
+  /** `expects` = this PM type is expected to carry a photo at all. */
+  photoByType: { pmType: string; expects: boolean; rate: number | null; n: number }[];
 };
 
 function topFlagOf(closes: ScoreClose[]): FlagKey | null {
@@ -533,11 +554,7 @@ export function buildScorecard(views: ScoreRow[], closes: ScoreClose[], weeks: s
   const photoByType = PM_TYPES.map((pmType) => {
     const rows = c.filter((r) => (r.pm_type ?? 'Minor') === pmType && r.has_details);
     const need = rows.filter((r) => r.min_photos > 0);
-    // the type's own minimum = the commonest one (template overrides are the exception)
-    const mins = new Map<number, number>();
-    for (const r of rows) mins.set(r.min_photos, (mins.get(r.min_photos) ?? 0) + 1);
-    const minPhotos = [...mins.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
-    return { pmType, minPhotos, n: need.length, rate: pct(need.filter((r) => (r.photo_count ?? 0) >= r.min_photos).length, need.length) };
+    return { pmType, expects: need.length > 0, n: need.length, rate: pct(need.filter((r) => r.has_photo).length, need.length) };
   });
 
   return { weeks, team, techs, flagsByReason, flagTotal: flagsByReason.reduce((a, r) => a + r.count, 0), photoByType };
@@ -561,7 +578,7 @@ export type HistoryEvent = {
   laborItem?: { hours?: number | null; performedBy?: { firstName?: string; lastName?: string } | null } | null;
 };
 
-export type TimelineItem = { key: string; at: string | null; text: string; strong?: string; tone: 'plain' | 'photo' | 'warn' };
+export type TimelineItem = { key: string; at: string | null; text: string; strong?: string; tone: 'plain' | 'photo' };
 
 function person(u: { firstName?: string; lastName?: string } | null | undefined): string {
   return shortName(`${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || null);
@@ -569,14 +586,11 @@ function person(u: { firstName?: string; lastName?: string } | null | undefined)
 
 const STATUS_WORD: Record<string, string> = { in_progress: 'Started', completed: 'Completed', on_hold: 'On hold', to_do: 'Back to To do', cancelled: 'Cancelled' };
 
-/** Cove history → the lines the review card shows, oldest first. The
- *  started → completed pair is toned 'warn' when under two minutes apart. */
+/** Cove history → the lines the review card shows, oldest first. Start and
+ *  complete times are shown as they are: nobody runs the Cove timer, so the
+ *  gap between them says nothing about the work. */
 export function buildTimeline(history: HistoryEvent[] | null | undefined, dueDate: string | null | undefined): TimelineItem[] {
   const hist = [...(history ?? [])].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
-  const started = hist.find((h) => h.eventType === 'status_changed' && h.status === 'in_progress');
-  const completed = [...hist].reverse().find((h) => h.eventType === 'status_changed' && h.status === 'completed');
-  const gap = closeMinutes(started?.createdAt, completed?.createdAt);
-  const quick = gap !== null && gap < 2;
   const out: TimelineItem[] = [];
   hist.forEach((h, i) => {
     const key = h.id ?? `${h.eventType}-${i}`;
@@ -598,12 +612,8 @@ export function buildTimeline(history: HistoryEvent[] | null | undefined, dueDat
         break;
       }
       case 'status_changed': {
-        const isPair = quick && (h === started || h === completed);
         const word = STATUS_WORD[h.status ?? ''] ?? `Status → ${h.status ?? '?'}`;
-        let tail = '';
-        if (h === started) tail = ' (in progress)';
-        if (h === completed && gap !== null) tail = ` · ${minutesText(gap)} after start`;
-        out.push({ key, at, tone: isPair ? 'warn' : 'plain', strong: word, text: `${tail}${by && h !== started ? ` · ${by}` : ''}` });
+        out.push({ key, at, tone: 'plain', strong: word, text: `${h.status === 'in_progress' ? ' (in progress)' : ''}${by ? ` · ${by}` : ''}` });
         break;
       }
       case 'labor_item_added':

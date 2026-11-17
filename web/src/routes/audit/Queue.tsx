@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuditAccess, useAuditQueue, useAuditWeekRange, useAuditWeekStats } from '../../hooks/usePmAudit';
 import {
-  FLAG_KEYS, FLAG_LABEL, SITE_LABEL, addDays, filterQueue, fmtClosed, fmtHours, fmtPct, rowChips, shortName, weekLabel,
+  FLAG_KEYS, FLAG_LABEL, SITE_LABEL, THICK_NOTE_CHARS, addDays, filterQueue, fmtClosed, fmtHours, fmtPct, rowChips, shortName, weekLabel,
   type FlagKey, type QueuePill, type QueueRow,
 } from '../../lib/pmAudit';
 import { AuditShell, ChipTag, Notice, Segmented, StatTile, VerdictTag } from './AuditUi';
@@ -26,15 +26,17 @@ function LaborCell({ row }: { row: QueueRow }) {
   );
 }
 
+const GOOD = { color: A.greenDark, fontWeight: 600 } as const;
+
+/** Photo count: red when the PM is flagged for having none, green when a
+ *  photo is there, muted when none is expected. */
 function PhotosCell({ row }: { row: QueueRow }) {
   const f = row.f;
-  if (!f) return <span style={GREY}>—</span>;
-  if (!f.has_details) return <span style={GREY}>— / {f.min_photos}</span>;
-  return (
-    <span style={row.flags.includes('low_photos') ? RED : undefined}>
-      {f.photo_count ?? 0} <span style={{ color: A.muted, fontWeight: 400 }}>/ {f.min_photos}</span>
-    </span>
-  );
+  if (!f || !f.has_details) return <span style={GREY}>—</span>;
+  const n = f.photo_count ?? 0;
+  if (row.flags.includes('no_photos')) return <span style={RED}>0</span>;
+  if (n > 0) return <span style={GOOD}>{n}</span>;
+  return <span style={{ color: A.muted }} title={f.min_photos > 0 ? 'No photo, covered by a thick note' : 'No photo expected for this PM'}>0</span>;
 }
 
 function StepsCell({ row }: { row: QueueRow }) {
@@ -42,26 +44,26 @@ function StepsCell({ row }: { row: QueueRow }) {
   if (!f || !f.has_details) return <span style={GREY}>—</span>;
   if (!f.steps_total) return <span style={{ color: A.muted }}>none</span>;
   return (
-    <span style={row.flags.includes('steps_incomplete') ? RED : undefined}>
+    <span style={row.flags.includes('steps_unexplained') ? RED : undefined}
+      title={f.steps_open && !row.flags.includes('steps_unexplained') ? 'Unchecked steps, explained in the note' : undefined}>
       {f.steps_checked ?? 0} <span style={{ color: A.muted, fontWeight: 400 }}>/ {f.steps_total}</span>
     </span>
   );
 }
 
-/** Note length, or the boilerplate word itself in red ("ok", "done"). */
+/** Note length in characters: green when thick (evidence on its own), muted
+ *  when thin; a boilerplate note shows its word ("ok", "done"). A thin note
+ *  is not a flag by itself any more. */
 function NoteCell({ row }: { row: QueueRow }) {
   const f = row.f;
   if (!f || !f.has_details) return <span style={GREY}>—</span>;
+  const tip = `${f.note_chars ?? 0} characters across ${f.note_count ?? 0} note(s); ${THICK_NOTE_CHARS}+ counts as a thick note`;
   if (f.note_boilerplate) {
     const word = (f.close_note ?? '').trim();
-    return <span style={RED} title="On the boilerplate list — counts as no note">“{word.length > 14 ? `${word.slice(0, 14)}…` : word}”</span>;
+    return <span style={{ color: A.muted }} title="Boilerplate — counts as no note">“{word.length > 14 ? `${word.slice(0, 14)}…` : word}”</span>;
   }
-  const thin = row.flags.includes('thin_note');
-  return (
-    <span style={thin ? RED : undefined} title={`${f.note_chars ?? 0} characters across ${f.note_count ?? 0} note(s), minimum ${f.min_note_chars}`}>
-      {f.note_chars ?? 0}
-    </span>
-  );
+  if (f.note_thick) return <span style={GOOD} title={tip}>{f.note_chars}</span>;
+  return <span style={f.note_thin ? { color: A.muted } : undefined} title={tip}>{f.note_chars ?? 0}</span>;
 }
 
 export default function AuditQueue() {
@@ -79,6 +81,7 @@ export default function AuditQueue() {
   const counts = useMemo(() => ({
     all: all.length,
     flagged: all.filter((r) => r.reason === 'flagged').length,
+    good: all.filter((r) => r.reason === 'good').length,
     random: all.filter((r) => r.reason === 'random').length,
     open: all.filter((r) => !r.review).length,
   }), [all]);
@@ -97,6 +100,7 @@ export default function AuditQueue() {
   const pills: { value: QueuePill; label: string }[] = [
     { value: 'all', label: `All ${counts.all}` },
     { value: 'flagged', label: `Flagged ${counts.flagged}` },
+    { value: 'good', label: `Good ${counts.good}` },
     { value: 'random', label: `Random ${counts.random}` },
     { value: 'open', label: `Open ${counts.open}` },
   ];
@@ -107,7 +111,7 @@ export default function AuditQueue() {
     <AuditShell
       kicker="Section 05"
       title={week ? `PM Audit · Week of ${weekLabel(week)}` : 'PM Audit'}
-      subtitle="Last week's closed recurring PMs: every flagged one plus 5 random per site. Pass / Coach / Fail each; the scorecard adds them up per tech."
+      subtitle="Last week's closed recurring PMs: each tech's worst flagged ones, the best good ones and 5 random per site. Pass / Coach / Fail each; the scorecard adds them up per tech."
       actions={week && (
         <>
           <button type="button" style={buttonStyle} onClick={() => goWeek(addDays(week, -7))}
@@ -128,7 +132,9 @@ export default function AuditQueue() {
         <StatTile label="Flagged" value={counts.flagged} valueColor={counts.flagged ? A.orange : undefined}
           sub={missingDetails > 0 && stats
             ? `${missingDetails} of ${stats.closed} closes have no task details yet — only the labor rule can fire on those`
-            : 'photo, steps, note, timing and labor rules'} />
+            : 'no photos, unexplained steps, low labor, batch close'} />
+        <StatTile label="Good PMs" value={counts.good} valueColor={counts.good ? A.green : undefined}
+          sub={stats ? `queued, of ${stats.good} good that week (a photo or a ${THICK_NOTE_CHARS}+ character note, no flag)` : 'a photo or a thick note, no flag'} />
         <StatTile label="Random sample" value={counts.random} sub="unflagged, drawn Sunday night" />
         <StatTile label="Reviewed" value={<>{reviewed} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>/ {counts.all}</span></>}>
           <div style={{ height: 6, borderRadius: 3, background: A.line, overflow: 'hidden' }}>
@@ -136,7 +142,7 @@ export default function AuditQueue() {
           </div>
         </StatTile>
         <StatTile label="Photo rate" value={fmtPct(stats?.photoRate)} valueColor={stats?.photoRate === null || !stats ? A.faint : undefined}
-          sub={!stats ? 'of closes that need a photo' : stats.withDetails === 0 ? 'needs backfill' : `enough photos, of ${stats.withDetails} closes with details`} />
+          sub={!stats ? 'of PMs that expect a photo' : stats.withDetails === 0 ? 'needs backfill' : 'at least one photo, of PMs that expect one'} />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
@@ -227,9 +233,10 @@ export default function AuditQueue() {
       )}
 
       <div style={{ fontSize: 12, color: A.muted, lineHeight: 1.6 }}>
-        <strong>Photos</strong> = count / minimum from the audit rules (by template, else PM type). <strong>Note</strong> = characters across
-        every note on the task; a word in quotes is boilerplate and counts as no note. Grey “—” means the task's details have not been
-        pulled from Cove yet. Flags are live from the current data; the queue itself is frozen Sunday 23:05 ET.
+        <strong>Flagged</strong> = no photo and no thick note, unchecked steps the note doesn't explain, very low labor, or a batch of closes with no
+        evidence. <strong>Good</strong> = a photo or a note of {THICK_NOTE_CHARS}+ characters, and no flag. <strong>Note</strong> = characters across every
+        note on the task (green = thick; a word in quotes is boilerplate). Grey “—” means the task's details have not been pulled from Cove yet.
+        Flags are live from the current data; the queue itself is frozen Sunday 23:05 ET.
       </div>
     </AuditShell>
   );

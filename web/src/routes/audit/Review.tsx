@@ -9,7 +9,7 @@ import {
   type TaskAttachment, type TaskDetails, type TaskStep,
 } from '../../hooks/usePmAudit';
 import {
-  REASON_TAGS, SITE_LABEL, VERDICT_LABEL, asFlagKeys, buildTimeline, coveTaskUrl, filterQueue, fmtClosed, fmtDay, fmtHours, fmtStamp,
+  REASON_TAGS, SITE_LABEL, THICK_NOTE_CHARS, VERDICT_LABEL, asFlagKeys, buildTimeline, coveTaskUrl, filterQueue, fmtClosed, fmtDay, fmtHours, fmtStamp,
   isPhotoName, isWeekStart, nextOpen, noteSourceLabel, rowChips, shortName, weekLabel,
   type QueueRow, type Review, type Verdict,
 } from '../../lib/pmAudit';
@@ -90,15 +90,15 @@ function Lightbox({ photos, index, onIndex, onClose }: { photos: TaskAttachment[
 
 function PhotosPanel({ row, details, onOpen }: { row: QueueRow; details: TaskDetails | null; onOpen: (i: number) => void }) {
   const f = row.f;
-  const min = f?.min_photos ?? 0;
+  const expects = (f?.min_photos ?? 0) > 0;
   const atts = details?.attachments ?? [];
   const photos = photosOf(details);
   const files = atts.filter((a) => !isPhotoName(a.name));
-  const missing = Math.max(0, min - photos.length);
+  const flagged = row.flags.includes('no_photos');
   const times = photos.map((a) => a.uploadedAt).filter((t): t is string => !!t).sort();
   return (
     <Panel
-      title={<>Photos <span style={{ color: details && photos.length < min ? A.red : undefined }}>{details ? photos.length : '—'}</span> <Soft>· minimum {min}{f?.pm_type ? ` for ${f.pm_type}` : ''}</Soft></>}
+      title={<>Photos <span style={{ color: flagged ? A.red : photos.length > 0 ? A.greenDark : undefined }}>{details ? photos.length : '—'}</span> <Soft>· {expects ? `at least one expected${f?.pm_type ? ` for a ${f.pm_type}` : ''}, or a thick note` : 'none expected for this PM'}</Soft></>}
       aside={times.length > 0 && (
         <span style={{ fontSize: 12, color: A.muted }}>
           uploaded {fmtClosed(times[0])}{times.length > 1 && times[times.length - 1] !== times[0] ? ` – ${fmtClosed(times[times.length - 1])}` : ''}
@@ -107,16 +107,16 @@ function PhotosPanel({ row, details, onOpen }: { row: QueueRow; details: TaskDet
     >
       {!details ? (
         <div style={{ fontSize: 13, color: A.muted }}>This task's details have not been pulled from Cove yet, so there is nothing to show.</div>
-      ) : photos.length === 0 && missing === 0 ? (
-        <div style={{ fontSize: 13, color: A.muted }}>No photos — none required for this PM.</div>
+      ) : photos.length === 0 && !flagged ? (
+        <div style={{ fontSize: 13, color: A.muted }}>{expects ? 'No photos — the note carries this one.' : 'No photos — none expected for this PM.'}</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
           {photos.map((a, i) => <PhotoThumb key={`${a.url}-${i}`} a={a} onOpen={() => onOpen(i)} />)}
-          {Array.from({ length: missing }, (_, i) => (
-            <div key={`missing-${i}`} style={{ aspectRatio: '4 / 3', borderRadius: 8, border: `1px dashed ${A.control}`, color: A.muted, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              missing
+          {flagged && (
+            <div style={{ aspectRatio: '4 / 3', borderRadius: 8, border: `1px dashed ${A.control}`, color: A.muted, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 8 }}>
+              no photo, and no thick note
             </div>
-          ))}
+          )}
         </div>
       )}
       {files.length > 0 && (
@@ -138,11 +138,18 @@ function stepDone(s: TaskStep): boolean {
   return s.value !== null && s.value !== undefined && s.value !== '' && s.value !== false;
 }
 
-function ChecklistPanel({ details }: { details: TaskDetails | null }) {
+function ChecklistPanel({ row, details }: { row: QueueRow; details: TaskDetails | null }) {
   const steps = details?.steps ?? [];
   const done = steps.filter(stepDone).length;
+  const open = details !== null && done < steps.length;
+  const unexplained = row.flags.includes('steps_unexplained');
   return (
-    <Panel title={<>Checklist <Soft>· {details ? `${done} / ${steps.length} checked` : 'not loaded'}</Soft></>}>
+    <Panel
+      title={<>Checklist <Soft>· {details ? `${done} / ${steps.length} checked` : 'not loaded'}</Soft></>}
+      aside={open && (unexplained
+        ? <ChipTag chip={{ key: 'steps', tone: 'orange', label: 'Unchecked, and the note does not say why' }} />
+        : <span style={{ fontSize: 12, color: A.muted }}>unchecked step — see the note</span>)}
+    >
       {!details ? (
         <div style={{ fontSize: 13, color: A.muted }}>Not pulled from Cove yet.</div>
       ) : steps.length === 0 ? (
@@ -180,16 +187,13 @@ function TimelinePanel({ details }: { details: TaskDetails | null }) {
         <div style={{ fontSize: 13, color: A.muted }}>{details.history === null ? 'History was pruned for this task (older than 180 days and never queued).' : 'Cove returned no history for this task.'}</div>
       ) : (
         <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', fontSize: 13 }}>
-          {items.map((it) => {
-            const warn = it.tone === 'warn';
-            return (
-              <li key={it.key} style={{ display: 'grid', gridTemplateColumns: '118px 14px 1fr', gap: 12, alignItems: 'start', padding: '6px 8px 6px 0', borderRadius: 6, background: warn ? A.orangeSoft : undefined }}>
-                <span style={{ color: warn ? A.orangeDark : A.muted, textAlign: 'right', fontWeight: warn ? 600 : 400, whiteSpace: 'nowrap' }}>{fmtStamp(it.at)}</span>
-                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 4, background: warn ? A.orange : it.tone === 'photo' ? A.blue : '#C9CED6' }} />
-                <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{it.strong && <strong>{it.strong}</strong>}{it.text}</span>
-              </li>
-            );
-          })}
+          {items.map((it) => (
+            <li key={it.key} style={{ display: 'grid', gridTemplateColumns: '118px 14px 1fr', gap: 12, alignItems: 'start', padding: '6px 8px 6px 0' }}>
+              <span style={{ color: A.muted, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtStamp(it.at)}</span>
+              <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 4, background: it.tone === 'photo' ? A.blue : '#C9CED6' }} />
+              <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{it.strong && <strong>{it.strong}</strong>}{it.text}</span>
+            </li>
+          ))}
         </ol>
       )}
     </Panel>
@@ -201,14 +205,13 @@ function TimelinePanel({ details }: { details: TaskDetails | null }) {
 function NotesPanel({ row, details }: { row: QueueRow; details: TaskDetails | null }) {
   const f = row.f;
   const notes = details?.notes ?? [];
-  const thin = row.flags.includes('thin_note');
   const chars = f?.note_chars ?? 0;
   return (
     <Panel
       title={<>Notes <Soft>· {details ? notes.length : '—'}</Soft></>}
-      aside={f && details && (thin
-        ? <ChipTag chip={{ key: 'thin', tone: 'orange', label: f.note_boilerplate ? 'Thin note · boilerplate' : chars < f.min_note_chars ? `Thin note · ${chars} chars, min ${f.min_note_chars}` : 'Thin note · no reading in it' }} />
-        : <span style={{ fontSize: 12, color: A.muted }}>{chars} chars · min {f.min_note_chars}</span>)}
+      aside={f && details && (f.note_thick
+        ? <ChipTag chip={{ key: 'thick', tone: 'green', label: `Thick note · ${chars} chars` }} />
+        : <span style={{ fontSize: 12, color: A.muted }}>{f.note_boilerplate ? 'boilerplate' : `${chars} chars`}{f.note_thin ? ' · thin' : ''} · thick at {THICK_NOTE_CHARS}</span>)}
     >
       {!details ? (
         <div style={{ fontSize: 13, color: A.muted }}>Not pulled from Cove yet.</div>
@@ -228,12 +231,11 @@ function NotesPanel({ row, details }: { row: QueueRow; details: TaskDetails | nu
           ))}
         </div>
       )}
-      {f && f.min_note_chars > 0 && (
-        <div style={{ fontSize: 12, color: A.muted, lineHeight: 1.5 }}>
-          Rule for this PM: at least {f.min_note_chars} characters across all notes, and not boilerplate (“n/a”, “done”, “ok”, “no issues”…).
-          {f.note_must_match === '\\d' && ' This template records a reading, so the note must contain a number.'}
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: A.muted, lineHeight: 1.5 }}>
+        A note of {THICK_NOTE_CHARS}+ characters counts as evidence on its own, photos or not. A short note is fine when every step is
+        checked; unchecked steps need a note that says why.
+        {f?.note_must_match === '\\d' && ' This template records a reading, so the note should contain a number.'}
+      </div>
     </Panel>
   );
 }
@@ -447,7 +449,7 @@ export default function AuditReview() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
             <div style={{ flex: '999 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
               <PhotosPanel row={cardRow} details={details} onOpen={setLightbox} />
-              <ChecklistPanel details={details} />
+              <ChecklistPanel row={cardRow} details={details} />
               <TimelinePanel details={details} />
             </div>
             <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>

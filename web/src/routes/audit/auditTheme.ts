@@ -22,6 +22,9 @@ export const A = {
   orange: '#B45309',
   orangeDark: '#8A4B0A',
   orangeSoft: '#FEF3E2',
+  green: '#1E7B45',
+  greenDark: '#1B6B3A',
+  greenSoft: '#E3F4EA',
   track: '#EEF0F3',
 } as const;
 
@@ -29,6 +32,7 @@ export const CHIP_TONE: Record<ChipTone, { bg: string; fg: string }> = {
   red: { bg: A.redSoft, fg: A.redDark },
   orange: { bg: A.orangeSoft, fg: A.orangeDark },
   blue: { bg: A.blueSoft, fg: A.blueDark },
+  green: { bg: A.greenSoft, fg: A.greenDark },
   grey: { bg: A.lineSoft, fg: A.muted },
 };
 

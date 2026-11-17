@@ -16,6 +16,7 @@ export function PmAuditPanel({ siteCode }: { siteCode: AuditSite }) {
   const rows = queueQ.data ?? [];
   const open = rows.filter((r) => !r.review).length;
   const flagged = rows.filter((r) => r.reason === 'flagged').length;
+  const good = rows.filter((r) => r.reason === 'good').length;
   const qs = access.canPickSite ? `?site=${siteCode}` : '';
 
   return (
@@ -34,7 +35,7 @@ export function PmAuditPanel({ siteCode }: { siteCode: AuditSite }) {
           ) : (
             <>
               <span className={`t-mono ${open > 0 ? 't-warn' : ''}`} style={{ fontWeight: 600 }}>{open}</span> to review
-              <span className="t-muted"> · {rows.length} queued ({flagged} flagged, {rows.length - flagged} random) · {rows.length - open} reviewed</span>
+              <span className="t-muted"> · {rows.length} queued ({flagged} flagged, {good} good, {rows.length - flagged - good} random) · {rows.length - open} reviewed</span>
             </>
           )}
         </p>

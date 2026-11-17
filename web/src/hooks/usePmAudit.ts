@@ -17,11 +17,12 @@ const FLAG_COLS = [
   'task_no', 'site_code', 'building_code', 'equipment', 'task_name', 'assigned_to_name', 'completed_on', 'week_start', 'pm_type',
   'labor_hours', 'est_labor_hours', 'tech_week_hours', 'has_details', 'cove_task_id', 'started_at', 'completed_at', 'close_note',
   'note_count', 'note_chars', 'note_boilerplate', 'steps_total', 'steps_checked', 'photo_count', 'attachment_count',
-  'min_photos', 'min_note_chars', 'note_must_match', 'closes_within_5m', 'flags', 'flag_count',
+  'min_photos', 'min_note_chars', 'note_must_match', 'closes_within_5m', 'has_photo', 'note_thick', 'note_thin', 'steps_open',
+  'flags', 'flag_count', 'good',
 ].join(',');
 
-const WEEK_COLS = 'task_no,site_code,assigned_to_name,has_details,min_photos,photo_count';
-const SCORE_COLS = 'task_no,site_code,assigned_to_name,week_start,pm_type,has_details,min_photos,photo_count,steps_total,steps_checked,flags,flag_count,f_thin_note';
+const WEEK_COLS = 'task_no,site_code,assigned_to_name,has_details,min_photos,has_photo,good';
+const SCORE_COLS = 'task_no,site_code,assigned_to_name,week_start,pm_type,has_details,min_photos,has_photo,steps_total,steps_checked,note_thin,flags,flag_count,good';
 
 /** Every row of a filtered read, past PostgREST's 1000-row page. `page`
  *  must apply a stable order. */
