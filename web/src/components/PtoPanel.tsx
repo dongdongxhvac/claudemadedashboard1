@@ -386,7 +386,6 @@ export function PtoPanel() {
   const subtitle = (
     <span className="t-small t-muted">
       <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{buckets.pending.length}</span> pending
-      <OtcOldRecordsLink />
       {' · '}
       <span style={{ color: buckets.outToday.length > 0 ? 'var(--color-warn, #d97706)' : 'var(--color-text)' }}>
         {buckets.outToday.length} out today
@@ -2416,6 +2415,9 @@ function BalancesGrid({
         >
           {exporting ? 'Exporting…' : '⤓ Export .xlsx'}
         </button>
+        {/* Old OnTheClock records (private bucket, managers only) — sits
+            with the other Balances downloads, after Export (user 2026-11-18). */}
+        <OtcOldRecordsLink />
       </div>
       <div className="flex flex-wrap items-start" style={{ columnGap: '1.25rem', rowGap: '1rem' }}>
       {halves.map((half, hi) => (

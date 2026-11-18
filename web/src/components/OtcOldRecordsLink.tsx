@@ -1,4 +1,5 @@
-// "otc old records" link in the UPark PTO panel header (user 2026-11-18).
+// "otc old records" link in the UPark PTO panel's Balances header, right
+// after "Export .xlsx" (user 2026-11-18). UPark only.
 //
 // Downloads one zip of the old OnTheClock PTO summaries (a .xlsx per
 // engineer, exported 2026-11-18). These are personnel records and the repo
@@ -71,12 +72,12 @@ export function OtcOldRecordsLink() {
 
   return (
     <>
-      {' · '}
       <button
         type="button"
         onClick={() => (exists ? download() : inputRef.current?.click())}
         disabled={busy}
-        className={exists ? 't-accent hover:underline' : 't-muted hover:underline'}
+        className={`${exists ? 't-accent' : 't-muted'} hover:underline ml-3`}
+        style={{ textTransform: 'none', fontWeight: 600, letterSpacing: 0 }}
         title={exists
           ? 'Download the old OnTheClock PTO records (zip, one spreadsheet per engineer, as of Nov 18 2026). Managers only.'
           : 'Not uploaded yet — click to upload the OnTheClock PTO records zip. Managers only.'}
