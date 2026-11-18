@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow,
 } from './pmAudit.ts';
 
@@ -39,6 +39,9 @@ eq('addDays across month', addDays('2026-10-27', 7), '2026-11-03');
 eq('weekLabel same month', weekLabel('2026-11-09'), 'Nov 9 – 15');
 eq('weekLabel across month', weekLabel('2026-10-26'), 'Oct 26 – Nov 1');
 eq('weeksEnding', weeksEnding('2026-11-09', 3), ['2026-10-26', '2026-11-02', '2026-11-09']);
+eq('weekStartOf: midweek', weekStartOf('2026-11-12T18:36:37Z'), '2026-11-09');
+eq('weekStartOf: Sunday night Eastern is still the old week', weekStartOf('2026-11-16T03:30:00Z'), '2026-11-09');
+eq('weekStartOf: Monday morning Eastern', weekStartOf('2026-11-16T13:00:00Z'), '2026-11-16');
 eq('fmtClosed is Eastern', fmtClosed('2026-11-12T18:36:37.452+00:00'), 'Thu 1:36 PM');
 
 // formatters

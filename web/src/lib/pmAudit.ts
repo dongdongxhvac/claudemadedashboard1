@@ -173,6 +173,16 @@ export function dayLabel(iso: string): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+/** The Monday (Eastern) of the week an instant falls in, as YYYY-MM-DD — the
+ *  same week the database's date_trunc('week', … at time zone) gives. */
+export function weekStartOf(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: AUDIT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const dow = parseDay(day).getUTCDay(); // 0 = Sunday
+  return addDays(day, -((dow + 6) % 7));
+}
+
 export function isWeekStart(s: string | null | undefined): s is string {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(parseDay(s).getTime());
 }

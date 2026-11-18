@@ -3,7 +3,7 @@
 // and pm_audit_reviews; the manager works the Open rows on Monday.
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuditAccess, useAuditQueue, useAuditWeekRange, useAuditWeekStats } from '../../hooks/usePmAudit';
+import { useAuditAccess, useAuditQueue, useAuditWeekRange, useAuditWeekStats, useBuildQueue } from '../../hooks/usePmAudit';
 import {
   FLAG_KEYS, FLAG_LABEL, SITE_LABEL, THICK_NOTE_CHARS, addDays, filterQueue, fmtClosed, fmtHours, fmtPct, rowChips, shortName, weekLabel,
   type FlagKey, type QueuePill, type QueueRow,
@@ -75,6 +75,11 @@ export default function AuditQueue() {
   const week = p.week ?? latest;
   const queueQ = useAuditQueue(week, p.site);
   const statsQ = useAuditWeekStats(week, p.site);
+  const build = useBuildQueue();
+  // The picker goes back as far as there are closes, not just queued weeks.
+  const earliest = range.data?.firstClose ?? range.data?.first ?? null;
+  const atEarliest = !week || !earliest || week <= earliest;
+  const atLatest = !week || !latest || week >= latest;
 
   const all = useMemo(() => queueQ.data ?? [], [queueQ.data]);
   const rows = useMemo(() => filterQueue(all, p.filter), [all, p.filter]);
@@ -114,10 +119,12 @@ export default function AuditQueue() {
       subtitle="Last week's closed recurring PMs: each tech's worst flagged ones, the best good ones and 5 random per site. Pass / Coach / Fail each; the scorecard adds them up per tech."
       actions={week && (
         <>
-          <button type="button" style={buttonStyle} onClick={() => goWeek(addDays(week, -7))}
-            disabled={!!range.data?.first && week <= range.data.first}>← Prior week</button>
-          <button type="button" style={{ ...buttonStyle, opacity: latest && week >= latest ? 0.45 : 1 }} onClick={() => goWeek(addDays(week, 7))}
-            disabled={!latest || week >= latest}>Next week →</button>
+          <button type="button" style={{ ...buttonStyle, opacity: atEarliest ? 0.45 : 1, cursor: atEarliest ? 'default' : 'pointer' }}
+            onClick={() => goWeek(addDays(week, -7))} disabled={atEarliest}
+            title={atEarliest ? 'No recurring PM was closed before this week' : undefined}>← Prior week</button>
+          <button type="button" style={{ ...buttonStyle, opacity: atLatest ? 0.45 : 1, cursor: atLatest ? 'default' : 'pointer' }}
+            onClick={() => goWeek(addDays(week, 7))} disabled={atLatest}
+            title={atLatest ? 'This is the latest week with a queue' : undefined}>Next week →</button>
           {firstOpen && (
             <button type="button" style={primaryButtonStyle} onClick={() => navigate(cardHref(firstOpen))}>
               {access.canReview ? 'Start review' : 'Open first'} ({rows.filter((r) => !r.review).length})
@@ -166,6 +173,21 @@ export default function AuditQueue() {
         <Notice tone="error">Could not load the queue: {(queueQ.error as Error).message}</Notice>
       ) : !week ? (
         <Notice>No audit queue yet. The first one is built Sunday at 23:05 ET from that week's closed recurring PMs.</Notice>
+      ) : all.length === 0 && range.data?.first && week < range.data.first ? (
+        <Notice>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>
+              No review queue was built for the week of {weekLabel(week)} — weekly queues start with the week of {weekLabel(range.data.first)}.
+              {stats ? ` ${stats.closed.toLocaleString()} recurring PMs were closed that week; the tiles above are for them.` : ''}
+            </span>
+            {access.canReview && (
+              <button type="button" style={{ ...primaryButtonStyle, opacity: build.isPending ? 0.5 : 1 }} disabled={build.isPending} onClick={() => build.mutate(week)}>
+                {build.isPending ? 'Building…' : "Build this week's queue"}
+              </button>
+            )}
+          </div>
+          {build.isError && <div role="alert" style={{ marginTop: 8, color: A.redDark }}>Could not build it: {(build.error as Error).message}</div>}
+        </Notice>
       ) : all.length === 0 ? (
         <Notice>Nothing was queued for the week of {weekLabel(week)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
       ) : rows.length === 0 ? (

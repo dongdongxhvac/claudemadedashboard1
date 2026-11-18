@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, joinQueue, weekStats, weeksEnding,
+  addDays, joinQueue, weekStartOf, weekStats, weeksEnding,
   type FlagRow, type HistoryEvent, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
@@ -69,19 +69,45 @@ export function useAuditAccess(): {
   };
 }
 
-/** First and latest week_start in pm_audit_queue (null when it is empty). */
+/** First and latest week_start in pm_audit_queue (null when it is empty),
+ *  plus `firstClose`: the earliest week with any recurring close at all, which
+ *  is how far back the week picker can go (weeks before the first queue show
+ *  their totals and can have a queue built on demand). */
 export function useAuditWeekRange() {
   return useQuery({
     queryKey: ['pm_audit', 'week_range'],
-    queryFn: async (): Promise<{ first: string | null; latest: string | null }> => {
+    queryFn: async (): Promise<{ first: string | null; latest: string | null; firstClose: string | null }> => {
       const pick = (ascending: boolean) =>
         supabase.from('pm_audit_queue').select('week_start').order('week_start', { ascending }).limit(1);
-      const [a, b] = await Promise.all([pick(true), pick(false)]);
+      const [a, b, c] = await Promise.all([
+        pick(true), pick(false),
+        supabase.from('pm_close_events').select('completed_on').eq('cmms_type', 'recurring')
+          .not('completed_on', 'is', null).order('completed_on', { ascending: true }).limit(1),
+      ]);
       if (a.error) throw a.error;
       if (b.error) throw b.error;
-      return { first: (a.data?.[0]?.week_start as string | undefined) ?? null, latest: (b.data?.[0]?.week_start as string | undefined) ?? null };
+      if (c.error) throw c.error;
+      const firstCloseAt = c.data?.[0]?.completed_on as string | undefined;
+      return {
+        first: (a.data?.[0]?.week_start as string | undefined) ?? null,
+        latest: (b.data?.[0]?.week_start as string | undefined) ?? null,
+        firstClose: firstCloseAt ? weekStartOf(firstCloseAt) : null,
+      };
     },
     staleTime: 5 * 60_000,
+  });
+}
+
+/** Build (or top up) one week's queue with the same function the Sunday
+ *  cron runs — for a week that never had one. Both sites; idempotent. */
+export function useBuildQueue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (week: string): Promise<void> => {
+      const { error } = await supabase.rpc('build_pm_audit_queue', { p_week_start: week });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pm_audit'] }),
   });
 }
 
