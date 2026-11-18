@@ -77,28 +77,31 @@ export function usePlantlogTodayCompliance() {
 
       // Expected = distinct buildings seen in last 30d (excluding 20/55/80).
       // Done as a separate query so adding a new building to plantlog
-      // doesn't require a code change.
+      // doesn't require a code change. Reads the per-(building, day) view:
+      // ~17 buildings x 30 days stays under PostgREST's 1000-row cap, which
+      // the raw table (~7k rows a month) does not.
       const since = new Date();
       since.setDate(since.getDate() - 30);
       const sinceStr = since.toISOString().slice(0, 10);
       const [expRes, todayRes] = await Promise.all([
         supabase
-          .from('plantlog_log_records')
-          .select('building_inferred')
-          .gte('performed_on', sinceStr)
-          .limit(50_000),
+          .from('v_plantlog_building_daily')
+          .select('building')
+          .gte('et_day', sinceStr),
         supabase
           .from('plantlog_log_records')
           .select('building_inferred, performed_at_local')
           .eq('performed_on', etDay)
-          .limit(10_000),
+          .not('building_inferred', 'is', null)
+          .order('performed_at_local')
+          .limit(1000),
       ]);
       if (expRes.error) throw expRes.error;
       if (todayRes.error) throw todayRes.error;
 
       const expectedSet = new Set<string>();
-      for (const r of (expRes.data ?? []) as { building_inferred: string | null }[]) {
-        const b = r.building_inferred;
+      for (const r of (expRes.data ?? []) as { building: string | null }[]) {
+        const b = r.building;
         if (b && !isExcludedBuilding(b)) expectedSet.add(b);
       }
       const expected = Array.from(expectedSet).sort();

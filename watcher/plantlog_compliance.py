@@ -25,9 +25,8 @@ from __future__ import annotations
 import os
 import smtplib
 import sys
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from email.message import EmailMessage
-from typing import Iterable
 from zoneinfo import ZoneInfo
 
 EASTERN = ZoneInfo("America/New_York")
@@ -57,19 +56,35 @@ def _is_excluded(building_inferred: str | None) -> bool:
     return head in EXCLUDED_LEADING_NUMBERS
 
 
-def _list_expected_buildings(client) -> list[str]:
-    """Distinct building_inferred values seen in the last 30d minus the
+EXPECTED_LOOKBACK_DAYS = 30
+PAGE = 1000  # PostgREST caps every response at 1000 rows
+
+
+def _list_expected_buildings(client, et_day: date) -> list[str]:
+    """Distinct buildings with a logged round in the last 30 days minus the
     user's exclusion list. We use observed rather than a hard-coded list
-    so adding a new building to plant log doesn't require a code change."""
-    res = client.table("plantlog_log_records") \
-        .select("building_inferred, performed_on") \
-        .gte("performed_on", (date.today().replace(day=1)).isoformat()) \
-        .execute()
+    so adding a new building to plant log doesn't require a code change.
+
+    Reads the per-(building, day) view — at most ~17 buildings x 30 days,
+    so the answer never depends on which 1000 raw rows PostgREST returns."""
+    since = et_day - timedelta(days=EXPECTED_LOOKBACK_DAYS)
     seen: set[str] = set()
-    for row in (res.data or []):
-        b = row.get("building_inferred")
-        if b and not _is_excluded(b):
-            seen.add(b)
+    offset = 0
+    while True:
+        res = client.table("v_plantlog_building_daily") \
+            .select("building, et_day") \
+            .gte("et_day", since.isoformat()) \
+            .order("et_day").order("building") \
+            .range(offset, offset + PAGE - 1) \
+            .execute()
+        data = res.data or []
+        for row in data:
+            b = row.get("building")
+            if b and not _is_excluded(b):
+                seen.add(b)
+        if len(data) < PAGE:
+            break
+        offset += PAGE
     return sorted(seen)
 
 
@@ -77,21 +92,26 @@ def _missing_buildings(client, deadline_t: time, et_day: date,
                        expected: list[str]) -> list[str]:
     """Return the buildings that have NO log entry today with
     performed_at_local <= deadline. Empty list = everyone synced."""
-    res = client.table("plantlog_log_records") \
-        .select("building_inferred, performed_at_local") \
-        .eq("performed_on", et_day.isoformat()) \
-        .execute()
     synced: set[str] = set()
     deadline_str = deadline_t.strftime("%H:%M:%S")
-    for row in (res.data or []):
-        b = row.get("building_inferred")
-        t = row.get("performed_at_local")
-        if not b or not t:
-            continue
-        # PostgREST returns time as 'HH:MM:SS' string; lexicographic
-        # compare works because both sides are zero-padded 24h.
-        if str(t)[:8] <= deadline_str:
-            synced.add(b)
+    offset = 0
+    while True:
+        # performed_at_local is 'HH:MM:SS', zero-padded 24h, so the
+        # deadline filter can run in the database.
+        res = client.table("plantlog_log_records") \
+            .select("id, building_inferred") \
+            .eq("performed_on", et_day.isoformat()) \
+            .lte("performed_at_local", deadline_str) \
+            .not_.is_("building_inferred", "null") \
+            .order("id") \
+            .range(offset, offset + PAGE - 1) \
+            .execute()
+        data = res.data or []
+        for row in data:
+            synced.add(row["building_inferred"])
+        if len(data) < PAGE:
+            break
+        offset += PAGE
     return sorted(b for b in expected if b not in synced)
 
 
@@ -170,7 +190,7 @@ def run_compliance_checks(client) -> None:
         return
 
     et_day = now_et.date()
-    expected = _list_expected_buildings(client)
+    expected = _list_expected_buildings(client, et_day)
     if not expected:
         print("[skip] compliance: no expected buildings observed yet")
         return

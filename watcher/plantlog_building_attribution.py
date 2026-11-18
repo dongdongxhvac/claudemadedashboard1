@@ -7,8 +7,9 @@ in 8 different buildings). This script infers the building via co-presence
 within time-bounded clusters of an engineer's day.
 
 Algorithm:
-  1. Build (log_name, group_name) -> {set of buildings} from plantlog's
-     live /groups + /logs catalog.
+  1. Build log_name -> {folder paths} from plantlog's live /groups + /logs
+     catalog, and match each row's group breadcrumb ("40 La… ► Penth… ►
+     HW Meter") against those paths to get its plausible buildings.
   2. Within each (user, day), sort rows by timestamp.
   3. Cluster: a 25-min gap starts a new cluster (engineers don't move
      between buildings inside that window; a typical round logs entries
@@ -105,37 +106,93 @@ def _building_from_log_prefix(log_name: str | None) -> str | None:
     return _BUILDING_PREFIX_MAP.get(m.group(1))
 
 
-def build_lookup(cookies: dict[str, str]) -> dict[tuple[str, str], frozenset[str]]:
-    """(log_name, group_name) -> set of plausible buildings."""
-    groups = requests.get(f"{BASE}/groups", cookies=cookies, headers=H, timeout=30).json()
-    logs   = requests.get(f"{BASE}/logs",   cookies=cookies, headers=H, timeout=30).json()
-    gmap = {g["groupId"]: (g["name"], g.get("parentId") if g.get("parentId") and g.get("parentId") != -1 else None) for g in groups}
+# Top-level plantlog folders that are not buildings.
+_NON_BUILDING_ROOTS = {"On Hold", "Archived"}
 
-    def root_of(gid: int | None) -> str | None:
+# Since the Aug 2026 plantlog update the report's "Group" column is the whole
+# folder path, each ancestor shortened with an ellipsis:
+#   "40 La… ► Penth… ► HW Meter"   /   "4… ► P… ► B… ► Boiler 1.2"
+# Before that it was just the leaf folder name ("HW Meter").
+_CRUMB_SEP = "►"
+_ELLIPSIS = "…"
+
+# log_name -> every folder path (root .. leaf, full names) holding a log of
+# that name.
+Catalog = dict[str, list[tuple[str, ...]]]
+
+
+def build_catalog(groups: list[dict], logs: list[dict]) -> Catalog:
+    """Pure: plantlog /groups + /logs payloads -> Catalog."""
+    gmap = {
+        g["groupId"]: (
+            g["name"],
+            g.get("parentId") if g.get("parentId") and g.get("parentId") != -1 else None,
+        )
+        for g in groups
+    }
+
+    def path_of(gid: int | None) -> tuple[str, ...] | None:
+        names: list[str] = []
         seen = set()
         while gid in gmap and gid not in seen:
             seen.add(gid)
             name, parent = gmap[gid]
+            names.append(name)
             if parent is None:
-                return name
+                return tuple(reversed(names))
             gid = parent
         return None
 
-    lookup: dict[tuple[str, str], set[str]] = defaultdict(set)
+    catalog: Catalog = defaultdict(list)
     for L in logs:
-        gid = L.get("groupId")
-        if gid not in gmap:
-            continue
-        sub_name = gmap[gid][0]
-        bldg = root_of(gid)
-        if bldg:
-            lookup[(L["name"], sub_name)].add(bldg)
-    return {k: frozenset(v) for k, v in lookup.items()}
+        path = path_of(L.get("groupId"))
+        if path and path[0] not in _NON_BUILDING_ROOTS:
+            catalog[L["name"]].append(path)
+    return dict(catalog)
+
+
+def _crumb_matches(crumb: str, name: str) -> bool:
+    """One breadcrumb segment vs one full folder name. "40 La…" matches any
+    name starting "40 La"; a segment without an ellipsis must be exact."""
+    crumb = crumb.strip()
+    if _ELLIPSIS not in crumb:
+        return crumb == name
+    head, _, tail = crumb.partition(_ELLIPSIS)
+    head, tail = head.rstrip(), tail.lstrip()
+    return (len(name) >= len(head) + len(tail)
+            and name.startswith(head) and name.endswith(tail))
+
+
+def candidate_buildings(catalog: Catalog, log_name: str | None,
+                        group_name: str | None) -> frozenset[str]:
+    """Buildings whose folder tree holds `log_name` under a path matching the
+    row's group string. One building = the row is unambiguous."""
+    paths = catalog.get(log_name or "", [])
+    crumbs = [c.strip() for c in (group_name or "").split(_CRUMB_SEP)]
+    crumbs = [c for c in crumbs if c]
+    if not crumbs:
+        return frozenset()
+    out: set[str] = set()
+    for path in paths:
+        if len(crumbs) == len(path):
+            if all(_crumb_matches(c, n) for c, n in zip(crumbs, path)):
+                out.add(path[0])
+        elif len(crumbs) == 1 and crumbs[0] == path[-1]:
+            # Pre-Aug-2026 rows: leaf folder name only.
+            out.add(path[0])
+    return frozenset(out)
+
+
+def build_lookup(cookies: dict[str, str]) -> Catalog:
+    """Fetch plantlog's live folder tree + logs and index them."""
+    groups = requests.get(f"{BASE}/groups", cookies=cookies, headers=H, timeout=30).json()
+    logs   = requests.get(f"{BASE}/logs",   cookies=cookies, headers=H, timeout=30).json()
+    return build_catalog(groups, logs)
 
 
 def attribute_nearest_neighbor(
     rows: list[dict],
-    lookup: dict[tuple[str, str], frozenset[str]],
+    lookup: Catalog,
     max_gap_min: int = 15,
 ) -> tuple[Counter, dict[str, int]]:
     """Per-entry attribution: each ambiguous entry inherits from its
@@ -164,8 +221,7 @@ def attribute_nearest_neighbor(
     for (_user, _day), day_rows in by_user_day.items():
         # First pass: tag each row with its unambiguous building (or None)
         for r in day_rows:
-            key = (r["log_name"], r["group_name"] or "")
-            bs = lookup.get(key, frozenset())
+            bs = candidate_buildings(lookup, r["log_name"], r["group_name"])
             r["_ts"] = datetime.fromisoformat(r["performed_at_utc"].replace("Z", "+00:00"))
             r["_building"] = next(iter(bs)) if len(bs) == 1 else None
             r["_inferred"] = False
@@ -244,7 +300,14 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
             break
         offset += PAGE
 
-    # Run attribution but capture per-row results (we need ids to UPDATE).
+    updates, diag = compute_attribution(rows, lookup)
+    _persist_updates(client, updates)
+    return diag
+
+
+def compute_attribution(rows: list[dict], lookup: Catalog) -> tuple[list[dict], dict[str, int]]:
+    """Pure: rows (id, user_name, performed_at_utc, group_name, log_name) ->
+    ([{id, building_inferred, attribution_source}], diagnostics)."""
     rows_sorted = sorted(rows, key=lambda r: (r["user_name"], r["performed_at_utc"]))
     by_user_day: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for r in rows_sorted:
@@ -256,8 +319,7 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
 
     for (_user, _day), day_rows in by_user_day.items():
         for r in day_rows:
-            key = (r["log_name"], r["group_name"] or "")
-            bs = lookup.get(key, frozenset())
+            bs = candidate_buildings(lookup, r["log_name"], r["group_name"])
             r["_ts"] = datetime.fromisoformat(r["performed_at_utc"].replace("Z", "+00:00"))
             r["_building"] = next(iter(bs)) if len(bs) == 1 else None
             # Log-prefix attribution: if log_name starts with "<num> " and
@@ -310,6 +372,10 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
 
             updates.append({"id": r["id"], "building_inferred": building, "attribution_source": source})
 
+    return updates, diag
+
+
+def _persist_updates(client, updates: list[dict]) -> None:
     # Batch UPDATE per-column-value group. supabase-py has no batch-update
     # API and ON CONFLICT path validates NOT NULL on the INSERT side, so
     # upsert(returning='minimal') fails here. Group by (building, source)
@@ -327,13 +393,11 @@ def attribute_and_persist(days: int = 14, client=None) -> dict[str, int]:
                 "attribution_source":  source,
             }).in_("id", ids[i:i + CHUNK]).execute()
 
-    return diag
-
 
 def main(days: int = 4) -> int:
     cookies = login()
     lookup = build_lookup(cookies)
-    print(f"lookup built: {len(lookup)} (log_name, group_name) combos")
+    print(f"lookup built: {len(lookup)} log names")
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     client = get_client()
