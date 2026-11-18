@@ -32,6 +32,7 @@ import { useRounds, type Round } from '../hooks/useRounds';
 import { useUparkUserIds } from '../hooks/useSiteScope';
 import { BMR_HOLIDAYS, chargeableWeekdays } from '../lib/bmrHolidays';
 import { BmrHolidayNote, SickNextToHolidayNote } from './BmrHolidayNote';
+import { OtcOldRecordsLink } from './OtcOldRecordsLink';
 import { Section } from './Section';
 import { downloadPtoWorkbook } from '../lib/ptoExcelExport';
 import { PtoCalRecipientsEditor } from './PtoCalRecipientsEditor';
@@ -385,6 +386,7 @@ export function PtoPanel() {
   const subtitle = (
     <span className="t-small t-muted">
       <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{buckets.pending.length}</span> pending
+      <OtcOldRecordsLink />
       {' · '}
       <span style={{ color: buckets.outToday.length > 0 ? 'var(--color-warn, #d97706)' : 'var(--color-text)' }}>
         {buckets.outToday.length} out today
