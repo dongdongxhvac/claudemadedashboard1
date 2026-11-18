@@ -121,6 +121,20 @@ failed"; the previous mirror stays on screen.
 
 ## Cove PM assign watcher (`pm_assign_watcher.py`) — Binney manager page
 
+> **SWITCHED OFF 2026-11-18.** Management decision (liability): the dashboard
+> must not write to Cove. One switch turns every layer off: the Vault secret
+> `COVE_WRITE_ENABLED` (migration 0165), read through `cove_write_enabled()`.
+> While it is off the panel is hidden, `pm_assign_requests` refuses every
+> insert, and this watcher returns without contacting Cove. On the VM, stop
+> the timer too:
+>
+>     sudo systemctl disable --now binney-pm-assign.timer
+>
+> Switching it back on needs an explicit decision. Then:
+> `select set_app_secret('COVE_WRITE_ENABLED', 'true');` in Supabase, and
+> `sudo systemctl enable --now binney-pm-assign.timer` on the VM.
+> Everything else in `watcher/` only READS Cove and is not affected.
+
 The only script here that WRITES to Cove. The Binney manager page's
 "Assign PMs · Cove" panel inserts a row into `pm_assign_requests`
 (migration 0156); this watcher (per-minute systemd timer) claims pending rows

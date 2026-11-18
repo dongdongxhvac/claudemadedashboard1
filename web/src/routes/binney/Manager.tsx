@@ -95,9 +95,10 @@ export default function BinneyManager() {
             {/* §05 — PM audit: this week's review queue for Binney + the way
                 into /audit (docs/pm-audit.md). */}
             <PmAuditPanel siteCode="binney" />
-            {/* Assign PMs · Cove — managers reassign open Binney PMs; the VM's
-                pm_assign_watcher writes UpdatePMTask to Cove. Migration 0156,
-                2026-11-05. Renders nothing for non-managers. */}
+            {/* Assign PMs · Cove — SWITCHED OFF 2026-11-18 (management,
+                liability: the dashboard must not write to Cove). Renders
+                nothing while Vault COVE_WRITE_ENABLED is off (migration
+                0165). Kept so it can be switched back on. */}
             <BinneyPmAssignPanel />
             {/* Clusters · Rounds · Weekend — the managers' paper sheets
                 (crews by cluster, buildings → rounds group, Week A/B

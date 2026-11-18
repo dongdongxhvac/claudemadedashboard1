@@ -1,5 +1,12 @@
 r"""PM assign watcher — services the dashboard's "Assign in Cove" button.
 
+SWITCHED OFF 2026-11-18. Management decision (liability): the dashboard must
+not write to Cove. main() reads the master switch first (cove_write_enabled(),
+Vault COVE_WRITE_ENABLED, migration 0165) and returns without contacting Cove
+while it is off. The VM timer should also be stopped:
+    sudo systemctl disable --now binney-pm-assign.timer
+Kept, not deleted, so it can be switched back on by an explicit decision.
+
 The Binney manager page INSERTs into pm_assign_requests (migration 0156):
 one row = "set PM task <cove_task_id> to assignee <assignee_cove_id>". This
 script (per-minute systemd timer, install_binney_pm_assign_linux.sh) claims
@@ -201,8 +208,38 @@ def reap_stale_running(client) -> None:
     }).in_("id", ids).execute()
 
 
+def cove_write_enabled(client) -> bool:
+    """The master switch (migration 0165, Vault COVE_WRITE_ENABLED). OFF since
+    2026-11-18 by management decision (liability): the dashboard must not write
+    to Cove. Fail closed — an error or anything but True means off."""
+    try:
+        return client.rpc("cove_write_enabled").execute().data is True
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: could not read the Cove write switch, treating it as OFF: {e}", file=sys.stderr)
+        return False
+
+
+def refuse_all(client) -> int:
+    """Switch is off: close out anything waiting, without touching Cove."""
+    waiting = (
+        client.table("pm_assign_requests").select("id").in_("status", ["pending", "running"]).execute()
+    )
+    ids = [r["id"] for r in (waiting.data or [])]
+    if ids:
+        client.table("pm_assign_requests").update({
+            "status": "error", "finished_at": _now(),
+            "detail": "Not sent: writing to Cove from the dashboard is switched off (COVE_WRITE_ENABLED).",
+        }).in_("id", ids).execute()
+        print(f"[{_now()}] Cove writes are switched off: refused {len(ids)} request(s), Cove not contacted")
+    return 0
+
+
 def main() -> int:
     client = get_client()
+
+    # Nothing below this line runs while the switch is off.
+    if not cove_write_enabled(client):
+        return refuse_all(client)
 
     try:
         reap_stale_running(client)

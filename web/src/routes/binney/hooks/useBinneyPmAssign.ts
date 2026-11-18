@@ -8,6 +8,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 
+/** Master switch for writing to Cove from the dashboard (migration 0165).
+ *  OFF since 2026-11-18 by management decision (liability): the dashboard
+ *  reads Cove and never writes to it. The flag is the Vault secret
+ *  COVE_WRITE_ENABLED, read through cove_write_enabled(). Loading, an
+ *  error, or anything but true all mean OFF — the panel stays hidden and
+ *  the database refuses the insert anyway. */
+export function useCoveWriteEnabled(): boolean {
+  const q = useQuery({
+    queryKey: ['cove_write_enabled'],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.rpc('cove_write_enabled');
+      if (error) throw error;
+      return data === true;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  return q.data === true;
+}
+
 export type PmAssignStatus = 'pending' | 'running' | 'done' | 'error';
 
 export type PmAssignRequest = {

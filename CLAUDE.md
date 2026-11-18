@@ -6,6 +6,15 @@ the user pulls and hard-refreshes. Before every push: `cd web && node --experime
 src/lib/trainingBoard.test.ts && npx tsc -b && npm run lint && npm run build` — lint baseline is
 64 problems (32 errors, 32 warnings) and must not grow.
 
+## Cove is read-only from the dashboard (user 2026-11-18, management / liability)
+
+The dashboard must NOT write to Cove. Pollers may read. The one write path, the Binney "Assign PMs · Cove"
+panel (`BinneyPmAssignPanel.tsx` → `pm_assign_requests` → `watcher/pm_assign_watcher.py` → Cove
+`UpdatePMTask`), is kept but switched off by one flag: Vault `COVE_WRITE_ENABLED` (migration 0165,
+`cove_write_enabled()`). Off = panel renders nothing, the table refuses inserts (trigger + RLS), the watcher
+returns before contacting Cove. Do not flip the flag, remove a gate, or add any other Cove mutation unless
+the user explicitly says the decision has changed.
+
 ## Training — 8-week board (Admin › User Profiles › Tracker)
 
 Source of truth: `web/src/lib/trainingBoard.ts` (pure), `trainingBoardPrint.ts` (fills the real

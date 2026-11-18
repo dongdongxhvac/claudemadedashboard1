@@ -1,4 +1,9 @@
 #!/bin/bash
+# SWITCHED OFF 2026-11-18 (management, liability): the dashboard must not
+# write to Cove. Do NOT install this timer while Vault COVE_WRITE_ENABLED is
+# off (migration 0165) — the watcher would only start, see the switch, and
+# exit. To remove it from the VM:  sudo ./install_binney_pm_assign_linux.sh uninstall
+#
 # Install the PM assign watcher (binney-pm-assign) as a systemd service +
 # per-minute timer on the Hetzner VM. It services the Binney manager page's
 # "Assign in Cove" button: claims pm_assign_requests rows (migration 0156)

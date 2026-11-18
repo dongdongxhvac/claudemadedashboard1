@@ -15,13 +15,20 @@
 // the usual starting point.
 //
 // Managers only (manageScopeFor !== 'none') — the DB policy says the same.
+//
+// SWITCHED OFF 2026-11-18 (management, liability): the dashboard must not
+// write to Cove. The panel is kept, hidden behind useCoveWriteEnabled()
+// (Vault COVE_WRITE_ENABLED, migration 0165). While that is off the gate
+// below renders nothing and none of the panel's queries run; the database
+// and the VM watcher refuse on their own as well. Do not remove the gate or
+// flip the flag without an explicit decision from the user.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useMe, manageScopeFor } from '../../hooks/useMe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAllUsers, type EngineerRow } from './hooks/useBinneyEngineers';
 import { useBinneyPmRows, useBinneySnapshotAges, type BinneyPmRow } from './hooks/useBinneySnapshots';
-import { usePmAssignRequests, useRequestPmAssign, useRequestPmAssignMany, type PmAssignInput, type PmAssignRequest } from './hooks/useBinneyPmAssign';
+import { useCoveWriteEnabled, usePmAssignRequests, useRequestPmAssign, useRequestPmAssignMany, type PmAssignInput, type PmAssignRequest } from './hooks/useBinneyPmAssign';
 import { isClosed, addDays, localISODate } from '../../lib/dashboard';
 import { inputStyle } from '../../lib/binneyRounds';
 import { SmallBtn } from './BinneyUi';
@@ -61,7 +68,14 @@ function StatusChip({ req }: { req: PmAssignRequest }) {
   );
 }
 
+/** The gate. Off = nothing at all (see the header comment). */
 export function BinneyPmAssignPanel() {
+  const coveWrites = useCoveWriteEnabled();
+  if (!coveWrites) return null;
+  return <BinneyPmAssignPanelInner />;
+}
+
+function BinneyPmAssignPanelInner() {
   const me = useMe().data;
   const canAssign = manageScopeFor(me) !== 'none';
   const { session } = useAuth();
