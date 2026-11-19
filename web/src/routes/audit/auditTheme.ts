@@ -2,7 +2,7 @@
 // one place so the three screens read as one section. Text/background pairs
 // are the canvas's own (all ≥ 4.5:1).
 import type { CSSProperties } from 'react';
-import type { Bucket, ChipTone, Verdict } from '../../lib/pmAudit';
+import type { Bucket, ChipTone, Verdict, WorkType } from '../../lib/pmAudit';
 
 export const A = {
   bg: '#F6F7F9',
@@ -84,4 +84,12 @@ export const BUCKET_COLOR: Record<Bucket, string> = {
   bms: '#eda100',
   work_order: '#e87ba4',
   other: '#008300',
+};
+
+/** PM / ODT / WO on the scorecard — the same hues the Week tab uses for
+ *  scheduled PMs, on-demand tasks and work orders. */
+export const WORK_TYPE_COLOR: Record<WorkType, string> = {
+  pm: BUCKET_COLOR.pm,
+  odt: BUCKET_COLOR.on_demand,
+  wo: BUCKET_COLOR.work_order,
 };

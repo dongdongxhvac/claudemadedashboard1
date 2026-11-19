@@ -3,10 +3,10 @@
 // per-close rows of v_pm_audit_flags (so multi-week rates add up exactly).
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SCORE_WEEKS_MAX, useAuditScorecard, useAuditWeekRange } from '../../hooks/usePmAudit';
-import { FLAG_LABEL, SITE_LABEL, buildScorecard, dayLabel, fmtPct, type TechScore } from '../../lib/pmAudit';
+import { SCORE_WEEKS_MAX, useAuditHoursSplit, useAuditScorecard, useAuditWeekRange } from '../../hooks/usePmAudit';
+import { FLAG_LABEL, SITE_LABEL, WORK_TYPES, buildHoursSplit, buildScorecard, dayLabel, fmtH, fmtPct, pct, type HoursSplit, type TechHours, type TechScore } from '../../lib/pmAudit';
 import { AuditShell, BarRow, Notice, Panel, Segmented, Soft, StatTile } from './AuditUi';
-import { A, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
+import { A, WORK_TYPE_COLOR, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
 import { useAuditParams } from './useAuditParams';
 
 type Win = '4' | '8' | '13';
@@ -64,6 +64,89 @@ function TechRow({ t, weeks, showSite }: { t: TechScore; weeks: string[]; showSi
   );
 }
 
+/** One engineer's hours as a bar: PM, ODT, WO. Length is their total against
+ *  the biggest total on the page, so rows compare. */
+function SplitBar({ t, scale }: { t: TechHours; scale: number }) {
+  if (t.total <= 0 || scale <= 0) return null;
+  const parts = WORK_TYPES.filter((w) => t[w.key] > 0);
+  return (
+    <div role="img" aria-label={`${t.tech}: ${parts.map((w) => `${w.label} ${fmtH(t[w.key])} h`).join(', ')}`}
+      style={{ display: 'flex', gap: 2, height: 14, width: `${(100 * t.total) / scale}%`, minWidth: 4 }}>
+      {parts.map((w) => (
+        <div key={w.key} title={`${w.long} · ${fmtH(t[w.key])} h · ${pct(t[w.key], t.total)}%`}
+          style={{ flex: `${t[w.key]} 0 0`, minWidth: 2, background: WORK_TYPE_COLOR[w.key], borderRadius: 2 }} />
+      ))}
+    </div>
+  );
+}
+
+function HoursPanel({ split, loading, error, label, showSite }: { split: HoursSplit | null; loading: boolean; error: string | null; label: string; showSite: boolean }) {
+  const num = { ...tdStyle, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
+  const scale = split ? Math.max(0, ...split.techs.map((t) => t.total)) : 0;
+  const swatch = (k: 'pm' | 'odt' | 'wo') => <span aria-hidden="true" style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: WORK_TYPE_COLOR[k], marginRight: 6 }} />;
+  return (
+    <section style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '18px 24px 14px', display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 24px' }}>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Hours by engineer · PM / ODT / WO <Soft>· {label}</Soft></h2>
+        {split && split.team.total > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: 13 }}>
+            {WORK_TYPES.map((w) => (
+              <span key={w.key} style={{ whiteSpace: 'nowrap' }}>
+                {swatch(w.key)}{w.long} <strong>{Math.round(split.team[w.key]).toLocaleString()} h</strong>
+                <span style={{ color: A.muted }}> · {pct(split.team[w.key], split.team.total)}%</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div style={{ padding: '0 24px 20px', fontSize: 14, color: A.muted }}>Adding up the labor entries…</div>
+      ) : error ? (
+        <div role="alert" style={{ padding: '0 24px 20px', fontSize: 14, color: A.redDark }}>Could not load the hours: {error}</div>
+      ) : !split || split.techs.length === 0 ? (
+        <div style={{ padding: '0 24px 20px', fontSize: 14, color: A.muted }}>No labor entries in this window.</div>
+      ) : (
+        <div style={{ overflowX: 'auto', borderTop: `1px solid ${A.line}` }}>
+          <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Engineer</th>
+                <th style={{ ...thStyle, textAlign: 'right' }} title="Hours on labor entries in the window">Hours</th>
+                <th style={{ ...thStyle, textAlign: 'right' }} title="Average over the weeks that have any hours">Per week</th>
+                {WORK_TYPES.map((w) => <th key={w.key} style={{ ...thStyle, textAlign: 'right' }} title={w.long}>{swatch(w.key)}{w.label}</th>)}
+                <th style={{ ...thStyle, minWidth: 220 }}>Split</th>
+              </tr>
+            </thead>
+            <tbody>
+              {split.techs.map((t) => (
+                <tr key={`${t.site_code}|${t.tech}`}>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>
+                    {t.tech}
+                    {showSite && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
+                  </td>
+                  <td style={{ ...num, fontWeight: 600 }}>{fmtH(t.total, false)}</td>
+                  <td style={num}>{fmtH(t.perWeek, false)}<span style={{ color: A.muted }}> × {t.weeks}</span></td>
+                  {WORK_TYPES.map((w) => (
+                    <td key={w.key} style={{ ...num, color: t[w.key] > 0 ? undefined : A.faint }}>
+                      {t[w.key] > 0 ? <>{fmtH(t[w.key])}<span style={{ color: A.muted }}> · {pct(t[w.key], t.total)}%</span></> : '—'}
+                    </td>
+                  ))}
+                  <td style={{ ...tdStyle, verticalAlign: 'middle' }}><SplitBar t={t} scale={scale} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ padding: '12px 24px 16px', fontSize: 12, color: A.muted, lineHeight: 1.6 }}>
+        <strong>PM</strong> = scheduled PM tasks, the monthly building-rounds tasks included. <strong>ODT</strong> = on-demand tasks, the non-scheduled PMs (NPM).
+        <strong> WO</strong> = work orders. PM and ODT hours are counted on the person who did the work, the week it was done; Cove gives work-order hours
+        only as a total at close, so those land on the assignee in the week the order closed, and time on open work orders is not here.
+      </div>
+    </section>
+  );
+}
+
 function trend(now: number | null, first: number | null, betterWhenHigher: boolean) {
   if (now === null || first === null || now === first) return null;
   const up = now > first;
@@ -78,6 +161,11 @@ export default function AuditScorecard() {
   const range = useAuditWeekRange();
   const lastWeek = range.data?.latest ?? null;
   const dataQ = useAuditScorecard(lastWeek, p.site);
+  const hoursQ = useAuditHoursSplit(lastWeek, p.site);
+  const split = useMemo(
+    () => (hoursQ.data ? buildHoursSplit(hoursQ.data.rows, hoursQ.data.weeks.slice(-Number(win))) : null),
+    [hoursQ.data, win],
+  );
 
   const card = useMemo(() => {
     if (!dataQ.data) return null;
@@ -158,6 +246,8 @@ export default function AuditScorecard() {
               </tbody>
             </table>
           </div>
+
+          <HoursPanel split={split} loading={hoursQ.isLoading} error={hoursQ.isError ? (hoursQ.error as Error).message : null} label={label} showSite={p.site === 'both'} />
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
             <Panel title={<>Flags by reason <Soft>· {card.flagTotal.toLocaleString()} flag{card.flagTotal === 1 ? '' : 's'}</Soft></>} style={{ flex: '1 1 420px', gap: 14 }}>

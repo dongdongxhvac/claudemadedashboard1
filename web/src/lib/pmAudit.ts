@@ -736,6 +736,82 @@ export function fmtH(h: number, blankZero = true): string {
   return r === 0 ? '<0.1' : r.toFixed(1);
 }
 
+// ---------- scorecard: hours split PM / ODT / WO ----------
+
+/** The shop's three-way split of where an engineer's hours go:
+ *    PM   scheduled PM tasks (Cove type "recurring" — the monthly building-rounds tasks included)
+ *    ODT  on-demand tasks, the non-scheduled PMs the shop calls NPM (Cove type "on_demand")
+ *    WO   work orders, at the hours they closed with */
+export type WorkType = 'pm' | 'odt' | 'wo';
+
+export const WORK_TYPES: { key: WorkType; label: string; long: string }[] = [
+  { key: 'pm', label: 'PM', long: 'Scheduled PMs' },
+  { key: 'odt', label: 'ODT', long: 'On-demand tasks (NPM)' },
+  { key: 'wo', label: 'WO', long: 'Work orders' },
+];
+
+export type TypeEntry = Pick<LaborItem, 'kind' | 'site_code' | 'performer' | 'week_start' | 'cmms_type' | 'hours'>;
+
+export function workTypeOf(it: Pick<LaborItem, 'kind' | 'cmms_type'>): WorkType {
+  if (it.kind === 'wo') return 'wo';
+  return it.cmms_type === 'recurring' ? 'pm' : 'odt';
+}
+
+/** Hours per person, site and week, by work type. */
+export type TypeHours = { site_code: string; performer: string; week_start: string; pm: number; odt: number; wo: number };
+
+export function sumTypeHours(items: TypeEntry[]): TypeHours[] {
+  const m = new Map<string, TypeHours>();
+  for (const it of items) {
+    const k = `${it.site_code ?? ''}|${it.performer}|${it.week_start}`;
+    let r = m.get(k);
+    if (!r) { r = { site_code: it.site_code ?? '', performer: it.performer, week_start: it.week_start, pm: 0, odt: 0, wo: 0 }; m.set(k, r); }
+    r[workTypeOf(it)] += Number(it.hours ?? 0);
+  }
+  return [...m.values()];
+}
+
+export type TechHours = {
+  tech: string;
+  site_code: string;
+  pm: number;
+  odt: number;
+  wo: number;
+  total: number;
+  /** Weeks in the window with any hours, and the average over those weeks. */
+  weeks: number;
+  perWeek: number;
+};
+
+export type HoursSplit = { techs: TechHours[]; team: { pm: number; odt: number; wo: number; total: number } };
+
+/** Each engineer's hours over the window, split PM / ODT / WO, biggest first. */
+export function buildHoursSplit(rows: TypeHours[], weeks: string[]): HoursSplit {
+  const inWin = new Set(weeks);
+  const m = new Map<string, TechHours & { seen: Set<string> }>();
+  for (const r of rows) {
+    if (!inWin.has(r.week_start)) continue;
+    const k = `${r.site_code}|${r.performer}`;
+    let t = m.get(k);
+    if (!t) { t = { tech: r.performer || 'Unassigned', site_code: r.site_code, pm: 0, odt: 0, wo: 0, total: 0, weeks: 0, perWeek: 0, seen: new Set() }; m.set(k, t); }
+    t.pm += r.pm; t.odt += r.odt; t.wo += r.wo;
+    if (r.pm + r.odt + r.wo > 0) t.seen.add(r.week_start);
+  }
+  const team = { pm: 0, odt: 0, wo: 0, total: 0 };
+  const techs: TechHours[] = [];
+  for (const { seen, ...t } of m.values()) {
+    t.pm = r2(t.pm); t.odt = r2(t.odt); t.wo = r2(t.wo);
+    t.total = r2(t.pm + t.odt + t.wo);
+    if (t.total <= 0) continue;
+    t.weeks = seen.size;
+    t.perWeek = seen.size ? r2(t.total / seen.size) : 0;
+    team.pm += t.pm; team.odt += t.odt; team.wo += t.wo; team.total += t.total;
+    techs.push(t);
+  }
+  techs.sort((a, b) => b.total - a.total || a.tech.localeCompare(b.tech));
+  return { techs, team };
+}
+
 // ---------- review card: timeline + notes ----------
 
 export type HistoryEvent = {

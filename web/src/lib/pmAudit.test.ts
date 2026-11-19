@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, fmtH,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -179,5 +179,20 @@ eq('week: no labor report row', [wt.techs[2].logged, wt.techs[2].placed, wt.tech
 eq('week: team', [wt.team.logged, wt.team.placed, wt.team.unplaced, wt.team.onOthers, wt.team.pmTaskHours, wt.team.people], [52, 12.5, 43.5, 4.5, 9.5, 3]);
 eq('week: as of the latest poll', wt.asOf, '2026-11-15T00:00:00Z');
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
+
+// scorecard: PM / ODT / WO
+eq('work type', [workTypeOf({ kind: 'pm', cmms_type: 'recurring' }), workTypeOf({ kind: 'pm', cmms_type: 'on_demand' }), workTypeOf({ kind: 'pm', cmms_type: null }), workTypeOf({ kind: 'wo', cmms_type: 'work_order' })],
+  ['pm', 'odt', 'odt', 'wo']);
+const th = sumTypeHours([
+  { kind: 'pm', site_code: 'upark', performer: 'Ann Lee', week_start: '2026-11-09', cmms_type: 'recurring', hours: 6 },
+  { kind: 'pm', site_code: 'upark', performer: 'Ann Lee', week_start: '2026-11-09', cmms_type: 'on_demand', hours: 3 },
+  { kind: 'wo', site_code: 'upark', performer: 'Ann Lee', week_start: '2026-11-02', cmms_type: 'work_order', hours: 1 },
+  { kind: 'pm', site_code: 'upark', performer: 'Bob Roy', week_start: '2026-11-09', cmms_type: 'recurring', hours: 20 },
+  { kind: 'pm', site_code: 'upark', performer: 'Ann Lee', week_start: '2026-08-03', cmms_type: 'recurring', hours: 50 },
+]);
+eq('sum by person, site, week', th.find((r) => r.performer === 'Ann Lee' && r.week_start === '2026-11-09'), { site_code: 'upark', performer: 'Ann Lee', week_start: '2026-11-09', pm: 6, odt: 3, wo: 0 });
+const hs = buildHoursSplit(th, ['2026-11-02', '2026-11-09']);
+eq('hours split: order + numbers', hs.techs.map((x) => [x.tech, x.pm, x.odt, x.wo, x.total, x.weeks, x.perWeek]), [['Bob Roy', 20, 0, 0, 20, 1, 20], ['Ann Lee', 6, 3, 1, 10, 2, 5]]);
+eq('hours split: team', hs.team, { pm: 26, odt: 3, wo: 1, total: 30 });
 
 if (failures) { console.error(`${failures} failed`); process.exitCode = 1; } else console.log('all passed');

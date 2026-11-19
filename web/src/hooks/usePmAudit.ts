@@ -8,9 +8,9 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, joinQueue, weekStartOf, weekStats, weeksEnding,
+  addDays, joinQueue, sumTypeHours, weekStartOf, weekStats, weeksEnding,
   type FlagRow, type HistoryEvent, type LaborItem, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
-  type WeekHours, type WeekTimeClose,
+  type TypeEntry, type TypeHours, type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
 
@@ -287,6 +287,37 @@ export function useAuditWeekTime(week: string | null, site: SiteFilter) {
 }
 
 export const SCORE_WEEKS_MAX = 13;
+
+/** Every labor entry of the 13 weeks ending at `lastWeek`, added up per
+ *  person, site and week by work type (PM / ODT / WO). Read a week at a
+ *  time, four at once: a quarter is ~10,000 entries, and one week is a page
+ *  or two. Kept apart from useAuditScorecard so the quality table never
+ *  waits for it. */
+export function useAuditHoursSplit(lastWeek: string | null, site: SiteFilter) {
+  return useQuery({
+    queryKey: ['pm_audit', 'hours_split', lastWeek, site],
+    enabled: !!lastWeek,
+    queryFn: async (): Promise<{ weeks: string[]; rows: TypeHours[] }> => {
+      const weeks = weeksEnding(lastWeek!, SCORE_WEEKS_MAX);
+      const out: TypeHours[] = [];
+      const queue = [...weeks];
+      const worker = async () => {
+        for (let w = queue.shift(); w; w = queue.shift()) {
+          const week = w;
+          const entries = await fetchAll<TypeEntry>((from, to) => {
+            let q = supabase.from('v_audit_labor_items').select('kind,site_code,performer,week_start,cmms_type,hours').eq('week_start', week);
+            if (site !== 'both') q = q.eq('site_code', site);
+            return q.order('performed_at').order('task_no').order('performer').range(from, to);
+          });
+          out.push(...sumTypeHours(entries));
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      return { weeks, rows: out };
+    },
+    staleTime: 10 * 60_000,
+  });
+}
 
 /** 13 weeks of scorecard rows + per-close rows ending at `lastWeek`; the
  *  4 / 8 / 13 window is sliced from this on the client, so switching is free. */

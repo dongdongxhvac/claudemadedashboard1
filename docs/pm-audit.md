@@ -263,3 +263,9 @@ Manager's two asks: expect photos only on Majors for now, and have the audit sho
   unscheduled, else scheduled PM (recurring) or on-demand. The page folds these into six (`BUCKETS` in `pmAudit.ts`).
 - **Limits**: "Logged" is the labor report as of that week's last poll, so late entries are missing from it; work-order
   hours land on the assignee in the week the WO closed; time on open work orders is not placed at all.
+- **Scorecard hours split** (2026-11-19): a "Hours by engineer · PM / ODT / WO" table under the quality table, for the
+  4 / 8 / 13-week window. PM = Cove type `recurring` (monthly rounds tasks included), ODT = `on_demand` (the shop's NPM),
+  WO = work orders at close. It adds up `v_audit_labor_items` in the browser, a week at a time (`useAuditHoursSplit`);
+  a grouped view would be lighter if it ever feels slow.
+- **Catch-up pull** (2026-11-19): `backfill-details 180` for both sites pulled 4,609 tasks with no errors. The week of
+  Nov 9 then placed 997 h against 993 h logged.
