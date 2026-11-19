@@ -2,7 +2,7 @@
 // one place so the three screens read as one section. Text/background pairs
 // are the canvas's own (all ≥ 4.5:1).
 import type { CSSProperties } from 'react';
-import type { ChipTone, Verdict } from '../../lib/pmAudit';
+import type { Bucket, ChipTone, Verdict } from '../../lib/pmAudit';
 
 export const A = {
   bg: '#F6F7F9',
@@ -73,3 +73,15 @@ export const thStyle: CSSProperties = {
 export const tdStyle: CSSProperties = { padding: '14px 12px', borderBottom: `1px solid ${A.lineSoft}`, verticalAlign: 'top' };
 
 export const tileGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16 };
+
+/** Where-the-hours-went bar. Fixed colour per kind of work (never by rank);
+ *  six categorical slots checked for colour-blind separation. Three of them
+ *  sit under 3:1 against white, so the page always shows the numbers too. */
+export const BUCKET_COLOR: Record<Bucket, string> = {
+  pm: '#2a78d6',
+  rounds: '#eb6834',
+  on_demand: '#1baf7a',
+  bms: '#eda100',
+  work_order: '#e87ba4',
+  other: '#008300',
+};

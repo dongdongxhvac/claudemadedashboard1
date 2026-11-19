@@ -27,6 +27,7 @@ import FieldReceipt from './routes/field/Receipt';
 import AuditQueue from './routes/audit/Queue';
 import AuditReview from './routes/audit/Review';
 import AuditScorecard from './routes/audit/Scorecard';
+import AuditWeek from './routes/audit/Week';
 import { RequireAudit } from './routes/audit/AuditUi';
 import { useMe, type Me } from './hooks/useMe';
 import { useMySiteAccess, type SiteCode } from './hooks/useSiteScope';
@@ -278,6 +279,7 @@ export default function App() {
             held to their home site). Gate mirrors the queue's RLS. */}
         <Route path="/audit" element={<Protected><RequireAudit><AuditQueue /></RequireAudit></Protected>} />
         <Route path="/audit/scorecard" element={<Protected><RequireAudit><AuditScorecard /></RequireAudit></Protected>} />
+        <Route path="/audit/week" element={<Protected><RequireAudit><AuditWeek /></RequireAudit></Protected>} />
         <Route path="/audit/:week/:taskNo" element={<Protected><RequireAudit><AuditReview /></RequireAudit></Protected>} />
         <Route path="/mro/receipts" element={<Protected><RequireSite site="upark"><MroReceipts /></RequireSite></Protected>} />
         <Route path="/upark/mro/receipts" element={<Navigate to="/mro/receipts" replace />} />

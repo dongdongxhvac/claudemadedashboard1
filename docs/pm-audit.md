@@ -240,3 +240,26 @@ CRUD on `pm_audit_rules`. Not in scope for the first PR.
   flagged, 46 good, 20 neither; the queue builds to 55 rows (35 flagged, 10 good, 10 random). Both audit views are
   now `security_invoker` with no `anon` grant — before, the public key could read them without a login — and the
   scorecard view no longer counts a close once per flag.
+
+---
+
+## 9. How the week was spent (2026-11-19)
+
+Manager's two asks: expect photos only on Majors for now, and have the audit show how everyone spends their week.
+
+- **Photos**: `pm_audit_rules` Minor and Filter Swap `min_photos` 1 → 0 (data change, noted on the rows). Over the last
+  five weeks that takes `no_photos` from 1,047 closes to 171 and flagged closes from 1,137 to 396 of 1,414.
+- **Week tab** (`/audit/week`, `web/src/routes/audit/Week.tsx`): per person and site — the labor report's total for the
+  week, where those hours went by kind of work, hours per day, and how that person's closed PMs audited.
+- **Why labor entries, not closes**: Cove logs labor as entries on a task (hours, day worked, who worked). Half of all
+  entries are on a task assigned to someone else, and the big buckets (Binney's monthly `CAM-BLDRDS-…` building rounds,
+  UPark's monthly "Unscheduled Tasks") stay open all month. So hours are counted on the performer and the day worked.
+- **Migration `0166_pm_audit_week_time`**: `pm_task_details.site_code` / `cmms_type`; `v_audit_labor_items` (one row per
+  labor entry on a PM task, plus one per closed work order — Cove gives WO hours only as a total at close);
+  `v_tech_week_site_hours` (labor report total per person, site and week). Both views `security_invoker`, no `anon`.
+- **Poller**: `pm12_poller.py` now also pulls details for any task, open or closed, recurring or on-demand, whose logged
+  labor changed since the last pull (`pull_task_details`), capped at 150 per run; `backfill-details` catches up.
+- **Kind of work** is read from the task name in the view (`bucket`): BMS, rounds, escort, meeting/training/coverage,
+  unscheduled, else scheduled PM (recurring) or on-demand. The page folds these into six (`BUCKETS` in `pmAudit.ts`).
+- **Limits**: "Logged" is the labor report as of that week's last poll, so late entries are missing from it; work-order
+  hours land on the assignee in the week the WO closed; time on open work orders is not placed at all.

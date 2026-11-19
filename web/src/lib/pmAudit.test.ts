@@ -5,8 +5,8 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf,
-  type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, fmtH,
+  type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
 let failures = 0;
@@ -144,5 +144,40 @@ eq('timeline order + words', tl.map((t) => `${t.strong ?? ''}${t.text}`), [
 ]);
 eq('timeline tones', tl.map((t) => t.tone), ['plain', 'photo', 'plain', 'plain', 'plain']);
 eq('note sources', [noteSourceLabel('note_added'), noteSourceLabel('completed'), noteSourceLabel('step:Important Notes')], ['Note', 'Close box', 'Step · Important Notes']);
+
+// how the week was spent
+eq('bucketOf folds the small kinds', ['pm', 'rounds', 'bms', 'work_order', 'escort', 'meeting', 'unscheduled', 'on_demand', 'new'].map(bucketOf),
+  ['pm', 'rounds', 'bms', 'work_order', 'other', 'other', 'on_demand', 'on_demand', 'on_demand']);
+const li = (over: Partial<LaborItem>): LaborItem => ({
+  kind: 'pm', site_code: 'binney', task_no: 'PM-1', task_name: 'AHU Quarterly', cmms_type: 'recurring', building: '301 Binney',
+  assignee_name: 'Ann Lee', task_closed: true, performer: 'Ann Lee', hours: 1, performed_at: '2026-11-09T17:00:00Z',
+  day_local: '2026-11-09', week_start: '2026-11-09', bucket: 'pm', ...over,
+});
+const wt = buildWeekTime([
+  li({}),
+  li({ task_no: 'PM-2', task_name: 'Building Rounds', bucket: 'rounds', hours: 2, day_local: '2026-11-10', performed_at: '2026-11-10T17:00:00Z', assignee_name: 'Bob Roy', task_closed: false }),
+  li({ task_no: 'PM-2', task_name: 'Building Rounds', bucket: 'rounds', hours: 2.5, day_local: '2026-11-15', performed_at: '2026-11-15T17:00:00Z', assignee_name: 'Bob Roy', task_closed: false }),
+  li({ kind: 'wo', task_no: 'W-9', task_name: 'Leak', bucket: 'work_order', hours: 3, day_local: '2026-11-12', performed_at: '2026-11-12T20:00:00Z' }),
+  li({ performer: 'Bob Roy', assignee_name: 'Bob Roy', task_no: 'PM-3', bucket: 'escort', hours: 4, day_local: '2026-11-11', performed_at: '2026-11-11T15:00:00Z' }),
+  li({ week_start: '2026-11-02', day_local: '2026-11-06', hours: 9 }),
+], [
+  { site_code: 'binney', assigned_to_name: 'Ann Lee', week_start: '2026-11-09', week_hours: 40, as_of: '2026-11-14T23:00:00Z' },
+  { site_code: 'binney', assigned_to_name: 'Cy Doe', week_start: '2026-11-09', week_hours: 12, as_of: '2026-11-15T00:00:00Z' },
+  { site_code: 'binney', assigned_to_name: 'Ann Lee', week_start: '2026-11-02', week_hours: 99, as_of: null },
+], [
+  { task_no: 'PM-1', site_code: 'binney', assigned_to_name: 'Ann Lee', flag_count: 1, good: false },
+  { task_no: 'PM-7', site_code: 'binney', assigned_to_name: 'Ann Lee', flag_count: 0, good: true },
+], '2026-11-09');
+eq('week: order by biggest week', wt.techs.map((t) => t.tech), ['Ann Lee', 'Cy Doe', 'Bob Roy']);
+const ann = wt.techs[0];
+eq('week: logged / placed / unplaced', [ann.logged, ann.placed, ann.unplaced], [40, 8.5, 31.5]);
+eq('week: by bucket', ann.byBucket, { pm: 1, rounds: 4.5, on_demand: 0, bms: 0, work_order: 3, other: 0 });
+eq('week: by day, Monday first', ann.byDay, [1, 2, 0, 3, 0, 0, 2.5]);
+eq('week: hours on someone else\'s task', ann.onOthers, 4.5);
+eq('week: tasks / closed / flagged / good', [ann.tasks, ann.closed, ann.flagged, ann.good], [3, 2, 1, 1]);
+eq('week: no labor report row', [wt.techs[2].logged, wt.techs[2].placed, wt.techs[2].unplaced, wt.techs[2].byBucket.other], [null, 4, 0, 4]);
+eq('week: team', [wt.team.logged, wt.team.placed, wt.team.unplaced, wt.team.onOthers, wt.team.pmTaskHours, wt.team.people], [52, 12.5, 43.5, 4.5, 9.5, 3]);
+eq('week: as of the latest poll', wt.asOf, '2026-11-15T00:00:00Z');
+eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 if (failures) { console.error(`${failures} failed`); process.exitCode = 1; } else console.log('all passed');

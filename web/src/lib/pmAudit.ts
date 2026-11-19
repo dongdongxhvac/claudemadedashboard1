@@ -575,6 +575,167 @@ export function weeksEnding(lastWeek: string, n: number): string[] {
   return Array.from({ length: n }, (_, i) => addDays(lastWeek, -7 * (n - 1 - i)));
 }
 
+// ---------- how the week was spent ----------
+
+/** What kind of work a labor entry is. The database names the task's kind
+ *  from its name (v_audit_labor_items.bucket); the page folds the small ones
+ *  together so the bar has six parts, not eight. */
+export type Bucket = 'pm' | 'rounds' | 'on_demand' | 'bms' | 'work_order' | 'other';
+
+export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
+  { key: 'pm', label: 'Scheduled PMs', short: 'PMs' },
+  { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
+  { key: 'on_demand', label: 'On-demand and unscheduled tasks', short: 'On-demand' },
+  { key: 'bms', label: 'BMS checks', short: 'BMS' },
+  { key: 'work_order', label: 'Work orders', short: 'WOs' },
+  { key: 'other', label: 'Escort, meetings, training, coverage', short: 'Other' },
+];
+
+/** The database's task kind → the page's bucket. */
+export function bucketOf(raw: string | null | undefined): Bucket {
+  switch (raw) {
+    case 'pm': case 'rounds': case 'bms': case 'work_order': return raw;
+    case 'escort': case 'meeting': return 'other';
+    default: return 'on_demand'; // on_demand, unscheduled, anything new
+  }
+}
+
+/** The finer name shown on each entry in the expanded list. */
+export const KIND_LABEL: Record<string, string> = {
+  pm: 'Scheduled PM', rounds: 'Building rounds', bms: 'BMS', work_order: 'Work order',
+  escort: 'Vendor escort', meeting: 'Meeting · training · coverage', unscheduled: 'Unscheduled tasks', on_demand: 'On-demand task',
+};
+
+/** v_audit_labor_items: one labor entry on a PM task (by the person who did
+ *  the work, on the day it was done), or one closed work order. */
+export type LaborItem = {
+  kind: 'pm' | 'wo';
+  site_code: string | null;
+  task_no: string;
+  task_name: string | null;
+  cmms_type: string | null;
+  building: string | null;
+  assignee_name: string | null;
+  task_closed: boolean | null;
+  performer: string;
+  hours: number;
+  performed_at: string;
+  day_local: string;
+  week_start: string;
+  bucket: string;
+};
+
+/** v_tech_week_site_hours: the labor report's weekly total per person and site. */
+export type WeekHours = { site_code: string; assigned_to_name: string | null; week_start: string; week_hours: number | null; as_of: string | null };
+
+/** The slice of a flags row the Week page needs for its "PMs closed" column. */
+export type WeekTimeClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'flag_count' | 'good'>;
+
+export type TechWeek = {
+  tech: string;
+  site_code: string;
+  /** Total hours the labor report shows for the week; null if the person is not on it. */
+  logged: number | null;
+  /** Hours we can put on a named task. */
+  placed: number;
+  /** logged − placed, never below zero: time on tasks we have not pulled yet. */
+  unplaced: number;
+  byBucket: Record<Bucket, number>;
+  /** Placed hours per day, Monday first. */
+  byDay: number[];
+  /** Hours logged on a PM task assigned to someone else. */
+  onOthers: number;
+  tasks: number;
+  closed: number;
+  flagged: number;
+  good: number;
+  items: LaborItem[];
+};
+
+export type WeekTime = {
+  techs: TechWeek[];
+  team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number };
+  /** Latest labor-report poll behind the week's totals. */
+  asOf: string | null;
+};
+
+function emptyBuckets(): Record<Bucket, number> {
+  return { pm: 0, rounds: 0, on_demand: 0, bms: 0, work_order: 0, other: 0 };
+}
+
+function dayIndex(weekStart: string, day: string): number {
+  return Math.round((parseDay(day).getTime() - parseDay(weekStart).getTime()) / 86_400_000);
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Per person: what the labor report says they logged, where those hours
+ *  went (by the kind of task), which days, and how their closed PMs audited.
+ *  One row per person and site, biggest week first. */
+export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string): WeekTime {
+  const rows = new Map<string, TechWeek>();
+  const row = (site: string | null, tech: string | null): TechWeek => {
+    const k = `${site ?? ''}|${tech ?? ''}`;
+    let r = rows.get(k);
+    if (!r) {
+      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: [0, 0, 0, 0, 0, 0, 0], onOthers: 0, tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
+      rows.set(k, r);
+    }
+    return r;
+  };
+  let asOf: string | null = null;
+  for (const h of hours) {
+    if (h.week_start !== weekStart || !h.assigned_to_name) continue;
+    const r = row(h.site_code, h.assigned_to_name);
+    r.logged = (r.logged ?? 0) + Number(h.week_hours ?? 0);
+    if (h.as_of && (!asOf || h.as_of > asOf)) asOf = h.as_of;
+  }
+  for (const it of items) {
+    if (it.week_start !== weekStart) continue;
+    const r = row(it.site_code, it.performer);
+    const hrs = Number(it.hours ?? 0);
+    r.placed += hrs;
+    r.byBucket[bucketOf(it.bucket)] += hrs;
+    const d = dayIndex(weekStart, it.day_local);
+    if (d >= 0 && d < 7) r.byDay[d] += hrs;
+    if (it.kind === 'pm' && it.assignee_name && it.assignee_name !== it.performer) r.onOthers += hrs;
+    r.items.push(it);
+  }
+  for (const c of closes) {
+    const r = row(c.site_code, c.assigned_to_name);
+    r.closed++;
+    if ((c.flag_count ?? 0) > 0) r.flagged++;
+    if (c.good) r.good++;
+  }
+  const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0 };
+  const techs = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
+  for (const r of techs) {
+    r.placed = r2(r.placed);
+    r.onOthers = r2(r.onOthers);
+    r.byDay = r.byDay.map(r2);
+    for (const b of BUCKETS) r.byBucket[b.key] = r2(r.byBucket[b.key]);
+    r.unplaced = r.logged === null ? 0 : r2(Math.max(0, r.logged - r.placed));
+    r.tasks = new Set(r.items.map((i) => `${i.kind}|${i.task_no}`)).size;
+    r.items.sort((a, b) => a.performed_at.localeCompare(b.performed_at) || a.task_no.localeCompare(b.task_no));
+    team.logged += r.logged ?? 0;
+    team.placed += r.placed;
+    team.unplaced += r.unplaced;
+    team.onOthers += r.onOthers;
+    team.pmTaskHours += r.placed - r.byBucket.work_order;
+    for (const b of BUCKETS) team.byBucket[b.key] += r.byBucket[b.key];
+    if ((r.logged ?? 0) > 0 || r.placed > 0) team.people++;
+  }
+  techs.sort((a, b) => Math.max(b.logged ?? 0, b.placed) - Math.max(a.logged ?? 0, a.placed) || a.tech.localeCompare(b.tech));
+  return { techs, team, asOf };
+}
+
+/** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */
+export function fmtH(h: number, blankZero = true): string {
+  if (!h) return blankZero ? '' : '0';
+  const r = Math.round(h * 10) / 10;
+  return r === 0 ? '<0.1' : r.toFixed(1);
+}
+
 // ---------- review card: timeline + notes ----------
 
 export type HistoryEvent = {

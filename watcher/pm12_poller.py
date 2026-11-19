@@ -549,18 +549,19 @@ def main() -> int:
 
     print(f"[ok] {filename}: {len(rows)} open rows, {len(events)} new closes")
 
-    # ----- pm_task_details: audit evidence for the closes just logged -----
-    # docs/pm-audit.md §3. After the snapshot's bookkeeping on purpose: a slow
-    # or failing detail pull must never cost the poll its snapshot.
-    pull_close_details(client, closed_items, events)
+    # ----- pm_task_details: audit evidence + labor entries -----
+    # docs/pm-audit.md §3 and §9. After the snapshot's bookkeeping on purpose: a
+    # slow or failing detail pull must never cost the poll its snapshot.
+    pull_task_details(client, open_items, closed_items, events)
     return 0
 
 
 # ---------- PM audit: task details ----------
 
-# Per-run ceiling on inline detail pulls (~1 s each). A normal poll logs a
-# handful of closes; a first run for a site logs the whole window, and those
-# belong to `pm12_poller.py backfill-details`, not to the hourly poll.
+# Per-run ceiling on inline detail pulls (~1 s each). A normal poll has a
+# handful of new closes plus the tasks someone logged time on since the last
+# poll; a first run for a site has the whole window, and that belongs to
+# `pm12_poller.py backfill-details`, not to the hourly poll.
 DETAILS_INLINE_MAX = 150
 
 
@@ -576,24 +577,92 @@ def _details_session() -> requests.Session:
     return s
 
 
-def pull_close_details(client, closed_items: list[dict], events: list[dict]) -> None:
-    """Fetch steps / attachments / history for the recurring PMs this run just
-    logged as closed and upsert them into pm_task_details. The closed fetch
-    already carries Cove's internal id per task, so no pm_rows lookup."""
+def _ts(s: str | None) -> datetime | None:
+    """Cove ('…Z') and Postgres ('…+00:00') timestamps as comparable datetimes."""
+    if not s:
+        return None
     try:
-        id_by_task = {it.get("altId"): it.get("id") for it in closed_items}
-        ids = [
-            id_by_task[ev["task_no"]] for ev in events
-            if ev.get("cmms_type") == "recurring" and id_by_task.get(ev["task_no"])
-        ]
-        if not ids:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _detail_stamps(client) -> dict[str, datetime | None]:
+    """cove_task_id -> the Cove updatedAt we last stored for it."""
+    out: dict[str, datetime | None] = {}
+    start = 0
+    while True:
+        got = (client.table("pm_task_details").select("cove_task_id,updated_at_cove")
+               .order("cove_task_id").range(start, start + 999).execute().data or [])
+        for r in got:
+            out[r["cove_task_id"]] = _ts(r.get("updated_at_cove"))
+        if len(got) < 1000:
+            return out
+        start += 1000
+
+
+def _labor_stale(items: list[dict], stamps: dict[str, datetime | None]) -> list[dict]:
+    """Tasks that carry logged labor and whose Cove record changed since we
+    last pulled it (or that we never pulled), most recently touched first.
+
+    This is what makes "how the week was spent" possible: labor entries live
+    in a task's history, half of them are logged by someone other than the
+    assignee, and the big buckets (Binney's monthly building rounds, UPark's
+    monthly "unscheduled tasks") stay open all month — so waiting for the
+    close would hide the month's hours until it ends."""
+    out = []
+    for it in items:
+        tid = it.get("id")
+        if not tid or not (it.get("hoursLogged") or 0) > 0:
+            continue
+        if tid not in stamps:
+            out.append(it)
+            continue
+        seen, now = stamps[tid], _ts(it.get("updatedAt"))
+        if seen is None or (now is not None and now > seen):
+            out.append(it)
+    out.sort(key=lambda it: it.get("updatedAt") or "", reverse=True)
+    return out
+
+
+def _pull_details(session: requests.Session, client, items: list[dict], label: str) -> tuple[int, int]:
+    """Fetch + upsert pm_task_details for each list item. Returns (ok, err)."""
+    sleep = float(os.environ.get("COVE_RATE_SLEEP", "0.5"))
+    ok = err = 0
+    for i, it in enumerate(items, 1):
+        try:
+            row = cove_task_details.normalize(cove_task_details.fetch_task(session, it["id"]))
+            row["site_code"] = SITE                # 0166: the task's site and
+            row["cmms_type"] = it.get("type")      # recurring | on_demand
+            cove_task_details.upsert(client, row)
+            ok += 1
+            if i % 25 == 0 or i == len(items):
+                print(f"  {label} {i}/{len(items)} ok={ok} err={err} (last {row['task_no']})", flush=True)
+        except Exception as e:  # noqa: BLE001
+            err += 1
+            print(f"  {label} {i}/{len(items)} {it.get('altId')} ERROR {e}", file=sys.stderr, flush=True)
+        time.sleep(sleep)
+    return ok, err
+
+
+def pull_task_details(client, open_items: list[dict], closed_items: list[dict], events: list[dict]) -> None:
+    """After a poll: (1) steps / photos / notes / history for the recurring PMs
+    this run just logged as closed — the audit's evidence, always pulled; then
+    (2) every task, open or closed, recurring or on-demand, whose logged labor
+    changed since we last pulled it. The list fetch already carries Cove's
+    internal id per task, so no pm_rows lookup."""
+    try:
+        new_closes = {ev["task_no"] for ev in events if ev.get("cmms_type") == "recurring"}
+        must = [it for it in closed_items if it.get("id") and it.get("altId") in new_closes]
+        must_ids = {it["id"] for it in must}
+        stale = [it for it in _labor_stale(open_items + closed_items, _detail_stamps(client)) if it["id"] not in must_ids]
+        todo = (must + stale)[:DETAILS_INLINE_MAX]
+        if not todo:
             return
-        if len(ids) > DETAILS_INLINE_MAX:
-            print(f"  task details: {len(ids)} new recurring closes — pulling the newest "
-                  f"{DETAILS_INLINE_MAX}; run `pm12_poller.py backfill-details` for the rest")
-            ids = ids[:DETAILS_INLINE_MAX]   # closed_items is createdAt-desc
-        print(f"  task details: pulling {len(ids)} closed PM(s)")
-        cove_task_details.on_close_events(_details_session(), client, ids)
+        left = len(must) + len(stale) - len(todo)
+        print(f"  task details: {len(must)} new recurring close(s) + {len(stale)} task(s) with new labor"
+              + (f" — pulling {len(todo)} now, {left} next run (or `pm12_poller.py backfill-details`)" if left else ""))
+        _pull_details(_details_session(), client, todo, "details")
     except Exception as e:  # noqa: BLE001
         print(f"WARN: task-details pull failed (snapshot unaffected): {e}", file=sys.stderr)
 
@@ -614,14 +683,16 @@ def _all_values(client, table: str, column: str, **eq) -> set[str]:
 
 
 def backfill_details(days: int = 180) -> int:
-    """One-time: detail rows for closed recurring PMs that pm12 logged before
-    pm_rows carried cove_task_id (0156, 2026-11-06) — those never appear in
-    v_pm_task_details_backlog, which finds the Cove id through pm_rows.
+    """One-time catch-up of pm_task_details for this site. Safe to re-run; it
+    only fetches what is missing or has changed.
 
-    Re-reads the site's closed list from Cove with a `days` due-date floor
-    (wider than the hourly poll's 60), keeps the recurring tasks this site has
-    a pm_close_events row for and no pm_task_details row yet, newest close
-    first. Safe to re-run; it only fetches what is still missing.
+      * closed PMs, recurring and on-demand, that pm12 logged in
+        pm_close_events (v_pm_task_details_backlog only sees recurring closes
+        whose task appeared in pm_rows after 0156);
+      * open PMs that carry logged labor (monthly rounds and the like).
+
+    Re-reads the site's task lists from Cove with a `days` due-date floor
+    (wider than the hourly poll's 60).
 
         COVE_SITE=binney .venv/bin/python pm12_poller.py backfill-details 180
     """
@@ -631,45 +702,21 @@ def backfill_details(days: int = 180) -> int:
     client = get_client()
     ids = assignee_ids(client, PM_ASSIGNEE_IDS, "pm12")
     closed = fetch_all_pm_tasks(CLOSED_STATUSES, ids)
+    open_items = fetch_all_pm_tasks(OPEN_STATUSES, ids)
 
-    logged = _all_values(client, "pm_close_events", "task_no", site_code=SITE, cmms_type="recurring")
-    have = _all_values(client, "pm_task_details", "task_no")
-    todo = [it for it in closed
-            if it.get("id") and it.get("completedOn")
-            and it.get("altId") in logged and it.get("altId") not in have]
-    todo.sort(key=lambda it: it["completedOn"], reverse=True)
-    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} logged recurring={len(logged)} "
-          f"already have={len(have & logged)} to fetch={len(todo)}")
+    logged = _all_values(client, "pm_close_events", "task_no", site_code=SITE)
+    stamps = _detail_stamps(client)
+    missing = [it for it in closed
+               if it.get("id") and it.get("completedOn") and it.get("altId") in logged and it["id"] not in stamps]
+    missing.sort(key=lambda it: it["completedOn"], reverse=True)
+    missing_ids = {it["id"] for it in missing}
+    stale = [it for it in _labor_stale(open_items + closed, stamps) if it["id"] not in missing_ids]
+    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} open={len(open_items)} "
+          f"logged closes={len(logged)} | to fetch: {len(missing)} closed without details + {len(stale)} with new labor")
 
-    session = _details_session()
-    sleep = float(os.environ.get("COVE_RATE_SLEEP", "0.5"))
-    ok = err = 0
-    for i, it in enumerate(todo, 1):
-        try:
-            row = cove_task_details.normalize(cove_task_details.fetch_task(session, it["id"]))
-            cove_task_details.upsert(client, row)
-            ok += 1
-            if i % 25 == 0 or i == len(todo):
-                print(f"  {i}/{len(todo)} ok={ok} err={err} (last {row['task_no']})", flush=True)
-        except Exception as e:  # noqa: BLE001
-            err += 1
-            print(f"  {i}/{len(todo)} {it.get('altId')} ERROR {e}", file=sys.stderr, flush=True)
-        time.sleep(sleep)
+    ok, err = _pull_details(_details_session(), client, missing + stale, "backfill")
     print(f"[backfill-details] done ok={ok} err={err}")
     return 0 if err == 0 else 1
-
-
-def _log_error(filename: str, error_msg: str) -> None:
-    try:
-        get_client().table("ingestion_log").insert({
-            "filename":  filename,
-            "kind":      "pm12",
-            "status":    "error",
-            "rows":      0,
-            "error_msg": error_msg[:4000],
-        }).execute()
-    except Exception as e:
-        print(f"WARN: also failed to write ingestion_log: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

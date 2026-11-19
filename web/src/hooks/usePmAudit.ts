@@ -9,7 +9,8 @@ import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
   addDays, joinQueue, weekStartOf, weekStats, weeksEnding,
-  type FlagRow, type HistoryEvent, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
+  type FlagRow, type HistoryEvent, type LaborItem, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
+  type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
 
@@ -76,7 +77,7 @@ export function useAuditAccess(): {
 export function useAuditWeekRange() {
   return useQuery({
     queryKey: ['pm_audit', 'week_range'],
-    queryFn: async (): Promise<{ first: string | null; latest: string | null; firstClose: string | null }> => {
+    queryFn: async (): Promise<{ first: string | null; latest: string | null; firstClose: string | null; current: string | null }> => {
       const pick = (ascending: boolean) =>
         supabase.from('pm_audit_queue').select('week_start').order('week_start', { ascending }).limit(1);
       const [a, b, c] = await Promise.all([
@@ -92,6 +93,8 @@ export function useAuditWeekRange() {
         first: (a.data?.[0]?.week_start as string | undefined) ?? null,
         latest: (b.data?.[0]?.week_start as string | undefined) ?? null,
         firstClose: firstCloseAt ? weekStartOf(firstCloseAt) : null,
+        // the week in progress — the Week page can show it, the queue cannot
+        current: weekStartOf(new Date().toISOString()),
       };
     },
     staleTime: 5 * 60_000,
@@ -247,6 +250,39 @@ export function useSaveReview() {
       qc.invalidateQueries({ queryKey: ['pm_audit', 'card', saved.week_start, saved.task_no] });
       qc.invalidateQueries({ queryKey: ['pm_audit', 'scorecard'] });
     },
+  });
+}
+
+const LABOR_COLS = 'kind,site_code,task_no,task_name,cmms_type,building,assignee_name,task_closed,performer,hours,performed_at,day_local,week_start,bucket';
+
+/** How the week was spent: every labor entry performed that week (PM tasks
+ *  by the person who did the work, work orders at close), the labor report's
+ *  weekly totals, and that week's closed PMs for the audit columns. */
+export function useAuditWeekTime(week: string | null, site: SiteFilter) {
+  return useQuery({
+    queryKey: ['pm_audit', 'week_time', week, site],
+    enabled: !!week,
+    queryFn: async (): Promise<{ items: LaborItem[]; hours: WeekHours[]; closes: WeekTimeClose[] }> => {
+      const [items, hours, closes] = await Promise.all([
+        fetchAll<LaborItem>((from, to) => {
+          let q = supabase.from('v_audit_labor_items').select(LABOR_COLS).eq('week_start', week!);
+          if (site !== 'both') q = q.eq('site_code', site);
+          return q.order('performed_at').order('task_no').order('performer').range(from, to);
+        }),
+        fetchAll<WeekHours>((from, to) => {
+          let q = supabase.from('v_tech_week_site_hours').select('site_code,assigned_to_name,week_start,week_hours,as_of').eq('week_start', week!);
+          if (site !== 'both') q = q.eq('site_code', site);
+          return q.order('assigned_to_name').order('site_code').range(from, to);
+        }),
+        fetchAll<WeekTimeClose>((from, to) => {
+          let q = supabase.from('v_pm_audit_flags').select('task_no,site_code,assigned_to_name,flag_count,good').eq('week_start', week!);
+          if (site !== 'both') q = q.eq('site_code', site);
+          return q.order('completed_on').order('task_no').range(from, to);
+        }),
+      ]);
+      return { items, hours, closes };
+    },
+    staleTime: 60_000,
   });
 }
 
