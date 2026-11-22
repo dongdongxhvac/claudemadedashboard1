@@ -106,7 +106,7 @@ function HoursPanel({ split, loading, error, label, showSite }: { split: HoursSp
       ) : !split || split.techs.length === 0 ? (
         <div style={{ padding: '0 24px 20px', fontSize: 14, color: A.muted }}>No labor entries in this window.</div>
       ) : (
-        <div style={{ overflowX: 'auto', borderTop: `1px solid ${A.line}` }}>
+        <div className="audit-table-box" style={{ borderTop: `1px solid ${A.line}` }}>
           <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
@@ -223,7 +223,7 @@ export default function AuditScorecard() {
             </div>
           )}
 
-          <div style={{ ...cardStyle, overflowX: 'auto' }}>
+          <div className="audit-table-box audit-table-card" style={cardStyle}>
             <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>

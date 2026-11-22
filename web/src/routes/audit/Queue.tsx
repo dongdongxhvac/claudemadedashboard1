@@ -193,7 +193,7 @@ export default function AuditQueue() {
       ) : rows.length === 0 ? (
         <Notice>No queued task matches these filters.</Notice>
       ) : (
-        <div style={{ ...cardStyle, overflowX: 'auto' }}>
+        <div className="audit-table-box audit-table-card" style={cardStyle}>
           <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>

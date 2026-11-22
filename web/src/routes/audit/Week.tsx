@@ -160,7 +160,7 @@ export default function AuditWeek() {
             </div>
           </Panel>
 
-          <div style={{ ...cardStyle, overflowX: 'auto' }}>
+          <div className="audit-table-box audit-table-card" style={cardStyle}>
             <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
