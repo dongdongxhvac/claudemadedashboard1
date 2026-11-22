@@ -3,7 +3,7 @@
 // per-close rows of v_pm_audit_flags (so multi-week rates add up exactly).
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SCORE_WEEKS_MAX, useAuditHoursSplit, useAuditScorecard, useAuditWeekRange } from '../../hooks/usePmAudit';
+import { SCORE_WEEKS_MAX, useAuditEngineers, useAuditHoursSplit, useAuditScorecard, useAuditWeekRange } from '../../hooks/usePmAudit';
 import { FLAG_LABEL, SITE_LABEL, WORK_TYPES, buildHoursSplit, buildScorecard, dayLabel, fmtH, fmtPct, pct, type HoursSplit, type TechHours, type TechScore } from '../../lib/pmAudit';
 import { AuditShell, BarRow, Notice, Panel, Segmented, Soft, StatTile } from './AuditUi';
 import { A, WORK_TYPE_COLOR, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
@@ -142,6 +142,10 @@ function HoursPanel({ split, loading, error, label, showSite }: { split: HoursSp
         <strong>PM</strong> = scheduled PM tasks, the monthly building-rounds tasks included. <strong>ODT</strong> = on-demand tasks, the non-scheduled PMs (NPM).
         <strong> WO</strong> = work orders. PM and ODT hours are counted on the person who did the work, the week it was done; Cove gives work-order hours
         only as a total at close, so those land on the assignee in the week the order closed, and time on open work orders is not here.
+        {split && split.others.people > 0 && (
+          <> Engineers only: {split.others.people} other {split.others.people === 1 ? 'person' : 'people'} with {fmtH(split.others.hours, false)} h
+            {split.others.people === 1 ? ' is' : ' are'} left off (not engineers on the roster).</>
+        )}
       </div>
     </section>
   );
@@ -162,9 +166,11 @@ export default function AuditScorecard() {
   const lastWeek = range.data?.latest ?? null;
   const dataQ = useAuditScorecard(lastWeek, p.site);
   const hoursQ = useAuditHoursSplit(lastWeek, p.site);
+  const rosterQ = useAuditEngineers();
+  const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data) : null), [rosterQ.data]);
   const split = useMemo(
-    () => (hoursQ.data ? buildHoursSplit(hoursQ.data.rows, hoursQ.data.weeks.slice(-Number(win))) : null),
-    [hoursQ.data, win],
+    () => (hoursQ.data ? buildHoursSplit(hoursQ.data.rows, hoursQ.data.weeks.slice(-Number(win)), engineers) : null),
+    [hoursQ.data, win, engineers],
   );
 
   const card = useMemo(() => {
@@ -247,7 +253,7 @@ export default function AuditScorecard() {
             </table>
           </div>
 
-          <HoursPanel split={split} loading={hoursQ.isLoading} error={hoursQ.isError ? (hoursQ.error as Error).message : null} label={label} showSite={p.site === 'both'} />
+          <HoursPanel split={split} loading={hoursQ.isLoading || rosterQ.isLoading} error={hoursQ.isError ? (hoursQ.error as Error).message : null} label={label} showSite={p.site === 'both'} />
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
             <Panel title={<>Flags by reason <Soft>· {card.flagTotal.toLocaleString()} flag{card.flagTotal === 1 ? '' : 's'}</Soft></>} style={{ flex: '1 1 420px', gap: 14 }}>

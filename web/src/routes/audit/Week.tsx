@@ -4,18 +4,27 @@
 // counted on the person who did the work and the day it was done — half of
 // all entries are logged on a task assigned to someone else.
 import { Fragment, useMemo, useState } from 'react';
-import { useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
+import { useAuditEngineers, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
   BUCKETS, KIND_LABEL, SITE_LABEL, addDays, bucketOf, buildWeekTime, dayLabel, fmtH, fmtStamp, pct, shortName, weekLabel,
-  type Bucket, type LaborItem, type TechWeek,
+  type Bucket, type LaborItem, type OtherPerson, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
 import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
 import { useAuditParams } from './useAuditParams';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const num = { ...tdStyle, padding: '14px 8px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
-const thNum = { ...thStyle, padding: '14px 8px', textAlign: 'right' as const, letterSpacing: '0.02em' };
+const num = { ...tdStyle, padding: '14px 6px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
+const thNum = { ...thStyle, padding: '12px 6px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
+const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
+/** The days and the three PM-result columns each read as a group: a rule on the group's left edge. */
+const groupEdge = { borderLeft: `1px solid ${A.lineSoft}`, paddingLeft: 10 };
+
+function otherLabel(o: OtherPerson): string {
+  const h = Math.max(o.logged, o.placed);
+  const parts = [h > 0 ? `${fmtH(h, false)} h` : '', o.closed > 0 ? `${o.closed} PM${o.closed === 1 ? '' : 's'} closed` : ''].filter(Boolean);
+  return `${o.tech} (${parts.join(', ')})`;
+}
 
 function Swatch({ bucket }: { bucket: Bucket }) {
   return <span aria-hidden="true" style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: BUCKET_COLOR[bucket], marginRight: 6, verticalAlign: 'baseline' }} />;
@@ -97,11 +106,15 @@ export default function AuditWeek() {
   const current = range.data?.current ?? null;
   const week = p.week ?? range.data?.latest ?? current;
   const dataQ = useAuditWeekTime(week, p.site);
+  const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
 
+  // Engineers only. If the roster cannot be read, show everyone and say so
+  // rather than an empty page.
+  const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data) : null), [rosterQ.data]);
   const wt = useMemo(
-    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week) : null),
-    [dataQ.data, week],
+    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers) : null),
+    [dataQ.data, week, engineers],
   );
   const scale = wt ? Math.max(0, ...wt.techs.map((t) => Math.max(t.logged ?? 0, t.placed))) : 0;
   const earliest = range.data?.firstClose ?? null;
@@ -114,7 +127,7 @@ export default function AuditWeek() {
     <AuditShell
       kicker="Section 05 · Week"
       title={week ? `How the week was spent · ${weekLabel(week)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
-      subtitle="Hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
+      subtitle="Engineers' hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
       actions={week && (
         <>
           <button type="button" style={{ ...buttonStyle, opacity: atEarliest ? 0.45 : 1, cursor: atEarliest ? 'default' : 'pointer' }}
@@ -124,19 +137,19 @@ export default function AuditWeek() {
         </>
       )}
     >
-      {range.isLoading || dataQ.isLoading ? (
+      {range.isLoading || dataQ.isLoading || rosterQ.isLoading ? (
         <Notice>Loading the week…</Notice>
       ) : dataQ.isError ? (
         <Notice tone="error">Could not load the week: {(dataQ.error as Error).message}</Notice>
       ) : !wt || !team || !week ? (
         <Notice>No week to show yet.</Notice>
       ) : wt.techs.length === 0 ? (
-        <Notice>No labor was logged for the week of {weekLabel(week)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
+        <Notice>No engineer logged labor for the week of {weekLabel(week)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
       ) : (
         <>
           <div style={tileGrid}>
             <StatTile label="Logged in Cove" value={<>{Math.round(team.logged).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
-              sub={`${team.people} people · labor report${wt.asOf ? `, as of ${fmtStamp(wt.asOf)}` : ''}`} />
+              sub={`${team.people} engineer${team.people === 1 ? '' : 's'} · labor report${wt.asOf ? `, as of ${fmtStamp(wt.asOf)}` : ''}`} />
             <StatTile label="Placed on a task" value={<>{Math.round(team.placed).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h · {placedPct === null ? '—' : `${placedPct}%`}</span></>}
               sub="hours we can name the task for" />
             <StatTile label="Not on a task we hold" value={<>{Math.round(team.unplaced).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
@@ -146,7 +159,7 @@ export default function AuditWeek() {
               sub={`${Math.round(team.onOthers).toLocaleString()} of ${Math.round(team.pmTaskHours).toLocaleString()} PM-task hours`} />
           </div>
 
-          <Panel title={<>Where the hours went <Soft>· everyone</Soft></>}>
+          <Panel title={<>Where the hours went <Soft>· all engineers</Soft></>}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '8px 24px', fontSize: 13 }}>
               {BUCKETS.map((b) => (
                 <div key={b.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
@@ -164,15 +177,20 @@ export default function AuditWeek() {
             <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={thStyle}>Person</th>
+                  <th style={thText}>Engineer</th>
                   <th style={thNum} title="Total hours on the Cove labor report for the week">Logged</th>
-                  <th style={{ ...thStyle, minWidth: 140 }}>Where it went</th>
+                  <th style={{ ...thText, minWidth: 120 }}>Where it went</th>
                   {BUCKETS.map((b) => (
-                    <th key={b.key} style={thNum} title={b.label}><Swatch bucket={b.key} />{b.short}</th>
+                    <th key={b.key} style={thNum} title={b.label}>
+                      {/* the bar's colour as an underline: ties the column to the bar without widening it */}
+                      <span style={{ display: 'inline-block', paddingBottom: 3, borderBottom: `3px solid ${BUCKET_COLOR[b.key]}` }}>{b.short}</span>
+                    </th>
                   ))}
-                  <th style={thNum} title="Logged hours that are on no task we hold">Not placed</th>
-                  {DAYS.map((d) => <th key={d} style={{ ...thNum, padding: '14px 5px' }}>{d}</th>)}
-                  <th style={{ ...thNum, whiteSpace: 'normal', minWidth: 84 }} title="Recurring PMs closed that week, then how many were flagged and how many were good">PMs closed · flagged · good</th>
+                  <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
+                  {DAYS.map((d, i) => <th key={d} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
+                  <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
+                  <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
+                  <th style={thNum} title="Of those, how many were good: a photo or a thick note, and no flag">Good</th>
                 </tr>
               </thead>
               <tbody>
@@ -193,20 +211,14 @@ export default function AuditWeek() {
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
-                        {t.byDay.map((h, i) => <td key={i} style={{ ...num, padding: '14px 5px', color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>)}
-                        <td style={num}>
-                          {t.closed > 0 ? (
-                            <>
-                              {t.closed}
-                              <span style={{ color: A.muted }}> · </span><span style={{ color: t.flagged > 0 ? A.red : A.muted, fontWeight: t.flagged > 0 ? 600 : 400 }}>{t.flagged}</span>
-                              <span style={{ color: A.muted }}> · </span><span style={{ color: t.good > 0 ? A.greenDark : A.muted, fontWeight: t.good > 0 ? 600 : 400 }}>{t.good}</span>
-                            </>
-                          ) : <span style={{ color: A.faint }}>—</span>}
-                        </td>
+                        {t.byDay.map((h, i) => <td key={i} style={{ ...num, padding: '14px 5px', ...(i === 0 ? groupEdge : null), color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>)}
+                        <td style={{ ...num, ...groupEdge, color: t.closed > 0 ? undefined : A.faint }}>{t.closed > 0 ? t.closed : '—'}</td>
+                        <td style={{ ...num, color: t.flagged > 0 ? A.red : A.faint, fontWeight: t.flagged > 0 ? 600 : 400 }}>{t.closed > 0 ? t.flagged : ''}</td>
+                        <td style={{ ...num, color: t.good > 0 ? A.greenDark : A.faint, fontWeight: t.good > 0 ? 600 : 400 }}>{t.closed > 0 ? t.good : ''}</td>
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={12 + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
+                          <td colSpan={14 + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
                             <Entries t={t} week={week} />
                           </td>
                         </tr>
@@ -219,6 +231,16 @@ export default function AuditWeek() {
           </div>
 
           <div style={{ fontSize: 12, color: A.muted, lineHeight: 1.6 }}>
+            {!engineers ? (
+              <div style={{ color: A.orangeDark, marginBottom: 6 }}>
+                The engineer roster could not be read, so this page shows everyone on the labor report.
+              </div>
+            ) : wt.others.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <strong>Engineers only.</strong> Left off, because they are not engineers on the roster (Admin › User Profiles):{' '}
+                {wt.others.map(otherLabel).join(' · ')}. Their hours are not in the totals above.
+              </div>
+            )}
             <strong>Logged</strong> is the Cove labor report's total for the week, as of its last poll that week, so hours entered late are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Not placed</strong> is the rest: time on tasks whose

@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, joinQueue, sumTypeHours, weekStartOf, weekStats, weeksEnding,
+  addDays, engineerKeys, joinQueue, sumTypeHours, weekStartOf, weekStats, weeksEnding,
   type FlagRow, type HistoryEvent, type LaborItem, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
   type TypeEntry, type TypeHours, type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
@@ -283,6 +283,27 @@ export function useAuditWeekTime(week: string | null, site: SiteFilter) {
       return { items, hours, closes };
     },
     staleTime: 60_000,
+  });
+}
+
+/** Roster keys of everyone whose role is engineer (leads included, people who
+ *  have left included, so past weeks keep their rows). The Week tab and the
+ *  scorecard's hours table show only these people: the labor report also
+ *  carries porters, managers and vendors. Two plain reads, no embed — users
+ *  and engineer_profiles are related twice (manager_user_id). */
+export function useAuditEngineers() {
+  return useQuery({
+    queryKey: ['pm_audit', 'engineers'],
+    queryFn: async (): Promise<string[]> => {
+      const [users, profiles] = await Promise.all([
+        supabase.from('users').select('id,full_name').eq('role', 'engineer'),
+        supabase.from('engineer_profiles').select('user_id,cmms_assignee_name'),
+      ]);
+      if (users.error) throw users.error;
+      if (profiles.error) throw profiles.error;
+      return engineerKeys(users.data ?? [], profiles.data ?? []);
+    },
+    staleTime: 10 * 60_000,
   });
 }
 

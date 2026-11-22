@@ -269,3 +269,18 @@ Manager's two asks: expect photos only on Majors for now, and have the audit sho
   a grouped view would be lighter if it ever feels slow.
 - **Catch-up pull** (2026-11-19): `backfill-details 180` for both sites pulled 4,609 tasks with no errors. The week of
   Nov 9 then placed 997 h against 993 h logged.
+
+### Engineers only (2026-11-22)
+
+The Week tab and the scorecard's "Hours by engineer" table show only people whose roster role is
+`engineer` (leads included; people who have left are kept so past weeks stay whole). The labor report
+also carries porters, managers and vendors. A Cove name is matched, ignoring case and spacing, against
+`engineer_profiles.cmms_assignee_name` or the user's full name (`engineerKeys` / `rosterKey` in
+`pmAudit.ts`, `useAuditEngineers`). Everyone left off is named under the Week table with their hours
+and closes, and their hours are out of the tiles — so an engineer missing from the roster shows up
+there, and is fixed in Admin › User Profiles, not in code. The queue and the scorecard's quality table
+are not filtered: a PM closed under a manager's name is still a PM to audit.
+
+The Week table's last column is three columns (PMs closed · Flagged · Good), and the bar colours are an
+underline on the bucket headers, which keeps the table inside the 1280 px card; the header row locks to
+the page from 1360 px wide, and inside the scrolling box below that.

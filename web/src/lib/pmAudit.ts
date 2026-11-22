@@ -652,12 +652,35 @@ export type TechWeek = {
   items: LaborItem[];
 };
 
+/** Someone with hours or closes that week who is not an engineer on the roster. */
+export type OtherPerson = { tech: string; site_code: string; logged: number; placed: number; closed: number };
+
 export type WeekTime = {
   techs: TechWeek[];
+  /** Left off the page when a roster is given: porters, managers, vendors. */
+  others: OtherPerson[];
   team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number };
   /** Latest labor-report poll behind the week's totals. */
   asOf: string | null;
 };
+
+/** How a name is matched against the roster: case and spacing do not count. */
+export function rosterKey(name: string | null | undefined): string {
+  return (name ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** The names an engineer can appear under in Cove: the profile's Cove name
+ *  and the full name (some profiles have no Cove name filled in). */
+export function engineerKeys(
+  users: { id: string; full_name: string | null }[],
+  profiles: { user_id: string; cmms_assignee_name: string | null }[],
+): string[] {
+  const ids = new Set(users.map((u) => u.id));
+  const keys = new Set<string>();
+  for (const u of users) { const k = rosterKey(u.full_name); if (k) keys.add(k); }
+  for (const p of profiles) { const k = rosterKey(p.cmms_assignee_name); if (k && ids.has(p.user_id)) keys.add(k); }
+  return [...keys].sort();
+}
 
 function emptyBuckets(): Record<Bucket, number> {
   return { pm: 0, rounds: 0, on_demand: 0, bms: 0, work_order: 0, other: 0 };
@@ -671,8 +694,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Per person: what the labor report says they logged, where those hours
  *  went (by the kind of task), which days, and how their closed PMs audited.
- *  One row per person and site, biggest week first. */
-export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string): WeekTime {
+ *  One row per person and site, biggest week first. With `engineers` (roster
+ *  keys) only those people get a row and count in the team totals; everyone
+ *  else is listed in `others`. */
+export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null): WeekTime {
   const rows = new Map<string, TechWeek>();
   const row = (site: string | null, tech: string | null): TechWeek => {
     const k = `${site ?? ''}|${tech ?? ''}`;
@@ -708,7 +733,12 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if (c.good) r.good++;
   }
   const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0 };
-  const techs = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
+  const present = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
+  const isEngineer = (r: TechWeek) => !engineers || engineers.has(rosterKey(r.tech));
+  const techs = present.filter(isEngineer);
+  const others: OtherPerson[] = present.filter((r) => !isEngineer(r))
+    .map((r) => ({ tech: r.tech, site_code: r.site_code, logged: r2(r.logged ?? 0), placed: r2(r.placed), closed: r.closed }))
+    .sort((a, b) => Math.max(b.logged, b.placed) - Math.max(a.logged, a.placed) || b.closed - a.closed || a.tech.localeCompare(b.tech));
   for (const r of techs) {
     r.placed = r2(r.placed);
     r.onOthers = r2(r.onOthers);
@@ -726,7 +756,7 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if ((r.logged ?? 0) > 0 || r.placed > 0) team.people++;
   }
   techs.sort((a, b) => Math.max(b.logged ?? 0, b.placed) - Math.max(a.logged ?? 0, a.placed) || a.tech.localeCompare(b.tech));
-  return { techs, team, asOf };
+  return { techs, others, team, asOf };
 }
 
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */
@@ -783,10 +813,16 @@ export type TechHours = {
   perWeek: number;
 };
 
-export type HoursSplit = { techs: TechHours[]; team: { pm: number; odt: number; wo: number; total: number } };
+export type HoursSplit = {
+  techs: TechHours[];
+  team: { pm: number; odt: number; wo: number; total: number };
+  /** People with hours who are not engineers on the roster, and their hours. */
+  others: { people: number; hours: number };
+};
 
-/** Each engineer's hours over the window, split PM / ODT / WO, biggest first. */
-export function buildHoursSplit(rows: TypeHours[], weeks: string[]): HoursSplit {
+/** Each engineer's hours over the window, split PM / ODT / WO, biggest first.
+ *  With `engineers` (roster keys) everyone else is only counted in `others`. */
+export function buildHoursSplit(rows: TypeHours[], weeks: string[], engineers?: ReadonlySet<string> | null): HoursSplit {
   const inWin = new Set(weeks);
   const m = new Map<string, TechHours & { seen: Set<string> }>();
   for (const r of rows) {
@@ -798,18 +834,20 @@ export function buildHoursSplit(rows: TypeHours[], weeks: string[]): HoursSplit 
     if (r.pm + r.odt + r.wo > 0) t.seen.add(r.week_start);
   }
   const team = { pm: 0, odt: 0, wo: 0, total: 0 };
+  const others = { people: 0, hours: 0 };
   const techs: TechHours[] = [];
   for (const { seen, ...t } of m.values()) {
     t.pm = r2(t.pm); t.odt = r2(t.odt); t.wo = r2(t.wo);
     t.total = r2(t.pm + t.odt + t.wo);
     if (t.total <= 0) continue;
+    if (engineers && !engineers.has(rosterKey(t.tech))) { others.people++; others.hours = r2(others.hours + t.total); continue; }
     t.weeks = seen.size;
     t.perWeek = seen.size ? r2(t.total / seen.size) : 0;
     team.pm += t.pm; team.odt += t.odt; team.wo += t.wo; team.total += t.total;
     techs.push(t);
   }
   techs.sort((a, b) => b.total - a.total || a.tech.localeCompare(b.tech));
-  return { techs, team };
+  return { techs, team, others };
 }
 
 // ---------- review card: timeline + notes ----------

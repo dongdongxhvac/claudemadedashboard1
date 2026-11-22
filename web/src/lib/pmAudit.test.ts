@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -178,6 +178,33 @@ eq('week: tasks / closed / flagged / good', [ann.tasks, ann.closed, ann.flagged,
 eq('week: no labor report row', [wt.techs[2].logged, wt.techs[2].placed, wt.techs[2].unplaced, wt.techs[2].byBucket.other], [null, 4, 0, 4]);
 eq('week: team', [wt.team.logged, wt.team.placed, wt.team.unplaced, wt.team.onOthers, wt.team.pmTaskHours, wt.team.people], [52, 12.5, 43.5, 4.5, 9.5, 3]);
 eq('week: as of the latest poll', wt.asOf, '2026-11-15T00:00:00Z');
+eq('week: no roster given, nobody left off', wt.others, []);
+
+// engineers only
+const roster = new Set(engineerKeys(
+  [{ id: 'u1', full_name: 'Ann  Lee' }, { id: 'u2', full_name: 'Robert Roy' }],
+  [{ user_id: 'u2', cmms_assignee_name: ' bob roy ' }, { user_id: 'u9', cmms_assignee_name: 'Cy Doe' }, { user_id: 'u1', cmms_assignee_name: null }],
+));
+eq('roster: full name and Cove name, engineers only', [...roster], ['ann lee', 'bob roy', 'robert roy']);
+eq('roster key', [rosterKey('  Bob   ROY '), rosterKey(null)], ['bob roy', '']);
+const wtEng = buildWeekTime([
+  li({}),
+  li({ performer: 'Bob Roy', assignee_name: 'Bob Roy', task_no: 'PM-3', bucket: 'escort', hours: 4, day_local: '2026-11-11', performed_at: '2026-11-11T15:00:00Z' }),
+  li({ performer: 'Pat Porter', assignee_name: 'Pat Porter', task_no: 'PM-4', hours: 0.5, day_local: '2026-11-11', performed_at: '2026-11-11T16:00:00Z' }),
+], [
+  { site_code: 'binney', assigned_to_name: 'Ann Lee', week_start: '2026-11-09', week_hours: 40, as_of: null },
+  { site_code: 'binney', assigned_to_name: 'Cy Doe', week_start: '2026-11-09', week_hours: 12, as_of: null },
+  { site_code: 'binney', assigned_to_name: 'Pat Porter', week_start: '2026-11-09', week_hours: 3.2, as_of: null },
+], [
+  { task_no: 'PM-8', site_code: 'binney', assigned_to_name: 'Max Manager', flag_count: 0, good: false },
+], '2026-11-09', roster);
+eq('engineers only: rows', wtEng.techs.map((t) => t.tech), ['Ann Lee', 'Bob Roy']);
+eq('engineers only: left off, biggest first', wtEng.others, [
+  { tech: 'Cy Doe', site_code: 'binney', logged: 12, placed: 0, closed: 0 },
+  { tech: 'Pat Porter', site_code: 'binney', logged: 3.2, placed: 0.5, closed: 0 },
+  { tech: 'Max Manager', site_code: 'binney', logged: 0, placed: 0, closed: 1 },
+]);
+eq('engineers only: team counts engineers', [wtEng.team.logged, wtEng.team.placed, wtEng.team.people], [40, 5, 2]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO
@@ -194,5 +221,8 @@ eq('sum by person, site, week', th.find((r) => r.performer === 'Ann Lee' && r.we
 const hs = buildHoursSplit(th, ['2026-11-02', '2026-11-09']);
 eq('hours split: order + numbers', hs.techs.map((x) => [x.tech, x.pm, x.odt, x.wo, x.total, x.weeks, x.perWeek]), [['Bob Roy', 20, 0, 0, 20, 1, 20], ['Ann Lee', 6, 3, 1, 10, 2, 5]]);
 eq('hours split: team', hs.team, { pm: 26, odt: 3, wo: 1, total: 30 });
+eq('hours split: no roster, nobody left off', hs.others, { people: 0, hours: 0 });
+const hsEng = buildHoursSplit(th, ['2026-11-02', '2026-11-09'], new Set(['ann lee']));
+eq('hours split, engineers only', [hsEng.techs.map((x) => x.tech), hsEng.team.total, hsEng.others], [['Ann Lee'], 10, { people: 1, hours: 20 }]);
 
 if (failures) { console.error(`${failures} failed`); process.exitCode = 1; } else console.log('all passed');
