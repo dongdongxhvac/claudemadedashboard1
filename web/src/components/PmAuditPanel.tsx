@@ -40,7 +40,8 @@ export function PmAuditPanel({ siteCode }: { siteCode: AuditSite }) {
           )}
         </p>
         <div className="flex items-center gap-4">
-          <Link to={`/audit${qs}`} className="t-small t-accent hover:underline">Review queue →</Link>
+          <Link to={`/audit${qs}`} className="t-small t-accent hover:underline">Week →</Link>
+          <Link to={`/audit/queue${qs}`} className="t-small t-accent hover:underline">Review queue →</Link>
           <Link to={`/audit/scorecard${qs}`} className="t-small t-accent hover:underline">Scorecard →</Link>
         </div>
       </div>

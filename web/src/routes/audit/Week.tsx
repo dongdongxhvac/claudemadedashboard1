@@ -3,7 +3,8 @@
 // by kind of task, on which days, and how their closed PMs audited. Hours are
 // counted on the person who did the work and the day it was done — half of
 // all entries are logged on a task assigned to someone else.
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
   BUCKETS, KIND_LABEL, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, pct, rosterKey, shortName,
@@ -143,6 +144,89 @@ function Entries({ t, firstDay, days }: { t: TechWeek; firstDay: string; days: s
   );
 }
 
+/** What prints. The shop copy is two columns of the table and nothing else:
+ *  the engineer and the hours per day (manager 2026-11-23, posted in the shop
+ *  each Wednesday for the week before). It lives outside #root, hidden on
+ *  screen; in print #root is hidden instead, so the page is this sheet alone,
+ *  landscape. Names run A–Z so people can find themselves. A day the PTO
+ *  calendar covers prints "PTO" without the kind of leave — the sheet hangs
+ *  on a wall — and a scheduled day with nothing logged prints a boxed 0. */
+const PRINT_CSS = `
+.audit-print-sheet { display: none; }
+@media print {
+  @page { size: landscape; margin: 0.5in; }
+  #root { display: none !important; }
+  html, body { background: #fff !important; }
+  .audit-print-sheet { display: block; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #000; }
+  .audit-print-sheet h1 { margin: 0; font-size: 20pt; font-weight: 700; }
+  .audit-print-sheet .aps-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24pt; border-bottom: 1.5pt solid #000; padding-bottom: 6pt; }
+  .audit-print-sheet .aps-range { font-size: 14pt; font-weight: 600; white-space: nowrap; }
+  .audit-print-sheet .aps-sub { margin: 4pt 0 8pt; font-size: 9pt; color: #333; }
+  .audit-print-sheet table { width: 100%; border-collapse: collapse; }
+  .audit-print-sheet thead { display: table-header-group; }
+  .audit-print-sheet tr { break-inside: avoid; }
+  .audit-print-sheet th { font-size: 10pt; font-weight: 700; text-align: right; padding: 3pt 8pt; border-bottom: 1pt solid #000; white-space: nowrap; }
+  .audit-print-sheet th small { display: block; font-size: 8pt; font-weight: 400; color: #333; }
+  .audit-print-sheet th:first-child, .audit-print-sheet td:first-child { text-align: left; }
+  .audit-print-sheet td { font-size: var(--aps-font, 12pt); line-height: 1.25; padding: var(--aps-pad, 3.5pt) 8pt; text-align: right; border-bottom: 0.5pt solid #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .audit-print-sheet td:first-child { font-weight: 600; }
+  .audit-print-sheet td small { font-size: 8pt; font-weight: 400; color: #333; }
+  .audit-print-sheet .aps-pto { font-size: 9pt; font-weight: 600; letter-spacing: 0.04em; }
+  .audit-print-sheet .aps-zero { display: inline-block; min-width: 10pt; padding: 0 3pt; line-height: 1.05; border: 1pt solid #000; font-weight: 700; text-align: center; }
+  .audit-print-sheet .aps-foot { margin-top: 8pt; font-size: 8.5pt; color: #333; }
+}
+`;
+
+type PrintRow = { t: TechWeek; marks: (DayMark | null)[] | null };
+
+function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inProgress }: {
+  rows: PrintRow[]; days: string[]; firstDay: string; rangeLabel: string; siteLabel: string; showSite: boolean; inProgress: boolean;
+}) {
+  const sorted = [...rows].sort((a, b) => a.t.tech.localeCompare(b.t.tech) || a.t.site_code.localeCompare(b.t.site_code));
+  const printed = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  // Type as large as the head-count allows on one landscape page (26 rows fit; more run on).
+  const n = sorted.length;
+  const [fontPt, padPt] = n <= 12 ? [14, 5] : n <= 17 ? [12, 3.5] : n <= 22 ? [11, 2] : [10, 1.5];
+  return createPortal(
+    <div className="audit-print-sheet" style={{ '--aps-font': `${fontPt}pt`, '--aps-pad': `${padPt}pt` } as CSSProperties}>
+      <style>{PRINT_CSS}</style>
+      <div className="aps-head">
+        <h1>Hours logged by day{siteLabel ? ` · ${siteLabel}` : ''}</h1>
+        <div className="aps-range">Week of {rangeLabel}{inProgress ? ' (in progress)' : ''}</div>
+      </div>
+      <div className="aps-sub">From the labor entries on Cove tasks, by the person who did the work and the day it was done. Printed {printed}.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Engineer</th>
+            {days.map((d, i) => <th key={i}>{d}<small>{dayLabel(addDays(firstDay, i))}</small></th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ t, marks }) => (
+            <tr key={`${t.site_code}|${t.tech}`}>
+              <td>{t.tech}{showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}</td>
+              {t.byDay.map((h, i) => {
+                const m = marks?.[i] ?? null;
+                return (
+                  <td key={i}>
+                    {h > 0 ? fmtH(h) : m?.tone === 'green' ? <span className="aps-pto">PTO</span> : m?.tone === 'red' ? <span className="aps-zero">0</span> : ''}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="aps-foot">
+        Blank = day off. PTO = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged and no approved time off.
+        Something missing? Log it on the task in Cove — hours entered after this was printed are not on it.
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function AuditWeek() {
   const p = useAuditParams();
   const range = useAuditWeekRange();
@@ -172,6 +256,16 @@ export default function AuditWeek() {
     () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7) : null),
     [dataQ.data, week, engineers, cols],
   );
+  // Each row's days set against the PTO calendar — for the table and the printed sheet
+  const rows = useMemo<PrintRow[]>(() => (wt && week && firstDay ? wt.techs.map((t) => {
+    const who = roster?.get(rosterKey(t.tech));
+    return {
+      t,
+      marks: who && ptoQ.data
+        ? dayMarks(t.byDay, firstDay, { weekFirst: weekFirstDay(week, t.site_code), crew: who.crew, pto: ptoByUser.get(who.user_id) ?? [], today })
+        : null,
+    };
+  }) : []), [wt, week, firstDay, roster, ptoQ.data, ptoByUser, today]);
   const scale = wt ? Math.max(0, ...wt.techs.map((t) => Math.max(t.logged ?? 0, t.placed))) : 0;
   const earliest = range.data?.firstClose ?? null;
   const atEarliest = !week || !earliest || week <= earliest;
@@ -182,7 +276,16 @@ export default function AuditWeek() {
   return (
     <AuditShell
       kicker="Section 05 · Week"
-      title={week ? `How the week was spent · ${auditWeekLabel(week, p.site)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
+      title={week ? (
+        <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px' }}>
+          <span>How the week was spent · {auditWeekLabel(week, p.site)}{week === current ? ' (in progress)' : ''}</span>
+          <button type="button" onClick={() => window.print()} disabled={rows.length === 0}
+            title="Prints the engineers and their hours per day, landscape — the sheet for the shop wall"
+            style={{ ...buttonStyle, height: 36, padding: '0 14px', opacity: rows.length === 0 ? 0.45 : 1, cursor: rows.length === 0 ? 'default' : 'pointer' }}>
+            Print
+          </button>
+        </span>
+      ) : 'How the week was spent'}
       subtitle="Engineers' hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
       actions={week && (
         <>
@@ -232,6 +335,9 @@ export default function AuditWeek() {
             </div>
           </Panel>
 
+          <PrintSheet rows={rows} days={days} firstDay={firstDay} rangeLabel={auditWeekLabel(week, p.site)}
+            siteLabel={p.site === 'both' ? '' : SITE_LABEL[p.site]} showSite={p.site === 'both'} inProgress={week === current} />
+
           <div className="audit-table-box audit-table-card" style={cardStyle}>
             <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -253,13 +359,9 @@ export default function AuditWeek() {
                 </tr>
               </thead>
               <tbody>
-                {wt.techs.map((t) => {
+                {rows.map(({ t, marks }) => {
                   const key = `${t.site_code}|${t.tech}`;
                   const isOpen = open === key;
-                  const who = roster?.get(rosterKey(t.tech));
-                  const marks = who && ptoQ.data
-                    ? dayMarks(t.byDay, firstDay, { weekFirst: weekFirstDay(week, t.site_code), crew: who.crew, pto: ptoByUser.get(who.user_id) ?? [], today })
-                    : null;
                   return (
                     <Fragment key={key}>
                       <tr>

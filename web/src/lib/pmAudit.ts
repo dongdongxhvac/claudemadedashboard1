@@ -698,8 +698,9 @@ export type TechWeek = {
   byDay: number[];
   /** Hours logged on a PM task assigned to someone else. */
   onOthers: number;
-  /** Double-booked: a second (or later) entry by this person on the same task
-   *  on the same day. Still inside placed / byBucket / byDay — Cove has them. */
+  /** Double-booked: this person's extra entries on a task they already have an
+   *  entry on that day (the largest stands). Still inside placed / byBucket /
+   *  byDay — Cove has them. */
   double: number;
   doubleByDay: number[];
   doubleItems: LaborItem[];
@@ -895,20 +896,30 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     r.unplaced = r.logged === null ? 0 : r2(Math.max(0, r.logged - r.placed));
     r.tasks = new Set(r.items.map((i) => `${i.kind}|${i.task_no}`)).size;
     r.items.sort((a, b) => a.performed_at.localeCompare(b.performed_at) || a.task_no.localeCompare(b.task_no));
-    // Double-booked: the first entry on a task that day stands, every later one
-    // is set apart. The catch-all "unscheduled tasks" tasks are left out — they
-    // take one entry per small job, many a day, by design. Work orders carry a
-    // single total, so they cannot repeat.
-    const seen = new Set<string>();
+    // Double-booked: of one person's entries on a task on one day, the largest
+    // stands (the earliest of equals) and every other one is set apart. Which
+    // came first cannot decide it: entries typed together carry the same time.
+    // The catch-all "unscheduled tasks" tasks are left out — they take one
+    // entry per small job, many a day, by design. Work orders carry a single
+    // total, so they cannot repeat.
+    const groups = new Map<string, LaborItem[]>();
     for (const it of r.items) {
       if (it.kind !== 'pm' || it.bucket === 'unscheduled') continue;
       const k = `${it.task_no}|${it.day_local}`;
-      if (!seen.has(k)) { seen.add(k); continue; }
-      const hrs = Number(it.hours ?? 0);
-      r.double += hrs;
-      r.doubleItems.push(it);
-      const d = dayIndex(firstDay, it.day_local);
-      if (d >= 0 && d < nDays) r.doubleByDay[d] += hrs;
+      const g = groups.get(k);
+      if (g) g.push(it); else groups.set(k, [it]);
+    }
+    for (const g of groups.values()) {
+      if (g.length < 2) continue;
+      const keep = g.reduce((a, b) => (Number(b.hours ?? 0) > Number(a.hours ?? 0) ? b : a));
+      for (const it of g) {
+        if (it === keep) continue;
+        const hrs = Number(it.hours ?? 0);
+        r.double += hrs;
+        r.doubleItems.push(it);
+        const d = dayIndex(firstDay, it.day_local);
+        if (d >= 0 && d < nDays) r.doubleByDay[d] += hrs;
+      }
     }
     r.double = r2(r.double);
     r.doubleByDay = r.doubleByDay.map(r2);

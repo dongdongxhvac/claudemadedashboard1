@@ -318,9 +318,10 @@ Checked on real rows, week key 2026-11-09: Binney Nov 8 – 14, 21 engineers, lo
 
 ### Week tab: double-booked hours and days against the PTO calendar (2026-11-23)
 
-**Double-booked** (manager: "separate out the double book"). A second or later entry by the same person on
-the same task on the same day (`buildWeekTime`: `double`, `doubleByDay`, `doubleItems`). The first entry
-stands. The hours stay in every total — Cove has them — and are set apart: a tile, a line under the name,
+**Double-booked** (manager: "separate out the double book"). More than one entry by the same person on
+the same task on the same day (`buildWeekTime`: `double`, `doubleByDay`, `doubleItems`). The largest entry
+stands (the earliest of equals) and the others are the double-booked ones — which was typed first cannot
+decide it, entries typed together carry the same time. The hours stay in every total — Cove has them — and are set apart: a tile, a line under the name,
 an orange underline on the day, and their own block under the day when a name is opened. Left out: the
 catch-all "unscheduled tasks" tasks (bucket `unscheduled`), which take one entry per small job, and work
 orders (one total at close). Cove stores no start/end time on an entry — `performedAt` is the moment it was
@@ -342,3 +343,24 @@ Scheduled days come from the profile's shift (`shifts.crew`, the PTO panel's rul
 cover it; pending and denied requests do not count. `useAuditEngineers` now returns each roster name with
 its `user_id` and crew; `useAuditPto` reads `pto_requests` for the days on the page. An engineer with no
 hours and no closes all week has no row, so a whole week off does not show here.
+
+**Removed entries (migration 0168).** `v_audit_labor_items` used to count every `labor_item_added` event
+and ignore `labor_item_removed`, so an entry typed by mistake and deleted still counted (138 so far; one
+task had nine added in 30 ms and eight removed) and showed as double-booked. A removal carries the entry's
+person, hours and performed-at but no id, so it cancels one added entry with the same three on the same
+task. `labor_item_updated` (190 events) has no id either and cannot be tied to the entry it changed; those
+still count at the hours first typed. Week key 2026-11-09 after the fix: Binney 756.5 h placed (was 764.0),
+double-booked 3.7 h across 5 engineers; UPark 252.6 h placed, double-booked 2.2 h across 3.
+
+### Week is the front page; the shop print (2026-11-23)
+
+- Tabs run Week · Queue · Scorecard. `/audit` is the Week tab (`/audit/week` still answers); the queue
+  moved to `/audit/queue`; review cards stay at `/audit/:week/:taskNo` and light the Queue tab.
+- **Print** (button beside the date range): the sheet the manager posts in the shop each Wednesday for the
+  week before. Two columns of the table only — the engineer and the hours per day — landscape, the selected
+  site and week. `PrintSheet` in `Week.tsx` is a portal on `document.body`, hidden on screen; its print CSS
+  hides `#root`, so Ctrl-P on the Week tab prints the same sheet. Names run A–Z. A day the PTO calendar
+  covers prints "PTO" with no kind of leave (it hangs on a wall), a scheduled day with nothing logged prints
+  a boxed 0, days off are blank; no double-booked marks. Type size steps down with the head-count so up to
+  26 people fit one page (Binney's 21 at 11 pt). Checked with headless Chrome `--print-to-pdf` against the
+  dev server: one Letter-landscape page for Binney and for UPark, two for both sites together.

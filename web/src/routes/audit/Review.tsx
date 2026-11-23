@@ -358,7 +358,7 @@ export default function AuditReview() {
   const idx = list.findIndex((r) => r.task_no === taskNo);
   const row = idx >= 0 ? list[idx] : null;
 
-  const queueHref = `/audit${p.carry}${week ? `${p.carry ? '&' : '?'}week=${week}` : ''}`;
+  const queueHref = `/audit/queue${p.carry}${week ? `${p.carry ? '&' : '?'}week=${week}` : ''}`;
   const hrefOf = (r: QueueRow) => `/audit/${r.week_start}/${encodeURIComponent(r.task_no)}${p.carry}`;
   const prev = idx > 0 ? list[idx - 1] : null;
   const next = idx >= 0 && idx < list.length - 1 ? list[idx + 1] : null;
@@ -389,7 +389,7 @@ export default function AuditReview() {
   );
 
   if (!week || !taskNo) {
-    return <AuditShell kicker="Section 05 · Review" title="PM Audit"><Notice tone="error">That address is not a review card. <Link to="/audit" style={{ color: A.blue }}>Back to the queue</Link>.</Notice></AuditShell>;
+    return <AuditShell kicker="Section 05 · Review" title="PM Audit"><Notice tone="error">That address is not a review card. <Link to="/audit/queue" style={{ color: A.blue }}>Back to the queue</Link>.</Notice></AuditShell>;
   }
 
   const f = row?.f ?? cardQ.data?.f ?? null;

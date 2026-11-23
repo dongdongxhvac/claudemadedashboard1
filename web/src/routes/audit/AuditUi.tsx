@@ -57,8 +57,11 @@ export function AuditShell({ kicker, title, subtitle, actions, children, tabs = 
   const access = useAuditAccess();
   const p = useAuditParams();
   const { pathname } = useLocation();
+  // Week is the section's front page (/audit; /audit/week still answers).
+  // The queue lives at /audit/queue, and a review card belongs to it.
   const onScorecard = pathname.startsWith('/audit/scorecard');
-  const onWeek = pathname.startsWith('/audit/week');
+  const onQueue = pathname.startsWith('/audit/queue') || /^\/audit\/\d{4}-\d{2}-\d{2}\//.test(pathname);
+  const onWeek = !onScorecard && !onQueue;
   const siteQs = p.site !== 'both' && access.canPickSite ? `?site=${p.site}` : '';
   const tab = (to: string, text: string, on: boolean) => (
     <Link to={to} aria-current={on ? 'page' : undefined}
@@ -72,8 +75,8 @@ export function AuditShell({ kicker, title, subtitle, actions, children, tabs = 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${A.line}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
             <Link to="/" style={{ font: `500 13px ${font}`, color: A.blue, textDecoration: 'none' }}>← Dashboard</Link>
-            {tabs && tab(`/audit${siteQs}`, 'Queue', !onScorecard && !onWeek)}
-            {tabs && tab(`/audit/week${siteQs}`, 'Week', onWeek)}
+            {tabs && tab(`/audit${siteQs}`, 'Week', onWeek)}
+            {tabs && tab(`/audit/queue${siteQs}`, 'Queue', onQueue)}
             {tabs && tab(`/audit/scorecard${siteQs}`, 'Scorecard', onScorecard)}
           </div>
           <div style={{ paddingBottom: 8 }}>

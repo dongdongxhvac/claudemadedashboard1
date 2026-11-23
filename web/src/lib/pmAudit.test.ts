@@ -244,6 +244,12 @@ const wtDbl = buildWeekTime([
 ], [], [], '2026-11-09');
 const dAnn = wtDbl.techs.find((t) => t.tech === 'Ann Lee')!;
 eq('double-booked: later entry on the same task that day, catch-all tasks left out', [dAnn.placed, dAnn.double, dAnn.doubleByDay, dAnn.doubleItems.map((i) => i.performed_at)], [6, 1.5, [1.5, 0, 0, 0, 0, 0, 0], ['2026-11-09T22:20:00Z']]);
+const wtBig = buildWeekTime([
+  li({ task_no: 'PM-R', hours: 0.25, day_local: '2026-11-09', performed_at: '2026-11-09T17:00:00Z' }),
+  li({ task_no: 'PM-R', hours: 6, day_local: '2026-11-09', performed_at: '2026-11-09T17:00:00Z' }),
+  li({ task_no: 'PM-R', hours: 0.5, day_local: '2026-11-09', performed_at: '2026-11-09T18:00:00Z' }),
+], [], [], '2026-11-09');
+eq('double-booked: the largest entry stands, whatever order they were typed in', [wtBig.techs[0].double, wtBig.techs[0].doubleItems.map((i) => i.hours)], [0.75, [0.25, 0.5]]);
 eq('double-booked: another person on the same task is not a repeat', [wtDbl.techs.find((t) => t.tech === 'Bob Roy')!.double, wtDbl.team.double, wtDbl.team.doublePeople], [0, 1.5, 1]);
 
 // roster with crews, and days against the PTO calendar

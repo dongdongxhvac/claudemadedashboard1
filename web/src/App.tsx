@@ -277,7 +277,8 @@ export default function App() {
             scorecard. One tree for both sites — the page carries its own
             UPark / Binney / Both toggle (admin + director; everyone else is
             held to their home site). Gate mirrors the queue's RLS. */}
-        <Route path="/audit" element={<Protected><RequireAudit><AuditQueue /></RequireAudit></Protected>} />
+        <Route path="/audit" element={<Protected><RequireAudit><AuditWeek /></RequireAudit></Protected>} />
+        <Route path="/audit/queue" element={<Protected><RequireAudit><AuditQueue /></RequireAudit></Protected>} />
         <Route path="/audit/scorecard" element={<Protected><RequireAudit><AuditScorecard /></RequireAudit></Protected>} />
         <Route path="/audit/week" element={<Protected><RequireAudit><AuditWeek /></RequireAudit></Protected>} />
         <Route path="/audit/:week/:taskNo" element={<Protected><RequireAudit><AuditReview /></RequireAudit></Protected>} />
