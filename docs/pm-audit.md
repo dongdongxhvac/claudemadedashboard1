@@ -364,3 +364,12 @@ double-booked 3.7 h across 5 engineers; UPark 252.6 h placed, double-booked 2.2 
   a boxed 0, days off are blank; no double-booked marks. Type size steps down with the head-count so up to
   26 people fit one page (Binney's 21 at 11 pt). Checked with headless Chrome `--print-to-pdf` against the
   dev server: one Letter-landscape page for Binney and for UPark, two for both sites together.
+
+**Later the same day (manager).** The print sheet gained a **Total** column and a **Double** (double-booked
+hours) column after the days, and prints in colour: PTO green, the boxed 0 and hours logged on a PTO day
+red, double-booked orange. On screen the double-booked hours left the line under the name for a **Double**
+column beside Logged — just the number. A week's total under **32 h** (`LOW_WEEK_HOURS`, `lowWeek`) is
+highlighted red on screen (Logged) and on the sheet (Total), never for the week in progress. Total is
+`weekTotal`: the labor report's figure, or what the entries add up to where that is more — it can exceed the
+sum of the days, because the report also counts hours on work orders still open. PTO hours do not count
+toward the 32.

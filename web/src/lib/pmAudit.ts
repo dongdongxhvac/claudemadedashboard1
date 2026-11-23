@@ -937,6 +937,21 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
   return { techs, others, team, asOf };
 }
 
+/** A week's total under this many hours is highlighted (manager 2026-11-23). */
+export const LOW_WEEK_HOURS = 32;
+
+/** One person's hours for the week: the labor report's total, or what the
+ *  entries add up to where that is more (or the report has no row). The
+ *  report also counts hours on work orders still open, which no day shows. */
+export function weekTotal(t: Pick<TechWeek, 'logged' | 'placed'>): number {
+  return Math.max(t.logged ?? 0, t.placed);
+}
+
+/** Highlight a total? Not while the week is still running — everyone is low then. */
+export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed'>, inProgress: boolean): boolean {
+  return !inProgress && weekTotal(t) < LOW_WEEK_HOURS;
+}
+
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */
 export function fmtH(h: number, blankZero = true): string {
   if (!h) return blankZero ? '' : '0';

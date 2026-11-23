@@ -7,19 +7,19 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, pct, rosterKey, shortName,
-  weekDays, weekFirstDay, weekLabel,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, pct,
+  rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
 import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
 import { useAuditParams } from './useAuditParams';
 
-const num = { ...tdStyle, padding: '14px 6px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
-const thNum = { ...thStyle, padding: '12px 6px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
+const num = { ...tdStyle, padding: '14px 5px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
+const thNum = { ...thStyle, padding: '12px 5px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 /** The days and the three PM-result columns each read as a group: a rule on the group's left edge. */
-const groupEdge = { borderLeft: `1px solid ${A.lineSoft}`, paddingLeft: 10 };
+const groupEdge = { borderLeft: `1px solid ${A.lineSoft}`, paddingLeft: 8 };
 
 function otherLabel(o: OtherPerson): string {
   const h = Math.max(o.logged, o.placed);
@@ -57,12 +57,12 @@ function HoursBar({ t, scale }: { t: TechWeek; scale: number }) {
  *  calendar (green: it agrees; red: it does not), and an orange underline
  *  where some of the day's hours are double-booked. */
 function DayCell({ hours, double, mark, first }: { hours: number; double: number; mark: DayMark | null; first: boolean }) {
-  const base = { ...num, padding: '14px 5px', ...(first ? groupEdge : null) };
+  const base = { ...num, padding: '14px 4px', ...(first ? groupEdge : null) };
   if (mark) {
     const tone = mark.tone === 'green' ? { background: A.greenSoft, color: A.greenDark } : { background: A.redSoft, color: A.redDark };
     return (
       <td style={base} title={mark.why}>
-        <span style={{ display: 'inline-block', minWidth: 18, padding: '1px 4px', borderRadius: 4, fontSize: 12, fontWeight: 600, textAlign: 'center', ...tone }}>{mark.label}</span>
+        <span style={{ display: 'inline-block', minWidth: 18, padding: '1px 3px', borderRadius: 4, fontSize: 12, fontWeight: 600, textAlign: 'center', ...tone }}>{mark.label}</span>
       </td>
     );
   }
@@ -171,8 +171,13 @@ const PRINT_CSS = `
   .audit-print-sheet td { font-size: var(--aps-font, 12pt); line-height: 1.25; padding: var(--aps-pad, 3.5pt) 8pt; text-align: right; border-bottom: 0.5pt solid #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .audit-print-sheet td:first-child { font-weight: 600; }
   .audit-print-sheet td small { font-size: 8pt; font-weight: 400; color: #333; }
-  .audit-print-sheet .aps-pto { font-size: 9pt; font-weight: 600; letter-spacing: 0.04em; }
-  .audit-print-sheet .aps-zero { display: inline-block; min-width: 10pt; padding: 0 3pt; line-height: 1.05; border: 1pt solid #000; font-weight: 700; text-align: center; }
+  .audit-print-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .audit-print-sheet .aps-pto { font-size: 9pt; font-weight: 700; letter-spacing: 0.04em; color: ${A.greenDark}; }
+  .audit-print-sheet .aps-zero { display: inline-block; min-width: 10pt; padding: 0 3pt; line-height: 1.05; border: 1pt solid ${A.red}; color: ${A.red}; font-weight: 700; text-align: center; }
+  .audit-print-sheet .aps-red { color: ${A.red}; font-weight: 700; }
+  .audit-print-sheet .aps-total { font-weight: 700; border-left: 1pt solid #000; }
+  .audit-print-sheet .aps-low { display: inline-block; padding: 0 4pt; line-height: 1.15; border-radius: 2pt; background: ${A.redSoft}; color: ${A.red}; }
+  .audit-print-sheet .aps-double { color: ${A.orange}; font-weight: 700; }
   .audit-print-sheet .aps-foot { margin-top: 8pt; font-size: 8.5pt; color: #333; }
 }
 `;
@@ -200,6 +205,8 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
           <tr>
             <th>Engineer</th>
             {days.map((d, i) => <th key={i}>{d}<small>{dayLabel(addDays(firstDay, i))}</small></th>)}
+            <th className="aps-total">Total<small>hours</small></th>
+            <th>Double<small>booked</small></th>
           </tr>
         </thead>
         <tbody>
@@ -210,17 +217,23 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
                 const m = marks?.[i] ?? null;
                 return (
                   <td key={i}>
-                    {h > 0 ? fmtH(h) : m?.tone === 'green' ? <span className="aps-pto">PTO</span> : m?.tone === 'red' ? <span className="aps-zero">0</span> : ''}
+                    {h > 0 ? (m?.tone === 'red' ? <span className="aps-red">{fmtH(h)}</span> : fmtH(h))
+                      : m?.tone === 'green' ? <span className="aps-pto">PTO</span> : m?.tone === 'red' ? <span className="aps-zero">0</span> : ''}
                   </td>
                 );
               })}
+              <td className="aps-total">{lowWeek(t, inProgress) ? <span className="aps-low">{fmtH(weekTotal(t), false)}</span> : fmtH(weekTotal(t), false)}</td>
+              <td className="aps-double">{fmtH(t.double)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="aps-foot">
-        Blank = day off. PTO = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged and no approved time off.
-        Something missing? Log it on the task in Cove — hours entered after this was printed are not on it.
+        Blank = day off. <span className="aps-pto">PTO</span> = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged
+        and no approved time off. <span className="aps-red">Red hours</span> = logged on a day the PTO calendar has off.{' '}
+        <strong>Total</strong> = the week's hours in Cove's labor report (it can be more than the days add up to: hours on a work order still open
+        are on no day){inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h</>}. <span className="aps-double">Double-booked</span> = hours
+        entered more than once on the same task the same day. Something missing? Log it on the task in Cove.
       </div>
     </div>,
     document.body,
@@ -343,16 +356,17 @@ export default function AuditWeek() {
               <thead>
                 <tr>
                   <th style={thText}>Engineer</th>
-                  <th style={thNum} title="Total hours on the Cove labor report for the week">Logged</th>
-                  <th style={{ ...thText, minWidth: days.length > 7 ? 96 : 120 }}>Where it went</th>
+                  <th style={thNum} title={`Total hours on the Cove labor report for the week — highlighted under ${LOW_WEEK_HOURS} h once the week is over`}>Logged</th>
+                  <th style={{ ...thNum, color: A.orangeDark }} title="Double-booked: hours entered more than once by the same person on the same task the same day. Inside Logged, not on top of it.">Double</th>
+                  <th style={{ ...thText, minWidth: days.length > 7 ? 72 : 88 }}>Where<br />it went</th>
                   {BUCKETS.map((b) => (
-                    <th key={b.key} style={thNum} title={b.label}>
+                    <th key={b.key} style={{ ...thNum, whiteSpace: 'normal' }} title={b.label}>
                       {/* the bar's colour as an underline: ties the column to the bar without widening it */}
                       <span style={{ display: 'inline-block', paddingBottom: 3, borderBottom: `3px solid ${BUCKET_COLOR[b.key]}` }}>{b.short}</span>
                     </th>
                   ))}
                   <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
-                  {days.map((d, i) => <th key={i} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
+                  {days.map((d, i) => <th key={i} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 4px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
                   <th style={thNum} title="Of those, how many were good: a photo or a thick note, and no flag">Good</th>
@@ -371,9 +385,14 @@ export default function AuditWeek() {
                             <span aria-hidden="true" style={{ display: 'inline-block', width: 14, color: A.muted }}>{isOpen ? '▾' : '▸'}</span>{t.tech}
                           </button>
                           {p.site === 'both' && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400, paddingLeft: 14 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
-                          {t.double > 0 && <div style={{ color: A.orangeDark, fontSize: 12, fontWeight: 500, paddingLeft: 14 }}>{fmtH(t.double, false)} h double-booked</div>}
                         </td>
-                        <td style={{ ...num, fontWeight: 600, color: t.logged === null ? A.faint : undefined }}>{t.logged === null ? '—' : fmtH(t.logged, false)}</td>
+                        <td style={{ ...num, fontWeight: 600, color: t.logged === null ? A.faint : undefined }}
+                          title={lowWeek(t, week === current) ? `Under ${LOW_WEEK_HOURS} h for the week` : undefined}>
+                          {lowWeek(t, week === current)
+                            ? <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 4, background: A.redSoft, color: A.redDark }}>{t.logged === null ? fmtH(t.placed, false) : fmtH(t.logged, false)}</span>
+                            : t.logged === null ? '—' : fmtH(t.logged, false)}
+                        </td>
+                        <td style={{ ...num, color: A.orangeDark, fontWeight: 600 }} title={t.double > 0 ? 'Double-booked hours — open the name to see the entries' : undefined}>{fmtH(t.double)}</td>
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
@@ -384,7 +403,7 @@ export default function AuditWeek() {
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={7 + days.length + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
+                          <td colSpan={8 + days.length + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
                             <Entries t={t} firstDay={firstDay} days={days} />
                           </td>
                         </tr>
@@ -429,9 +448,11 @@ export default function AuditWeek() {
               {ptoQ.isError && <span style={{ color: A.orangeDark }}> The PTO calendar could not be read, so no day is marked.</span>}
             </div>
             <div style={{ marginBottom: 6 }}>
-              <strong>Double-booked</strong> = a second (or later) entry by the same person on the same task on the same day,{' '}
-              <span style={{ borderBottom: `2px solid ${A.orange}` }}>underlined</span> in the day columns and set apart when you open a name. Those hours are still in
-              every total, as Cove has them. The catch-all unscheduled-task tasks are left out: they take one entry per small job.
+              <strong>Double</strong> = double-booked hours: more than one entry by the same person on the same task on the same day (the largest stands).
+              They are <span style={{ borderBottom: `2px solid ${A.orange}` }}>underlined</span> in the day columns and set apart when you open a name. Those hours are
+              still in every total, as Cove has them. The catch-all unscheduled-task tasks are left out: they take one entry per small job.
+              A <span style={{ background: A.redSoft, color: A.redDark, fontWeight: 600, borderRadius: 4, padding: '0 4px' }}>Logged</span> total
+              under {LOW_WEEK_HOURS} h is highlighted once the week is over.
             </div>
             <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the

@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, lowWeek, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -284,6 +284,8 @@ eq('day marks: today and later are not judged', marksOf([7, 0, 0, 0, 0, 0, 0], [
 eq('day marks: both sites, a column outside the person\'s own week', dayMarks([0, 0, 0, 0, 0, 0, 0, 0], '2026-11-08', { weekFirst: '2026-11-09', crew: null, pto: [], today: '2026-11-20' }).map((m) => m?.label ?? null),
   [null, '0', '0', '0', '0', '0', null, null]);
 
+eq('week total: the labor report, or the entries where they add up to more', [weekTotal({ logged: 40, placed: 8.5 }), weekTotal({ logged: 20, placed: 31 }), weekTotal({ logged: null, placed: 4 })], [40, 31, 4]);
+eq('low week: under 32 h, but not while the week is running', [lowWeek({ logged: 31.9, placed: 30 }, false), lowWeek({ logged: 32, placed: 30 }, false), lowWeek({ logged: null, placed: 12 }, false), lowWeek({ logged: 8, placed: 8 }, true)], [true, false, true, false]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO
