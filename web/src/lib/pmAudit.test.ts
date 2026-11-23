@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, easternMidnight, weekFirstDay, sunSatHours, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -205,6 +205,32 @@ eq('engineers only: left off, biggest first', wtEng.others, [
   { tech: 'Max Manager', site_code: 'binney', logged: 0, placed: 0, closed: 1 },
 ]);
 eq('engineers only: team counts engineers', [wtEng.team.logged, wtEng.team.placed, wtEng.team.people], [40, 5, 2]);
+
+// Binney's Week tab runs Sunday–Saturday, from the day before the Monday
+eq('first day of the week tab', [weekFirstDay('2026-11-09', 'binney'), weekFirstDay('2026-11-09', 'upark'), weekFirstDay('2026-11-09', 'both')], ['2026-11-08', '2026-11-09', '2026-11-09']);
+eq('eastern day', [easternDay('2026-11-09T03:30:00Z'), easternDay('2026-11-09T05:00:00Z'), easternDay('nope')], ['2026-11-08', '2026-11-09', null]);
+eq('eastern midnight: standard and daylight time', [easternMidnight('2026-11-09'), easternMidnight('2026-07-06'), easternMidnight('2026-11-01')],
+  ['2026-11-09T05:00:00.000Z', '2026-07-06T04:00:00.000Z', '2026-11-01T04:00:00.000Z']);
+const wtSun = buildWeekTime([
+  li({ task_no: 'PM-S', hours: 7.5, day_local: '2026-11-08', performed_at: '2026-11-08T15:00:00Z', week_start: '2026-11-02' }),
+  li({}),
+  li({ task_no: 'PM-L', hours: 9, day_local: '2026-11-15', performed_at: '2026-11-15T15:00:00Z' }),
+], [{ site_code: 'binney', assigned_to_name: 'Ann Lee', week_start: '2026-11-09', week_hours: 20, as_of: null }], [], '2026-11-09', null, '2026-11-08');
+eq('sunday first: the prior Sunday is in, the Sunday that ends the Monday week is out', [wtSun.techs[0].placed, wtSun.techs[0].byDay, wtSun.techs[0].unplaced], [8.5, [7.5, 1, 0, 0, 0, 0, 0], 11.5]);
+eq('sunday to saturday total from Monday-week polls', sunSatHours([
+  { snapshot_id: 'satPrev', assigned_to_name: 'Ann Lee', labor_hours: 30 },
+  { snapshot_id: 'endPrev', assigned_to_name: 'Ann Lee', labor_hours: 38.5 },
+  { snapshot_id: 'endPrev', assigned_to_name: 'Bob Roy', labor_hours: 9 },
+  { snapshot_id: 'satThis', assigned_to_name: 'Ann Lee', labor_hours: 24 },
+  { snapshot_id: 'satThis', assigned_to_name: 'Cy Doe', labor_hours: 32 },
+  { snapshot_id: 'satPrev', assigned_to_name: 'Cy Doe', labor_hours: 40 },
+  { snapshot_id: 'endPrev', assigned_to_name: 'Cy Doe', labor_hours: 39 },
+], { satThis: 'satThis', endPrev: 'endPrev', satPrev: 'satPrev' }, 'binney', '2026-11-09', 't').map((h) => [h.assigned_to_name, h.week_hours, h.week_start]),
+  [['Ann Lee', 32.5, '2026-11-09'], ['Bob Roy', 9, '2026-11-09'], ['Cy Doe', 32, '2026-11-09']]);
+eq('sunday to saturday: no poll before the Sunday, so no Sunday part', sunSatHours([
+  { snapshot_id: 'endPrev', assigned_to_name: 'Ann Lee', labor_hours: 38.5 },
+  { snapshot_id: 'satThis', assigned_to_name: 'Ann Lee', labor_hours: 24 },
+], { satThis: 'satThis', endPrev: 'endPrev', satPrev: null }, 'binney', '2026-11-09', null).map((h) => [h.assigned_to_name, h.week_hours]), [['Ann Lee', 24]]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO

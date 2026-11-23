@@ -176,11 +176,33 @@ export function dayLabel(iso: string): string {
 /** The Monday (Eastern) of the week an instant falls in, as YYYY-MM-DD — the
  *  same week the database's date_trunc('week', … at time zone) gives. */
 export function weekStartOf(iso: string): string | null {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const day = new Intl.DateTimeFormat('en-CA', { timeZone: AUDIT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const day = easternDay(iso);
+  if (!day) return null;
   const dow = parseDay(day).getUTCDay(); // 0 = Sunday
   return addDays(day, -((dow + 6) % 7));
+}
+
+/** The Eastern calendar day an instant falls on, as YYYY-MM-DD. */
+export function easternDay(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: AUDIT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+/** The instant an Eastern calendar day starts, as a UTC timestamp: 04:00Z in
+ *  daylight time, 05:00Z in standard time. */
+export function easternMidnight(day: string): string {
+  const edt = `${day.slice(0, 10)}T04:00:00.000Z`;
+  return easternDay(edt) === day.slice(0, 10) ? edt : `${day.slice(0, 10)}T05:00:00.000Z`;
+}
+
+/** The first of the seven days the Week tab shows. The section's week is
+ *  Monday–Sunday (queue, scorecard, the week in the address). Binney works
+ *  Sun–Wed and Wed–Sat shifts, so its Week tab runs Sunday–Saturday, starting
+ *  the day BEFORE that Monday (user 2026-11-23). UPark, and both sites
+ *  together, stay Monday–Sunday. */
+export function weekFirstDay(weekStart: string, site: SiteFilter): string {
+  return site === 'binney' ? addDays(weekStart, -1) : weekStart;
 }
 
 export function isWeekStart(s: string | null | undefined): s is string {
@@ -631,6 +653,37 @@ export type WeekHours = { site_code: string; assigned_to_name: string | null; we
 /** The slice of a flags row the Week page needs for its "PMs closed" column. */
 export type WeekTimeClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'flag_count' | 'good'>;
 
+/** One person's row of one labor-report poll (a running total for a Monday week). */
+export type LaborPollRow = { snapshot_id: string; assigned_to_name: string | null; labor_hours: number | null };
+
+/** A Sunday–Saturday total per person out of Monday-week polls, which are
+ *  running totals: what the old week's total grew by on its Sunday (its last
+ *  poll minus its last poll before that Sunday) plus the new week's total at
+ *  its last poll before the next Sunday. Returned keyed to `weekStart` (the
+ *  Monday) so buildWeekTime takes it like the labor report's own rows. */
+export function sunSatHours(
+  rows: LaborPollRow[],
+  polls: { satThis: string | null; endPrev: string | null; satPrev: string | null },
+  site: string, weekStart: string, asOf: string | null,
+): WeekHours[] {
+  const of = (id: string | null) => {
+    const m = new Map<string, number>();
+    if (id) for (const r of rows) if (r.snapshot_id === id && r.assigned_to_name) m.set(r.assigned_to_name, (m.get(r.assigned_to_name) ?? 0) + Number(r.labor_hours ?? 0));
+    return m;
+  };
+  const satThis = of(polls.satThis);
+  const endPrev = of(polls.endPrev);
+  const satPrev = of(polls.satPrev);
+  const sundayKnown = !!polls.endPrev && !!polls.satPrev;
+  const out: WeekHours[] = [];
+  for (const name of [...new Set([...satThis.keys(), ...endPrev.keys()])].sort()) {
+    const sunday = sundayKnown ? Math.max(0, (endPrev.get(name) ?? 0) - (satPrev.get(name) ?? 0)) : 0;
+    const total = Math.round(((satThis.get(name) ?? 0) + sunday) * 100) / 100;
+    if (total > 0 || satThis.has(name)) out.push({ site_code: site, assigned_to_name: name, week_start: weekStart, week_hours: total, as_of: asOf });
+  }
+  return out;
+}
+
 export type TechWeek = {
   tech: string;
   site_code: string;
@@ -696,8 +749,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  went (by the kind of task), which days, and how their closed PMs audited.
  *  One row per person and site, biggest week first. With `engineers` (roster
  *  keys) only those people get a row and count in the team totals; everyone
- *  else is listed in `others`. */
-export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null): WeekTime {
+ *  else is listed in `others`. `firstDay` is the first of the seven days the
+ *  entries are taken from and `byDay` starts on (weekFirstDay); `hours` and
+ *  `closes` are the caller's to match to that window. */
+export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null, firstDay: string = weekStart): WeekTime {
   const rows = new Map<string, TechWeek>();
   const row = (site: string | null, tech: string | null): TechWeek => {
     const k = `${site ?? ''}|${tech ?? ''}`;
@@ -716,13 +771,13 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if (h.as_of && (!asOf || h.as_of > asOf)) asOf = h.as_of;
   }
   for (const it of items) {
-    if (it.week_start !== weekStart) continue;
+    const d = dayIndex(firstDay, it.day_local);
+    if (!(d >= 0 && d < 7)) continue;
     const r = row(it.site_code, it.performer);
     const hrs = Number(it.hours ?? 0);
     r.placed += hrs;
     r.byBucket[bucketOf(it.bucket)] += hrs;
-    const d = dayIndex(weekStart, it.day_local);
-    if (d >= 0 && d < 7) r.byDay[d] += hrs;
+    r.byDay[d] += hrs;
     if (it.kind === 'pm' && it.assignee_name && it.assignee_name !== it.performer) r.onOthers += hrs;
     r.items.push(it);
   }

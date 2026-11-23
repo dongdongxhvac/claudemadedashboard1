@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, engineerKeys, joinQueue, sumTypeHours, weekStartOf, weekStats, weeksEnding,
-  type FlagRow, type HistoryEvent, type LaborItem, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
+  addDays, easternDay, easternMidnight, engineerKeys, joinQueue, sumTypeHours, sunSatHours, weekFirstDay, weekStartOf, weekStats, weeksEnding,
+  type FlagRow, type HistoryEvent, type LaborItem, type LaborPollRow, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
   type TypeEntry, type TypeHours, type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
@@ -255,14 +255,59 @@ export function useSaveReview() {
 
 const LABOR_COLS = 'kind,site_code,task_no,task_name,cmms_type,building,assignee_name,task_closed,performer,hours,performed_at,day_local,week_start,bucket';
 
+/** The labor report's total per person for a Sunday–Saturday week. The
+ *  poller only stores running totals for Monday weeks, so this reads three
+ *  polls — the old week's last one, its last one before the Sunday, and the
+ *  new week's last one before the next Sunday — and lets sunSatHours add
+ *  them up. */
+async function fetchSunSatHours(week: string, site: 'upark' | 'binney'): Promise<WeekHours[]> {
+  const pollBefore = async (beforeDay: string, fromDay: string) => {
+    const { data, error } = await supabase.from('snapshots').select('id,taken_at')
+      .eq('kind', 'labor').eq('site_code', site)
+      .gte('taken_at', easternMidnight(fromDay)).lt('taken_at', easternMidnight(beforeDay))
+      .order('taken_at', { ascending: false }).limit(1);
+    if (error) throw new Error(error.message);
+    return (data?.[0] ?? null) as { id: string; taken_at: string } | null;
+  };
+  const [satThis, endPrev, satPrev] = await Promise.all([
+    pollBefore(addDays(week, 6), week),
+    pollBefore(week, addDays(week, -7)),
+    pollBefore(addDays(week, -1), addDays(week, -7)),
+  ]);
+  const ids = [...new Set([satThis, endPrev, satPrev].flatMap((p) => (p ? [p.id] : [])))];
+  const rows = ids.length === 0 ? [] : await fetchAll<LaborPollRow>((from, to) =>
+    supabase.from('labor_rows').select('snapshot_id,assigned_to_name,labor_hours').in('snapshot_id', ids).order('id').range(from, to));
+  return sunSatHours(rows, { satThis: satThis?.id ?? null, endPrev: endPrev?.id ?? null, satPrev: satPrev?.id ?? null },
+    site, week, satThis?.taken_at ?? endPrev?.taken_at ?? null);
+}
+
 /** How the week was spent: every labor entry performed that week (PM tasks
  *  by the person who did the work, work orders at close), the labor report's
- *  weekly totals, and that week's closed PMs for the audit columns. */
+ *  weekly totals, and that week's closed PMs for the audit columns. `week` is
+ *  the section's Monday; for Binney alone the seven days start the Sunday
+ *  before it (weekFirstDay), so everything is read for that window instead. */
 export function useAuditWeekTime(week: string | null, site: SiteFilter) {
   return useQuery({
     queryKey: ['pm_audit', 'week_time', week, site],
     enabled: !!week,
     queryFn: async (): Promise<{ items: LaborItem[]; hours: WeekHours[]; closes: WeekTimeClose[] }> => {
+      const first = weekFirstDay(week!, site);
+      if (site !== 'both' && first !== week) {
+        const last = addDays(first, 6);
+        const [items, closes, hours] = await Promise.all([
+          fetchAll<LaborItem>((from, to) => supabase.from('v_audit_labor_items').select(LABOR_COLS)
+            .eq('site_code', site).gte('day_local', first).lte('day_local', last)
+            .order('performed_at').order('task_no').order('performer').range(from, to)),
+          // closes of the two Monday weeks the window touches, kept by the Eastern day they closed
+          fetchAll<WeekTimeClose & { completed_on: string }>((from, to) => supabase.from('v_pm_audit_flags')
+            .select('task_no,site_code,assigned_to_name,flag_count,good,completed_on')
+            .eq('site_code', site).in('week_start', [addDays(week!, -7), week!])
+            .order('completed_on').order('task_no').range(from, to)),
+          fetchSunSatHours(week!, site),
+        ]);
+        const inWindow = closes.filter((c) => { const d = easternDay(c.completed_on); return !!d && d >= first && d <= last; });
+        return { items, hours, closes: inWindow };
+      }
       const [items, hours, closes] = await Promise.all([
         fetchAll<LaborItem>((from, to) => {
           let q = supabase.from('v_audit_labor_items').select(LABOR_COLS).eq('week_start', week!);

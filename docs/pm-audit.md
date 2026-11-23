@@ -285,9 +285,22 @@ The Week table's last column is three columns (PMs closed · Flagged · Good), a
 underline on the bucket headers, which keeps the table inside the 1280 px card; the header row locks to
 the page from 1360 px wide, and inside the scrolling box below that.
 
-### Binney's days start on Sunday (2026-11-23)
+### Binney's Week tab runs Sunday to Saturday (2026-11-23)
 
-With Binney selected, the Week table's day columns run Sun · Mon … Sat, so a Sun–Wed or Wed–Sat shift
-reads as one run of cells. UPark, and both sites together, stay Monday first. It is column order only:
-the week (totals, queue, labor report) is still Monday–Sunday, so that Sunday column is the day that
-ends the week; the page says so under the table and each day header's tooltip carries its date.
+Binney works Sun–Wed and Wed–Sat shifts, so with Binney selected the Week tab's seven days start on the
+Sunday BEFORE the section's Monday (`weekFirstDay`): week `2026-11-09` shows Nov 8 – 14. Everything on the
+page is for that window. UPark, and both sites together, stay Monday–Sunday. The address, the queue and
+the scorecard still count Monday–Sunday at both sites; moving Binney's queue needs `build_pm_audit_queue`,
+the cron and the views changed (not done).
+
+- Entries: `v_audit_labor_items` by `day_local` range instead of `week_start`.
+- PMs closed / flagged / good: `v_pm_audit_flags` rows of the two Monday weeks the window touches, kept by
+  the Eastern day they closed.
+- Logged: the poller only stores running totals per Monday week, so the Sunday–Saturday total is worked
+  out from three polls (`fetchSunSatHours` → `sunSatHours`): what the old week's total grew by on its
+  Sunday, plus the new week's total at its last poll before the next Sunday. An estimate — an entry typed
+  in on that Sunday for an earlier day counts as Sunday. A true figure needs the labor poller to ask Cove
+  for a Sunday–Saturday range and a place to store it (a new snapshot kind = a migration).
+
+Checked 2026-11-23 on real rows for the weeks of Nov 8 and Nov 22: 21 engineers, logged 710 h (Monday week
+717 h), placed 764 h, Sun–Wed and Wed–Sat shifts each read as one run of cells.

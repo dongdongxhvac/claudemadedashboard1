@@ -6,7 +6,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useAuditEngineers, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, SITE_LABEL, addDays, bucketOf, buildWeekTime, dayLabel, fmtH, fmtStamp, pct, shortName, weekLabel,
+  BUCKETS, KIND_LABEL, SITE_LABEL, addDays, bucketOf, buildWeekTime, dayLabel, fmtH, fmtStamp, pct, shortName, weekFirstDay, weekLabel,
   type Bucket, type LaborItem, type OtherPerson, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
@@ -14,13 +14,8 @@ import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } f
 import { useAuditParams } from './useAuditParams';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-/** Column order of the day cells, as indexes into a Monday-first week. Binney
- *  runs Sun–Wed and Wed–Sat shifts, so its Sunday sits in front of Monday and a
- *  shift reads as one run of cells (user 2026-11-23). Display order only: the
- *  week is still Monday–Sunday, so that Sunday is the one that ends the week.
- *  UPark, and both sites together, stay Monday first. */
-const MON_FIRST = [0, 1, 2, 3, 4, 5, 6];
-const SUN_FIRST = [6, 0, 1, 2, 3, 4, 5];
+/** Binney's Week tab runs Sunday–Saturday (weekFirstDay), so its days are named from Sunday. */
+const DAYS_SUN_FIRST = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const num = { ...tdStyle, padding: '14px 6px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
 const thNum = { ...thStyle, padding: '12px 6px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
@@ -60,7 +55,7 @@ function HoursBar({ t, scale }: { t: TechWeek; scale: number }) {
 }
 
 /** The expanded row: that person's entries, day by day. */
-function Entries({ t, week }: { t: TechWeek; week: string }) {
+function Entries({ t, firstDay, days }: { t: TechWeek; firstDay: string; days: string[] }) {
   const byDay = useMemo(() => {
     const m = new Map<string, LaborItem[]>();
     for (const it of t.items) {
@@ -75,11 +70,11 @@ function Entries({ t, week }: { t: TechWeek; week: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {byDay.map(([day, list]) => {
-        const i = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${week}T00:00:00Z`)) / 86_400_000);
+        const i = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${firstDay}T00:00:00Z`)) / 86_400_000);
         return (
           <div key={day}>
             <div style={{ fontSize: 12, fontWeight: 600, color: A.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {DAYS[i] ?? ''} {dayLabel(day)} · {fmtH(list.reduce((a, it) => a + Number(it.hours), 0), false)} h
+              {days[i] ?? ''} {dayLabel(day)} · {fmtH(list.reduce((a, it) => a + Number(it.hours), 0), false)} h
             </div>
             <ul style={{ listStyle: 'none', margin: '4px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 13 }}>
               {list.map((it, k) => (
@@ -115,14 +110,16 @@ export default function AuditWeek() {
   const dataQ = useAuditWeekTime(week, p.site);
   const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
-  const dayOrder = p.site === 'binney' ? SUN_FIRST : MON_FIRST;
+  const firstDay = week ? weekFirstDay(week, p.site) : null;
+  const sunFirst = !!week && firstDay !== week;
+  const days = sunFirst ? DAYS_SUN_FIRST : DAYS;
 
   // Engineers only. If the roster cannot be read, show everyone and say so
   // rather than an empty page.
   const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data) : null), [rosterQ.data]);
   const wt = useMemo(
-    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers) : null),
-    [dataQ.data, week, engineers],
+    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, firstDay ?? week) : null),
+    [dataQ.data, week, engineers, firstDay],
   );
   const scale = wt ? Math.max(0, ...wt.techs.map((t) => Math.max(t.logged ?? 0, t.placed))) : 0;
   const earliest = range.data?.firstClose ?? null;
@@ -134,7 +131,7 @@ export default function AuditWeek() {
   return (
     <AuditShell
       kicker="Section 05 · Week"
-      title={week ? `How the week was spent · ${weekLabel(week)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
+      title={week && firstDay ? `How the week was spent · ${weekLabel(firstDay)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
       subtitle="Engineers' hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
       actions={week && (
         <>
@@ -149,10 +146,10 @@ export default function AuditWeek() {
         <Notice>Loading the week…</Notice>
       ) : dataQ.isError ? (
         <Notice tone="error">Could not load the week: {(dataQ.error as Error).message}</Notice>
-      ) : !wt || !team || !week ? (
+      ) : !wt || !team || !week || !firstDay ? (
         <Notice>No week to show yet.</Notice>
       ) : wt.techs.length === 0 ? (
-        <Notice>No engineer logged labor for the week of {weekLabel(week)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
+        <Notice>No engineer logged labor for the week of {weekLabel(firstDay)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
       ) : (
         <>
           <div style={tileGrid}>
@@ -195,7 +192,7 @@ export default function AuditWeek() {
                     </th>
                   ))}
                   <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
-                  {dayOrder.map((d, i) => <th key={d} title={`${DAYS[d]} ${dayLabel(addDays(week, d))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{DAYS[d]}</th>)}
+                  {days.map((d, i) => <th key={d} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
                   <th style={thNum} title="Of those, how many were good: a photo or a thick note, and no flag">Good</th>
@@ -219,7 +216,7 @@ export default function AuditWeek() {
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
-                        {dayOrder.map((d, i) => { const h = t.byDay[d]; return <td key={d} style={{ ...num, padding: '14px 5px', ...(i === 0 ? groupEdge : null), color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>; })}
+                        {t.byDay.map((h, i) => <td key={i} style={{ ...num, padding: '14px 5px', ...(i === 0 ? groupEdge : null), color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>)}
                         <td style={{ ...num, ...groupEdge, color: t.closed > 0 ? undefined : A.faint }}>{t.closed > 0 ? t.closed : '—'}</td>
                         <td style={{ ...num, color: t.flagged > 0 ? A.red : A.faint, fontWeight: t.flagged > 0 ? 600 : 400 }}>{t.closed > 0 ? t.flagged : ''}</td>
                         <td style={{ ...num, color: t.good > 0 ? A.greenDark : A.faint, fontWeight: t.good > 0 ? 600 : 400 }}>{t.closed > 0 ? t.good : ''}</td>
@@ -227,7 +224,7 @@ export default function AuditWeek() {
                       {isOpen && (
                         <tr>
                           <td colSpan={14 + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
-                            <Entries t={t} week={week} />
+                            <Entries t={t} firstDay={firstDay} days={days} />
                           </td>
                         </tr>
                       )}
@@ -249,10 +246,11 @@ export default function AuditWeek() {
                 {wt.others.map(otherLabel).join(' · ')}. Their hours are not in the totals above.
               </div>
             )}
-            {dayOrder === SUN_FIRST && (
+            {sunFirst && (
               <div style={{ marginBottom: 6 }}>
-                <strong>Sunday first.</strong> The days are in Binney's shift order. The week itself is still Monday to Sunday, so the Sunday
-                column is {dayLabel(addDays(week, 6))}, the day that ends this week.
+                <strong>Sunday to Saturday.</strong> Binney's week on this page starts on Sunday {dayLabel(firstDay)}, the day before the
+                Monday – Sunday week ({weekLabel(week)}) that the queue and the scorecard still count by. Here <strong>Logged</strong> is worked
+                out from the hourly labor-report polls: what was added on that Sunday, plus the new week's total as of Saturday evening.
               </div>
             )}
             <strong>Logged</strong> is the Cove labor report's total for the week, as of its last poll that week, so hours entered late are not in it.
