@@ -31,6 +31,7 @@ _SITES: dict[str, dict] = {
         "label":         "",                      # filenames unchanged for UPark
         "roster_roles":  ("engineer",),
         "sunday_skip":   True,
+        "audit_week_sunday": False,              # PM audit week: Monday–Sunday
         "use_legacy":    True,
         "wo_extra_open": [],
         "fetch_unassigned": False,
@@ -40,6 +41,9 @@ _SITES: dict[str, dict] = {
         "label":         "Binney",
         "roster_roles":  ("engineer", "manager"),
         "sunday_skip":   False,
+        # PM audit week runs Sunday–Saturday here (Sun–Wed / Wed–Sat shifts,
+        # migration 0167): the labor poller also stores that window's totals.
+        "audit_week_sunday": True,
         "use_legacy":    False,
         "wo_extra_open": ["scheduled"],
         # Also pull open PMs with NO assignee (0156 assign-PM panel): on the
@@ -69,6 +73,10 @@ def filename_label(base: str) -> str:
 
 def sunday_skip() -> bool:
     return bool(CFG["sunday_skip"])
+
+
+def audit_week_sunday() -> bool:
+    return bool(CFG.get("audit_week_sunday"))
 
 
 def fetch_unassigned() -> bool:

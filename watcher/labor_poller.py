@@ -11,8 +11,14 @@ Schedule (set up via install_labor_poller_task.ps1):
 On auth expiry the script writes an `ingestion_log` row with status='error' and
 exits non-zero so Task Scheduler marks the run as failed.
 
+Sites whose PM-audit week is not Monday–Sunday (Binney: Sunday–Saturday,
+migration 0167) also get that window's totals upserted into `audit_week_hours`
+after the normal poll — a second read of the same report, nothing written to
+Cove. A failure there never fails the poll.
+
 Run manually:
     .\.venv\Scripts\python.exe labor_poller.py
+    COVE_SITE=binney .venv/bin/python labor_poller.py backfill-audit-weeks [weeks=26]
 """
 from __future__ import annotations
 
@@ -21,7 +27,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -34,7 +40,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
-from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip  # noqa: E402
+from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, audit_week_sunday, filename_label, sunday_skip  # noqa: E402
 
 # Populated in main() via cove_session.get_fresh_token(). The session manager
 # transparently refreshes the JWT when it's within 24h of expiry.
@@ -88,6 +94,106 @@ def end_of_today_eastern() -> datetime:
     return now.replace(hour=23, minute=59, second=59, microsecond=999000)
 
 
+def _report_body(start_iso: str, end_iso: str) -> dict:
+    return {
+        "operationName": "GetWorkOrderAndPMTaskLaborReport",
+        "query": QUERY,
+        "variables": {
+            "networkId": NETWORK_ID,
+            "filter": {
+                "items": [
+                    {"field": "performedAt", "operator": "GREATER_THAN", "value": start_iso},
+                    {"field": "performedAt", "operator": "LESS_THAN",    "value": end_iso},
+                ],
+            },
+            "page": {"limit": 500, "skip": 0},
+            "sortDesc": True,
+        },
+    }
+
+
+def _report_headers() -> dict:
+    return {
+        # NOTE: Cove takes the RAW JWT here — NO "Bearer " prefix.
+        "Authorization": TOKEN,
+        "Content-Type": "application/json",
+        "Accept": "*/*",
+        "Origin": "https://manage.cove.is",
+        "Referer": "https://manage.cove.is/",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/148.0.0.0 Safari/537.36"
+        ),
+        # Cove's siteNetwork resolver authenticates via the cove_manage_auth cookie,
+        # not the Authorization header (which it ignores). Send the fresh session
+        # token as that cookie; the legacy static COVE_COOKIE env is no longer used.
+        "Cookie": f"cove_manage_auth={TOKEN}",
+    }
+
+
+# ---------- PM audit week (sites where it is not Monday–Sunday) ----------
+
+def audit_week_key(now_local: datetime) -> date:
+    """The audit week key (a Monday) for a Sunday–Saturday site: the Monday
+    after the Sunday that starts the week. Same rule as SQL audit_week_key()."""
+    d = now_local.date() + timedelta(days=1)
+    return d - timedelta(days=d.weekday())
+
+
+def audit_week_window(key: date) -> tuple[datetime, datetime]:
+    """Sunday 00:00 → Saturday 23:59:59.999 Eastern for the week under `key`."""
+    start = datetime.combine(key - timedelta(days=1), dtime.min, tzinfo=EASTERN)
+    end = datetime.combine(key + timedelta(days=5), dtime(23, 59, 59, 999000), tzinfo=EASTERN)
+    return start, end
+
+
+def store_audit_week(client, key: date) -> tuple[int, float]:
+    """Read the labor report for one audit week and upsert it into
+    audit_week_hours (one row per person). Returns (people, total hours)."""
+    start, end = audit_week_window(key)
+    resp = requests.post(GQL_URL, headers=_report_headers(), json=_report_body(_iso_utc(start), _iso_utc(end)), timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+    data = resp.json()
+    if "errors" in data:
+        raise RuntimeError("GraphQL errors: " + " | ".join(e.get("message", "") for e in data["errors"]))
+    items = (data.get("data", {}).get("siteNetwork", {}).get("workOrderAndPMTaskLaborReport", {}).get("items")) or []
+    hours: dict[str, float] = {}
+    for it in items:
+        name = str(it.get("label") or "").strip()
+        if name and it.get("value") is not None:
+            hours[name] = hours.get(name, 0.0) + float(it["value"])
+    if not hours:
+        return 0, 0.0          # nothing logged yet (or an empty answer): leave what is stored
+    stamp = datetime.now(UTC).isoformat()
+    client.table("audit_week_hours").upsert(
+        [{"site_code": SITE, "week_start": key.isoformat(), "assigned_to_name": n, "week_hours": round(h, 4), "as_of": stamp}
+         for n, h in hours.items()],
+        on_conflict="site_code,week_start,assigned_to_name",
+    ).execute()
+    # someone whose hours were removed in Cove since the last read
+    client.table("audit_week_hours").delete().eq("site_code", SITE).eq("week_start", key.isoformat()).lt("as_of", stamp).execute()
+    return len(hours), sum(hours.values())
+
+
+def backfill_audit_weeks(weeks: int = 26) -> int:
+    """One-off: store the last `weeks` audit weeks (the report takes any date range)."""
+    global TOKEN
+    if not audit_week_sunday():
+        print(f"site={SITE}: audit week is Monday–Sunday, nothing to backfill")
+        return 0
+    TOKEN = get_fresh_token()
+    client = get_client()
+    key = audit_week_key(datetime.now(EASTERN))
+    for i in range(weeks):
+        k = key - timedelta(days=7 * i)
+        people, total = store_audit_week(client, k)
+        print(f"[audit week {k}] {people} people, {total:.1f} h")
+        time.sleep(0.5)
+    return 0
+
+
 def synthetic_filename(now_local: datetime) -> str:
     # Prefix with "api-" so it's obvious in `snapshots` / `ingestion_log` that
     # this row came from the API poller, not a dropped CSV.
@@ -134,39 +240,8 @@ def main() -> int:
 
     print(f"[{now_local.isoformat()}] polling labor for site={SITE} network={NETWORK_ID}, window {start_iso} -> {end_iso}")
 
-    body = {
-        "operationName": "GetWorkOrderAndPMTaskLaborReport",
-        "query": QUERY,
-        "variables": {
-            "networkId": NETWORK_ID,
-            "filter": {
-                "items": [
-                    {"field": "performedAt", "operator": "GREATER_THAN", "value": start_iso},
-                    {"field": "performedAt", "operator": "LESS_THAN",    "value": end_iso},
-                ],
-            },
-            "page": {"limit": 500, "skip": 0},
-            "sortDesc": True,
-        },
-    }
-
-    headers = {
-        # NOTE: Cove takes the RAW JWT here — NO "Bearer " prefix.
-        "Authorization": TOKEN,
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "Origin": "https://manage.cove.is",
-        "Referer": "https://manage.cove.is/",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/148.0.0.0 Safari/537.36"
-        ),
-    }
-    # Cove's siteNetwork resolver authenticates via the cove_manage_auth cookie,
-    # not the Authorization header (which it ignores). Send the fresh session
-    # token as that cookie; the legacy static COVE_COOKIE env is no longer used.
-    headers["Cookie"] = f"cove_manage_auth={TOKEN}"
+    body = _report_body(start_iso, end_iso)
+    headers = _report_headers()
 
     try:
         resp = requests.post(GQL_URL, headers=headers, json=body, timeout=30)
@@ -234,6 +309,19 @@ def main() -> int:
     }).execute()
 
     print(f"[ok] {filename}: {len(rows)} rows, total={report.get('totalValue')}")
+
+    if audit_week_sunday():
+        try:
+            key = audit_week_key(now_local)
+            people, total = store_audit_week(client, key)
+            print(f"[ok] audit week {key}: {people} people, {total:.1f} h")
+            # Sunday / Monday: settle the week that ended Saturday (entries typed in late)
+            if now_local.weekday() in (6, 0):
+                prev = key - timedelta(days=7)
+                people, total = store_audit_week(client, prev)
+                print(f"[ok] audit week {prev}: {people} people, {total:.1f} h")
+        except Exception as e:  # never fail the poll over the audit copy
+            print(f"WARN: audit week hours not stored: {e}", file=sys.stderr)
     return 0
 
 
@@ -253,4 +341,6 @@ def _log_error(filename: str, error_msg: str) -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "backfill-audit-weeks":
+        sys.exit(backfill_audit_weeks(int(sys.argv[2]) if len(sys.argv) > 2 else 26))
     sys.exit(main())
