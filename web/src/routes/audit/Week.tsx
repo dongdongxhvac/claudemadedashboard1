@@ -18,6 +18,8 @@ import { useAuditParams } from './useAuditParams';
 const num = { ...tdStyle, padding: '14px 5px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
 const thNum = { ...thStyle, padding: '12px 5px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
+/** The buttons that sit in the title line, beside the date range. */
+const titleButton = { ...buttonStyle, height: 36, padding: '0 14px' };
 /** The days and the three PM-result columns each read as a group: a rule on the group's left edge. */
 const groupEdge = { borderLeft: `1px solid ${A.lineSoft}`, paddingLeft: 8 };
 
@@ -292,24 +294,21 @@ export default function AuditWeek() {
     <AuditShell
       kicker="Section 05 · Week"
       title={week ? (
-        <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px' }}>
-          <span>How the week was spent · {auditWeekLabel(week, p.site)}{week === current ? ' (in progress)' : ''}</span>
+        // the date range, then the two week steps, then Print (manager 2026-11-23)
+        <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 10px' }}>
+          <span style={{ marginRight: 4 }}>How the week was spent · {auditWeekLabel(week, p.site)}{week === current ? ' (in progress)' : ''}</span>
+          <button type="button" style={{ ...titleButton, opacity: atEarliest ? 0.45 : 1, cursor: atEarliest ? 'default' : 'pointer' }}
+            disabled={atEarliest} onClick={() => p.set({ week: addDays(week, -7) })}>← Prior week</button>
+          <button type="button" style={{ ...titleButton, opacity: atLatest ? 0.45 : 1, cursor: atLatest ? 'default' : 'pointer' }}
+            disabled={atLatest} onClick={() => p.set({ week: addDays(week, 7) })}>Next week →</button>
           <button type="button" onClick={() => window.print()} disabled={rows.length === 0}
             title="Prints the engineers and their hours per day, landscape — the sheet for the shop wall"
-            style={{ ...buttonStyle, height: 36, padding: '0 14px', opacity: rows.length === 0 ? 0.45 : 1, cursor: rows.length === 0 ? 'default' : 'pointer' }}>
+            style={{ ...titleButton, opacity: rows.length === 0 ? 0.45 : 1, cursor: rows.length === 0 ? 'default' : 'pointer' }}>
             Print
           </button>
         </span>
       ) : 'How the week was spent'}
       subtitle="Engineers' hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
-      actions={week && (
-        <>
-          <button type="button" style={{ ...buttonStyle, opacity: atEarliest ? 0.45 : 1, cursor: atEarliest ? 'default' : 'pointer' }}
-            disabled={atEarliest} onClick={() => p.set({ week: addDays(week, -7) })}>← Prior week</button>
-          <button type="button" style={{ ...buttonStyle, opacity: atLatest ? 0.45 : 1, cursor: atLatest ? 'default' : 'pointer' }}
-            disabled={atLatest} onClick={() => p.set({ week: addDays(week, 7) })}>Next week →</button>
-        </>
-      )}
     >
       {range.isLoading || dataQ.isLoading || rosterQ.isLoading ? (
         <Notice>Loading the week…</Notice>
