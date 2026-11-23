@@ -14,6 +14,13 @@ import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } f
 import { useAuditParams } from './useAuditParams';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** Column order of the day cells, as indexes into a Monday-first week. Binney
+ *  runs Sun–Wed and Wed–Sat shifts, so its Sunday sits in front of Monday and a
+ *  shift reads as one run of cells (user 2026-11-23). Display order only: the
+ *  week is still Monday–Sunday, so that Sunday is the one that ends the week.
+ *  UPark, and both sites together, stay Monday first. */
+const MON_FIRST = [0, 1, 2, 3, 4, 5, 6];
+const SUN_FIRST = [6, 0, 1, 2, 3, 4, 5];
 const num = { ...tdStyle, padding: '14px 6px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
 const thNum = { ...thStyle, padding: '12px 6px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
@@ -108,6 +115,7 @@ export default function AuditWeek() {
   const dataQ = useAuditWeekTime(week, p.site);
   const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
+  const dayOrder = p.site === 'binney' ? SUN_FIRST : MON_FIRST;
 
   // Engineers only. If the roster cannot be read, show everyone and say so
   // rather than an empty page.
@@ -187,7 +195,7 @@ export default function AuditWeek() {
                     </th>
                   ))}
                   <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
-                  {DAYS.map((d, i) => <th key={d} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
+                  {dayOrder.map((d, i) => <th key={d} title={`${DAYS[d]} ${dayLabel(addDays(week, d))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{DAYS[d]}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
                   <th style={thNum} title="Of those, how many were good: a photo or a thick note, and no flag">Good</th>
@@ -211,7 +219,7 @@ export default function AuditWeek() {
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
-                        {t.byDay.map((h, i) => <td key={i} style={{ ...num, padding: '14px 5px', ...(i === 0 ? groupEdge : null), color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>)}
+                        {dayOrder.map((d, i) => { const h = t.byDay[d]; return <td key={d} style={{ ...num, padding: '14px 5px', ...(i === 0 ? groupEdge : null), color: h > 0 ? undefined : A.faint }}>{h > 0 ? fmtH(h) : '·'}</td>; })}
                         <td style={{ ...num, ...groupEdge, color: t.closed > 0 ? undefined : A.faint }}>{t.closed > 0 ? t.closed : '—'}</td>
                         <td style={{ ...num, color: t.flagged > 0 ? A.red : A.faint, fontWeight: t.flagged > 0 ? 600 : 400 }}>{t.closed > 0 ? t.flagged : ''}</td>
                         <td style={{ ...num, color: t.good > 0 ? A.greenDark : A.faint, fontWeight: t.good > 0 ? 600 : 400 }}>{t.closed > 0 ? t.good : ''}</td>
@@ -239,6 +247,12 @@ export default function AuditWeek() {
               <div style={{ marginBottom: 6 }}>
                 <strong>Engineers only.</strong> Left off, because they are not engineers on the roster (Admin › User Profiles):{' '}
                 {wt.others.map(otherLabel).join(' · ')}. Their hours are not in the totals above.
+              </div>
+            )}
+            {dayOrder === SUN_FIRST && (
+              <div style={{ marginBottom: 6 }}>
+                <strong>Sunday first.</strong> The days are in Binney's shift order. The week itself is still Monday to Sunday, so the Sunday
+                column is {dayLabel(addDays(week, 6))}, the day that ends this week.
               </div>
             )}
             <strong>Logged</strong> is the Cove labor report's total for the week, as of its last poll that week, so hours entered late are not in it.

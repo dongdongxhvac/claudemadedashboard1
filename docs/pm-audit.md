@@ -284,3 +284,10 @@ are not filtered: a PM closed under a manager's name is still a PM to audit.
 The Week table's last column is three columns (PMs closed · Flagged · Good), and the bar colours are an
 underline on the bucket headers, which keeps the table inside the 1280 px card; the header row locks to
 the page from 1360 px wide, and inside the scrolling box below that.
+
+### Binney's days start on Sunday (2026-11-23)
+
+With Binney selected, the Week table's day columns run Sun · Mon … Sat, so a Sun–Wed or Wed–Sat shift
+reads as one run of cells. UPark, and both sites together, stay Monday first. It is column order only:
+the week (totals, queue, labor report) is still Monday–Sunday, so that Sunday column is the day that
+ends the week; the page says so under the table and each day header's tooltip carries its date.
