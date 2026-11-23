@@ -300,15 +300,17 @@ export function useAuditEngineers() {
   return useQuery({
     queryKey: ['pm_audit', 'engineers'],
     queryFn: async (): Promise<RosterPerson[]> => {
-      const [users, profiles, shifts] = await Promise.all([
-        supabase.from('users').select('id,full_name').eq('role', 'engineer'),
-        supabase.from('engineer_profiles').select('user_id,cmms_assignee_name,shift_id'),
+      const [users, profiles, shifts, sites] = await Promise.all([
+        supabase.from('users').select('id,full_name,active,hiring_date').eq('role', 'engineer'),
+        supabase.from('engineer_profiles').select('user_id,cmms_assignee_name,shift_id,home_site_id'),
         supabase.from('shifts').select('id,crew'),
+        supabase.from('sites').select('id,code'),
       ]);
       if (users.error) throw users.error;
       if (profiles.error) throw profiles.error;
       if (shifts.error) throw shifts.error;
-      return rosterPeople(users.data ?? [], profiles.data ?? [], shifts.data ?? []);
+      if (sites.error) throw sites.error;
+      return rosterPeople(users.data ?? [], profiles.data ?? [], shifts.data ?? [], sites.data ?? []);
     },
     staleTime: 10 * 60_000,
   });

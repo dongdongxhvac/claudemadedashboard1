@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, needsAttention, netTotal, pct, ptoHoursInWeek,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, lowWeek, needsAttention, netTotal, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
@@ -297,9 +297,14 @@ export default function AuditWeek() {
     return m;
   }, [ptoQ.data]);
   const today = easternDay(new Date().toISOString()) ?? '9999-12-31';
+  // Every active engineer of the site(s) on the page gets a row, hours or not
+  const expected = useMemo(
+    () => (rosterQ.data && cols ? expectedEngineers(rosterQ.data, p.site, addDays(cols.first, cols.names.length - 1)) : []),
+    [rosterQ.data, cols, p.site],
+  );
   const wt = useMemo(
-    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7) : null),
-    [dataQ.data, week, engineers, cols],
+    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7, expected) : null),
+    [dataQ.data, week, engineers, cols, expected],
   );
   // Each row's days set against the PTO calendar — for the table and the printed sheet
   const rows = useMemo<PrintRow[]>(() => (wt && week && firstDay ? wt.techs.map((t) => {
@@ -351,7 +356,7 @@ export default function AuditWeek() {
         <>
           <div style={tileGrid}>
             <StatTile label="Logged in Cove" value={<>{Math.round(team.logged).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
-              sub={`${team.people} engineer${team.people === 1 ? '' : 's'} · labor report${wt.asOf ? `, as of ${fmtStamp(wt.asOf)}` : ''}`} />
+              sub={`${team.people} engineer${team.people === 1 ? '' : 's'}${team.noHours > 0 ? ` · ${team.noHours} more with no hours` : ''} · labor report${wt.asOf ? `, as of ${fmtStamp(wt.asOf)}` : ''}`} />
             <StatTile label="Placed on a task" value={<>{Math.round(team.placed).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h · {placedPct === null ? '—' : `${placedPct}%`}</span></>}
               sub="hours we can name the task for" />
             <StatTile label="Not on a task we hold" value={<>{Math.round(team.unplaced).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
@@ -448,7 +453,7 @@ export default function AuditWeek() {
               </div>
             ) : wt.others.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <strong>Engineers only.</strong> Left off, because they are not engineers on the roster (Admin › User Profiles):{' '}
+                <strong>Engineers only.</strong> Every active engineer of the site has a row, hours or not. Left off, because they are not engineers on the roster (Admin › User Profiles):{' '}
                 {wt.others.map(otherLabel).join(' · ')}. Their hours are not in the totals above.
               </div>
             )}

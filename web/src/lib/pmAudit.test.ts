@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, expectedEngineers, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -254,11 +254,27 @@ eq('double-booked: another person on the same task is not a repeat', [wtDbl.tech
 
 // roster with crews, and days against the PTO calendar
 const people = rosterPeople(
-  [{ id: 'u1', full_name: 'Ann Lee' }, { id: 'u2', full_name: 'Robert Roy' }],
-  [{ user_id: 'u1', cmms_assignee_name: null, shift_id: 's1' }, { user_id: 'u2', cmms_assignee_name: 'Bob Roy', shift_id: 's9' }],
+  [{ id: 'u1', full_name: 'Ann Lee', active: true, hiring_date: '2020-01-06' }, { id: 'u2', full_name: 'Robert Roy', active: true, hiring_date: '2026-11-12' },
+   { id: 'u3', full_name: 'Old Hand', active: false, hiring_date: '2010-01-01' }, { id: 'u4', full_name: 'New Start', active: true, hiring_date: '2026-11-23' },
+   { id: 'u5', full_name: 'Uma Park', active: true, hiring_date: null }],
+  [{ user_id: 'u1', cmms_assignee_name: null, shift_id: 's1', home_site_id: 'b' }, { user_id: 'u2', cmms_assignee_name: 'Bob Roy', shift_id: 's9', home_site_id: 'b' },
+   { user_id: 'u3', cmms_assignee_name: null, shift_id: 's1', home_site_id: 'b' }, { user_id: 'u4', cmms_assignee_name: null, shift_id: 's1', home_site_id: 'b' },
+   { user_id: 'u5', cmms_assignee_name: null, shift_id: 's9', home_site_id: 'u' }],
   [{ id: 's1', crew: 'sunday' }, { id: 's9', crew: null }],
+  [{ id: 'b', code: 'binney' }, { id: 'u', code: 'upark' }],
 );
-eq('roster people', people, [{ key: 'ann lee', user_id: 'u1', crew: 'sunday' }, { key: 'bob roy', user_id: 'u2', crew: null }, { key: 'robert roy', user_id: 'u2', crew: null }]);
+eq('roster people', people.filter((x) => x.user_id === 'u1' || x.user_id === 'u2'), [
+  { key: 'ann lee', user_id: 'u1', crew: 'sunday', name: 'Ann Lee', site: 'binney', active: true, hired: '2020-01-06' },
+  { key: 'bob roy', user_id: 'u2', crew: null, name: 'Robert Roy', site: 'binney', active: true, hired: '2026-11-12' },
+  { key: 'robert roy', user_id: 'u2', crew: null, name: 'Robert Roy', site: 'binney', active: true, hired: '2026-11-12' },
+]);
+// every active engineer of the site, hired by the end of the week, has a row
+eq('expected engineers: active, this site, hired by then; one per person with all their names', [
+  expectedEngineers(people, 'binney', '2026-11-14'), expectedEngineers(people, 'upark', '2026-11-15').map((e) => e.name), expectedEngineers(people, 'both', '2026-11-11').map((e) => e.name),
+], [[{ site: 'binney', name: 'Ann Lee', keys: ['ann lee'] }, { site: 'binney', name: 'Robert Roy', keys: ['bob roy', 'robert roy'] }], ['Uma Park'], ['Ann Lee', 'Uma Park']]);
+const wtAll = buildWeekTime([li({ performer: 'Bob Roy', assignee_name: 'Bob Roy', hours: 6 })], [], [], '2026-11-09', new Set(people.map((x) => x.key)), '2026-11-08', 7, expectedEngineers(people, 'binney', '2026-11-14'));
+eq('no hours documented: still a row, last, and not doubled for someone under their Cove name', [wtAll.techs.map((t) => [t.tech, t.logged, t.placed, t.byDay.length]), wtAll.team.noHours, wtAll.team.people],
+  [[['Bob Roy', null, 6, 7], ['Ann Lee', null, 0, 7]], 1, 1]);
 eq('crew days: Sun–Wed, Wed–Sat, Mon–Fri', ['2026-11-08', '2026-11-11', '2026-11-12', '2026-11-14'].map((d) => [worksOn('sunday', d), worksOn('saturday', d), worksOn(null, d)]),
   [[true, false, false], [true, true, true], [false, true, true], [false, true, false]]);
 const pto = (over: Partial<{ type: string; status: string; starts_on: string; ends_on: string; hours: number | null }>) =>

@@ -21,7 +21,8 @@ the user explicitly says the decision has changed.
 week under a key is Monday–Sunday; **Binney's is Sunday–Saturday, starting the day before the key**
 (Sun–Wed / Wed–Sat shifts). SQL `audit_week_key(site, instant)` (0167) and `weekFirstDay` / `weekDays` /
 `auditWeekLabel` in `web/src/lib/pmAudit.ts` are the only places that know; do not "fix" a view back to
-`date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role).
+`date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role); the
+Week tab gives every active engineer of the site a row, hours or not.
 `/audit` opens on the Week tab; the queue is `/audit/queue`. The Week tab's Print is the sheet posted in the
 shop (engineer + hours per day + Total, landscape, in colour, PTO shown without its kind). Logged / Total reads
 "25.8 −1.5": the total bigger, double-booked hours smaller after it; a week under 32 h net, approved PTO

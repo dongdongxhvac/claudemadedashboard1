@@ -396,3 +396,11 @@ On the sheet the day cells are as Cove has them again, so they add up to the big
 when the week's total is flagged (under 32 h net, PTO counted) or a scheduled day has no hours documented
 (a red 0) — `needsAttention`, `missingDays`. Hours logged on a PTO day do not turn the name yellow. The sheet
 sets `print-color-adjust: exact`, so the yellow and the light red print without "Background graphics".
+
+**Every engineer has a row (manager, same day: "still show someone who doesn't document any hrs").** The
+Week table and the sheet list every active engineer whose home site is on the page and who was hired by the
+end of the week, hours or not (`expectedEngineers` → the `expected` argument of `buildWeekTime`; the roster
+hook now also reads `active`, `hiring_date` and the home site). A person with nothing logged shows 0 in red,
+a red 0 on each scheduled day and a yellow name; one on approved leave all week shows PTO on those days and
+is not flagged. People who have left get a row only in weeks they have hours. This replaces the earlier note
+that a whole week off does not show. Week key 2026-11-09: Binney 21 → 23 rows.

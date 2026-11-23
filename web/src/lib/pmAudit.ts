@@ -718,7 +718,7 @@ export type WeekTime = {
   techs: TechWeek[];
   /** Left off the page when a roster is given: porters, managers, vendors. */
   others: OtherPerson[];
-  team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number; double: number; doublePeople: number };
+  team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number; double: number; doublePeople: number; noHours: number };
   /** Latest labor-report poll behind the week's totals. */
   asOf: string | null;
 };
@@ -745,26 +745,47 @@ export function engineerKeys(
  *  crew, or neither (a Monday–Friday shift, every UPark shift). */
 export type Crew = 'sunday' | 'saturday' | null;
 
-/** One name an engineer can appear under in Cove, with who it is. */
-export type RosterPerson = { key: string; user_id: string; crew: Crew };
+/** One name an engineer can appear under in Cove, with who it is: their own
+ *  name, home site, whether they still work here and since when. */
+export type RosterPerson = { key: string; user_id: string; crew: Crew; name: string; site: string | null; active: boolean; hired: string | null };
 
 export function rosterPeople(
-  users: { id: string; full_name: string | null }[],
-  profiles: { user_id: string; cmms_assignee_name: string | null; shift_id?: string | null }[],
+  users: { id: string; full_name: string | null; active?: boolean | null; hiring_date?: string | null }[],
+  profiles: { user_id: string; cmms_assignee_name: string | null; shift_id?: string | null; home_site_id?: string | null }[],
   shifts: { id: string; crew: string | null }[],
+  sites: { id: string; code: string }[] = [],
 ): RosterPerson[] {
   const crewOf = new Map(shifts.map((x) => [x.id, x.crew === 'sunday' || x.crew === 'saturday' ? x.crew : null] as const));
+  const siteOf = new Map(sites.map((x) => [x.id, x.code] as const));
   const profile = new Map(profiles.map((x) => [x.user_id, x] as const));
   const out = new Map<string, RosterPerson>();
   for (const u of users) {
     const pr = profile.get(u.id);
     const crew: Crew = (pr?.shift_id ? crewOf.get(pr.shift_id) : null) ?? null;
+    const site = (pr?.home_site_id ? siteOf.get(pr.home_site_id) : null) ?? null;
     for (const name of [u.full_name, pr?.cmms_assignee_name]) {
       const key = rosterKey(name);
-      if (key && !out.has(key)) out.set(key, { key, user_id: u.id, crew });
+      if (key && !out.has(key)) out.set(key, { key, user_id: u.id, crew, name: (u.full_name ?? name ?? '').trim(), site, active: u.active !== false, hired: u.hiring_date ?? null });
     }
   }
   return [...out.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Who must have a row on the Week tab even with nothing logged (manager
+ *  2026-11-23: "still show someone who doesn't document any hrs"): every
+ *  active engineer whose home site is on the page and who was hired by the end
+ *  of the week. One entry per person, with every name Cove may use for them. */
+export type ExpectedPerson = { site: string; name: string; keys: string[] };
+
+export function expectedEngineers(people: RosterPerson[], site: SiteFilter, lastDay: string): ExpectedPerson[] {
+  const byUser = new Map<string, ExpectedPerson>();
+  for (const p of people) {
+    if (!p.active || !p.site || (site !== 'both' && p.site !== site)) continue;
+    if (p.hired && p.hired > lastDay) continue;
+    const e = byUser.get(p.user_id);
+    if (e) e.keys.push(p.key); else byUser.set(p.user_id, { site: p.site, name: p.name, keys: [p.key] });
+  }
+  return [...byUser.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Is this a day the crew is scheduled? Same rule as the PTO panel's crew
@@ -845,8 +866,12 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  keys) only those people get a row and count in the team totals; everyone
  *  else is listed in `others`. Which entries belong to the week is the
  *  database's call (their week_start); `firstDay` and `nDays` only say which
- *  day columns `byDay` has (weekDays). */
-export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null, firstDay: string = weekStart, nDays = 7): WeekTime {
+ *  day columns `byDay` has (weekDays). `expected` people (expectedEngineers)
+ *  get a row even when they logged and closed nothing. */
+export function buildWeekTime(
+  items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string,
+  engineers?: ReadonlySet<string> | null, firstDay: string = weekStart, nDays = 7, expected: ExpectedPerson[] = [],
+): WeekTime {
   const rows = new Map<string, TechWeek>();
   const row = (site: string | null, tech: string | null): TechWeek => {
     const k = `${site ?? ''}|${tech ?? ''}`;
@@ -881,8 +906,15 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if ((c.flag_count ?? 0) > 0) r.flagged++;
     if (c.good) r.good++;
   }
-  const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0, double: 0, doublePeople: 0 };
+  const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0, double: 0, doublePeople: 0, noHours: 0 };
   const present = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
+  // everyone on the roster who has no row of their own at their site gets an empty one
+  for (const e of expected) {
+    const keys = new Set(e.keys);
+    if (present.some((r) => r.site_code === e.site && keys.has(rosterKey(r.tech)))) continue;
+    present.push(row(e.site, e.name));
+    team.noHours++;
+  }
   const isEngineer = (r: TechWeek) => !engineers || engineers.has(rosterKey(r.tech));
   const techs = present.filter(isEngineer);
   const others: OtherPerson[] = present.filter((r) => !isEngineer(r))
