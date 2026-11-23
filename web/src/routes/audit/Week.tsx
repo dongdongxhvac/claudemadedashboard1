@@ -169,44 +169,53 @@ function Entries({ t, firstDay, days }: { t: TechWeek; firstDay: string; days: s
   );
 }
 
-/** What prints. The shop copy is two columns of the table and nothing else:
- *  the engineer and the hours per day (manager 2026-11-23, posted in the shop
- *  each Wednesday for the week before). It lives outside #root, hidden on
- *  screen; in print #root is hidden instead, so the page is this sheet alone,
- *  landscape. Names run A–Z so people can find themselves. A day the PTO
- *  calendar covers prints "PTO" without the kind of leave — the sheet hangs
- *  on a wall — and a scheduled day with nothing logged prints a boxed 0. */
+/** What prints: the sheet the manager posts in the shop each Wednesday for the
+ *  week before. Just the table — the engineer, the hours per day and the
+ *  total — with no title block and no footnote, thin margins, and type as
+ *  large as the page allows (manager 2026-11-23). The site and the week sit in
+ *  the first column's heading so the sheet still says what it is. It lives
+ *  outside #root, hidden on screen; in print #root is hidden instead, so the
+ *  page is this sheet alone, landscape. Names run A–Z so people can find
+ *  themselves. A day the PTO calendar covers prints "PTO" without the kind of
+ *  leave — the sheet hangs on a wall. Sizes are in em so everything follows
+ *  the one font size `printFont` works out. */
 const PRINT_CSS = `
 .audit-print-sheet { display: none; }
 @media print {
-  @page { size: landscape; margin: 0.5in; }
+  @page { size: landscape; margin: 0.25in; }
   #root { display: none !important; }
-  html, body { background: #fff !important; }
-  .audit-print-sheet { display: block; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #000; }
-  .audit-print-sheet h1 { margin: 0; font-size: 20pt; font-weight: 700; }
-  .audit-print-sheet .aps-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24pt; border-bottom: 1.5pt solid #000; padding-bottom: 6pt; }
-  .audit-print-sheet .aps-range { font-size: 14pt; font-weight: 600; white-space: nowrap; }
-  .audit-print-sheet .aps-sub { margin: 4pt 0 8pt; font-size: 9pt; color: #333; }
+  html, body { background: #fff !important; margin: 0 !important; }
+  .audit-print-sheet { display: block; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #000; font-size: var(--aps-font, 12pt);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .audit-print-sheet table { width: 100%; border-collapse: collapse; }
   .audit-print-sheet thead { display: table-header-group; }
   .audit-print-sheet tr { break-inside: avoid; }
-  .audit-print-sheet th { font-size: 10pt; font-weight: 700; text-align: right; padding: 3pt 8pt; border-bottom: 1pt solid #000; white-space: nowrap; }
-  .audit-print-sheet th small { display: block; font-size: 8pt; font-weight: 400; color: #333; }
-  .audit-print-sheet th:first-child, .audit-print-sheet td:first-child { text-align: left; }
-  .audit-print-sheet td { font-size: var(--aps-font, 12pt); line-height: 1.25; padding: var(--aps-pad, 3.5pt) 8pt; text-align: right; border-bottom: 0.5pt solid #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .audit-print-sheet th { font-size: 0.68em; line-height: 1.2; font-weight: 700; text-align: right; padding: 0.1em 0.5em 0.2em; border-bottom: 1.5pt solid #000; white-space: nowrap; vertical-align: bottom; }
+  .audit-print-sheet th small { display: block; font-size: 0.74em; font-weight: 400; color: #333; }
+  .audit-print-sheet th:first-child, .audit-print-sheet td:first-child { text-align: left; padding-left: 0.15em; }
+  .audit-print-sheet td { line-height: 1.25; padding: 0.12em 0.34em; text-align: right; border-bottom: 0.5pt solid #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .audit-print-sheet td:first-child { font-weight: 600; }
-  .audit-print-sheet td small { font-size: 8pt; font-weight: 400; color: #333; }
-  .audit-print-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .audit-print-sheet .aps-pto { font-size: 9pt; font-weight: 700; letter-spacing: 0.04em; color: ${A.greenDark}; }
-  .audit-print-sheet .aps-zero { display: inline-block; min-width: 10pt; padding: 0 3pt; line-height: 1.05; border: 1pt solid ${A.red}; color: ${A.red}; font-weight: 700; text-align: center; }
+  .audit-print-sheet td small { font-size: 0.6em; font-weight: 400; color: #333; }
+  .audit-print-sheet .aps-pto { font-size: 0.72em; font-weight: 700; letter-spacing: 0.04em; color: ${A.greenDark}; }
+  .audit-print-sheet .aps-zero { display: inline-block; min-width: 0.9em; padding: 0 0.22em; line-height: 1.05; border: 1pt solid ${A.red}; color: ${A.red}; font-weight: 700; text-align: center; }
   .audit-print-sheet .aps-red { color: ${A.red}; font-weight: 700; }
   .audit-print-sheet .aps-total { font-weight: 700; border-left: 1pt solid #000; }
-  .audit-print-sheet .aps-minus { display: inline-block; min-width: 22pt; padding-left: 2pt; text-align: left; font-size: 8.5pt; font-weight: 700; color: ${A.orange}; }
-  .audit-print-sheet .aps-flag { background: ${A.yellow}; padding: 0 3pt; margin-left: -3pt; border-radius: 2pt; }
-  .audit-print-sheet .aps-low { display: inline-block; padding: 0 4pt; line-height: 1.15; border-radius: 2pt; background: ${A.redSoft}; color: ${A.red}; }
-  .audit-print-sheet .aps-foot { margin-top: 8pt; font-size: 8.5pt; color: #333; }
+  .audit-print-sheet .aps-minus { display: inline-block; min-width: 2.7em; padding-left: 0.2em; text-align: left; font-size: 0.62em; font-weight: 700; color: ${A.orange}; }
+  .audit-print-sheet .aps-flag { background: ${A.yellow}; padding: 0 0.2em; margin-left: -0.2em; border-radius: 0.12em; }
+  .audit-print-sheet .aps-low { display: inline-block; padding: 0 0.25em; line-height: 1.15; border-radius: 0.12em; background: ${A.redSoft}; color: ${A.red}; }
 }
 `;
+
+/** The largest type, in points, that keeps the sheet on one landscape Letter
+ *  page inside 0.25 in margins (756 × 576 pt of paper to fill). Height: a body
+ *  row is about 1.5 em tall and the heading row about 1.8 em. Width: the
+ *  longest name, then about 2.9 em per day and 5.2 em for the total (2.6 em
+ *  when nobody has double-booked hours to show after it). */
+function printFont(n: number, nDays: number, longestName: number, anyDouble: boolean): number {
+  const byHeight = (576 * 0.96) / (1.5 * Math.max(1, n) + 1.8);
+  const byWidth = (756 * 0.97) / (0.58 * longestName + 1 + 2.9 * nDays + (anyDouble ? 5.2 : 3.0));
+  return Math.max(7, Math.floor(Math.min(byHeight, byWidth) * 10) / 10);
+}
 
 /** A table row: the person's week, their days against the PTO calendar, and their approved PTO hours that week. */
 type PrintRow = { t: TechWeek; marks: (DayMark | null)[] | null; ptoHours: number };
@@ -215,22 +224,16 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
   rows: PrintRow[]; days: string[]; firstDay: string; rangeLabel: string; siteLabel: string; showSite: boolean; inProgress: boolean;
 }) {
   const sorted = [...rows].sort((a, b) => a.t.tech.localeCompare(b.t.tech) || a.t.site_code.localeCompare(b.t.site_code));
-  const printed = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  // Type as large as the head-count allows on one landscape page (26 rows fit; more run on).
-  const n = sorted.length;
-  const [fontPt, padPt] = n <= 12 ? [14, 5] : n <= 17 ? [12, 3.5] : n <= 22 ? [11, 2] : [10, 1.5];
+  const anyDouble = sorted.some(({ t }) => t.double > 0);
+  const longest = Math.max(8, ...sorted.map(({ t }) => t.tech.length + (showSite ? 5 : 0)));
+  const fontPt = printFont(sorted.length, days.length, longest, anyDouble);
   return createPortal(
-    <div className="audit-print-sheet" style={{ '--aps-font': `${fontPt}pt`, '--aps-pad': `${padPt}pt` } as CSSProperties}>
+    <div className="audit-print-sheet" style={{ '--aps-font': `${fontPt}pt` } as CSSProperties}>
       <style>{PRINT_CSS}</style>
-      <div className="aps-head">
-        <h1>Hours logged by day{siteLabel ? ` · ${siteLabel}` : ''}</h1>
-        <div className="aps-range">Week of {rangeLabel}{inProgress ? ' (in progress)' : ''}</div>
-      </div>
-      <div className="aps-sub">From the labor entries on Cove tasks, by the person who did the work and the day it was done. Printed {printed}.</div>
       <table>
         <thead>
           <tr>
-            <th>Engineer</th>
+            <th>{siteLabel ? `${siteLabel} · ` : ''}{rangeLabel}{inProgress ? ' (in progress)' : ''}</th>
             {days.map((d, i) => <th key={i}>{d}<small>{dayLabel(addDays(firstDay, i))}</small></th>)}
             <th className="aps-total">Total<small>hours</small></th>
           </tr>
@@ -253,20 +256,12 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
               })}
               <td className="aps-total">
                 {lowWeek(t, inProgress, ptoHours) ? <span className="aps-low">{fmtH(weekTotal(t), false)}</span> : fmtH(weekTotal(t), false)}
-                <span className="aps-minus">{t.double > 0 ? `−${fmtH(t.double, false)}` : ''}</span>
+                {anyDouble && <span className="aps-minus">{t.double > 0 ? `−${fmtH(t.double, false)}` : ''}</span>}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="aps-foot">
-        Blank = day off. <span className="aps-pto">PTO</span> = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged
-        and no approved time off. <span className="aps-red">Red hours</span> = logged on a day the PTO calendar has off.{' '}
-        <strong>Total</strong> = the week's hours in Cove's labor report; it can be more than the days add up to, because hours on a work order still
-        open are on no day. <span className="aps-minus" style={{ minWidth: 0, padding: 0 }}>−1.5</span> after a total = hours entered more than once on the same task
-        the same day, to take off it{inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h after that, even with approved PTO counted</>}.
-        <span className="aps-flag" style={{ marginLeft: 0 }}>Yellow name</span> = a red total or a missing day. Something missing? Log it on the task in Cove.
-      </div>
     </div>,
     document.body,
   );

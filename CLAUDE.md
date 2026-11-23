@@ -24,7 +24,8 @@ week under a key is Monday–Sunday; **Binney's is Sunday–Saturday, starting t
 `date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role); the
 Week tab gives every active engineer of the site a row, hours or not.
 `/audit` opens on the Week tab; the queue is `/audit/queue`. The Week tab's Print is the sheet posted in the
-shop (engineer + hours per day + Total, landscape, in colour, PTO shown without its kind). Logged / Total reads
+shop (the table alone — engineer, hours per day, Total — no title or footnote, 0.25 in margins, type as
+large as one landscape page allows, in colour, PTO shown without its kind). Logged / Total reads
 "25.8 −1.5": the total bigger, double-booked hours smaller after it; a week under 32 h net, approved PTO
 hours counted in, is highlighted red, and the name goes yellow for that or for a scheduled day with no hours — verify print changes with a headless Chrome `--print-to-pdf` render.
 

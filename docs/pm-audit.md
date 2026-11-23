@@ -404,3 +404,11 @@ hook now also reads `active`, `hiring_date` and the home site). A person with no
 a red 0 on each scheduled day and a yellow name; one on approved leave all week shows PTO on those days and
 is not flagged. People who have left get a row only in weeks they have hours. This replaces the earlier note
 that a whole week off does not show. Week key 2026-11-09: Binney 21 → 23 rows.
+
+**The sheet is the table alone (manager, same day: "no header, no footnote … bigger as possible, less
+margin").** The title block, the "printed" line and the legend are gone; page margins are 0.25 in. The site
+and week sit in the first column's heading ("Binney · Nov 8 – 14"). `printFont` picks the largest type that
+keeps one landscape Letter page: limited by height for a big crew (about 15 pt for 23 people, 11 pt for 33)
+and by the longest name's width for a small one (about 20 pt for 10). All sizes in the sheet's CSS are in em,
+so they follow that one number. The colours keep their meaning without a key: green PTO, red boxed 0, red
+total, yellow name, small orange minus.
