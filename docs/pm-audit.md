@@ -430,6 +430,9 @@ against 132 h in entries.
   entry sums, and a day cell's tooltip says when the report has more than the tasks we hold. So the days of
   a row now add up to Logged, and the red 0 / yellow name / print sheet all rest on Cove's own numbers.
 - The columns by kind of work, Not placed and the entries under a name still come from the tasks we hold.
+- Logged is the weekly poll, or the daily rows where they add up to more: UPark's weekly figure is as of that
+  week's last poll, the daily rows are re-read since and include hours entered late (week key 2026-11-16 at
+  UPark: 302 h on the weekly poll, 316 h by day).
 - Week key 2026-11-16, Binney, on real rows: red 0 days 21 → 17, and every row's days sum to its Logged.
 
 **Two yellows (manager, same day).** `attentionOf`: strong yellow when the week's total is flagged; very

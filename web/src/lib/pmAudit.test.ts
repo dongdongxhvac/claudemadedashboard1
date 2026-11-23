@@ -340,7 +340,10 @@ const wtRep = buildWeekTime([
 const rAnn = wtRep.techs.find((t) => t.tech === 'Ann Lee')!;
 eq('day columns: the report where it has the day (0 if the person is not on it), the entries where it does not',
   [rAnn.byDay, rAnn.entryByDay, rAnn.placed, rAnn.unplaced], [[9.75, 8.5, 8.5, 8.5, 0, 5, 0], [9, 7.75, 0, 0, 0, 5, 0], 21.75, 13.5]);
-eq('day columns: someone only on the daily report still gets a row', wtRep.techs.map((t) => [t.tech, t.byDay[4]]), [['Ann Lee', 0], ['Bob Roy', 6]]);
+eq('day columns: someone only on the daily report still gets a row, with the days as their total', wtRep.techs.map((t) => [t.tech, t.byDay[4], t.logged]), [['Ann Lee', 0, 35.25], ['Bob Roy', 6, 6]]);
+const wtLate = buildWeekTime([], [{ site_code: 'upark', assigned_to_name: 'Uma Park', week_start: '2026-11-09', week_hours: 30, as_of: null }], [], '2026-11-09', null, '2026-11-09', 7, [],
+  [dh('2026-11-09', 8, 'Uma Park', 'upark'), dh('2026-11-10', 8, 'Uma Park', 'upark'), dh('2026-11-11', 8, 'Uma Park', 'upark'), dh('2026-11-12', 8, 'Uma Park', 'upark'), dh('2026-11-13', 2.5, 'Uma Park', 'upark')]);
+eq('logged: the daily rows where they add up to more than the weekly poll', [wtLate.techs[0].logged, wtLate.team.logged], [34.5, 34.5]);
 const wtRepBoth = buildWeekTime([], [], [], '2026-11-09', null, '2026-11-08', 8, [], [dh('2026-11-08', 8, 'Uma Park', 'upark'), dh('2026-11-15', 5, 'Uma Park', 'upark'), dh('2026-11-15', 9, 'Ann Lee', 'binney'), dh('2026-11-08', 7, 'Ann Lee', 'binney')]);
 eq('day columns, both sites: each site keeps to its own week', wtRepBoth.techs.map((t) => [t.tech, t.byDay]), [['Ann Lee', [7, 0, 0, 0, 0, 0, 0, 0]], ['Uma Park', [0, 0, 0, 0, 0, 0, 0, 5]]]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);

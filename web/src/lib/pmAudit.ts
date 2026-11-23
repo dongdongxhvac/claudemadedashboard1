@@ -690,7 +690,7 @@ export type WeekTimeClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to
 export type TechWeek = {
   tech: string;
   site_code: string;
-  /** Total hours the labor report shows for the week; null if the person is not on it. */
+  /** Total hours the labor report shows for the week (the weekly poll, or its daily rows where they add up to more); null if the person is not on it. */
   logged: number | null;
   /** Hours we can put on a named task. */
   placed: number;
@@ -956,6 +956,13 @@ export function buildWeekTime(
       const day = addDays(firstDay, i);
       return reported.has(`${r.site_code}|${day}`) ? r2(reportHours.get(`${r.site_code}|${r.tech}|${day}`) ?? 0) : h;
     });
+    // The weekly figure is the report as of that week's last poll; the daily
+    // rows are the same report read again since. Where they add up to more
+    // (hours entered late), they are the week's total.
+    const own = weekFirstDay(weekStart, r.site_code);
+    let daily = 0;
+    for (let i = 0; i < 7; i++) daily += reportHours.get(`${r.site_code}|${r.tech}|${addDays(own, i)}`) ?? 0;
+    if (daily > (r.logged ?? 0)) r.logged = r2(daily);
     for (const b of BUCKETS) r.byBucket[b.key] = r2(r.byBucket[b.key]);
     r.unplaced = r.logged === null ? 0 : r2(Math.max(0, r.logged - r.placed));
     r.tasks = new Set(r.items.map((i) => `${i.kind}|${i.task_no}`)).size;
