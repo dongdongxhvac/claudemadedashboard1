@@ -681,6 +681,9 @@ export type LaborItem = {
 /** v_tech_week_site_hours: the labor report's weekly total per person and site. */
 export type WeekHours = { site_code: string; assigned_to_name: string | null; week_start: string; week_hours: number | null; as_of: string | null };
 
+/** Cove's labor report for one person on one Eastern calendar day (audit_day_hours, migration 0169). */
+export type DayHours = { site_code: string; day: string; assigned_to_name: string | null; hours: number | null };
+
 /** The slice of a flags row the Week page needs for its "PMs closed" column. */
 export type WeekTimeClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'flag_count' | 'good'>;
 
@@ -694,8 +697,13 @@ export type TechWeek = {
   /** logged − placed, never below zero: time on tasks we have not pulled yet. */
   unplaced: number;
   byBucket: Record<Bucket, number>;
-  /** Placed hours per day column (weekDays): Monday first at UPark, Sunday first at Binney. */
+  /** Hours per day column (weekDays): Monday first at UPark, Sunday first at
+   *  Binney. Cove's labor report for that day where we have it — every hour by
+   *  the day it was worked, work orders still open included — else what the
+   *  entries on the tasks we hold add up to. */
   byDay: number[];
+  /** What the entries on the tasks we hold add up to per day (the old byDay). */
+  entryByDay: number[];
   /** Hours logged on a PM task assigned to someone else. */
   onOthers: number;
   /** Double-booked: this person's extra entries on a task they already have an
@@ -867,17 +875,20 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  else is listed in `others`. Which entries belong to the week is the
  *  database's call (their week_start); `firstDay` and `nDays` only say which
  *  day columns `byDay` has (weekDays). `expected` people (expectedEngineers)
- *  get a row even when they logged and closed nothing. */
+ *  get a row even when they logged and closed nothing. `dayHours` is Cove's
+ *  labor report per person per day: where it has a site's day, that is what
+ *  the day column shows; a day it does not have falls back to the entries. */
 export function buildWeekTime(
   items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string,
   engineers?: ReadonlySet<string> | null, firstDay: string = weekStart, nDays = 7, expected: ExpectedPerson[] = [],
+  dayHours: DayHours[] = [],
 ): WeekTime {
   const rows = new Map<string, TechWeek>();
   const row = (site: string | null, tech: string | null): TechWeek => {
     const k = `${site ?? ''}|${tech ?? ''}`;
     let r = rows.get(k);
     if (!r) {
-      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: new Array<number>(nDays).fill(0), onOthers: 0, double: 0, doubleByDay: new Array<number>(nDays).fill(0), doubleItems: [], tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
+      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: new Array<number>(nDays).fill(0), entryByDay: new Array<number>(nDays).fill(0), onOthers: 0, double: 0, doubleByDay: new Array<number>(nDays).fill(0), doubleItems: [], tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
       rows.set(k, r);
     }
     return r;
@@ -906,8 +917,25 @@ export function buildWeekTime(
     if ((c.flag_count ?? 0) > 0) r.flagged++;
     if (c.good) r.good++;
   }
+  // Cove's labor report by day. A site's day is "reported" once the table has
+  // any row for it; then a person with no row that day worked no hours.
+  const reported = new Set<string>();
+  const reportHours = new Map<string, number>();
+  const hasDayHours = new Set<TechWeek>();
+  const lastDay = addDays(firstDay, nDays - 1);
+  for (const h of dayHours) {
+    if (h.day < firstDay || h.day > lastDay) continue;
+    const own = weekFirstDay(weekStart, h.site_code);
+    if (h.day < own || h.day > addDays(own, 6)) continue;      // both sites on the page: a column outside this site's week
+    reported.add(`${h.site_code}|${h.day}`);
+    const hrs = Number(h.hours ?? 0);
+    if (!h.assigned_to_name || hrs <= 0) continue;
+    const k = `${h.site_code}|${h.assigned_to_name}|${h.day}`;
+    reportHours.set(k, (reportHours.get(k) ?? 0) + hrs);
+    hasDayHours.add(row(h.site_code, h.assigned_to_name));
+  }
   const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0, double: 0, doublePeople: 0, noHours: 0 };
-  const present = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
+  const present = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0 || hasDayHours.has(r));
   // everyone on the roster who has no row of their own at their site gets an empty one
   for (const e of expected) {
     const keys = new Set(e.keys);
@@ -923,7 +951,11 @@ export function buildWeekTime(
   for (const r of techs) {
     r.placed = r2(r.placed);
     r.onOthers = r2(r.onOthers);
-    r.byDay = r.byDay.map(r2);
+    r.entryByDay = r.byDay.map(r2);
+    r.byDay = r.entryByDay.map((h, i) => {
+      const day = addDays(firstDay, i);
+      return reported.has(`${r.site_code}|${day}`) ? r2(reportHours.get(`${r.site_code}|${r.tech}|${day}`) ?? 0) : h;
+    });
     for (const b of BUCKETS) r.byBucket[b.key] = r2(r.byBucket[b.key]);
     r.unplaced = r.logged === null ? 0 : r2(Math.max(0, r.logged - r.placed));
     r.tasks = new Set(r.items.map((i) => `${i.kind}|${i.task_no}`)).size;
@@ -1020,12 +1052,22 @@ export function missingDays(byDay: number[], marks: (DayMark | null)[] | null): 
   return marks ? marks.filter((m, i) => m?.tone === 'red' && (byDay[i] ?? 0) <= 0).length : 0;
 }
 
-/** Whose name gets the yellow highlight (manager 2026-11-23): the week's total
- *  is flagged, or a scheduled day has no hours documented. */
+/** Whose name gets a yellow highlight, and how strong (manager 2026-11-23):
+ *    'strong'  the week's total is flagged
+ *    'light'   the total is fine, but a scheduled day has no hours documented */
+export type Attention = 'strong' | 'light' | null;
+
+export function attentionOf(
+  t: Pick<TechWeek, 'logged' | 'placed' | 'double' | 'byDay'>, marks: (DayMark | null)[] | null, inProgress: boolean, ptoHours = 0,
+): Attention {
+  if (lowWeek(t, inProgress, ptoHours)) return 'strong';
+  return missingDays(t.byDay, marks) > 0 ? 'light' : null;
+}
+
 export function needsAttention(
   t: Pick<TechWeek, 'logged' | 'placed' | 'double' | 'byDay'>, marks: (DayMark | null)[] | null, inProgress: boolean, ptoHours = 0,
 ): boolean {
-  return lowWeek(t, inProgress, ptoHours) || missingDays(t.byDay, marks) > 0;
+  return attentionOf(t, marks, inProgress, ptoHours) !== null;
 }
 
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */

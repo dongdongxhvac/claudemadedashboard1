@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, expectedEngineers, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, attentionOf, expectedEngineers, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -324,6 +324,25 @@ eq('yellow name: a low total or a missing day', [
   needsAttention({ logged: 38, placed: 38, double: 0, byDay: [14, 12, 12, 0] }, [null, null, null, red0], false),
   needsAttention({ logged: 8, placed: 8, double: 0, byDay: [8, 0, 0, 0] }, [null, null, null, null], true),
 ], [false, false, true, true, false]);
+eq('yellow name: strong when the total is flagged, light when only a day is missing', [
+  attentionOf({ logged: 30, placed: 30, double: 0, byDay: [10, 10, 10, 0] }, [null, null, null, red0], false),
+  attentionOf({ logged: 38, placed: 38, double: 0, byDay: [14, 12, 12, 0] }, [null, null, null, red0], false),
+  attentionOf({ logged: 40, placed: 40, double: 0, byDay: [10, 10, 10, 10] }, [null, null, null, null], false),
+], ['strong', 'light', null]);
+// day columns from Cove's labor report: a day logged on work we hold no entry for is not empty
+const dh = (day: string, hours: number, name = 'Ann Lee', site = 'binney') => ({ site_code: site, day, assigned_to_name: name, hours });
+const wtRep = buildWeekTime([
+  li({ task_no: 'PM-A', hours: 9, day_local: '2026-11-08', performed_at: '2026-11-08T15:00:00Z' }),
+  li({ task_no: 'PM-B', hours: 7.75, day_local: '2026-11-09', performed_at: '2026-11-09T15:00:00Z' }),
+  li({ task_no: 'PM-C', hours: 5, day_local: '2026-11-13', performed_at: '2026-11-13T15:00:00Z' }),
+], [{ site_code: 'binney', assigned_to_name: 'Ann Lee', week_start: '2026-11-09', week_hours: 35.25, as_of: null }], [], '2026-11-09', null, '2026-11-08', 7, [],
+  [dh('2026-11-08', 9.75), dh('2026-11-09', 8.5), dh('2026-11-10', 8.5), dh('2026-11-11', 8.5), dh('2026-11-12', 6, 'Bob Roy'), dh('2026-11-07', 4), dh('2026-11-15', 4)]);
+const rAnn = wtRep.techs.find((t) => t.tech === 'Ann Lee')!;
+eq('day columns: the report where it has the day (0 if the person is not on it), the entries where it does not',
+  [rAnn.byDay, rAnn.entryByDay, rAnn.placed, rAnn.unplaced], [[9.75, 8.5, 8.5, 8.5, 0, 5, 0], [9, 7.75, 0, 0, 0, 5, 0], 21.75, 13.5]);
+eq('day columns: someone only on the daily report still gets a row', wtRep.techs.map((t) => [t.tech, t.byDay[4]]), [['Ann Lee', 0], ['Bob Roy', 6]]);
+const wtRepBoth = buildWeekTime([], [], [], '2026-11-09', null, '2026-11-08', 8, [], [dh('2026-11-08', 8, 'Uma Park', 'upark'), dh('2026-11-15', 5, 'Uma Park', 'upark'), dh('2026-11-15', 9, 'Ann Lee', 'binney'), dh('2026-11-08', 7, 'Ann Lee', 'binney')]);
+eq('day columns, both sites: each site keeps to its own week', wtRepBoth.techs.map((t) => [t.tech, t.byDay]), [['Ann Lee', [7, 0, 0, 0, 0, 0, 0, 0]], ['Uma Park', [0, 0, 0, 0, 0, 0, 0, 5]]]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO

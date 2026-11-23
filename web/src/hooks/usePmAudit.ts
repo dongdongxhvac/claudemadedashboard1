@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, auditWeekKeyOf, joinQueue, rosterPeople, sumTypeHours, weekStartOf, weekStats, weeksEnding,
-  type FlagRow, type HistoryEvent, type LaborItem, type PtoRow, type RosterPerson, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
+  addDays, auditWeekKeyOf, joinQueue, rosterPeople, sumTypeHours, weekDays, weekStartOf, weekStats, weeksEnding,
+  type DayHours, type FlagRow, type HistoryEvent, type LaborItem, type PtoRow, type RosterPerson, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
   type TypeEntry, type TypeHours, type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
@@ -266,8 +266,9 @@ export function useAuditWeekTime(week: string | null, site: SiteFilter) {
   return useQuery({
     queryKey: ['pm_audit', 'week_time', week, site],
     enabled: !!week,
-    queryFn: async (): Promise<{ items: LaborItem[]; hours: WeekHours[]; closes: WeekTimeClose[] }> => {
-      const [items, hours, closes] = await Promise.all([
+    queryFn: async (): Promise<{ items: LaborItem[]; hours: WeekHours[]; closes: WeekTimeClose[]; dayHours: DayHours[] }> => {
+      const cols = weekDays(week!, site);
+      const [items, hours, closes, dayHours] = await Promise.all([
         fetchAll<LaborItem>((from, to) => {
           let q = supabase.from('v_audit_labor_items').select(LABOR_COLS).eq('week_start', week!);
           if (site !== 'both') q = q.eq('site_code', site);
@@ -283,8 +284,16 @@ export function useAuditWeekTime(week: string | null, site: SiteFilter) {
           if (site !== 'both') q = q.eq('site_code', site);
           return q.order('completed_on').order('task_no').range(from, to);
         }),
+        // Cove's labor report per person per day, for the day columns. If it cannot
+        // be read the page still works: the days fall back to the task entries.
+        fetchAll<DayHours>((from, to) => {
+          let q = supabase.from('audit_day_hours').select('site_code,day,assigned_to_name,hours')
+            .gte('day', cols.first).lte('day', addDays(cols.first, cols.names.length - 1));
+          if (site !== 'both') q = q.eq('site_code', site);
+          return q.order('day').order('assigned_to_name').order('site_code').range(from, to);
+        }).catch(() => [] as DayHours[]),
       ]);
-      return { items, hours, closes };
+      return { items, hours, closes, dayHours };
     },
     staleTime: 60_000,
   });

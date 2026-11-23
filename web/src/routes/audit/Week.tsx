@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, lowWeek, needsAttention, netTotal, pct, ptoHoursInWeek,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, attentionOf, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, lowWeek, netTotal, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
@@ -58,7 +58,7 @@ function HoursBar({ t, scale }: { t: TechWeek; scale: number }) {
 /** A day cell. Plain hours, or a mark where the day was set against the PTO
  *  calendar (green: it agrees; red: it does not), and an orange underline
  *  where some of the day's hours are double-booked. */
-function DayCell({ hours, double, mark, first }: { hours: number; double: number; mark: DayMark | null; first: boolean }) {
+function DayCell({ hours, entries, double, mark, first }: { hours: number; entries: number; double: number; mark: DayMark | null; first: boolean }) {
   const base = { ...num, padding: '14px 4px', ...(first ? groupEdge : null) };
   if (mark) {
     const tone = mark.tone === 'green' ? { background: A.greenSoft, color: A.greenDark } : { background: A.redSoft, color: A.redDark };
@@ -70,7 +70,10 @@ function DayCell({ hours, double, mark, first }: { hours: number; double: number
   }
   if (hours <= 0) return <td style={{ ...base, color: A.faint }}>·</td>;
   return (
-    <td style={base} title={double > 0 ? `${fmtH(double, false)} h of this is double-booked` : undefined}>
+    <td style={base} title={[
+      double > 0 ? `${fmtH(double, false)} h of this is double-booked` : '',
+      hours - entries > 0.05 ? `${fmtH(hours, false)} h on Cove's labor report, ${entries > 0 ? `${fmtH(entries, false)} h` : 'none'} of it on a task we hold` : '',
+    ].filter(Boolean).join(' · ') || undefined}>
       <span style={double > 0 ? { borderBottom: `2px solid ${A.orange}`, paddingBottom: 1 } : undefined}>{fmtH(hours)}</span>
     </td>
   );
@@ -202,6 +205,7 @@ const PRINT_CSS = `
   .audit-print-sheet .aps-total { font-weight: 700; border-left: 1pt solid #000; }
   .audit-print-sheet .aps-minus { display: inline-block; min-width: 2.7em; padding-left: 0.2em; text-align: left; font-size: 0.62em; font-weight: 700; color: ${A.orange}; }
   .audit-print-sheet .aps-flag { background: ${A.yellow}; padding: 0 0.2em; margin-left: -0.2em; border-radius: 0.12em; }
+  .audit-print-sheet .aps-flag-light { background: ${A.yellowLight}; }
   .audit-print-sheet .aps-low { display: inline-block; padding: 0 0.25em; line-height: 1.15; border-radius: 0.12em; background: ${A.redSoft}; color: ${A.red}; }
 }
 `;
@@ -239,10 +243,12 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
           </tr>
         </thead>
         <tbody>
-          {sorted.map(({ t, marks, ptoHours }) => (
+          {sorted.map(({ t, marks, ptoHours }) => {
+            const level = attentionOf(t, marks, inProgress, ptoHours);
+            return (
             <tr key={`${t.site_code}|${t.tech}`}>
               <td>
-                {needsAttention(t, marks, inProgress, ptoHours) ? <span className="aps-flag">{t.tech}</span> : t.tech}
+                {level ? <span className={level === 'light' ? 'aps-flag aps-flag-light' : 'aps-flag'}>{t.tech}</span> : t.tech}
                 {showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}
               </td>
               {t.byDay.map((h, i) => {
@@ -259,7 +265,8 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
                 {anyDouble && <span className="aps-minus">{t.double > 0 ? `−${fmtH(t.double, false)}` : ''}</span>}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>,
@@ -298,7 +305,7 @@ export default function AuditWeek() {
     [rosterQ.data, cols, p.site],
   );
   const wt = useMemo(
-    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7, expected) : null),
+    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7, expected, dataQ.data.dayHours ?? []) : null),
     [dataQ.data, week, engineers, cols, expected],
   );
   // Each row's days set against the PTO calendar — for the table and the printed sheet
@@ -405,7 +412,7 @@ export default function AuditWeek() {
                 {rows.map(({ t, marks, ptoHours }) => {
                   const key = `${t.site_code}|${t.tech}`;
                   const isOpen = open === key;
-                  const attention = needsAttention(t, marks, week === current, ptoHours);
+                  const attention = attentionOf(t, marks, week === current, ptoHours);
                   return (
                     <Fragment key={key}>
                       <tr>
@@ -413,8 +420,8 @@ export default function AuditWeek() {
                           <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : key)}
                             style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 600, color: A.ink, cursor: 'pointer', textAlign: 'left' }}>
                             <span aria-hidden="true" style={{ display: 'inline-block', width: 14, color: A.muted }}>{isOpen ? '▾' : '▸'}</span>
-                            <span title={attention ? 'The week\'s total is flagged, or a scheduled day has no hours logged' : undefined}
-                              style={attention ? { background: A.yellow, padding: '1px 4px', margin: '0 -4px', borderRadius: 3 } : undefined}>{t.tech}</span>
+                            <span title={attention === 'strong' ? 'The week\'s total is flagged' : attention === 'light' ? 'The total is fine, but a scheduled day has no hours logged' : undefined}
+                              style={attention ? { background: attention === 'strong' ? A.yellow : A.yellowLight, padding: '1px 4px', margin: '0 -4px', borderRadius: 3 } : undefined}>{t.tech}</span>
                           </button>
                           {p.site === 'both' && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400, paddingLeft: 14 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
                         </td>
@@ -422,7 +429,7 @@ export default function AuditWeek() {
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
-                        {t.byDay.map((h, i) => <DayCell key={i} hours={h} double={t.doubleByDay[i] ?? 0} mark={marks?.[i] ?? null} first={i === 0} />)}
+                        {t.byDay.map((h, i) => <DayCell key={i} hours={h} entries={t.entryByDay[i] ?? 0} double={t.doubleByDay[i] ?? 0} mark={marks?.[i] ?? null} first={i === 0} />)}
                         <td style={{ ...num, ...groupEdge, color: t.closed > 0 ? undefined : A.faint }}>{t.closed > 0 ? t.closed : '—'}</td>
                         <td style={{ ...num, color: t.flagged > 0 ? A.red : A.faint, fontWeight: t.flagged > 0 ? 600 : 400 }}>{t.closed > 0 ? t.flagged : ''}</td>
                         <td style={{ ...num, color: t.good > 0 ? A.greenDark : A.faint, fontWeight: t.good > 0 ? 600 : 400 }}>{t.closed > 0 ? t.good : ''}</td>
@@ -480,8 +487,11 @@ export default function AuditWeek() {
               The catch-all unscheduled-task tasks are left out: they take one entry per small job.
               A <span style={{ background: A.redSoft, color: A.redDark, fontWeight: 600, borderRadius: 4, padding: '0 4px' }}>Logged</span> total
               under {LOW_WEEK_HOURS} h is highlighted once the week is over; approved PTO hours that week count toward the {LOW_WEEK_HOURS}.
-              A <span style={{ background: A.yellow, borderRadius: 3, padding: '0 4px', color: A.ink, fontWeight: 600 }}>name</span> is highlighted when its total is flagged or a scheduled day has no hours logged.
+              A <span style={{ background: A.yellow, borderRadius: 3, padding: '0 4px', color: A.ink, fontWeight: 600 }}>name</span> is highlighted when its total is flagged, and{' '}
+              <span style={{ background: A.yellowLight, borderRadius: 3, padding: '0 4px', color: A.ink, fontWeight: 600 }}>lightly</span> when the total is fine but a scheduled day has no hours logged.
             </div>
+            The <strong>day columns</strong> are Cove's labor report for each day — every hour by the day it was worked, including time on work orders still open;
+            the columns by kind of work, and the entries under a name, come from the tasks we hold, so they can add up to less.{' '}
             <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Not placed</strong> is the rest: time on tasks whose

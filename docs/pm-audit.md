@@ -412,3 +412,25 @@ keeps one landscape Letter page: limited by height for a big crew (about 15 pt f
 and by the longest name's width for a small one (about 20 pt for 10). All sizes in the sheet's CSS are in em,
 so they follow that one number. The colours keep their meaning without a key: green PTO, red boxed 0, red
 total, yellow name, small orange minus.
+
+### Day columns come from Cove's labor report (2026-11-23, migration 0169)
+
+The day columns used to be added up from the labor entries on the tasks we hold. An engineer was flagged
+for a Wednesday with no hours while Cove's report had 8.5 h for him that day — on work we hold no entry
+for (his rounds tasks were up to date and did not carry it; an open work order is the likely place, Cove
+gives those hours only at close). That week the whole Binney network's Wednesday was 166 h on the report
+against 132 h in entries.
+
+- `audit_day_hours` (site, day, person, hours): the labor report asked one Eastern day at a time. The labor
+  poller upserts it for both sites — today and the two days before on every run, two weeks back on the
+  first run of the day, so late entries land on the day they were worked. Read-only toward Cove. Backfill:
+  `COVE_SITE=<site> labor_poller.py backfill-audit-days [190]` (run for both on 2026-11-23).
+- `buildWeekTime(…, dayHours)`: where the table has a site's day, `byDay` is the report's figure for the
+  person (0 if they are not on it); a day it does not have falls back to the entries. `entryByDay` keeps the
+  entry sums, and a day cell's tooltip says when the report has more than the tasks we hold. So the days of
+  a row now add up to Logged, and the red 0 / yellow name / print sheet all rest on Cove's own numbers.
+- The columns by kind of work, Not placed and the entries under a name still come from the tasks we hold.
+- Week key 2026-11-16, Binney, on real rows: red 0 days 21 → 17, and every row's days sum to its Logged.
+
+**Two yellows (manager, same day).** `attentionOf`: strong yellow when the week's total is flagged; very
+light yellow when the total is fine but a scheduled day has no hours.

@@ -23,7 +23,8 @@ week under a key is Monday–Sunday; **Binney's is Sunday–Saturday, starting t
 `auditWeekLabel` in `web/src/lib/pmAudit.ts` are the only places that know; do not "fix" a view back to
 `date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role); the
 Week tab gives every active engineer of the site a row, hours or not.
-`/audit` opens on the Week tab; the queue is `/audit/queue`. The Week tab's Print is the sheet posted in the
+The Week tab's day columns are Cove's labor report per day (`audit_day_hours`, 0169, labor poller), not sums of
+the task entries we hold — those miss open work orders. `/audit` opens on the Week tab; the queue is `/audit/queue`. The Week tab's Print is the sheet posted in the
 shop (the table alone — engineer, hours per day, Total — no title or footnote, 0.25 in margins, type as
 large as one landscape page allows, in colour, PTO shown without its kind). Logged / Total reads
 "25.8 −1.5": the total bigger, double-booked hours smaller after it; a week under 32 h net, approved PTO
