@@ -385,3 +385,9 @@ measured against (plus approved PTO). On screen a reduced Logged is underlined o
 the sum ("43.0 h in Cove − 0.4 h double-booked"); the day columns, the bucket columns, Not placed and the
 tiles still show hours as Cove has them. On the sheet the day cells are net too, so a row adds up.
 The Prior week / Next week buttons sit in the title line between the date range and Print.
+
+**Logged format (manager, same day: "25.8 (bigger) − 1.5 (smaller)").** The Logged cell and the sheet's
+Total show the week's total in larger type and, where there are double-booked hours, a small orange "−1.5"
+after it in a fixed slot, so the totals stay in a column. The big number is `weekTotal` (as Cove has it);
+the tooltip gives the sum. Rows are still ordered by, and the 32 h line still measured against, `netTotal`.
+On the sheet the day cells are as Cove has them again, so they add up to the big number.
