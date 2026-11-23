@@ -24,7 +24,7 @@ week under a key is Monday–Sunday; **Binney's is Sunday–Saturday, starting t
 `date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role).
 `/audit` opens on the Week tab; the queue is `/audit/queue`. The Week tab's Print is the sheet posted in the
 shop (engineer + hours per day + Total + Double, landscape, in colour, PTO shown without its kind; a week's
-total under 32 h is highlighted) — verify print changes with a headless Chrome `--print-to-pdf` render.
+total under 32 h, approved PTO hours counted in, is highlighted) — verify print changes with a headless Chrome `--print-to-pdf` render.
 
 ## Training — 8-week board (Admin › User Profiles › Tracker)
 

@@ -371,5 +371,9 @@ red, double-booked orange. On screen the double-booked hours left the line under
 column beside Logged — just the number. A week's total under **32 h** (`LOW_WEEK_HOURS`, `lowWeek`) is
 highlighted red on screen (Logged) and on the sheet (Total), never for the week in progress. Total is
 `weekTotal`: the labor report's figure, or what the entries add up to where that is more — it can exceed the
-sum of the days, because the report also counts hours on work orders still open. PTO hours do not count
-toward the 32.
+sum of the days, because the report also counts hours on work orders still open.
+
+Approved PTO hours that week count toward the 32 (manager, same day): `ptoHoursInWeek` adds every approved
+request in the person's week, any kind of leave; a request that runs past the week counts in proportion to
+the scheduled days of it that fall inside. The Total shown stays hours worked — only the highlight uses
+the sum. Week key 2026-11-09 on real rows: Binney 7 → 4 highlighted, UPark 6 → 5.

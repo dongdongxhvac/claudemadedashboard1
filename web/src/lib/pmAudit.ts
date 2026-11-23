@@ -947,9 +947,32 @@ export function weekTotal(t: Pick<TechWeek, 'logged' | 'placed'>): number {
   return Math.max(t.logged ?? 0, t.placed);
 }
 
-/** Highlight a total? Not while the week is still running — everyone is low then. */
-export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed'>, inProgress: boolean): boolean {
-  return !inProgress && weekTotal(t) < LOW_WEEK_HOURS;
+/** Approved PTO hours that fall in a person's week (`weekFirst` … +6). A
+ *  request that runs past the week counts in proportion: its hours are spread
+ *  over the days of it the crew is scheduled (over every day of it, if none
+ *  is). Any kind of approved time off counts; pending and denied do not. */
+export function ptoHoursInWeek(pto: PtoRow[], weekFirst: string, crew: Crew): number {
+  const weekLast = addDays(weekFirst, 6);
+  let sum = 0;
+  for (const r of pto) {
+    if (r.status !== 'approved' || r.starts_on > weekLast || r.ends_on < weekFirst) continue;
+    const hours = Number(r.hours ?? 0);
+    if (r.starts_on >= weekFirst && r.ends_on <= weekLast) { sum += hours; continue; }
+    let all = 0, allIn = 0, worked = 0, workedIn = 0;
+    for (let d = r.starts_on; d <= r.ends_on && all < 400; d = addDays(d, 1)) {
+      const inWeek = d >= weekFirst && d <= weekLast;
+      all++; if (inWeek) allIn++;
+      if (worksOn(crew, d)) { worked++; if (inWeek) workedIn++; }
+    }
+    sum += worked > 0 ? (hours * workedIn) / worked : all > 0 ? (hours * allIn) / all : 0;
+  }
+  return r2(sum);
+}
+
+/** Highlight a total? Hours worked plus approved PTO under the line — and
+ *  not while the week is still running, when everyone is low. */
+export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed'>, inProgress: boolean, ptoHours = 0): boolean {
+  return !inProgress && weekTotal(t) + ptoHours < LOW_WEEK_HOURS;
 }
 
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */

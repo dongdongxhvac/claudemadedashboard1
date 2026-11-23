@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, pct,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
@@ -182,7 +182,8 @@ const PRINT_CSS = `
 }
 `;
 
-type PrintRow = { t: TechWeek; marks: (DayMark | null)[] | null };
+/** A table row: the person's week, their days against the PTO calendar, and their approved PTO hours that week. */
+type PrintRow = { t: TechWeek; marks: (DayMark | null)[] | null; ptoHours: number };
 
 function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inProgress }: {
   rows: PrintRow[]; days: string[]; firstDay: string; rangeLabel: string; siteLabel: string; showSite: boolean; inProgress: boolean;
@@ -210,7 +211,7 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
           </tr>
         </thead>
         <tbody>
-          {sorted.map(({ t, marks }) => (
+          {sorted.map(({ t, marks, ptoHours }) => (
             <tr key={`${t.site_code}|${t.tech}`}>
               <td>{t.tech}{showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}</td>
               {t.byDay.map((h, i) => {
@@ -222,7 +223,7 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
                   </td>
                 );
               })}
-              <td className="aps-total">{lowWeek(t, inProgress) ? <span className="aps-low">{fmtH(weekTotal(t), false)}</span> : fmtH(weekTotal(t), false)}</td>
+              <td className="aps-total">{lowWeek(t, inProgress, ptoHours) ? <span className="aps-low">{fmtH(weekTotal(t), false)}</span> : fmtH(weekTotal(t), false)}</td>
               <td className="aps-double">{fmtH(t.double)}</td>
             </tr>
           ))}
@@ -232,7 +233,7 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
         Blank = day off. <span className="aps-pto">PTO</span> = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged
         and no approved time off. <span className="aps-red">Red hours</span> = logged on a day the PTO calendar has off.{' '}
         <strong>Total</strong> = the week's hours in Cove's labor report (it can be more than the days add up to: hours on a work order still open
-        are on no day){inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h</>}. <span className="aps-double">Double-booked</span> = hours
+        are on no day){inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h even with approved PTO counted</>}. <span className="aps-double">Double-booked</span> = hours
         entered more than once on the same task the same day. Something missing? Log it on the task in Cove.
       </div>
     </div>,
@@ -272,11 +273,12 @@ export default function AuditWeek() {
   // Each row's days set against the PTO calendar — for the table and the printed sheet
   const rows = useMemo<PrintRow[]>(() => (wt && week && firstDay ? wt.techs.map((t) => {
     const who = roster?.get(rosterKey(t.tech));
+    const pto = who && ptoQ.data ? ptoByUser.get(who.user_id) ?? [] : null;
+    const weekFirst = weekFirstDay(week, t.site_code);
     return {
       t,
-      marks: who && ptoQ.data
-        ? dayMarks(t.byDay, firstDay, { weekFirst: weekFirstDay(week, t.site_code), crew: who.crew, pto: ptoByUser.get(who.user_id) ?? [], today })
-        : null,
+      marks: who && pto ? dayMarks(t.byDay, firstDay, { weekFirst, crew: who.crew, pto, today }) : null,
+      ptoHours: who && pto ? ptoHoursInWeek(pto, weekFirst, who.crew) : 0,
     };
   }) : []), [wt, week, firstDay, roster, ptoQ.data, ptoByUser, today]);
   const scale = wt ? Math.max(0, ...wt.techs.map((t) => Math.max(t.logged ?? 0, t.placed))) : 0;
@@ -373,7 +375,7 @@ export default function AuditWeek() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ t, marks }) => {
+                {rows.map(({ t, marks, ptoHours }) => {
                   const key = `${t.site_code}|${t.tech}`;
                   const isOpen = open === key;
                   return (
@@ -387,8 +389,10 @@ export default function AuditWeek() {
                           {p.site === 'both' && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400, paddingLeft: 14 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
                         </td>
                         <td style={{ ...num, fontWeight: 600, color: t.logged === null ? A.faint : undefined }}
-                          title={lowWeek(t, week === current) ? `Under ${LOW_WEEK_HOURS} h for the week` : undefined}>
-                          {lowWeek(t, week === current)
+                          title={lowWeek(t, week === current, ptoHours)
+                            ? `Under ${LOW_WEEK_HOURS} h for the week${ptoHours > 0 ? `, even with ${fmtH(ptoHours, false)} h of approved PTO` : ''}`
+                            : ptoHours > 0 ? `Plus ${fmtH(ptoHours, false)} h of approved PTO this week` : undefined}>
+                          {lowWeek(t, week === current, ptoHours)
                             ? <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 4, background: A.redSoft, color: A.redDark }}>{t.logged === null ? fmtH(t.placed, false) : fmtH(t.logged, false)}</span>
                             : t.logged === null ? '—' : fmtH(t.logged, false)}
                         </td>
@@ -452,7 +456,7 @@ export default function AuditWeek() {
               They are <span style={{ borderBottom: `2px solid ${A.orange}` }}>underlined</span> in the day columns and set apart when you open a name. Those hours are
               still in every total, as Cove has them. The catch-all unscheduled-task tasks are left out: they take one entry per small job.
               A <span style={{ background: A.redSoft, color: A.redDark, fontWeight: 600, borderRadius: 4, padding: '0 4px' }}>Logged</span> total
-              under {LOW_WEEK_HOURS} h is highlighted once the week is over.
+              under {LOW_WEEK_HOURS} h is highlighted once the week is over; approved PTO hours that week count toward the {LOW_WEEK_HOURS}.
             </div>
             <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
