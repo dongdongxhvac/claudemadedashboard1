@@ -19,6 +19,11 @@ Cove. A failure there never fails the poll.
 Run manually:
     .\.venv\Scripts\python.exe labor_poller.py
     COVE_SITE=binney .venv/bin/python labor_poller.py backfill-audit-weeks [weeks=26]
+
+Both sites also get the report one day at a time, upserted into
+`audit_day_hours` (migration 0169): the PM audit Week tab's day columns.
+
+    COVE_SITE=binney .venv/bin/python labor_poller.py backfill-audit-days [days=190]
 """
 from __future__ import annotations
 
@@ -148,10 +153,8 @@ def audit_week_window(key: date) -> tuple[datetime, datetime]:
     return start, end
 
 
-def store_audit_week(client, key: date) -> tuple[int, float]:
-    """Read the labor report for one audit week and upsert it into
-    audit_week_hours (one row per person). Returns (people, total hours)."""
-    start, end = audit_week_window(key)
+def _report_hours(start: datetime, end: datetime) -> dict[str, float]:
+    """The labor report for one window: hours per person. Read-only."""
     resp = requests.post(GQL_URL, headers=_report_headers(), json=_report_body(_iso_utc(start), _iso_utc(end)), timeout=30)
     if resp.status_code != 200:
         raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
@@ -164,6 +167,14 @@ def store_audit_week(client, key: date) -> tuple[int, float]:
         name = str(it.get("label") or "").strip()
         if name and it.get("value") is not None:
             hours[name] = hours.get(name, 0.0) + float(it["value"])
+    return hours
+
+
+def store_audit_week(client, key: date) -> tuple[int, float]:
+    """Read the labor report for one audit week and upsert it into
+    audit_week_hours (one row per person). Returns (people, total hours)."""
+    start, end = audit_week_window(key)
+    hours = _report_hours(start, end)
     if not hours:
         return 0, 0.0          # nothing logged yet (or an empty answer): leave what is stored
     stamp = datetime.now(UTC).isoformat()
@@ -175,6 +186,46 @@ def store_audit_week(client, key: date) -> tuple[int, float]:
     # someone whose hours were removed in Cove since the last read
     client.table("audit_week_hours").delete().eq("site_code", SITE).eq("week_start", key.isoformat()).lt("as_of", stamp).execute()
     return len(hours), sum(hours.values())
+
+
+# ---------- PM audit: hours per person per day (both sites, migration 0169) ----------
+
+def store_audit_day(client, day: date) -> tuple[int, float]:
+    """Read the labor report for one Eastern calendar day and upsert it into
+    audit_day_hours. The PM audit Week tab shows these as its day columns: the
+    report counts every hour by the day it was worked, including hours on work
+    orders still open, which no task entry we hold shows."""
+    start = datetime.combine(day, dtime.min, tzinfo=EASTERN)
+    end = datetime.combine(day, dtime(23, 59, 59, 999000), tzinfo=EASTERN)
+    hours = _report_hours(start, end)
+    if not hours:
+        return 0, 0.0          # nobody logged that day yet (or an empty answer): leave what is stored
+    stamp = datetime.now(UTC).isoformat()
+    client.table("audit_day_hours").upsert(
+        [{"site_code": SITE, "day": day.isoformat(), "assigned_to_name": n, "hours": round(h, 4), "as_of": stamp}
+         for n, h in hours.items()],
+        on_conflict="site_code,day,assigned_to_name",
+    ).execute()
+    client.table("audit_day_hours").delete().eq("site_code", SITE).eq("day", day.isoformat()).lt("as_of", stamp).execute()
+    return len(hours), sum(hours.values())
+
+
+def backfill_audit_days(days: int = 190) -> int:
+    """One-off: store the last `days` days (the report takes any date range)."""
+    global TOKEN
+    TOKEN = get_fresh_token()
+    client = get_client()
+    today = datetime.now(EASTERN).date()
+    stored = 0
+    for i in range(days):
+        d = today - timedelta(days=i)
+        people, total = store_audit_day(client, d)
+        stored += 1 if people else 0
+        if i < 14 or i % 30 == 0:
+            print(f"[audit day {d}] {people} people, {total:.1f} h")
+        time.sleep(0.25)
+    print(f"[done] site={SITE}: {stored} of {days} days have hours")
+    return 0
 
 
 def backfill_audit_weeks(weeks: int = 26) -> int:
@@ -322,6 +373,20 @@ def main() -> int:
                 print(f"[ok] audit week {prev}: {people} people, {total:.1f} h")
         except Exception as e:  # never fail the poll over the audit copy
             print(f"WARN: audit week hours not stored: {e}", file=sys.stderr)
+
+    # Hours per person per day, both sites. Each run refreshes today and the two
+    # days before; the first run of the day goes back two weeks, so entries
+    # typed in late still land on the day they were worked.
+    try:
+        today = now_local.date()
+        span = 14 if now_local.hour <= 7 else 3
+        got = 0
+        for i in range(span):
+            people, _ = store_audit_day(client, today - timedelta(days=i))
+            got += 1 if people else 0
+        print(f"[ok] audit days: {got} of the last {span} have hours")
+    except Exception as e:  # never fail the poll over the audit copy
+        print(f"WARN: audit day hours not stored: {e}", file=sys.stderr)
     return 0
 
 
@@ -343,4 +408,6 @@ def _log_error(filename: str, error_msg: str) -> None:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "backfill-audit-weeks":
         sys.exit(backfill_audit_weeks(int(sys.argv[2]) if len(sys.argv) > 2 else 26))
+    if len(sys.argv) > 1 and sys.argv[1] == "backfill-audit-days":
+        sys.exit(backfill_audit_days(int(sys.argv[2]) if len(sys.argv) > 2 else 190))
     sys.exit(main())
