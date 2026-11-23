@@ -377,3 +377,11 @@ Approved PTO hours that week count toward the 32 (manager, same day): `ptoHoursI
 request in the person's week, any kind of leave; a request that runs past the week counts in proportion to
 the scheduled days of it that fall inside. The Total shown stays hours worked — only the highlight uses
 the sum. Week key 2026-11-09 on real rows: Binney 7 → 4 highlighted, UPark 6 → 5.
+
+**Logged is net of double-booked (manager, same day: "just show logged column and name, total hrs − double
+hrs").** The Double column is gone again, on screen and on the sheet. `netTotal` = `weekTotal` − `double`
+is what the Logged column and the sheet's Total show, what rows are ordered by, and what the 32 h line is
+measured against (plus approved PTO). On screen a reduced Logged is underlined orange and its tooltip gives
+the sum ("43.0 h in Cove − 0.4 h double-booked"); the day columns, the bucket columns, Not placed and the
+tiles still show hours as Cove has them. On the sheet the day cells are net too, so a row adds up.
+The Prior week / Next week buttons sit in the title line between the date range and Print.

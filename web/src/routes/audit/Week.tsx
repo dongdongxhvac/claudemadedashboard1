@@ -7,8 +7,8 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, pct, ptoHoursInWeek,
-  rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, netTotal, pct, ptoHoursInWeek,
+  rosterKey, shortName, weekDays, weekFirstDay, weekLabel,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
@@ -72,6 +72,27 @@ function DayCell({ hours, double, mark, first }: { hours: number; double: number
   return (
     <td style={base} title={double > 0 ? `${fmtH(double, false)} h of this is double-booked` : undefined}>
       <span style={double > 0 ? { borderBottom: `2px solid ${A.orange}`, paddingBottom: 1 } : undefined}>{fmtH(hours)}</span>
+    </td>
+  );
+}
+
+/** The Logged cell: the labor report's total with the double-booked hours
+ *  taken out. Underlined in orange where something was taken out (hover for
+ *  the sum), red where the week is under the line. */
+function LoggedCell({ t, low, ptoHours }: { t: TechWeek; low: boolean; ptoHours: number }) {
+  const shown = t.logged === null && !low ? null : netTotal(t);
+  const why = [
+    t.double > 0 ? `${fmtH(Math.max(t.logged ?? 0, t.placed), false)} h in Cove − ${fmtH(t.double, false)} h double-booked` : '',
+    low ? `Under ${LOW_WEEK_HOURS} h for the week${ptoHours > 0 ? `, even with ${fmtH(ptoHours, false)} h of approved PTO` : ''}`
+      : ptoHours > 0 ? `Plus ${fmtH(ptoHours, false)} h of approved PTO this week` : '',
+  ].filter(Boolean).join(' · ');
+  const text = shown === null ? '—' : fmtH(shown, false);
+  const marked = t.double > 0 ? { borderBottom: `2px solid ${A.orange}`, paddingBottom: 1 } : null;
+  return (
+    <td style={{ ...num, fontWeight: 600, color: shown === null ? A.faint : undefined }} title={why || undefined}>
+      {low
+        ? <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 4, background: A.redSoft, color: A.redDark, ...marked }}>{text}</span>
+        : <span style={marked ?? undefined}>{text}</span>}
     </td>
   );
 }
@@ -179,7 +200,6 @@ const PRINT_CSS = `
   .audit-print-sheet .aps-red { color: ${A.red}; font-weight: 700; }
   .audit-print-sheet .aps-total { font-weight: 700; border-left: 1pt solid #000; }
   .audit-print-sheet .aps-low { display: inline-block; padding: 0 4pt; line-height: 1.15; border-radius: 2pt; background: ${A.redSoft}; color: ${A.red}; }
-  .audit-print-sheet .aps-double { color: ${A.orange}; font-weight: 700; }
   .audit-print-sheet .aps-foot { margin-top: 8pt; font-size: 8.5pt; color: #333; }
 }
 `;
@@ -209,15 +229,16 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
             <th>Engineer</th>
             {days.map((d, i) => <th key={i}>{d}<small>{dayLabel(addDays(firstDay, i))}</small></th>)}
             <th className="aps-total">Total<small>hours</small></th>
-            <th>Double<small>booked</small></th>
           </tr>
         </thead>
         <tbody>
           {sorted.map(({ t, marks, ptoHours }) => (
             <tr key={`${t.site_code}|${t.tech}`}>
               <td>{t.tech}{showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}</td>
-              {t.byDay.map((h, i) => {
+              {t.byDay.map((raw, i) => {
                 const m = marks?.[i] ?? null;
+                // double-booked hours are out of the Total, so they are out of the day too: the row adds up
+                const h = Math.max(0, Math.round((raw - (t.doubleByDay[i] ?? 0)) * 100) / 100);
                 return (
                   <td key={i}>
                     {h > 0 ? (m?.tone === 'red' ? <span className="aps-red">{fmtH(h)}</span> : fmtH(h))
@@ -225,8 +246,7 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
                   </td>
                 );
               })}
-              <td className="aps-total">{lowWeek(t, inProgress, ptoHours) ? <span className="aps-low">{fmtH(weekTotal(t), false)}</span> : fmtH(weekTotal(t), false)}</td>
-              <td className="aps-double">{fmtH(t.double)}</td>
+              <td className="aps-total">{lowWeek(t, inProgress, ptoHours) ? <span className="aps-low">{fmtH(netTotal(t), false)}</span> : fmtH(netTotal(t), false)}</td>
             </tr>
           ))}
         </tbody>
@@ -234,9 +254,10 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
       <div className="aps-foot">
         Blank = day off. <span className="aps-pto">PTO</span> = approved time off on the PTO calendar. <span className="aps-zero">0</span> = a scheduled day with no hours logged
         and no approved time off. <span className="aps-red">Red hours</span> = logged on a day the PTO calendar has off.{' '}
-        <strong>Total</strong> = the week's hours in Cove's labor report (it can be more than the days add up to: hours on a work order still open
-        are on no day){inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h even with approved PTO counted</>}. <span className="aps-double">Double-booked</span> = hours
-        entered more than once on the same task the same day. Something missing? Log it on the task in Cove.
+        Hours entered more than once on the same task the same day are counted once, in the day and in the total.{' '}
+        <strong>Total</strong> = the week's hours in Cove's labor report; it can be more than the days add up to, because hours on a work order still
+        open are on no day{inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h even with approved PTO counted</>}.
+        Something missing? Log it on the task in Cove.
       </div>
     </div>,
     document.body,
@@ -357,9 +378,8 @@ export default function AuditWeek() {
               <thead>
                 <tr>
                   <th style={thText}>Engineer</th>
-                  <th style={thNum} title={`Total hours on the Cove labor report for the week — highlighted under ${LOW_WEEK_HOURS} h once the week is over`}>Logged</th>
-                  <th style={{ ...thNum, color: A.orangeDark }} title="Double-booked: hours entered more than once by the same person on the same task the same day. Inside Logged, not on top of it.">Double</th>
-                  <th style={{ ...thText, minWidth: days.length > 7 ? 72 : 88 }}>Where<br />it went</th>
+                  <th style={thNum} title={`The week's hours on the Cove labor report, less double-booked hours — highlighted under ${LOW_WEEK_HOURS} h once the week is over`}>Logged</th>
+                  <th style={{ ...thText, minWidth: days.length > 7 ? 92 : 110 }}>Where<br />it went</th>
                   {BUCKETS.map((b) => (
                     <th key={b.key} style={{ ...thNum, whiteSpace: 'normal' }} title={b.label}>
                       {/* the bar's colour as an underline: ties the column to the bar without widening it */}
@@ -387,15 +407,7 @@ export default function AuditWeek() {
                           </button>
                           {p.site === 'both' && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400, paddingLeft: 14 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
                         </td>
-                        <td style={{ ...num, fontWeight: 600, color: t.logged === null ? A.faint : undefined }}
-                          title={lowWeek(t, week === current, ptoHours)
-                            ? `Under ${LOW_WEEK_HOURS} h for the week${ptoHours > 0 ? `, even with ${fmtH(ptoHours, false)} h of approved PTO` : ''}`
-                            : ptoHours > 0 ? `Plus ${fmtH(ptoHours, false)} h of approved PTO this week` : undefined}>
-                          {lowWeek(t, week === current, ptoHours)
-                            ? <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 4, background: A.redSoft, color: A.redDark }}>{t.logged === null ? fmtH(t.placed, false) : fmtH(t.logged, false)}</span>
-                            : t.logged === null ? '—' : fmtH(t.logged, false)}
-                        </td>
-                        <td style={{ ...num, color: A.orangeDark, fontWeight: 600 }} title={t.double > 0 ? 'Double-booked hours — open the name to see the entries' : undefined}>{fmtH(t.double)}</td>
+                        <LoggedCell t={t} low={lowWeek(t, week === current, ptoHours)} ptoHours={ptoHours} />
                         <td style={{ ...tdStyle, verticalAlign: 'middle' }}><HoursBar t={t} scale={scale} /></td>
                         {BUCKETS.map((b) => <td key={b.key} style={num}>{fmtH(t.byBucket[b.key])}</td>)}
                         <td style={{ ...num, color: t.unplaced > 0 ? A.orangeDark : A.faint, fontWeight: t.unplaced > 0 ? 600 : 400 }}>{t.unplaced > 0 ? fmtH(t.unplaced) : '—'}</td>
@@ -406,7 +418,7 @@ export default function AuditWeek() {
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={8 + days.length + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
+                          <td colSpan={7 + days.length + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
                             <Entries t={t} firstDay={firstDay} days={days} />
                           </td>
                         </tr>
@@ -451,13 +463,14 @@ export default function AuditWeek() {
               {ptoQ.isError && <span style={{ color: A.orangeDark }}> The PTO calendar could not be read, so no day is marked.</span>}
             </div>
             <div style={{ marginBottom: 6 }}>
-              <strong>Double</strong> = double-booked hours: more than one entry by the same person on the same task on the same day (the largest stands).
-              They are <span style={{ borderBottom: `2px solid ${A.orange}` }}>underlined</span> in the day columns and set apart when you open a name. Those hours are
-              still in every total, as Cove has them. The catch-all unscheduled-task tasks are left out: they take one entry per small job.
+              <strong>Double-booked</strong> = more than one entry by the same person on the same task on the same day (the largest stands).
+              Those hours are taken out of <strong>Logged</strong> (hover the number for the sum), <span style={{ borderBottom: `2px solid ${A.orange}` }}>underlined</span> where
+              they sit in the day columns, and set apart when you open a name; the other columns and the tiles show them as Cove has them.
+              The catch-all unscheduled-task tasks are left out: they take one entry per small job.
               A <span style={{ background: A.redSoft, color: A.redDark, fontWeight: 600, borderRadius: 4, padding: '0 4px' }}>Logged</span> total
               under {LOW_WEEK_HOURS} h is highlighted once the week is over; approved PTO hours that week count toward the {LOW_WEEK_HOURS}.
             </div>
-            <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
+            <strong>Logged</strong> starts from the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Not placed</strong> is the rest: time on tasks whose
             entries have not been pulled yet, and on work orders still open. The kind of work is read from the task's name. Click a name for the entries.

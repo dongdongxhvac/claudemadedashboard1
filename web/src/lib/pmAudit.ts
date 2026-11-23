@@ -933,7 +933,8 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     for (const b of BUCKETS) team.byBucket[b.key] += r.byBucket[b.key];
     if ((r.logged ?? 0) > 0 || r.placed > 0) team.people++;
   }
-  techs.sort((a, b) => Math.max(b.logged ?? 0, b.placed) - Math.max(a.logged ?? 0, a.placed) || a.tech.localeCompare(b.tech));
+  // biggest week first, by the number the Logged column shows (double-booked hours taken out)
+  techs.sort((a, b) => netTotal(b) - netTotal(a) || a.tech.localeCompare(b.tech));
   return { techs, others, team, asOf };
 }
 
@@ -969,10 +970,17 @@ export function ptoHoursInWeek(pto: PtoRow[], weekFirst: string, crew: Crew): nu
   return r2(sum);
 }
 
-/** Highlight a total? Hours worked plus approved PTO under the line — and
- *  not while the week is still running, when everyone is low. */
-export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed'>, inProgress: boolean, ptoHours = 0): boolean {
-  return !inProgress && weekTotal(t) + ptoHours < LOW_WEEK_HOURS;
+/** The week's hours with the double-booked ones taken out — what the Week
+ *  tab's Logged column and the print sheet's Total show (manager 2026-11-23:
+ *  "total hrs - double hrs"). */
+export function netTotal(t: Pick<TechWeek, 'logged' | 'placed' | 'double'>): number {
+  return r2(Math.max(0, weekTotal(t) - t.double));
+}
+
+/** Highlight a total? Net hours plus approved PTO under the line — and not
+ *  while the week is still running, when everyone is low. */
+export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed' | 'double'>, inProgress: boolean, ptoHours = 0): boolean {
+  return !inProgress && netTotal(t) + ptoHours < LOW_WEEK_HOURS;
 }
 
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */

@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, lowWeek, ptoHoursInWeek, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -285,8 +285,9 @@ eq('day marks: both sites, a column outside the person\'s own week', dayMarks([0
   [null, '0', '0', '0', '0', '0', null, null]);
 
 eq('week total: the labor report, or the entries where they add up to more', [weekTotal({ logged: 40, placed: 8.5 }), weekTotal({ logged: 20, placed: 31 }), weekTotal({ logged: null, placed: 4 })], [40, 31, 4]);
-eq('low week: under 32 h, but not while the week is running', [lowWeek({ logged: 31.9, placed: 30 }, false), lowWeek({ logged: 32, placed: 30 }, false), lowWeek({ logged: null, placed: 12 }, false), lowWeek({ logged: 8, placed: 8 }, true)], [true, false, true, false]);
-eq('low week: approved PTO counts toward the 32', [lowWeek({ logged: 24, placed: 24 }, false, 10), lowWeek({ logged: 24, placed: 24 }, false, 7.5), lowWeek({ logged: null, placed: 0 }, false, 40)], [false, true, false]);
+eq('net total: double-booked hours come off', [netTotal({ logged: 43, placed: 40, double: 0.4 }), netTotal({ logged: null, placed: 4, double: 0 }), netTotal({ logged: 1, placed: 1, double: 3 })], [42.6, 4, 0]);
+eq('low week: under 32 h net, but not while the week is running', [lowWeek({ logged: 31.9, placed: 30, double: 0 }, false), lowWeek({ logged: 32, placed: 30, double: 0 }, false), lowWeek({ logged: 33, placed: 30, double: 1.5 }, false), lowWeek({ logged: null, placed: 12, double: 0 }, false), lowWeek({ logged: 8, placed: 8, double: 0 }, true)], [true, false, true, true, false]);
+eq('low week: approved PTO counts toward the 32', [lowWeek({ logged: 24, placed: 24, double: 0 }, false, 10), lowWeek({ logged: 24, placed: 24, double: 0 }, false, 7.5), lowWeek({ logged: null, placed: 0, double: 0 }, false, 40)], [false, true, false]);
 eq('PTO hours in the week: approved only, a long request in proportion to scheduled days', [
   ptoHoursInWeek([pto({}), pto({ type: 'sick', hours: 3.5, starts_on: '2026-11-09', ends_on: '2026-11-09' }), pto({ status: 'pending' }), pto({ status: 'denied' })], '2026-11-08', 'sunday'),
   // Sun–Wed crew, Tue Nov 10 … Mon Nov 16, 40 h: scheduled Tue Wed | Sun Mon → half is in the week of Nov 8
