@@ -26,6 +26,8 @@ export const A = {
   greenDark: '#1B6B3A',
   greenSoft: '#E3F4EA',
   track: '#EEF0F3',
+  /** highlighter yellow behind a name that needs a look (ink on it is 15:1) */
+  yellow: '#FFE566',
 } as const;
 
 export const CHIP_TONE: Record<ChipTone, { bg: string; fg: string }> = {

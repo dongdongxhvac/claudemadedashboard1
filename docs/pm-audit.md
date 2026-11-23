@@ -391,3 +391,8 @@ Total show the week's total in larger type and, where there are double-booked ho
 after it in a fixed slot, so the totals stay in a column. The big number is `weekTotal` (as Cove has it);
 the tooltip gives the sum. Rows are still ordered by, and the 32 h line still measured against, `netTotal`.
 On the sheet the day cells are as Cove has them again, so they add up to the big number.
+
+**Yellow name (manager, same day).** An engineer's name is highlighted yellow, on screen and on the sheet,
+when the week's total is flagged (under 32 h net, PTO counted) or a scheduled day has no hours documented
+(a red 0) — `needsAttention`, `missingDays`. Hours logged on a PTO day do not turn the name yellow. The sheet
+sets `print-color-adjust: exact`, so the yellow and the light red print without "Background graphics".

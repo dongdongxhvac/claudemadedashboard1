@@ -983,6 +983,19 @@ export function lowWeek(t: Pick<TechWeek, 'logged' | 'placed' | 'double'>, inPro
   return !inProgress && netTotal(t) + ptoHours < LOW_WEEK_HOURS;
 }
 
+/** Scheduled days with nothing logged and no approved time off — the red 0s. */
+export function missingDays(byDay: number[], marks: (DayMark | null)[] | null): number {
+  return marks ? marks.filter((m, i) => m?.tone === 'red' && (byDay[i] ?? 0) <= 0).length : 0;
+}
+
+/** Whose name gets the yellow highlight (manager 2026-11-23): the week's total
+ *  is flagged, or a scheduled day has no hours documented. */
+export function needsAttention(
+  t: Pick<TechWeek, 'logged' | 'placed' | 'double' | 'byDay'>, marks: (DayMark | null)[] | null, inProgress: boolean, ptoHours = 0,
+): boolean {
+  return lowWeek(t, inProgress, ptoHours) || missingDays(t.byDay, marks) > 0;
+}
+
 /** 6.333 → "6.3", 0.08 → "0.1", 0 → "" (an empty cell reads better than a zero). */
 export function fmtH(h: number, blankZero = true): string {
   if (!h) return blankZero ? '' : '0';

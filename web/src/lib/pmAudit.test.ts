@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -297,6 +297,17 @@ eq('PTO hours in the week: approved only, a long request in proportion to schedu
   ptoHoursInWeek([pto({ starts_on: '2026-11-12', ends_on: '2026-11-17', hours: 32 })], '2026-11-09', null),
   ptoHoursInWeek([pto({ starts_on: '2026-11-20', ends_on: '2026-11-20' })], '2026-11-08', 'sunday'),
 ], [13.5, 20, 20, 16, 0]);
+const red0 = { tone: 'red' as const, label: '0', why: '' };
+const redWorked = { tone: 'red' as const, label: '9.0', why: '' };
+const green = { tone: 'green' as const, label: 'Vac', why: '' };
+eq('missing days: the red 0s, not PTO and not hours logged on a PTO day', [missingDays([8, 0, 0, 9], [null, red0, green, redWorked]), missingDays([8, 0], null)], [1, 0]);
+eq('yellow name: a low total or a missing day', [
+  needsAttention({ logged: 40, placed: 40, double: 0, byDay: [10, 10, 10, 10] }, [null, null, null, null], false),
+  needsAttention({ logged: 30, placed: 30, double: 0, byDay: [10, 10, 10, 0] }, [null, null, null, green], false, 10),
+  needsAttention({ logged: 30, placed: 30, double: 0, byDay: [10, 10, 10, 0] }, [null, null, null, null], false),
+  needsAttention({ logged: 38, placed: 38, double: 0, byDay: [14, 12, 12, 0] }, [null, null, null, red0], false),
+  needsAttention({ logged: 8, placed: 8, double: 0, byDay: [8, 0, 0, 0] }, [null, null, null, null], true),
+], [false, false, true, true, false]);
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO

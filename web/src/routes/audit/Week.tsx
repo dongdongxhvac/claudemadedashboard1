@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, netTotal, pct, ptoHoursInWeek,
+  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, dayMarks, easternDay, fmtH, fmtStamp, lowWeek, needsAttention, netTotal, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
@@ -202,6 +202,7 @@ const PRINT_CSS = `
   .audit-print-sheet .aps-red { color: ${A.red}; font-weight: 700; }
   .audit-print-sheet .aps-total { font-weight: 700; border-left: 1pt solid #000; }
   .audit-print-sheet .aps-minus { display: inline-block; min-width: 22pt; padding-left: 2pt; text-align: left; font-size: 8.5pt; font-weight: 700; color: ${A.orange}; }
+  .audit-print-sheet .aps-flag { background: ${A.yellow}; padding: 0 3pt; margin-left: -3pt; border-radius: 2pt; }
   .audit-print-sheet .aps-low { display: inline-block; padding: 0 4pt; line-height: 1.15; border-radius: 2pt; background: ${A.redSoft}; color: ${A.red}; }
   .audit-print-sheet .aps-foot { margin-top: 8pt; font-size: 8.5pt; color: #333; }
 }
@@ -237,7 +238,10 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
         <tbody>
           {sorted.map(({ t, marks, ptoHours }) => (
             <tr key={`${t.site_code}|${t.tech}`}>
-              <td>{t.tech}{showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}</td>
+              <td>
+                {needsAttention(t, marks, inProgress, ptoHours) ? <span className="aps-flag">{t.tech}</span> : t.tech}
+                {showSite && <small> · {SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</small>}
+              </td>
               {t.byDay.map((h, i) => {
                 const m = marks?.[i] ?? null;
                 return (
@@ -261,7 +265,7 @@ function PrintSheet({ rows, days, firstDay, rangeLabel, siteLabel, showSite, inP
         <strong>Total</strong> = the week's hours in Cove's labor report; it can be more than the days add up to, because hours on a work order still
         open are on no day. <span className="aps-minus" style={{ minWidth: 0, padding: 0 }}>−1.5</span> after a total = hours entered more than once on the same task
         the same day, to take off it{inProgress ? '' : <>; <span className="aps-low">red</span> = under {LOW_WEEK_HOURS} h after that, even with approved PTO counted</>}.
-        Something missing? Log it on the task in Cove.
+        <span className="aps-flag" style={{ marginLeft: 0 }}>Yellow name</span> = a red total or a missing day. Something missing? Log it on the task in Cove.
       </div>
     </div>,
     document.body,
@@ -401,13 +405,16 @@ export default function AuditWeek() {
                 {rows.map(({ t, marks, ptoHours }) => {
                   const key = `${t.site_code}|${t.tech}`;
                   const isOpen = open === key;
+                  const attention = needsAttention(t, marks, week === current, ptoHours);
                   return (
                     <Fragment key={key}>
                       <tr>
                         <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>
                           <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : key)}
                             style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 600, color: A.ink, cursor: 'pointer', textAlign: 'left' }}>
-                            <span aria-hidden="true" style={{ display: 'inline-block', width: 14, color: A.muted }}>{isOpen ? '▾' : '▸'}</span>{t.tech}
+                            <span aria-hidden="true" style={{ display: 'inline-block', width: 14, color: A.muted }}>{isOpen ? '▾' : '▸'}</span>
+                            <span title={attention ? 'The week\'s total is flagged, or a scheduled day has no hours logged' : undefined}
+                              style={attention ? { background: A.yellow, padding: '1px 4px', margin: '0 -4px', borderRadius: 3 } : undefined}>{t.tech}</span>
                           </button>
                           {p.site === 'both' && <div style={{ color: A.muted, fontSize: 12, fontWeight: 400, paddingLeft: 14 }}>{SITE_LABEL[t.site_code as 'upark' | 'binney'] ?? t.site_code}</div>}
                         </td>
@@ -473,6 +480,7 @@ export default function AuditWeek() {
               The catch-all unscheduled-task tasks are left out: they take one entry per small job.
               A <span style={{ background: A.redSoft, color: A.redDark, fontWeight: 600, borderRadius: 4, padding: '0 4px' }}>Logged</span> total
               under {LOW_WEEK_HOURS} h is highlighted once the week is over; approved PTO hours that week count toward the {LOW_WEEK_HOURS}.
+              A <span style={{ background: A.yellow, borderRadius: 3, padding: '0 4px', color: A.ink, fontWeight: 600 }}>name</span> is highlighted when its total is flagged or a scheduled day has no hours logged.
             </div>
             <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
