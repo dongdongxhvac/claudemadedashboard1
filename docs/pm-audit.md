@@ -315,3 +315,30 @@ scorecard to count Sunday–Saturday. UPark stays Monday–Sunday.
 
 Checked on real rows, week key 2026-11-09: Binney Nov 8 – 14, 21 engineers, logged 774 h, placed 764 h,
 238 PMs closed; UPark Nov 9 – 15 unchanged (276 h logged, 108 closed).
+
+### Week tab: double-booked hours and days against the PTO calendar (2026-11-23)
+
+**Double-booked** (manager: "separate out the double book"). A second or later entry by the same person on
+the same task on the same day (`buildWeekTime`: `double`, `doubleByDay`, `doubleItems`). The first entry
+stands. The hours stay in every total — Cove has them — and are set apart: a tile, a line under the name,
+an orange underline on the day, and their own block under the day when a name is opened. Left out: the
+catch-all "unscheduled tasks" tasks (bucket `unscheduled`), which take one entry per small job, and work
+orders (one total at close). Cove stores no start/end time on an entry — `performedAt` is the moment it was
+typed unless someone back-dates it — so hours that overlap in time cannot be detected, and an entry typed
+the next morning for yesterday shows as today's second entry.
+
+**PTO marks** (manager: "mark the day green when it is matched the PTO calendar, otherwise red").
+`dayMarks` judges each of a person's days before today:
+
+| the day | mark |
+|---|---|
+| no hours, whole-day approved request on the calendar | green, labelled with its type (Vac, Sick, Hol …) |
+| no hours on a scheduled day, nothing approved covers it | red `0` |
+| hours logged on a whole-day PTO day (holidays excepted) | red, the hours |
+| anything else (a day off, a worked day, part-day PTO) | no mark |
+
+Scheduled days come from the profile's shift (`shifts.crew`, the PTO panel's rule): `sunday` = Sun–Wed,
+`saturday` = Wed–Sat, otherwise Monday–Friday. A one-day request under 7 h is part of a day and does not
+cover it; pending and denied requests do not count. `useAuditEngineers` now returns each roster name with
+its `user_id` and crew; `useAuditPto` reads `pto_requests` for the days on the page. An engineer with no
+hours and no closes all week has no row, so a whole week off does not show here.

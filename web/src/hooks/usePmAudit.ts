@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase';
 import { useMe } from './useMe';
 import { useMySiteAccess } from './useSiteScope';
 import {
-  addDays, auditWeekKeyOf, engineerKeys, joinQueue, sumTypeHours, weekStartOf, weekStats, weeksEnding,
-  type FlagRow, type HistoryEvent, type LaborItem, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
+  addDays, auditWeekKeyOf, joinQueue, rosterPeople, sumTypeHours, weekStartOf, weekStats, weeksEnding,
+  type FlagRow, type HistoryEvent, type LaborItem, type PtoRow, type RosterPerson, type QueueEntry, type QueueRow, type Review, type ScoreClose, type ScoreRow,
   type TypeEntry, type TypeHours, type WeekHours, type WeekTimeClose,
   type SiteFilter, type TaskNote, type Verdict, type WeekClose, type WeekStats,
 } from '../lib/pmAudit';
@@ -290,24 +290,41 @@ export function useAuditWeekTime(week: string | null, site: SiteFilter) {
   });
 }
 
-/** Roster keys of everyone whose role is engineer (leads included, people who
- *  have left included, so past weeks keep their rows). The Week tab and the
- *  scorecard's hours table show only these people: the labor report also
- *  carries porters, managers and vendors. Two plain reads, no embed — users
- *  and engineer_profiles are related twice (manager_user_id). */
+/** Everyone whose role is engineer (leads included, people who have left
+ *  included, so past weeks keep their rows), under each name Cove may use for
+ *  them, with their crew. The Week tab and the scorecard's hours table show
+ *  only these people: the labor report also carries porters, managers and
+ *  vendors. Plain reads, no embed — users and engineer_profiles are related
+ *  twice (manager_user_id). */
 export function useAuditEngineers() {
   return useQuery({
     queryKey: ['pm_audit', 'engineers'],
-    queryFn: async (): Promise<string[]> => {
-      const [users, profiles] = await Promise.all([
+    queryFn: async (): Promise<RosterPerson[]> => {
+      const [users, profiles, shifts] = await Promise.all([
         supabase.from('users').select('id,full_name').eq('role', 'engineer'),
-        supabase.from('engineer_profiles').select('user_id,cmms_assignee_name'),
+        supabase.from('engineer_profiles').select('user_id,cmms_assignee_name,shift_id'),
+        supabase.from('shifts').select('id,crew'),
       ]);
       if (users.error) throw users.error;
       if (profiles.error) throw profiles.error;
-      return engineerKeys(users.data ?? [], profiles.data ?? []);
+      if (shifts.error) throw shifts.error;
+      return rosterPeople(users.data ?? [], profiles.data ?? [], shifts.data ?? []);
     },
     staleTime: 10 * 60_000,
+  });
+}
+
+/** The PTO calendar for a span of days: every approved or pending request
+ *  that touches it. The Week tab sets each person's empty days against it. */
+export function useAuditPto(firstDay: string | null, lastDay: string | null) {
+  return useQuery({
+    queryKey: ['pm_audit', 'pto', firstDay, lastDay],
+    enabled: !!firstDay && !!lastDay,
+    queryFn: async (): Promise<PtoRow[]> => fetchAll<PtoRow>((from, to) =>
+      supabase.from('pto_requests').select('user_id,type,status,starts_on,ends_on,hours')
+        .in('status', ['approved', 'pending']).lte('starts_on', lastDay!).gte('ends_on', firstDay!)
+        .order('starts_on').order('id').range(from, to)),
+    staleTime: 60_000,
   });
 }
 

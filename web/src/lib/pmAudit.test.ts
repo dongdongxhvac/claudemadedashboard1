@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -233,6 +233,51 @@ const wtBoth = buildWeekTime([
   li({ site_code: 'upark', performer: 'Bob Roy', assignee_name: 'Bob Roy', task_no: 'PM-U', hours: 6, day_local: '2026-11-15', performed_at: '2026-11-15T15:00:00Z' }),
 ], sunHours, [], '2026-11-09', null, '2026-11-08', 8);
 eq('both sites: eight day columns', wtBoth.techs.map((t) => [t.tech, t.byDay]), [['Ann Lee', [7.5, 1, 0, 0, 0, 0, 0, 0]], ['Bob Roy', [0, 0, 0, 0, 0, 0, 0, 6]]]);
+// double-booked: a second entry on the same task the same day
+const wtDbl = buildWeekTime([
+  li({ task_no: 'PM-R', task_name: 'Building Rounds', bucket: 'rounds', hours: 1.5, day_local: '2026-11-09', performed_at: '2026-11-09T13:59:00Z' }),
+  li({ task_no: 'PM-R', task_name: 'Building Rounds', bucket: 'rounds', hours: 1.5, day_local: '2026-11-09', performed_at: '2026-11-09T22:20:00Z' }),
+  li({ task_no: 'PM-R', task_name: 'Building Rounds', bucket: 'rounds', hours: 2, day_local: '2026-11-10', performed_at: '2026-11-10T22:20:00Z' }),
+  li({ task_no: 'PM-U', task_name: 'Unscheduled Tasks November', bucket: 'unscheduled', hours: 0.5, day_local: '2026-11-09', performed_at: '2026-11-09T15:00:00Z' }),
+  li({ task_no: 'PM-U', task_name: 'Unscheduled Tasks November', bucket: 'unscheduled', hours: 0.5, day_local: '2026-11-09', performed_at: '2026-11-09T16:00:00Z' }),
+  li({ performer: 'Bob Roy', task_no: 'PM-R', task_name: 'Building Rounds', bucket: 'rounds', hours: 1.5, day_local: '2026-11-09', performed_at: '2026-11-09T22:21:00Z' }),
+], [], [], '2026-11-09');
+const dAnn = wtDbl.techs.find((t) => t.tech === 'Ann Lee')!;
+eq('double-booked: later entry on the same task that day, catch-all tasks left out', [dAnn.placed, dAnn.double, dAnn.doubleByDay, dAnn.doubleItems.map((i) => i.performed_at)], [6, 1.5, [1.5, 0, 0, 0, 0, 0, 0], ['2026-11-09T22:20:00Z']]);
+eq('double-booked: another person on the same task is not a repeat', [wtDbl.techs.find((t) => t.tech === 'Bob Roy')!.double, wtDbl.team.double, wtDbl.team.doublePeople], [0, 1.5, 1]);
+
+// roster with crews, and days against the PTO calendar
+const people = rosterPeople(
+  [{ id: 'u1', full_name: 'Ann Lee' }, { id: 'u2', full_name: 'Robert Roy' }],
+  [{ user_id: 'u1', cmms_assignee_name: null, shift_id: 's1' }, { user_id: 'u2', cmms_assignee_name: 'Bob Roy', shift_id: 's9' }],
+  [{ id: 's1', crew: 'sunday' }, { id: 's9', crew: null }],
+);
+eq('roster people', people, [{ key: 'ann lee', user_id: 'u1', crew: 'sunday' }, { key: 'bob roy', user_id: 'u2', crew: null }, { key: 'robert roy', user_id: 'u2', crew: null }]);
+eq('crew days: Sun–Wed, Wed–Sat, Mon–Fri', ['2026-11-08', '2026-11-11', '2026-11-12', '2026-11-14'].map((d) => [worksOn('sunday', d), worksOn('saturday', d), worksOn(null, d)]),
+  [[true, false, false], [true, true, true], [false, true, true], [false, true, false]]);
+const pto = (over: Partial<{ type: string; status: string; starts_on: string; ends_on: string; hours: number | null }>) =>
+  ({ user_id: 'u1', type: 'vacation', status: 'approved', starts_on: '2026-11-11', ends_on: '2026-11-11', hours: 10, ...over });
+// Sun–Wed crew, week Sun Nov 8 … Sat Nov 14: worked Sun/Mon/Tue, nothing Wed
+const marksOf = (byDay: number[], rows: ReturnType<typeof pto>[], today = '2026-11-16') =>
+  dayMarks(byDay, '2026-11-08', { weekFirst: '2026-11-08', crew: 'sunday', pto: rows, today }).map((m) => (m ? `${m.tone}:${m.label}` : null));
+eq('day marks: PTO explains the empty day', marksOf([7, 8, 8.8, 0, 0, 0, 0], [pto({})]), [null, null, null, 'green:Vac', null, null, null]);
+eq('day marks: nothing explains it', marksOf([7, 8, 8.8, 0, 0, 0, 0], []), [null, null, null, 'red:0', null, null, null]);
+eq('day marks: denied, pending and part-day PTO do not cover a day', [
+  marksOf([7, 8, 8.8, 0, 0, 0, 0], [pto({ status: 'denied' })])[3],
+  marksOf([7, 8, 8.8, 0, 0, 0, 0], [pto({ status: 'pending' })])[3],
+  marksOf([7, 8, 8.8, 0, 0, 0, 0], [pto({ type: 'sick', hours: 3.5 })])[3],
+], ['red:0', 'red:0', 'red:0']);
+eq('day marks: hours logged on a full PTO day; a holiday worked is fine; part-day PTO is fine', [
+  marksOf([7, 8, 8.8, 9, 0, 0, 0], [pto({})])[3],
+  marksOf([7, 8, 8.8, 9, 0, 0, 0], [pto({ type: 'holiday' })])[3],
+  marksOf([7, 8, 8.8, 6.5, 0, 0, 0], [pto({ type: 'sick', hours: 3.5 })])[3],
+], ['red:9.0', null, null]);
+eq('day marks: a multi-day request, and PTO on a day off', marksOf([0, 0, 0, 0, 0, 0, 0], [pto({ starts_on: '2026-11-08', ends_on: '2026-11-10', hours: 30 }), pto({ starts_on: '2026-11-13', ends_on: '2026-11-13' })]),
+  ['green:Vac', 'green:Vac', 'green:Vac', 'red:0', null, 'green:Vac', null]);
+eq('day marks: today and later are not judged', marksOf([7, 0, 0, 0, 0, 0, 0], [], '2026-11-10'), [null, 'red:0', null, null, null, null, null]);
+eq('day marks: both sites, a column outside the person\'s own week', dayMarks([0, 0, 0, 0, 0, 0, 0, 0], '2026-11-08', { weekFirst: '2026-11-09', crew: null, pto: [], today: '2026-11-20' }).map((m) => m?.label ?? null),
+  [null, '0', '0', '0', '0', '0', null, null]);
+
 eq('fmtH', [fmtH(6.333), fmtH(0.04), fmtH(0), fmtH(0, false), fmtH(12)], ['6.3', '<0.1', '', '0', '12.0']);
 
 // scorecard: PM / ODT / WO

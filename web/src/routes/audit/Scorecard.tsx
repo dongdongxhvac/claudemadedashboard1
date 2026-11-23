@@ -167,7 +167,7 @@ export default function AuditScorecard() {
   const dataQ = useAuditScorecard(lastWeek, p.site);
   const hoursQ = useAuditHoursSplit(lastWeek, p.site);
   const rosterQ = useAuditEngineers();
-  const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data) : null), [rosterQ.data]);
+  const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data.map((x) => x.key)) : null), [rosterQ.data]);
   const split = useMemo(
     () => (hoursQ.data ? buildHoursSplit(hoursQ.data.rows, hoursQ.data.weeks.slice(-Number(win)), engineers) : null),
     [hoursQ.data, win, engineers],

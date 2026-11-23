@@ -698,6 +698,11 @@ export type TechWeek = {
   byDay: number[];
   /** Hours logged on a PM task assigned to someone else. */
   onOthers: number;
+  /** Double-booked: a second (or later) entry by this person on the same task
+   *  on the same day. Still inside placed / byBucket / byDay — Cove has them. */
+  double: number;
+  doubleByDay: number[];
+  doubleItems: LaborItem[];
   tasks: number;
   closed: number;
   flagged: number;
@@ -712,7 +717,7 @@ export type WeekTime = {
   techs: TechWeek[];
   /** Left off the page when a roster is given: porters, managers, vendors. */
   others: OtherPerson[];
-  team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number };
+  team: { logged: number; placed: number; unplaced: number; byBucket: Record<Bucket, number>; onOthers: number; pmTaskHours: number; people: number; double: number; doublePeople: number };
   /** Latest labor-report poll behind the week's totals. */
   asOf: string | null;
 };
@@ -733,6 +738,94 @@ export function engineerKeys(
   for (const u of users) { const k = rosterKey(u.full_name); if (k) keys.add(k); }
   for (const p of profiles) { const k = rosterKey(p.cmms_assignee_name); if (k && ids.has(p.user_id)) keys.add(k); }
   return [...keys].sort();
+}
+
+/** Which crew a shift belongs to (shifts.crew): the Sun–Wed crew, the Wed–Sat
+ *  crew, or neither (a Monday–Friday shift, every UPark shift). */
+export type Crew = 'sunday' | 'saturday' | null;
+
+/** One name an engineer can appear under in Cove, with who it is. */
+export type RosterPerson = { key: string; user_id: string; crew: Crew };
+
+export function rosterPeople(
+  users: { id: string; full_name: string | null }[],
+  profiles: { user_id: string; cmms_assignee_name: string | null; shift_id?: string | null }[],
+  shifts: { id: string; crew: string | null }[],
+): RosterPerson[] {
+  const crewOf = new Map(shifts.map((x) => [x.id, x.crew === 'sunday' || x.crew === 'saturday' ? x.crew : null] as const));
+  const profile = new Map(profiles.map((x) => [x.user_id, x] as const));
+  const out = new Map<string, RosterPerson>();
+  for (const u of users) {
+    const pr = profile.get(u.id);
+    const crew: Crew = (pr?.shift_id ? crewOf.get(pr.shift_id) : null) ?? null;
+    for (const name of [u.full_name, pr?.cmms_assignee_name]) {
+      const key = rosterKey(name);
+      if (key && !out.has(key)) out.set(key, { key, user_id: u.id, crew });
+    }
+  }
+  return [...out.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Is this a day the crew is scheduled? Same rule as the PTO panel's crew
+ *  calendar: Sun–Wed crew, Wed–Sat crew, otherwise Monday to Friday. */
+export function worksOn(crew: Crew | undefined, day: string): boolean {
+  const dow = parseDay(day).getUTCDay(); // 0 = Sunday
+  if (crew === 'sunday') return dow <= 3;
+  if (crew === 'saturday') return dow >= 3;
+  return dow >= 1 && dow <= 5;
+}
+
+// ---------- week tab: days against the PTO calendar ----------
+
+export type PtoRow = { user_id: string; type: string; status: string; starts_on: string; ends_on: string; hours: number | null };
+
+/** Green: the day agrees with the PTO calendar. Red: it does not. */
+export type DayMark = { tone: 'green' | 'red'; label: string; why: string };
+
+const PTO_SHORT: Record<string, string> = { vacation: 'Vac', sick: 'Sick', personal: 'Pers', bereavement: 'Brv', holiday: 'Hol', unpaid: 'Unpd', leave: 'Lv', short_term: 'STD', jury_duty: 'Jury' };
+const PTO_WORD: Record<string, string> = { vacation: 'vacation', sick: 'sick', personal: 'personal', bereavement: 'bereavement', holiday: 'holiday', unpaid: 'unpaid', leave: 'leave', short_term: 'short-term leave', jury_duty: 'jury duty' };
+
+/** A one-day request for under 7 hours is part of a day (late in, early out);
+ *  everything else takes the whole day. Full days are 8 h at UPark, 10 h at Binney. */
+function partialDay(r: PtoRow): boolean {
+  return r.starts_on === r.ends_on && r.hours !== null && Number(r.hours) < 7;
+}
+
+/** One mark per day column for one person, or null where there is nothing to say.
+ *
+ *    no hours, whole-day approved PTO          green  (the calendar explains it)
+ *    no hours on a scheduled day, no such PTO  red    (nothing explains it)
+ *    hours logged on a whole-day PTO day       red    (calendar and Cove disagree; holidays excepted —
+ *                                                      the crew on shift works them)
+ *
+ *  Only days before `today` are judged (today's hours may not be typed yet),
+ *  and only the person's own week (`weekFirst` … +6): with both sites on the
+ *  page there is a column outside it. */
+export function dayMarks(
+  byDay: number[], firstDay: string,
+  o: { weekFirst: string; crew: Crew; pto: PtoRow[]; today: string },
+): (DayMark | null)[] {
+  const weekLast = addDays(o.weekFirst, 6);
+  return byDay.map((hours, i) => {
+    const day = addDays(firstDay, i);
+    if (day < o.weekFirst || day > weekLast || day >= o.today) return null;
+    const on = o.pto.filter((r) => r.starts_on <= day && r.ends_on >= day);
+    const approved = on.filter((r) => r.status === 'approved');
+    const whole = approved.find((r) => !partialDay(r));
+    if (hours <= 0) {
+      if (whole) return { tone: 'green', label: PTO_SHORT[whole.type] ?? 'PTO', why: `No hours logged — ${PTO_WORD[whole.type] ?? whole.type} on the PTO calendar` };
+      if (!worksOn(o.crew, day)) return null;
+      const part = approved.reduce((a, r) => a + Number(r.hours ?? 0), 0);
+      const why = part > 0 ? `only ${fmtH(part, false)} h of PTO on the calendar`
+        : on.some((r) => r.status === 'pending') ? 'the PTO request is still pending'
+        : 'nothing on the PTO calendar';
+      return { tone: 'red', label: '0', why: `Scheduled day, no hours logged — ${why}` };
+    }
+    if (whole && whole.type !== 'holiday') {
+      return { tone: 'red', label: fmtH(hours), why: `${fmtH(hours, false)} h logged, but the PTO calendar has a full day of ${PTO_WORD[whole.type] ?? whole.type}` };
+    }
+    return null;
+  });
 }
 
 function emptyBuckets(): Record<Bucket, number> {
@@ -758,7 +851,7 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     const k = `${site ?? ''}|${tech ?? ''}`;
     let r = rows.get(k);
     if (!r) {
-      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: new Array<number>(nDays).fill(0), onOthers: 0, tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
+      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: new Array<number>(nDays).fill(0), onOthers: 0, double: 0, doubleByDay: new Array<number>(nDays).fill(0), doubleItems: [], tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
       rows.set(k, r);
     }
     return r;
@@ -787,7 +880,7 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if ((c.flag_count ?? 0) > 0) r.flagged++;
     if (c.good) r.good++;
   }
-  const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0 };
+  const team = { logged: 0, placed: 0, unplaced: 0, byBucket: emptyBuckets(), onOthers: 0, pmTaskHours: 0, people: 0, double: 0, doublePeople: 0 };
   const present = [...rows.values()].filter((r) => r.logged !== null || r.placed > 0 || r.closed > 0);
   const isEngineer = (r: TechWeek) => !engineers || engineers.has(rosterKey(r.tech));
   const techs = present.filter(isEngineer);
@@ -802,6 +895,25 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     r.unplaced = r.logged === null ? 0 : r2(Math.max(0, r.logged - r.placed));
     r.tasks = new Set(r.items.map((i) => `${i.kind}|${i.task_no}`)).size;
     r.items.sort((a, b) => a.performed_at.localeCompare(b.performed_at) || a.task_no.localeCompare(b.task_no));
+    // Double-booked: the first entry on a task that day stands, every later one
+    // is set apart. The catch-all "unscheduled tasks" tasks are left out — they
+    // take one entry per small job, many a day, by design. Work orders carry a
+    // single total, so they cannot repeat.
+    const seen = new Set<string>();
+    for (const it of r.items) {
+      if (it.kind !== 'pm' || it.bucket === 'unscheduled') continue;
+      const k = `${it.task_no}|${it.day_local}`;
+      if (!seen.has(k)) { seen.add(k); continue; }
+      const hrs = Number(it.hours ?? 0);
+      r.double += hrs;
+      r.doubleItems.push(it);
+      const d = dayIndex(firstDay, it.day_local);
+      if (d >= 0 && d < nDays) r.doubleByDay[d] += hrs;
+    }
+    r.double = r2(r.double);
+    r.doubleByDay = r.doubleByDay.map(r2);
+    team.double += r.double;
+    if (r.double > 0) team.doublePeople++;
     team.logged += r.logged ?? 0;
     team.placed += r.placed;
     team.unplaced += r.unplaced;
