@@ -10,7 +10,7 @@ import {
 } from '../../hooks/usePmAudit';
 import {
   REASON_TAGS, SITE_LABEL, THICK_NOTE_CHARS, VERDICT_LABEL, asFlagKeys, buildTimeline, coveTaskUrl, filterQueue, fmtClosed, fmtDay, fmtHours, fmtStamp,
-  isPhotoName, isWeekStart, nextOpen, noteSourceLabel, rowChips, shortName, weekLabel,
+  isPhotoName, isWeekStart, nextOpen, noteSourceLabel, rowChips, shortName, auditWeekLabel,
   type QueueRow, type Review, type Verdict,
 } from '../../lib/pmAudit';
 import { AuditShell, ChipTag, Notice, Panel, Soft, VerdictTag } from './AuditUi';
@@ -379,7 +379,7 @@ export default function AuditReview() {
       <div style={{ fontSize: 13, color: A.muted }}>
         <Link to={queueHref} style={{ textDecoration: 'none', fontWeight: 500, color: A.blue }}>← Queue</Link>
         {idx >= 0 && <> &nbsp;·&nbsp; Review {idx + 1} of {list.length}</>}
-        {week && <> &nbsp;·&nbsp; Week of {weekLabel(week)}</>}
+        {week && <> &nbsp;·&nbsp; Week of {auditWeekLabel(week, p.site)}</>}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" style={{ ...buttonStyle, opacity: prev ? 1 : 0.45 }} disabled={!prev} onClick={() => prev && navigate(hrefOf(prev))}>← Prev</button>
@@ -412,7 +412,7 @@ export default function AuditReview() {
       ) : queueQ.isError || cardQ.isError ? (
         <Notice tone="error">Could not load this task: {((queueQ.error ?? cardQ.error) as Error).message}</Notice>
       ) : !cardRow ? (
-        <Notice>No recurring PM {taskNo} was closed in the week of {weekLabel(week)}. <Link to={queueHref} style={{ color: A.blue }}>Back to the queue</Link>.</Notice>
+        <Notice>No recurring PM {taskNo} was closed in the week of {auditWeekLabel(week, p.site)}. <Link to={queueHref} style={{ color: A.blue }}>Back to the queue</Link>.</Notice>
       ) : (
         <>
           <div style={{ ...cardStyle, padding: '18px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>

@@ -15,6 +15,14 @@ panel (`BinneyPmAssignPanel.tsx` → `pm_assign_requests` → `watcher/pm_assign
 returns before contacting Cove. Do not flip the flag, remove a gate, or add any other Cove mutation unless
 the user explicitly says the decision has changed.
 
+## PM audit weeks (user 2026-11-23)
+
+`/audit` (docs/pm-audit.md). `week_start` is the week KEY and is always a Monday at both sites. UPark's
+week under a key is Monday–Sunday; **Binney's is Sunday–Saturday, starting the day before the key**
+(Sun–Wed / Wed–Sat shifts). SQL `audit_week_key(site, instant)` (0167) and `weekFirstDay` / `weekDays` /
+`auditWeekLabel` in `web/src/lib/pmAudit.ts` are the only places that know; do not "fix" a view back to
+`date_trunc('week')`. The Week tab and the scorecard hours table list engineers only (roster role).
+
 ## Training — 8-week board (Admin › User Profiles › Tracker)
 
 Source of truth: `web/src/lib/trainingBoard.ts` (pure), `trainingBoardPrint.ts` (fills the real

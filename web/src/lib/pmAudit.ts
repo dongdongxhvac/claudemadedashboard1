@@ -189,20 +189,51 @@ export function easternDay(iso: string): string | null {
   return new Intl.DateTimeFormat('en-CA', { timeZone: AUDIT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
-/** The instant an Eastern calendar day starts, as a UTC timestamp: 04:00Z in
- *  daylight time, 05:00Z in standard time. */
-export function easternMidnight(day: string): string {
-  const edt = `${day.slice(0, 10)}T04:00:00.000Z`;
-  return easternDay(edt) === day.slice(0, 10) ? edt : `${day.slice(0, 10)}T05:00:00.000Z`;
+// ---------- a site's week ----------
+//
+// `week_start` is the section's week KEY and is always a Monday, at both
+// sites: in the address, the queue, the reviews and every view. What differs
+// is which days fall under a key (migration 0167, SQL audit_week_key):
+//
+//     UPark   key 2026-11-09  =  Mon Nov 9 … Sun Nov 15
+//     Binney  key 2026-11-09  =  Sun Nov 8 … Sat Nov 14
+//
+// Binney works Sun–Wed and Wed–Sat shifts, so its week starts on the Sunday
+// BEFORE the key (user 2026-11-23). The database decides which key a close or
+// a labor entry gets; the client only has to label and lay out the days.
+
+/** The first day of the week a key stands for at a site. */
+export function weekFirstDay(weekStart: string, site: string | null | undefined): string {
+  return site === 'binney' ? addDays(weekStart, -1) : weekStart;
 }
 
-/** The first of the seven days the Week tab shows. The section's week is
- *  Monday–Sunday (queue, scorecard, the week in the address). Binney works
- *  Sun–Wed and Wed–Sat shifts, so its Week tab runs Sunday–Saturday, starting
- *  the day BEFORE that Monday (user 2026-11-23). UPark, and both sites
- *  together, stay Monday–Sunday. */
-export function weekFirstDay(weekStart: string, site: SiteFilter): string {
-  return site === 'binney' ? addDays(weekStart, -1) : weekStart;
+/** "Nov 9 – 15" as the site counts the week; with both sites, both ranges. */
+export function auditWeekLabel(weekStart: string, site: string | null | undefined): string {
+  if (site === 'binney') return weekLabel(addDays(weekStart, -1));
+  if (site === 'both') return `${weekLabel(weekStart)} · Binney ${weekLabel(addDays(weekStart, -1))}`;
+  return weekLabel(weekStart);
+}
+
+const MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SUN_FIRST = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** The Week tab's day columns: where they start and what they are called.
+ *  One site: its own seven days. Both together: eight, Sunday to Sunday, so a
+ *  weekday is one column for everyone — the first Sunday is Binney's, the
+ *  last is UPark's. */
+export function weekDays(weekStart: string, site: SiteFilter): { first: string; names: string[] } {
+  if (site === 'binney') return { first: addDays(weekStart, -1), names: SUN_FIRST };
+  if (site === 'both') return { first: addDays(weekStart, -1), names: [...SUN_FIRST, 'Sun'] };
+  return { first: weekStart, names: MON_FIRST };
+}
+
+/** The key of the week an instant falls in at a site (JS twin of SQL
+ *  audit_week_key). 'both' answers for Binney, whose week turns over first. */
+export function auditWeekKeyOf(iso: string, site: string | null | undefined): string | null {
+  const day = easternDay(iso);
+  if (!day) return null;
+  const d = site === 'binney' || site === 'both' ? addDays(day, 1) : day;
+  return addDays(d, -((parseDay(d).getUTCDay() + 6) % 7));
 }
 
 export function isWeekStart(s: string | null | undefined): s is string {
@@ -653,37 +684,6 @@ export type WeekHours = { site_code: string; assigned_to_name: string | null; we
 /** The slice of a flags row the Week page needs for its "PMs closed" column. */
 export type WeekTimeClose = Pick<FlagRow, 'task_no' | 'site_code' | 'assigned_to_name' | 'flag_count' | 'good'>;
 
-/** One person's row of one labor-report poll (a running total for a Monday week). */
-export type LaborPollRow = { snapshot_id: string; assigned_to_name: string | null; labor_hours: number | null };
-
-/** A Sunday–Saturday total per person out of Monday-week polls, which are
- *  running totals: what the old week's total grew by on its Sunday (its last
- *  poll minus its last poll before that Sunday) plus the new week's total at
- *  its last poll before the next Sunday. Returned keyed to `weekStart` (the
- *  Monday) so buildWeekTime takes it like the labor report's own rows. */
-export function sunSatHours(
-  rows: LaborPollRow[],
-  polls: { satThis: string | null; endPrev: string | null; satPrev: string | null },
-  site: string, weekStart: string, asOf: string | null,
-): WeekHours[] {
-  const of = (id: string | null) => {
-    const m = new Map<string, number>();
-    if (id) for (const r of rows) if (r.snapshot_id === id && r.assigned_to_name) m.set(r.assigned_to_name, (m.get(r.assigned_to_name) ?? 0) + Number(r.labor_hours ?? 0));
-    return m;
-  };
-  const satThis = of(polls.satThis);
-  const endPrev = of(polls.endPrev);
-  const satPrev = of(polls.satPrev);
-  const sundayKnown = !!polls.endPrev && !!polls.satPrev;
-  const out: WeekHours[] = [];
-  for (const name of [...new Set([...satThis.keys(), ...endPrev.keys()])].sort()) {
-    const sunday = sundayKnown ? Math.max(0, (endPrev.get(name) ?? 0) - (satPrev.get(name) ?? 0)) : 0;
-    const total = Math.round(((satThis.get(name) ?? 0) + sunday) * 100) / 100;
-    if (total > 0 || satThis.has(name)) out.push({ site_code: site, assigned_to_name: name, week_start: weekStart, week_hours: total, as_of: asOf });
-  }
-  return out;
-}
-
 export type TechWeek = {
   tech: string;
   site_code: string;
@@ -694,7 +694,7 @@ export type TechWeek = {
   /** logged − placed, never below zero: time on tasks we have not pulled yet. */
   unplaced: number;
   byBucket: Record<Bucket, number>;
-  /** Placed hours per day, Monday first. */
+  /** Placed hours per day column (weekDays): Monday first at UPark, Sunday first at Binney. */
   byDay: number[];
   /** Hours logged on a PM task assigned to someone else. */
   onOthers: number;
@@ -749,16 +749,16 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  went (by the kind of task), which days, and how their closed PMs audited.
  *  One row per person and site, biggest week first. With `engineers` (roster
  *  keys) only those people get a row and count in the team totals; everyone
- *  else is listed in `others`. `firstDay` is the first of the seven days the
- *  entries are taken from and `byDay` starts on (weekFirstDay); `hours` and
- *  `closes` are the caller's to match to that window. */
-export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null, firstDay: string = weekStart): WeekTime {
+ *  else is listed in `others`. Which entries belong to the week is the
+ *  database's call (their week_start); `firstDay` and `nDays` only say which
+ *  day columns `byDay` has (weekDays). */
+export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: WeekTimeClose[], weekStart: string, engineers?: ReadonlySet<string> | null, firstDay: string = weekStart, nDays = 7): WeekTime {
   const rows = new Map<string, TechWeek>();
   const row = (site: string | null, tech: string | null): TechWeek => {
     const k = `${site ?? ''}|${tech ?? ''}`;
     let r = rows.get(k);
     if (!r) {
-      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: [0, 0, 0, 0, 0, 0, 0], onOthers: 0, tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
+      r = { tech: tech || 'Unassigned', site_code: site ?? '', logged: null, placed: 0, unplaced: 0, byBucket: emptyBuckets(), byDay: new Array<number>(nDays).fill(0), onOthers: 0, tasks: 0, closed: 0, flagged: 0, good: 0, items: [] };
       rows.set(k, r);
     }
     return r;
@@ -771,13 +771,13 @@ export function buildWeekTime(items: LaborItem[], hours: WeekHours[], closes: We
     if (h.as_of && (!asOf || h.as_of > asOf)) asOf = h.as_of;
   }
   for (const it of items) {
-    const d = dayIndex(firstDay, it.day_local);
-    if (!(d >= 0 && d < 7)) continue;
+    if (it.week_start !== weekStart) continue;
     const r = row(it.site_code, it.performer);
     const hrs = Number(it.hours ?? 0);
     r.placed += hrs;
     r.byBucket[bucketOf(it.bucket)] += hrs;
-    r.byDay[d] += hrs;
+    const d = dayIndex(firstDay, it.day_local);
+    if (d >= 0 && d < nDays) r.byDay[d] += hrs;
     if (it.kind === 'pm' && it.assignee_name && it.assignee_name !== it.performer) r.onOthers += hrs;
     r.items.push(it);
   }

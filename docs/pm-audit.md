@@ -285,22 +285,33 @@ The Week table's last column is three columns (PMs closed · Flagged · Good), a
 underline on the bucket headers, which keeps the table inside the 1280 px card; the header row locks to
 the page from 1360 px wide, and inside the scrolling box below that.
 
-### Binney's Week tab runs Sunday to Saturday (2026-11-23)
+### Binney's week runs Sunday to Saturday (2026-11-23, migration 0167)
 
-Binney works Sun–Wed and Wed–Sat shifts, so with Binney selected the Week tab's seven days start on the
-Sunday BEFORE the section's Monday (`weekFirstDay`): week `2026-11-09` shows Nov 8 – 14. Everything on the
-page is for that window. UPark, and both sites together, stay Monday–Sunday. The address, the queue and
-the scorecard still count Monday–Sunday at both sites; moving Binney's queue needs `build_pm_audit_queue`,
-the cron and the views changed (not done).
+Binney works Sun–Wed and Wed–Sat shifts, so the manager asked for Binney's Week tab, review queue and
+scorecard to count Sunday–Saturday. UPark stays Monday–Sunday.
 
-- Entries: `v_audit_labor_items` by `day_local` range instead of `week_start`.
-- PMs closed / flagged / good: `v_pm_audit_flags` rows of the two Monday weeks the window touches, kept by
-  the Eastern day they closed.
-- Logged: the poller only stores running totals per Monday week, so the Sunday–Saturday total is worked
-  out from three polls (`fetchSunSatHours` → `sunSatHours`): what the old week's total grew by on its
-  Sunday, plus the new week's total at its last poll before the next Sunday. An estimate — an entry typed
-  in on that Sunday for an earlier day counts as Sunday. A true figure needs the labor poller to ask Cove
-  for a Sunday–Saturday range and a place to store it (a new snapshot kind = a migration).
+**The week key does not change.** `week_start` is still a Monday everywhere — the address, `pm_audit_queue`,
+`pm_audit_reviews`, every view — at both sites. What differs is which days fall under a key:
 
-Checked 2026-11-23 on real rows for the weeks of Nov 8 and Nov 22: 21 engineers, logged 710 h (Monday week
-717 h), placed 764 h, Sun–Wed and Wed–Sat shifts each read as one run of cells.
+| site | key `2026-11-09` covers |
+|---|---|
+| UPark | Mon Nov 9 … Sun Nov 15 |
+| Binney | Sun Nov 8 … Sat Nov 14 (starts the day before the key) |
+
+- SQL `audit_week_key(site, instant)` is the one place that says so. `v_pm_audit_flags` (so
+  `v_pm_audit_scorecard` and `build_pm_audit_queue`, which read it) and `v_audit_labor_items` use it. The
+  queue builder and the cron are unchanged: Sunday 23:05 ET still builds the key that just ended at both sites.
+- Labor-report totals: `labor_rows` holds running totals per Monday week and other panels read it, so it is
+  untouched. For Binney `watcher/labor_poller.py` also asks Cove for the Sunday–Saturday window each hour
+  (and once more for the week that just ended, on Sunday and Monday) and upserts `audit_week_hours`
+  (site, key, person). `v_tech_week_site_hours` and the flags' `tech_week_hours` take a site's week from
+  that table when it has it, else from the polls. Backfill: `COVE_SITE=binney labor_poller.py
+  backfill-audit-weeks [26]`. Read-only toward Cove.
+- Client (`pmAudit.ts`): `weekFirstDay`, `auditWeekLabel`, `weekDays`, `auditWeekKeyOf`. Queries are the
+  same for both sites; only labels and day columns differ. The Week tab shows Sun…Sat for Binney, Mon…Sun
+  for UPark, and with both sites eight columns Sun…Sun (the first Sunday is Binney's, the last UPark's).
+- Done once on 2026-11-23: 26 weeks of `audit_week_hours` backfilled; Binney's six queues deleted and
+  rebuilt (26 / 21 / 30 / 30 / 30 / 27 rows; no reviews existed; UPark's queues unchanged).
+
+Checked on real rows, week key 2026-11-09: Binney Nov 8 – 14, 21 engineers, logged 774 h, placed 764 h,
+238 PMs closed; UPark Nov 9 – 15 unchanged (276 h logged, 108 closed).

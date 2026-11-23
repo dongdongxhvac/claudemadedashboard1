@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom';
 import { Section } from './Section';
 import { useAuditAccess, useAuditQueue, useAuditWeekRange } from '../hooks/usePmAudit';
-import { weekLabel, type AuditSite } from '../lib/pmAudit';
+import { auditWeekLabel, type AuditSite } from '../lib/pmAudit';
 
 export function PmAuditPanel({ siteCode }: { siteCode: AuditSite }) {
   const access = useAuditAccess();
@@ -23,7 +23,7 @@ export function PmAuditPanel({ siteCode }: { siteCode: AuditSite }) {
     <Section
       title="§05 PM audit"
       id="sec-pm-audit"
-      subtitle={week ? `week of ${weekLabel(week)}` : undefined}
+      subtitle={week ? `week of ${auditWeekLabel(week, siteCode)}` : undefined}
       loading={range.isLoading || queueQ.isLoading}
     >
       <div className="flex items-center justify-between gap-4 flex-wrap">

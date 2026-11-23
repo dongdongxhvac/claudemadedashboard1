@@ -6,16 +6,13 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useAuditEngineers, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, SITE_LABEL, addDays, bucketOf, buildWeekTime, dayLabel, fmtH, fmtStamp, pct, shortName, weekFirstDay, weekLabel,
+  BUCKETS, KIND_LABEL, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, dayLabel, fmtH, fmtStamp, pct, shortName, weekDays, weekLabel,
   type Bucket, type LaborItem, type OtherPerson, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
 import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
 import { useAuditParams } from './useAuditParams';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-/** Binney's Week tab runs Sunday–Saturday (weekFirstDay), so its days are named from Sunday. */
-const DAYS_SUN_FIRST = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const num = { ...tdStyle, padding: '14px 6px', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const };
 const thNum = { ...thStyle, padding: '12px 6px', textAlign: 'right' as const, letterSpacing: '0.02em', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
 const thText = { ...thStyle, padding: '12px 12px', verticalAlign: 'bottom' as const, lineHeight: 1.35 };
@@ -105,21 +102,22 @@ function Entries({ t, firstDay, days }: { t: TechWeek; firstDay: string; days: s
 export default function AuditWeek() {
   const p = useAuditParams();
   const range = useAuditWeekRange();
-  const current = range.data?.current ?? null;
+  // Binney's week turns over on Sunday, a day before UPark's
+  const current = (p.site === 'upark' ? range.data?.current : range.data?.currentSun ?? range.data?.current) ?? null;
   const week = p.week ?? range.data?.latest ?? current;
   const dataQ = useAuditWeekTime(week, p.site);
   const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
-  const firstDay = week ? weekFirstDay(week, p.site) : null;
-  const sunFirst = !!week && firstDay !== week;
-  const days = sunFirst ? DAYS_SUN_FIRST : DAYS;
+  const cols = useMemo(() => (week ? weekDays(week, p.site) : null), [week, p.site]);
+  const firstDay = cols?.first ?? null;
+  const days = cols?.names ?? [];
 
   // Engineers only. If the roster cannot be read, show everyone and say so
   // rather than an empty page.
   const engineers = useMemo(() => (rosterQ.data && rosterQ.data.length > 0 ? new Set(rosterQ.data) : null), [rosterQ.data]);
   const wt = useMemo(
-    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, firstDay ?? week) : null),
-    [dataQ.data, week, engineers, firstDay],
+    () => (dataQ.data && week ? buildWeekTime(dataQ.data.items, dataQ.data.hours, dataQ.data.closes, week, engineers, cols?.first ?? week, cols?.names.length ?? 7) : null),
+    [dataQ.data, week, engineers, cols],
   );
   const scale = wt ? Math.max(0, ...wt.techs.map((t) => Math.max(t.logged ?? 0, t.placed))) : 0;
   const earliest = range.data?.firstClose ?? null;
@@ -131,7 +129,7 @@ export default function AuditWeek() {
   return (
     <AuditShell
       kicker="Section 05 · Week"
-      title={week && firstDay ? `How the week was spent · ${weekLabel(firstDay)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
+      title={week ? `How the week was spent · ${auditWeekLabel(week, p.site)}${week === current ? ' (in progress)' : ''}` : 'How the week was spent'}
       subtitle="Engineers' hours by the person who did the work, on the day it was done — from the labor entries on each Cove task, set against the labor report's weekly total."
       actions={week && (
         <>
@@ -149,7 +147,7 @@ export default function AuditWeek() {
       ) : !wt || !team || !week || !firstDay ? (
         <Notice>No week to show yet.</Notice>
       ) : wt.techs.length === 0 ? (
-        <Notice>No engineer logged labor for the week of {weekLabel(firstDay)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
+        <Notice>No engineer logged labor for the week of {auditWeekLabel(week, p.site)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
       ) : (
         <>
           <div style={tileGrid}>
@@ -184,7 +182,7 @@ export default function AuditWeek() {
                 <tr>
                   <th style={thText}>Engineer</th>
                   <th style={thNum} title="Total hours on the Cove labor report for the week">Logged</th>
-                  <th style={{ ...thText, minWidth: 120 }}>Where it went</th>
+                  <th style={{ ...thText, minWidth: days.length > 7 ? 96 : 120 }}>Where it went</th>
                   {BUCKETS.map((b) => (
                     <th key={b.key} style={thNum} title={b.label}>
                       {/* the bar's colour as an underline: ties the column to the bar without widening it */}
@@ -192,7 +190,7 @@ export default function AuditWeek() {
                     </th>
                   ))}
                   <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
-                  {days.map((d, i) => <th key={d} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
+                  {days.map((d, i) => <th key={i} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 5px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
                   <th style={thNum} title="Of those, how many were good: a photo or a thick note, and no flag">Good</th>
@@ -223,7 +221,7 @@ export default function AuditWeek() {
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={14 + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
+                          <td colSpan={7 + days.length + BUCKETS.length} style={{ ...tdStyle, background: A.bg, padding: '14px 26px 18px' }}>
                             <Entries t={t} firstDay={firstDay} days={days} />
                           </td>
                         </tr>
@@ -246,14 +244,19 @@ export default function AuditWeek() {
                 {wt.others.map(otherLabel).join(' · ')}. Their hours are not in the totals above.
               </div>
             )}
-            {sunFirst && (
+            {p.site === 'binney' && (
               <div style={{ marginBottom: 6 }}>
-                <strong>Sunday to Saturday.</strong> Binney's week on this page starts on Sunday {dayLabel(firstDay)}, the day before the
-                Monday – Sunday week ({weekLabel(week)}) that the queue and the scorecard still count by. Here <strong>Logged</strong> is worked
-                out from the hourly labor-report polls: what was added on that Sunday, plus the new week's total as of Saturday evening.
+                <strong>Sunday to Saturday.</strong> Binney's week starts on Sunday {dayLabel(firstDay)} and ends on Saturday {dayLabel(addDays(firstDay, 6))}.
+                The review queue and the scorecard count the same seven days.
               </div>
             )}
-            <strong>Logged</strong> is the Cove labor report's total for the week, as of its last poll that week, so hours entered late are not in it.
+            {p.site === 'both' && (
+              <div style={{ marginBottom: 6 }}>
+                <strong>Two weeks side by side.</strong> Binney's runs Sunday to Saturday ({weekLabel(firstDay)}), UPark's Monday to Sunday ({weekLabel(week)}).
+                The first Sun column is Binney's, the last is UPark's.
+              </div>
+            )}
+            <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Not placed</strong> is the rest: time on tasks whose
             entries have not been pulled yet, and on work orders still open. The kind of work is read from the task's name. Click a name for the entries.

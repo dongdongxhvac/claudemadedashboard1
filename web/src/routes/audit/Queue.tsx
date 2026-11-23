@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuditAccess, useAuditQueue, useAuditWeekRange, useAuditWeekStats, useBuildQueue } from '../../hooks/usePmAudit';
 import {
-  FLAG_KEYS, FLAG_LABEL, SITE_LABEL, THICK_NOTE_CHARS, addDays, filterQueue, fmtClosed, fmtHours, fmtPct, rowChips, shortName, weekLabel,
+  FLAG_KEYS, FLAG_LABEL, SITE_LABEL, THICK_NOTE_CHARS, addDays, filterQueue, fmtClosed, fmtHours, fmtPct, rowChips, shortName, auditWeekLabel,
   type FlagKey, type QueuePill, type QueueRow,
 } from '../../lib/pmAudit';
 import { AuditShell, ChipTag, Notice, Segmented, StatTile, VerdictTag } from './AuditUi';
@@ -115,7 +115,7 @@ export default function AuditQueue() {
   return (
     <AuditShell
       kicker="Section 05"
-      title={week ? `PM Audit · Week of ${weekLabel(week)}` : 'PM Audit'}
+      title={week ? `PM Audit · Week of ${auditWeekLabel(week, p.site)}` : 'PM Audit'}
       subtitle="Last week's closed recurring PMs: each tech's worst flagged ones, the best good ones and 5 random per site. Pass / Coach / Fail each; the scorecard adds them up per tech."
       actions={week && (
         <>
@@ -177,7 +177,7 @@ export default function AuditQueue() {
         <Notice>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>
-              No review queue was built for the week of {weekLabel(week)} — weekly queues start with the week of {weekLabel(range.data.first)}.
+              No review queue was built for the week of {auditWeekLabel(week, p.site)} — weekly queues start with the week of {auditWeekLabel(range.data.first, p.site)}.
               {stats ? ` ${stats.closed.toLocaleString()} recurring PMs were closed that week; the tiles above are for them.` : ''}
             </span>
             {access.canReview && (
@@ -189,7 +189,7 @@ export default function AuditQueue() {
           {build.isError && <div role="alert" style={{ marginTop: 8, color: A.redDark }}>Could not build it: {(build.error as Error).message}</div>}
         </Notice>
       ) : all.length === 0 ? (
-        <Notice>Nothing was queued for the week of {weekLabel(week)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
+        <Notice>Nothing was queued for the week of {auditWeekLabel(week, p.site)}{p.site !== 'both' ? ` at ${SITE_LABEL[p.site]}` : ''}.</Notice>
       ) : rows.length === 0 ? (
         <Notice>No queued task matches these filters.</Notice>
       ) : (

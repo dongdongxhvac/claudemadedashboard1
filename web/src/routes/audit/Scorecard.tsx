@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SCORE_WEEKS_MAX, useAuditEngineers, useAuditHoursSplit, useAuditScorecard, useAuditWeekRange } from '../../hooks/usePmAudit';
-import { FLAG_LABEL, SITE_LABEL, WORK_TYPES, buildHoursSplit, buildScorecard, dayLabel, fmtH, fmtPct, pct, type HoursSplit, type TechHours, type TechScore } from '../../lib/pmAudit';
+import { FLAG_LABEL, SITE_LABEL, WORK_TYPES, buildHoursSplit, buildScorecard, dayLabel, weekFirstDay, fmtH, fmtPct, pct, type HoursSplit, type TechHours, type TechScore } from '../../lib/pmAudit';
 import { AuditShell, BarRow, Notice, Panel, Segmented, Soft, StatTile } from './AuditUi';
 import { A, WORK_TYPE_COLOR, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
 import { useAuditParams } from './useAuditParams';
@@ -19,13 +19,13 @@ const SPARK_WEEKS = 8;
 
 /** Photo-rate trend, one point per week; gaps where the tech closed nothing
  *  with details that week. The 0–100 scale is fixed so rows compare. */
-function Spark({ values, weeks }: { values: (number | null)[]; weeks: string[] }) {
+function Spark({ values, weeks, site }: { values: (number | null)[]; weeks: string[]; site: string }) {
   const pts = values.map((v, i) => (v === null ? null : { x: 4 + (i * 152) / Math.max(1, values.length - 1), y: 32 - (v / 100) * 28, v, w: weeks[i] }));
   const have = pts.filter((p): p is NonNullable<typeof p> => p !== null);
   if (have.length === 0) return <span style={{ color: A.faint }}>—</span>;
   const last = have[have.length - 1].v;
   const color = last < 60 ? A.orange : A.blue;
-  const label = `Photo rate by week: ${have.map((p) => `${dayLabel(p.w)} ${p.v}%`).join(', ')}`;
+  const label = `Photo rate by week: ${have.map((p) => `${dayLabel(weekFirstDay(p.w, site))} ${p.v}%`).join(', ')}`;
   return (
     <svg viewBox="0 0 160 36" width="160" height="36" role="img" aria-label={label}>
       <title>{label}</title>
@@ -58,7 +58,7 @@ function TechRow({ t, weeks, showSite }: { t: TechScore; weeks: string[]; showSi
       <td style={{ ...num, fontWeight: 600, color: t.passRate === null ? A.faint : t.passRate < 70 ? A.orangeDark : A.blueDark }}>
         {fmtPct(t.passRate)}{t.reviewed > 0 && <span style={{ color: A.muted, fontWeight: 400 }}> of {t.reviewed}</span>}
       </td>
-      <td style={{ ...tdStyle, padding: '10px 12px' }}>{none ? <span style={{ color: A.faint }}>needs backfill</span> : <Spark values={t.spark} weeks={weeks} />}</td>
+      <td style={{ ...tdStyle, padding: '10px 12px' }}>{none ? <span style={{ color: A.faint }}>needs backfill</span> : <Spark values={t.spark} weeks={weeks} site={t.site_code} />}</td>
       <td style={{ ...tdStyle, color: A.muted, whiteSpace: 'nowrap' }}>{t.topFlag ? FLAG_LABEL[t.topFlag] : '—'}</td>
     </tr>
   );
@@ -198,7 +198,7 @@ export default function AuditScorecard() {
     <AuditShell
       kicker="Section 05 · Scorecard"
       title={`PM quality · ${label}`}
-      subtitle={card ? `Weeks of ${dayLabel(card.weeks[0])} to ${dayLabel(card.weeks[card.weeks.length - 1])} · manager view · feeds the “PM quality verification” line in the monthly BMR report` : 'Manager view'}
+      subtitle={card ? `Weeks of ${dayLabel(weekFirstDay(card.weeks[0], p.site))} to ${dayLabel(weekFirstDay(card.weeks[card.weeks.length - 1], p.site))}${p.site === 'upark' ? '' : ' · Binney’s weeks run Sunday to Saturday'} · manager view · feeds the “PM quality verification” line in the monthly BMR report` : 'Manager view'}
       actions={<Segmented label="Window" value={win} options={WINDOWS} onChange={setWin} />}
     >
       {range.isLoading || dataQ.isLoading ? (
