@@ -154,7 +154,7 @@ eq('on-demand: boiler / chiller opening and closing, and punching, count as PMs'
 eq('on-demand: maintenance, cleaning and inspection count as PMs', ['Chiller 2 maintenance', '26LS Chiller 1 Maintenance', 'cooling tower cleaning', 'East CTs cleaning Cham aqua', 'Boiler inspection', 'support cooling towers cleaning', 'clean strainers', 'Cleaned up water on floor at 301'].map(od),
   ['pm', 'pm', 'pm', 'pm', 'pm', 'pm', 'pm', 'odt_a']);
 eq('on-demand: equipment or on-call in the title is repair', ['pump leak', 'RTU 1 condenser fan replacement', '215 LEF 1B no run command', 'Boiler 1 pump 21', '150 ahu static pressure', 'oncall respond',
-  '(ON-CALL) 40 Erie HW Leak Detector 1', 'Chiller 2 tripped', 'cooling tower fan vfd', 'snow melt panel install', '11/13/26; Gym Leak in ceiling.', 'GWH#2 troubleshooting', '26LS ch1 lockout', 'EAHU Q4 PM', '40 Erie CWP 2 and CWP 3 alarms'].map(od),
+  '(ON-CALL) 40 Erie HW Leak Detector 1', 'Chiller 2 tripped', 'cooling tower fan vfd', 'snow melt panel install', '11/13/26; Gym Leak in ceiling.', 'GWH#2 troubleshooting', '26LS ch1 lockout', 'EAHU static pressure', '40 Erie CWP 2 and CWP 3 alarms'].map(od),
   ['odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r']);
 eq('on-demand: what is left is all other', ['650', 'home depot', 'Van service', 'power shut down infra red', 'prefix the forms', 'installed chem aqua coupon rack at 21 erie', null].map(od),
   ['odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
@@ -340,6 +340,8 @@ eq('yellow name: strong when the total is flagged, light when only a day is miss
   attentionOf({ logged: 38, placed: 38, double: 0, byDay: [14, 12, 12, 0] }, [null, null, null, red0], false),
   attentionOf({ logged: 40, placed: 40, double: 0, byDay: [10, 10, 10, 10] }, [null, null, null, null], false),
 ], ['strong', 'light', null]);
+eq('on-demand: a title with the word PM counts as PMs, a time of day does not', ['EAHU Q4 PM', 'pm on ahu 3', 'Quarterly PMs 215', 'meet vendor 3 PM', 'vendor at 3pm', 'pump 2 alarm 2:30 pm', 'rpm sensor'].map(od),
+  ['pm', 'pm', 'pm', 'odt_a', 'odt_a', 'odt_r', 'odt_r']);
 // day columns from Cove's labor report: a day logged on work we hold no entry for is not empty
 const dh = (day: string, hours: number, name = 'Ann Lee', site = 'binney') => ({ site_code: site, day, assigned_to_name: name, hours });
 const wtRep = buildWeekTime([

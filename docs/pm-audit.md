@@ -488,7 +488,8 @@ seven slots in bar order, validated — escort violet, repair green, all-other k
 task of the view's `on_demand` kind, by its title, in this order (`bucketOf`):
 
 1. boiler or chiller opening / closing, tube punching, and (added the same day) any title with maintenance,
-   cleaning or inspection → **PMs** (`PM_LIKE_RE`; "ch1" counts as a chiller; "cleaned up" a spill does not);
+   cleaning or inspection, or with the word PM in it → **PMs** (`PM_LIKE_RE`; "ch1" counts as a chiller;
+   "cleaned up" a spill does not; a time of day such as "3 PM" does not);
 2. the title names a piece of equipment, or says on-call → **ODT-R** (`EQUIPMENT_RE`, `ONCALL_RE`; a repair
    word from `REPAIR_RE` counts too, so "Gym leak in ceiling" is a repair);
 3. everything else → **ODT-A**: training, meetings, van service, the unscheduled-task tasks, and titles that

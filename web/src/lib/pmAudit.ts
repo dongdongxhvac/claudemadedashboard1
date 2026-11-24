@@ -644,7 +644,7 @@ export type Bucket = 'pm' | 'rounds' | 'odt_e' | 'odt_r' | 'odt_a' | 'bms' | 'wo
  *    ODT-A  all other: training, meetings, van service, the unscheduled-task
  *           tasks, and titles that say nothing ("650", "home depot") */
 export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
-  { key: 'pm', label: 'Scheduled PMs (with opening / closing, tube punching, maintenance, cleaning, inspection)', short: 'PMs' },
+  { key: 'pm', label: 'Scheduled PMs (with on-demand PM work: opening / closing, tube punching, maintenance, cleaning, inspection)', short: 'PMs' },
   { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
   { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E' },
   { key: 'odt_r', label: 'On-demand · repair (equipment or on-call)', short: 'ODT-R' },
@@ -658,9 +658,10 @@ export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
  *  split is read from the title. */
 
 /** PM work logged on an on-demand task: opening or closing a boiler or
- *  chiller ("ch1" too), tube punching, and anything titled maintenance,
- *  cleaning or inspection ("cleaned up" a spill is not cleaning). */
-export const PM_LIKE_RE = /\bpunch\w*|\bmaint\w*|\bclean(?:ing|ed|s)?\b(?! up\b)|\binspect\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
+ *  chiller ("ch1" too), tube punching, anything titled maintenance, cleaning
+ *  or inspection ("cleaned up" a spill is not cleaning), and any title with
+ *  the word PM in it ("EAHU Q4 PM" — but not a time of day, "3 PM"). */
+export const PM_LIKE_RE = /(?<!(?:^|[^\w:])\d{1,2}(?::\d{2})?\s?)\bpms?\b|\bpunch\w*|\bmaint\w*|\bclean(?:ing|ed|s)?\b(?! up\b)|\binspect\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
 
 export const ONCALL_RE = /\bon[- ]?call\b/i;
 
