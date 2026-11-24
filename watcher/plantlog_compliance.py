@@ -16,6 +16,14 @@ Windows (Eastern Time):
   AM — 10:30am for the 7am crew
   PM — 17:55   for the 9:30am crew
 
+AM recheck (user 2026-11-23): tablets often upload hours after the round,
+so the 11:00 AM alert lists buildings whose round was done on time but had
+not reached us yet. The PM run therefore looks at every building the AM
+alert listed again and reports, in the PM email, which are in now (and
+when their first entry was) and which still have nothing. That email goes
+out whenever an AM alert was sent that day, even with nothing missing in
+the PM window.
+
 Excluded short-codes (per user direction 2026-06-04): 20, 55, 80
 (and their G- garage variants). Building plant log isn't expected
 from these locations.
@@ -88,35 +96,95 @@ def _list_expected_buildings(client, et_day: date) -> list[str]:
     return sorted(seen)
 
 
-def _missing_buildings(client, deadline_t: time, et_day: date,
-                       expected: list[str]) -> list[str]:
-    """Return the buildings that have NO log entry today with
-    performed_at_local <= deadline. Empty list = everyone synced."""
-    synced: set[str] = set()
-    deadline_str = deadline_t.strftime("%H:%M:%S")
+def _first_entries_today(client, et_day: date) -> dict[str, str]:
+    """building -> time of its earliest log entry today ('HH:MM:SS', ET)."""
+    first: dict[str, str] = {}
     offset = 0
     while True:
-        # performed_at_local is 'HH:MM:SS', zero-padded 24h, so the
-        # deadline filter can run in the database.
         res = client.table("plantlog_log_records") \
-            .select("id, building_inferred") \
+            .select("id, building_inferred, performed_at_local") \
             .eq("performed_on", et_day.isoformat()) \
-            .lte("performed_at_local", deadline_str) \
             .not_.is_("building_inferred", "null") \
             .order("id") \
             .range(offset, offset + PAGE - 1) \
             .execute()
         data = res.data or []
         for row in data:
-            synced.add(row["building_inferred"])
+            b = row["building_inferred"]
+            t = str(row.get("performed_at_local") or "")[:8]
+            # PostgREST returns time as 'HH:MM:SS'; lexicographic compare
+            # works because it is zero-padded 24h.
+            if t and (b not in first or t < first[b]):
+                first[b] = t
         if len(data) < PAGE:
             break
         offset += PAGE
-    return sorted(b for b in expected if b not in synced)
+    return first
+
+
+def _missing_buildings(expected: list[str], first: dict[str, str],
+                       deadline_t: time) -> list[str]:
+    """Expected buildings with NO log entry today at or before the deadline.
+    Empty list = everyone synced."""
+    deadline_str = deadline_t.strftime("%H:%M:%S")
+    return sorted(b for b in expected
+                  if b not in first or first[b] > deadline_str)
+
+
+def _alerted_buildings(client, et_day: date, window_key: str) -> list[str] | None:
+    """Buildings listed in the alert already sent for (day, window);
+    None when no alert went out."""
+    res = client.table("plantlog_compliance_alerts") \
+        .select("missing_buildings") \
+        .eq("et_day", et_day.isoformat()) \
+        .eq("window_key", window_key) \
+        .limit(1) \
+        .execute()
+    if not res.data:
+        return None
+    return list(res.data[0].get("missing_buildings") or [])
+
+
+def _h12(t: time | str) -> str:
+    """time or 'HH:MM:SS' -> '7:18 AM'."""
+    if isinstance(t, str):
+        t = time(int(t[0:2]), int(t[3:5]))
+    return t.strftime("%I:%M %p").lstrip("0")
+
+
+def _am_recheck_lines(am_listed: list[str], first: dict[str, str]) -> tuple[list[str], int]:
+    """Body lines re-checking the buildings the AM alert listed, and how
+    many of them turned out to be logged before the AM deadline."""
+    am_deadline_str = AM_DEADLINE.strftime("%H:%M:%S")
+    on_time = 0
+    lines = [
+        f"AM recheck: this morning's alert listed "
+        f"{len(am_listed)} building(s). Now:",
+        "",
+    ]
+    for b in am_listed:
+        t = first.get(b)
+        if t is None:
+            lines.append(f"  • {b}: still no round logged today")
+        elif t <= am_deadline_str:
+            on_time += 1
+            lines.append(f"  • {b}: in, first entry {_h12(t)} (synced late)")
+        else:
+            lines.append(f"  • {b}: late, first entry {_h12(t)} "
+                         f"(after the {_h12(AM_DEADLINE)} deadline)")
+    lines.extend([
+        "",
+        f"{on_time} of {len(am_listed)} were logged before "
+        f"{_h12(AM_DEADLINE)} and reached the dashboard after the AM check.",
+    ])
+    return lines, on_time
 
 
 def _send_email(window_label: str, et_day: date, deadline_t: time,
-                missing: list[str]) -> None:
+                missing: list[str],
+                am_recheck: tuple[list[str], dict[str, str]] | None = None) -> None:
+    """am_recheck = (buildings the AM alert listed, first entry per building
+    today); only passed for the PM email."""
     user = os.environ.get("GMAIL_USER", "").strip()
     pw = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
     if not user or not pw:
@@ -124,20 +192,36 @@ def _send_email(window_label: str, et_day: date, deadline_t: time,
               "compliance email", file=sys.stderr)
         return
 
-    deadline_h12 = deadline_t.strftime("%I:%M %p").lstrip("0")
     subject = (f"[Plantlog compliance] {window_label} {et_day.isoformat()} "
                f"— {len(missing)} building(s) missing")
     body_lines = [
         f"Plantlog compliance check — {window_label} window "
-        f"(deadline {deadline_h12} ET) for {et_day.isoformat()}.",
-        "",
-        f"{len(missing)} building(s) without a logged round before the deadline:",
+        f"(deadline {_h12(deadline_t)} ET) for {et_day.isoformat()}.",
         "",
     ]
-    for b in missing:
-        body_lines.append(f"  • {b}")
+    if missing:
+        body_lines.extend([
+            f"{len(missing)} building(s) without a logged round before the deadline:",
+            "",
+        ])
+        for b in missing:
+            body_lines.append(f"  • {b}")
+    else:
+        body_lines.append("Every building has a logged round before the deadline.")
+    body_lines.append("")
+    if am_recheck is not None:
+        am_listed, first = am_recheck
+        recheck_lines, on_time = _am_recheck_lines(am_listed, first)
+        body_lines.extend(recheck_lines)
+        body_lines.append("")
+        subject += f" · AM recheck {on_time}/{len(am_listed)} in on time"
+    elif window_label == "AM":
+        body_lines.extend([
+            ("Rounds that were done but have not synced yet are checked "
+             "again at the PM check and reported in that email."),
+            "",
+        ])
     body_lines.extend([
-        "",
         ("This alert fires once per missed deadline; subsequent hourly "
          "poller runs today won't re-send."),
         "",
@@ -195,9 +279,15 @@ def run_compliance_checks(client) -> None:
         print("[skip] compliance: no expected buildings observed yet")
         return
 
+    first = _first_entries_today(client, et_day)
+    pm_due = now_et.time() >= PM_DEADLINE
+    # Read before the AM block below can claim a row in this same run: the
+    # recheck is only worth sending for an alert that went out earlier.
+    am_listed = _alerted_buildings(client, et_day, "am") if pm_due else None
+
     # AM window — after 10:30am
     if now_et.time() >= AM_DEADLINE:
-        missing = _missing_buildings(client, AM_DEADLINE, et_day, expected)
+        missing = _missing_buildings(expected, first, AM_DEADLINE)
         if missing:
             if _try_claim_alert(client, et_day, "am", missing):
                 try:
@@ -211,13 +301,14 @@ def run_compliance_checks(client) -> None:
             print("[ok] AM compliance: all buildings synced before "
                   "10:30am ET")
 
-    # PM window — after 17:55
-    if now_et.time() >= PM_DEADLINE:
-        missing = _missing_buildings(client, PM_DEADLINE, et_day, expected)
-        if missing:
+    # PM window — after 17:55. Also re-checks what the AM alert listed.
+    if pm_due:
+        missing = _missing_buildings(expected, first, PM_DEADLINE)
+        if missing or am_listed:
             if _try_claim_alert(client, et_day, "pm", missing):
                 try:
-                    _send_email("PM", et_day, PM_DEADLINE, missing)
+                    _send_email("PM", et_day, PM_DEADLINE, missing,
+                                am_recheck=(am_listed, first) if am_listed else None)
                 except Exception as e:
                     print(f"ERROR: PM email send failed: {e}", file=sys.stderr)
             else:
