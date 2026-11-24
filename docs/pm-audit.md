@@ -500,3 +500,8 @@ calls it `meeting` first). ODT-A is drawn gray (the catch-all); the scorecard's 
 Unknown column's header is "Unk". Three weeks of real rows (keys 11-02 … 11-16): Binney PMs 695 · Rounds 585
 · ODT-E 39 · ODT-R 414 · ODT-A 224 · BMS 202 h; UPark PMs 268 · Rounds 197 · ODT-E 16 · ODT-R 40 · ODT-A 216 h
 (194 h of that is its unscheduled-task tasks). To add an equipment word or abbreviation, extend `EQUIPMENT_RE`.
+
+**"Where the hours went" panel (manager 2026-11-24: "format better, layout better").** One bar for the whole
+crew, split by kind of work, then a cell per kind under it in the same order: colour square and short name
+(PMs, Rounds, ODT-E, ODT-R, ODT-A, BMS, WOs), the hours large with the share beside them, and a one-line
+note (`BUCKETS[].note`). The long descriptions moved to tooltips.

@@ -643,14 +643,14 @@ export type Bucket = 'pm' | 'rounds' | 'odt_e' | 'odt_r' | 'odt_a' | 'bms' | 'wo
  *           (a word for fixing or a fault counts too)
  *    ODT-A  all other: training, meetings, van service, the unscheduled-task
  *           tasks, and titles that say nothing ("650", "home depot") */
-export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
-  { key: 'pm', label: 'Scheduled PMs (with on-demand PM work: opening / closing, tube punching, maintenance, cleaning, inspection)', short: 'PMs' },
-  { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
-  { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E' },
-  { key: 'odt_r', label: 'On-demand · repair (equipment or on-call)', short: 'ODT-R' },
-  { key: 'odt_a', label: 'On-demand · all other (training, meetings, van service)', short: 'ODT-A' },
-  { key: 'bms', label: 'BMS checks', short: 'BMS' },
-  { key: 'work_order', label: 'Work orders', short: 'WOs' },
+export const BUCKETS: { key: Bucket; label: string; short: string; note: string }[] = [
+  { key: 'pm', label: 'Scheduled PMs (with on-demand PM work: opening / closing, tube punching, maintenance, cleaning, inspection)', short: 'PMs', note: 'Scheduled PMs and PM work logged on-demand' },
+  { key: 'rounds', label: 'Building rounds', short: 'Rounds', note: 'Building rounds' },
+  { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E', note: 'Escort' },
+  { key: 'odt_r', label: 'On-demand · repair (equipment or on-call)', short: 'ODT-R', note: 'Repair: equipment or on-call' },
+  { key: 'odt_a', label: 'On-demand · all other (training, meetings, van service)', short: 'ODT-A', note: 'All other: training, meetings, van' },
+  { key: 'bms', label: 'BMS checks', short: 'BMS', note: 'BMS checks' },
+  { key: 'work_order', label: 'Work orders', short: 'WOs', note: 'Work orders, at close' },
 ];
 
 /** Cove has no field for any of this — on-demand tasks are named in free text

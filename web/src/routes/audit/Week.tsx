@@ -371,17 +371,34 @@ export default function AuditWeek() {
               sub={team.double > 0 ? `a second entry on the same task the same day · ${team.doublePeople} engineer${team.doublePeople === 1 ? '' : 's'}` : 'no task has two entries by one person on one day'} />
           </div>
 
-          <Panel title={<>Where the hours went <Soft>· all engineers</Soft></>}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '8px 24px', fontSize: 13 }}>
-              {BUCKETS.map((b) => (
-                <div key={b.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span><Swatch bucket={b.key} />{b.label}</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    <strong>{fmtH(team.byBucket[b.key], false)} h</strong>
-                    <span style={{ color: A.muted }}> · {pct(team.byBucket[b.key], team.placed) ?? 0}%</span>
-                  </span>
-                </div>
-              ))}
+          <Panel title={<>Where the hours went <Soft>· all engineers</Soft></>}
+            aside={<span style={{ fontSize: 13, color: A.muted }}>{Math.round(team.placed).toLocaleString()} h placed on a task</span>}>
+            {/* one bar for the whole crew, then a cell per kind of work under it, in the bar's order */}
+            {team.placed > 0 && (
+              <div role="img" aria-label={`Hours by kind of work: ${BUCKETS.map((b) => `${b.short} ${fmtH(team.byBucket[b.key], false)} h`).join(', ')}`}
+                style={{ display: 'flex', gap: 2, height: 14 }}>
+                {BUCKETS.filter((b) => team.byBucket[b.key] > 0).map((b) => (
+                  <div key={b.key} title={`${b.label} · ${fmtH(team.byBucket[b.key], false)} h · ${pct(team.byBucket[b.key], team.placed) ?? 0}%`}
+                    style={{ flex: `${team.byBucket[b.key]} 0 0`, minWidth: 3, background: BUCKET_COLOR[b.key], borderRadius: 3 }} />
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))', gap: '14px 20px' }}>
+              {BUCKETS.map((b) => {
+                const h = team.byBucket[b.key];
+                return (
+                  <div key={b.key} title={b.label} style={{ minWidth: 0, opacity: h > 0 ? 1 : 0.55 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: A.muted, whiteSpace: 'nowrap' }}>
+                      <Swatch bucket={b.key} />{b.short}
+                    </div>
+                    <div style={{ marginTop: 2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 20, fontWeight: 700 }}>{fmtH(h, false)}</span>
+                      <span style={{ fontSize: 13, color: A.muted }}> h · {pct(h, team.placed) ?? 0}%</span>
+                    </div>
+                    <div style={{ marginTop: 2, fontSize: 12, lineHeight: 1.35, color: A.muted }}>{b.note}</div>
+                  </div>
+                );
+              })}
             </div>
           </Panel>
 
