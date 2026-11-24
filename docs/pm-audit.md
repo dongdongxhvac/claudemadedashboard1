@@ -457,3 +457,8 @@ with no assignee inside the due-date window (111 at Binney, 1 at UPark on the da
 `pull_task_details(…, labor_only=…)`, so their labor entries land in `pm_task_details`. They are never
 written to `pm_rows` or `pm_close_events`. `backfill-details` includes them. The other rows of the table are
 left as they are: widening the roster filter would pull other departments' tasks.
+
+**"Not placed" is now "Unknown" (manager, same day)** — the column, the tile and the notes; the field is still
+`unplaced`. How it has run, all people on the labor report, as of 2026-11-23 after the unassigned-task pull:
+Binney 6–30 h a week (about 1–4 % of ~750 h) over the last seven full weeks; UPark 45–90 h a week
+(17–36 % of ~300 h), which has not been looked into.

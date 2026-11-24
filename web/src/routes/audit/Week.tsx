@@ -40,7 +40,7 @@ function HoursBar({ t, scale }: { t: TechWeek; scale: number }) {
   const total = Math.max(t.logged ?? 0, t.placed);
   if (total <= 0 || scale <= 0) return null;
   const parts = BUCKETS.filter((b) => t.byBucket[b.key] > 0);
-  const label = `${t.tech}: ${parts.map((b) => `${b.label} ${fmtH(t.byBucket[b.key])} h`).join(', ')}${t.unplaced > 0 ? `, not on a task ${fmtH(t.unplaced)} h` : ''}`;
+  const label = `${t.tech}: ${parts.map((b) => `${b.label} ${fmtH(t.byBucket[b.key])} h`).join(', ')}${t.unplaced > 0 ? `, unknown ${fmtH(t.unplaced)} h` : ''}`;
   return (
     <div role="img" aria-label={label} style={{ display: 'flex', gap: 2, height: 14, width: `${(100 * total) / scale}%`, minWidth: 4 }}>
       {parts.map((b) => (
@@ -48,7 +48,7 @@ function HoursBar({ t, scale }: { t: TechWeek; scale: number }) {
           style={{ flex: `${t.byBucket[b.key]} 0 0`, minWidth: 2, background: BUCKET_COLOR[b.key], borderRadius: 2 }} />
       ))}
       {t.unplaced > 0 && (
-        <div title={`Not on a task we hold · ${fmtH(t.unplaced)} h`}
+        <div title={`Unknown — on no task the dashboard holds · ${fmtH(t.unplaced)} h`}
           style={{ flex: `${t.unplaced} 0 0`, minWidth: 2, background: A.track, border: `1px solid ${A.control}`, boxSizing: 'border-box', borderRadius: 2 }} />
       )}
     </div>
@@ -361,9 +361,9 @@ export default function AuditWeek() {
               sub={`${team.people} engineer${team.people === 1 ? '' : 's'}${team.noHours > 0 ? ` · ${team.noHours} more with no hours` : ''} · labor report${wt.asOf ? `, as of ${fmtStamp(wt.asOf)}` : ''}`} />
             <StatTile label="Placed on a task" value={<>{Math.round(team.placed).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h · {placedPct === null ? '—' : `${placedPct}%`}</span></>}
               sub="hours we can name the task for" />
-            <StatTile label="Not on a task we hold" value={<>{Math.round(team.unplaced).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
+            <StatTile label="Unknown" value={<>{Math.round(team.unplaced).toLocaleString()} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
               valueColor={team.unplaced > 0 ? A.orange : undefined}
-              sub="logged on tasks not pulled yet, or on open work orders" />
+              sub="hours Cove counts that are on no task the dashboard holds" />
             <StatTile label="On someone else's task" value={`${pct(team.onOthers, team.pmTaskHours) ?? 0}%`}
               sub={`${Math.round(team.onOthers).toLocaleString()} of ${Math.round(team.pmTaskHours).toLocaleString()} PM-task hours`} />
             <StatTile label="Double-booked" value={<>{fmtH(team.double, false)} <span style={{ fontSize: 18, fontWeight: 500, color: A.muted }}>h</span></>}
@@ -401,7 +401,7 @@ export default function AuditWeek() {
                       <span style={{ display: 'inline-block', paddingBottom: 3, borderBottom: `3px solid ${BUCKET_COLOR[b.key]}` }}>{b.short}</span>
                     </th>
                   ))}
-                  <th style={thNum} title="Logged hours that are on no task we hold">Not<br />placed</th>
+                  <th style={thNum} title="Hours Cove counts for the week that are on no task the dashboard holds, so their kind of work is unknown">Unknown</th>
                   {days.map((d, i) => <th key={i} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 4px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
@@ -494,8 +494,9 @@ export default function AuditWeek() {
             the columns by kind of work, and the entries under a name, come from the tasks we hold, so they can add up to less.{' '}
             <strong>Logged</strong> is the Cove labor report's total for the week as of its last poll (UPark: that week's last; Binney: hourly, and once more after the week ends), so hours entered later are not in it.
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
-            work and the day it was done, plus work orders at the hours they closed with. <strong>Not placed</strong> is the rest: time on tasks whose
-            entries have not been pulled yet, and on work orders still open. The kind of work is read from the task's name. Click a name for the entries.
+            work and the day it was done, plus work orders at the hours they closed with. <strong>Unknown</strong> is the rest: hours Cove counts
+            that are on no task the dashboard holds — work orders still open, tasks assigned to someone off the roster or older than its window, and entries
+            edited in Cove after they were typed. The kind of work is read from the task's name. Click a name for the entries.
           </div>
         </>
       )}
