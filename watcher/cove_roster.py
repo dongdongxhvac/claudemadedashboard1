@@ -82,6 +82,33 @@ def assignee_ids(client, legacy: list[str], label: str = "") -> list[str]:
     return ids
 
 
+def labor_only_assignee_ids(client) -> list[str]:
+    """Cove IDs of the site's managers where the roster leaves managers out
+    (UPark). Their tasks are not part of the PM snapshot, but at UPark the
+    monthly building-rounds tasks are assigned to the engineering manager and
+    the engineers log their rounds on them — about 55 h a week that sat on the
+    labor report and on no task we held. pm12_poller pulls those tasks for
+    their labor entries only. Empty where managers are already on the roster
+    (Binney). Best effort: a read failure means none this run."""
+    if "manager" in CFG["roster_roles"]:
+        return []
+    try:
+        rows = (
+            client.table("v_site_active_engineers")
+            .select("full_name, role, cove_user_id")
+            .eq("site_code", SITE).eq("role", "manager")
+            .execute()
+        ).data or []
+        ids = [cid for r in rows if (cid := (r.get("cove_user_id") or "").strip())]
+        missing = [r["full_name"] for r in rows if not (r.get("cove_user_id") or "").strip()]
+        if missing:
+            print(f"  note: manager(s) with no Cove ID on the profile, their tasks are not pulled: {', '.join(missing)}")
+        return ids
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: manager roster read failed, their tasks are not pulled this run: {e}", file=sys.stderr)
+        return []
+
+
 def backfill_cove_ids(client, items: list[dict], kind: str) -> int:
     """For each fetched task, if its assignee's name matches a roster row
     with NULL cove_user_id, set it. Returns how many profiles were updated.

@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from supabase_client import get_client  # noqa: E402
 from classify import classify_pm  # noqa: E402
 from cove_session import get_fresh_token, SessionError  # noqa: E402
-from cove_roster import assignee_ids, backfill_cove_ids, roster_gap_check  # noqa: E402
+from cove_roster import assignee_ids, backfill_cove_ids, labor_only_assignee_ids, roster_gap_check  # noqa: E402
 from cove_sites import SITE, NETWORK_ID as _SITE_NETWORK_ID, filename_label, sunday_skip, fetch_unassigned  # noqa: E402
 import cove_task_details  # noqa: E402  (PM audit evidence: steps / photos / notes / history)
 
@@ -553,7 +553,7 @@ def main() -> int:
     # ----- pm_task_details: audit evidence + labor entries -----
     # docs/pm-audit.md §3 and §9. After the snapshot's bookkeeping on purpose: a
     # slow or failing detail pull must never cost the poll its snapshot.
-    pull_task_details(client, open_items, closed_items, events, labor_only=fetch_unassigned_closed())
+    pull_task_details(client, open_items, closed_items, events, labor_only=fetch_unassigned_closed() + fetch_manager_tasks(client))
     return 0
 
 
@@ -663,6 +663,23 @@ def fetch_unassigned_closed() -> list[dict]:
         return []
 
 
+def fetch_manager_tasks(client) -> list[dict]:
+    """Tasks assigned to the site's managers where they are not on the roster
+    (cove_roster.labor_only_assignee_ids — UPark's monthly rounds tasks). Like
+    fetch_unassigned_closed they are pulled for their labor entries only:
+    never written to pm_rows or pm_close_events. Best effort."""
+    try:
+        ids = labor_only_assignee_ids(client)
+        if not ids:
+            return []
+        items = fetch_all_pm_tasks(OPEN_STATUSES, ids) + fetch_all_pm_tasks(CLOSED_STATUSES, ids)
+        print(f"  manager-assigned PMs (labor only): {len(items)}")
+        return items
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: manager-task fetch failed (their hours stay unknown this run): {e}", file=sys.stderr)
+        return []
+
+
 def pull_task_details(client, open_items: list[dict], closed_items: list[dict], events: list[dict],
                       labor_only: list[dict] | None = None) -> None:
     """After a poll: (1) steps / photos / notes / history for the recurring PMs
@@ -737,9 +754,9 @@ def backfill_details(days: int = 180) -> int:
     missing.sort(key=lambda it: it["completedOn"], reverse=True)
     missing_ids = {it["id"] for it in missing}
     known = {it.get("id") for it in open_items + closed}
-    unassigned = [it for it in fetch_unassigned_closed() if it.get("id") not in known]
+    unassigned = [it for it in fetch_unassigned_closed() + fetch_manager_tasks(client) if it.get("id") not in known]
     stale = [it for it in _labor_stale(open_items + closed + unassigned, stamps) if it["id"] not in missing_ids]
-    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} open={len(open_items)} completed-unassigned={len(unassigned)} "
+    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} open={len(open_items)} labor-only (unassigned / manager)={len(unassigned)} "
           f"logged closes={len(logged)} | to fetch: {len(missing)} closed without details + {len(stale)} with new labor")
 
     ok, err = _pull_details(_details_session(), client, missing + stale, "backfill")

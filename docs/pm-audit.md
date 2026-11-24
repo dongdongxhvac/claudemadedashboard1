@@ -462,3 +462,13 @@ left as they are: widening the roster filter would pull other departments' tasks
 `unplaced`. How it has run, all people on the labor report, as of 2026-11-23 after the unassigned-task pull:
 Binney 6–30 h a week (about 1–4 % of ~750 h) over the last seven full weeks; UPark 45–90 h a week
 (17–36 % of ~300 h), which has not been looked into.
+
+**UPark's Unknown, and the manager's rounds tasks (2026-11-23).** UPark ran 45–90 h a week Unknown. Read
+from Cove's lists: (1) the monthly building-rounds tasks ("730/750MS November Rounds (CW Manager)", "300MA
+Nov Rounds", …) are assigned to the UPark engineering manager and the engineers log their rounds on them —
+24 tasks, 165 h month to date — and UPark's roster is engineers only, so they were never pulled; (2) 14 open
+work orders carry 76 h, which only arrive at close. Fixed (1), with the manager's go-ahead:
+`cove_roster.labor_only_assignee_ids` gives the Cove IDs of a site's managers where the roster leaves them
+out, and `pm12_poller.fetch_manager_tasks` pulls their tasks for labor entries only (never `pm_rows` or
+`pm_close_events`). The UPark manager's `cove_user_id` was filled in from the task list. (2) is left: an
+open order's hours are a running total with no day on it.
