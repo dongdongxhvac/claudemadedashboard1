@@ -165,12 +165,38 @@ _LATEST_LABELS = {"Completed:", "User:", "Activity:", "Note:"}
 
 
 def parse_latest_readings(xlsx_bytes: bytes) -> list[dict[str, Any]]:
-    """Memo 8: state machine over per-equipment blocks."""
+    """Memo 8: state machine over per-equipment blocks.
+
+    Two layouts exist. Until Jul 2026 (4 columns):
+        <log name>                       col 0, alone  -> starts a block
+        Completed: | <value>             label col 0, value col 1
+        Item | | Unit | Value            readings in cols 0 / 2 / 3
+    Since the Aug 2026 plantlog update (5 columns) a folder line was added
+    and everything else moved one column right:
+        <folder path, "10 Green St ► Commercial Roof">   col 0, alone
+        | <log name>                     col 1, alone  -> starts a block
+        Completed: | | <value>           label col 0, value col 2
+        Item | | | Unit | Value          readings in cols 0 / 3 / 4
+    A line with only col 0 filled is therefore a block start (old), a folder
+    line (new) or a reading with a blank value; the next line decides.
+    """
     wb = _open_workbook(xlsx_bytes)
     ws = wb[wb.sheetnames[0]]
+    WIDTH = 5
+    table: list[list[str]] = []
+    for row in ws.iter_rows(values_only=True):
+        cells = [_as_str(c) for c in row][:WIDTH]
+        cells += [""] * (WIDTH - len(cells))
+        if any(cells):
+            table.append(cells)
+
+    def only(cells: list[str], idx: int) -> bool:
+        return bool(cells[idx]) and not any(c for i, c in enumerate(cells) if i != idx)
+
     rows_out: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
     in_readings = False
+    unit_col, value_col = 2, 3
 
     def emit():
         nonlocal current
@@ -199,55 +225,61 @@ def parse_latest_readings(xlsx_bytes: bytes) -> list[dict[str, Any]]:
         })
         current = None
 
-    for row in ws.iter_rows(values_only=True):
-        cells = [_as_str(c) for c in row]
-        while len(cells) < 4:
-            cells.append("")
-        c0, c1, c2, c3 = cells[:4]
-
-        # Fully empty row
-        if not (c0 or c1 or c2 or c3):
-            continue
+    for i, cells in enumerate(table):
+        c0 = cells[0]
+        nxt = table[i + 1] if i + 1 < len(table) else None
 
         # Skip the preamble (first 2 rows): title + "All"
-        if c0 == "Log Record Latest ALL" and not c1:
-            continue
-        if c0 == "All" and not c1 and not c2 and not c3:
+        if only(cells, 0) and c0 in ("Log Record Latest ALL", "All") and i < 2:
             continue
 
         # Field labels inside the current block (order matters: check before
-        # the "reading row" rule, because labels have c1 non-empty too).
+        # the "reading row" rule, because labels carry a value cell too).
         if c0 in _LATEST_LABELS:
             if current is not None:
                 field = c0[:-1].lower()  # "completed" / "user" / "activity" / "note"
+                value = cells[1] or cells[2]
                 if field == "completed":
-                    current["completed_str"] = c1
+                    current["completed_str"] = value
                 else:
-                    current[field] = c1
+                    current[field] = value
             in_readings = False
             continue
 
-        # Reading-section header
-        if c0 == "Item" and c2 == "Unit" and c3 == "Value":
+        # Reading-section header — it also says where Unit / Value sit.
+        if c0 == "Item" and "Unit" in cells and "Value" in cells:
+            unit_col, value_col = cells.index("Unit"), cells.index("Value")
             in_readings = True
             continue
 
-        # New equipment block: c0 set, c1/c2/c3 ALL empty. Check this BEFORE
-        # the reading-row rule so that the next equipment doesn't get eaten as
-        # a reading with blank unit + blank value.
-        if c0 and not c1 and not c2 and not c3:
+        # New layout: the log name alone in col 1 starts a block.
+        if only(cells, 1):
             emit()
-            current = {"log_name": c0, "readings": []}
+            current = {"log_name": cells[1], "readings": []}
             in_readings = False
             continue
 
-        # Reading row: c0 set + at least one of (c2, c3) — units may be blank
-        # for boolean-style items like "Active Alarms: No" or status enums.
+        if only(cells, 0):
+            # New layout: a folder line, always followed by a log-name line.
+            if nxt is not None and only(nxt, 1):
+                emit()
+                in_readings = False
+                continue
+            # Old layout: the log name, always followed by "Completed:".
+            if nxt is not None and nxt[0] == "Completed:":
+                emit()
+                current = {"log_name": c0, "readings": []}
+                in_readings = False
+                continue
+            # Otherwise it is a reading whose unit and value are both blank.
+
+        # Reading row — units may be blank for boolean-style items like
+        # "Active Alarms: No" or status enums.
         if in_readings and c0 and current is not None:
             current["readings"].append({
                 "item":  c0,
-                "unit":  c2 or None,
-                "value": c3,
+                "unit":  cells[unit_col] or None,
+                "value": cells[value_col],
             })
 
     emit()
