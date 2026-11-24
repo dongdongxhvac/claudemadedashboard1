@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, KIND_LABEL, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, attentionOf, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, lowWeek, netTotal, pct, ptoHoursInWeek,
+  BUCKETS, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, attentionOf, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, kindLabel, lowWeek, netTotal, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
   type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
@@ -108,10 +108,10 @@ function EntryLine({ it, repeat }: { it: LaborItem; repeat?: boolean }) {
       <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: repeat ? A.orangeDark : undefined }}>{fmtH(Number(it.hours), false)} h</span>
       <span style={{ whiteSpace: 'nowrap' }}>{it.task_no}</span>
       <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-        <Swatch bucket={bucketOf(it.bucket)} />
+        <Swatch bucket={bucketOf(it.bucket, it.task_name)} />
         {it.task_name ?? '—'}
         <span style={{ color: A.muted }}>
-          {' '}· {KIND_LABEL[it.bucket] ?? it.bucket}
+          {' '}· {kindLabel(it)}
           {it.building ? ` · ${it.building}` : ''}
           {it.kind === 'pm' && it.assignee_name && it.assignee_name !== it.performer ? ` · on ${shortName(it.assignee_name)}'s task` : ''}
           {it.kind === 'pm' && it.task_closed === false ? ' · task still open' : ''}
@@ -396,7 +396,7 @@ export default function AuditWeek() {
                   <th style={thNum} title={`The week's hours on the Cove labor report, less double-booked hours — highlighted under ${LOW_WEEK_HOURS} h once the week is over`}>Logged</th>
                   <th style={{ ...thText, minWidth: days.length > 7 ? 92 : 110 }}>Where<br />it went</th>
                   {BUCKETS.map((b) => (
-                    <th key={b.key} style={{ ...thNum, whiteSpace: 'normal' }} title={b.label}>
+                    <th key={b.key} style={thNum} title={b.label}>
                       {/* the bar's colour as an underline: ties the column to the bar without widening it */}
                       <span style={{ display: 'inline-block', paddingBottom: 3, borderBottom: `3px solid ${BUCKET_COLOR[b.key]}` }}>{b.short}</span>
                     </th>
@@ -496,7 +496,9 @@ export default function AuditWeek() {
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Unknown</strong> is the rest: hours Cove counts
             that are on no task the dashboard holds — work orders still open, tasks assigned to someone off the roster or older than its window, and entries
-            edited in Cove after they were typed. The kind of work is read from the task's name. Click a name for the entries.
+            edited in Cove after they were typed. The kind of work is read from the task's name. On-demand tasks split three ways: <strong>ODT-E</strong> escort, <strong>ODT-R</strong> repair
+            (the name has a word such as repair, replace, leak, fix, broken, tripped, failed, troubleshoot or "no heat"), and <strong>ODT-A</strong> all
+            other, the unscheduled-task tasks, meetings, training and coverage included. Click a name for the entries.
           </div>
         </>
       )}

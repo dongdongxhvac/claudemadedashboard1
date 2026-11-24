@@ -146,8 +146,12 @@ eq('timeline tones', tl.map((t) => t.tone), ['plain', 'photo', 'plain', 'plain',
 eq('note sources', [noteSourceLabel('note_added'), noteSourceLabel('completed'), noteSourceLabel('step:Important Notes')], ['Note', 'Close box', 'Step · Important Notes']);
 
 // how the week was spent
-eq('bucketOf folds the small kinds', ['pm', 'rounds', 'bms', 'work_order', 'escort', 'meeting', 'unscheduled', 'on_demand', 'new'].map(bucketOf),
-  ['pm', 'rounds', 'bms', 'work_order', 'other', 'other', 'on_demand', 'on_demand', 'on_demand']);
+eq('bucketOf folds the kinds', ['pm', 'rounds', 'bms', 'work_order', 'escort', 'meeting', 'unscheduled', 'on_demand', 'new'].map((k) => bucketOf(k)),
+  ['pm', 'rounds', 'bms', 'work_order', 'odt_e', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
+eq('on-demand repair is read from the task name', ['pump leak', 'RTU 1 condenser fan replacement', '215 LEF 1B no run command', '65; penthouse hot water pump 1 seals leaking', 'chiller 3 tripped on evap flow loss',
+  'troubleshoot 215 boiler-5', 'snow melt panel install', 'chiller 3 open', '650', 'pump training', 'boiler 5 closing', 'prefix the filters', null].map((n) => bucketOf('on_demand', n)),
+  ['odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
+eq('only on-demand tasks are tested for repair', [bucketOf('unscheduled', 'leak repairs November'), bucketOf('escort', 'escort for pump repair'), bucketOf('rounds', 'rounds - leak check'), bucketOf('pm', 'Pump seal PM')], ['odt_a', 'odt_e', 'rounds', 'pm']);
 const li = (over: Partial<LaborItem>): LaborItem => ({
   kind: 'pm', site_code: 'binney', task_no: 'PM-1', task_name: 'AHU Quarterly', cmms_type: 'recurring', building: '301 Binney',
   assignee_name: 'Ann Lee', task_closed: true, performer: 'Ann Lee', hours: 1, performed_at: '2026-11-09T17:00:00Z',
@@ -171,11 +175,11 @@ const wt = buildWeekTime([
 eq('week: order by biggest week', wt.techs.map((t) => t.tech), ['Ann Lee', 'Cy Doe', 'Bob Roy']);
 const ann = wt.techs[0];
 eq('week: logged / placed / unplaced', [ann.logged, ann.placed, ann.unplaced], [40, 8.5, 31.5]);
-eq('week: by bucket', ann.byBucket, { pm: 1, rounds: 4.5, on_demand: 0, bms: 0, work_order: 3, other: 0 });
+eq('week: by bucket', ann.byBucket, { pm: 1, rounds: 4.5, odt_e: 0, odt_r: 0, odt_a: 0, bms: 0, work_order: 3 });
 eq('week: by day, Monday first', ann.byDay, [1, 2, 0, 3, 0, 0, 2.5]);
 eq('week: hours on someone else\'s task', ann.onOthers, 4.5);
 eq('week: tasks / closed / flagged / good', [ann.tasks, ann.closed, ann.flagged, ann.good], [3, 2, 1, 1]);
-eq('week: no labor report row', [wt.techs[2].logged, wt.techs[2].placed, wt.techs[2].unplaced, wt.techs[2].byBucket.other], [null, 4, 0, 4]);
+eq('week: no labor report row', [wt.techs[2].logged, wt.techs[2].placed, wt.techs[2].unplaced, wt.techs[2].byBucket.odt_e], [null, 4, 0, 4]);
 eq('week: team', [wt.team.logged, wt.team.placed, wt.team.unplaced, wt.team.onOthers, wt.team.pmTaskHours, wt.team.people], [52, 12.5, 43.5, 4.5, 9.5, 3]);
 eq('week: as of the latest poll', wt.asOf, '2026-11-15T00:00:00Z');
 eq('week: no roster given, nobody left off', wt.others, []);

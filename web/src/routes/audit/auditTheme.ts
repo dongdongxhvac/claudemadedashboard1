@@ -79,21 +79,24 @@ export const tdStyle: CSSProperties = { padding: '14px 12px', borderBottom: `1px
 export const tileGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16 };
 
 /** Where-the-hours-went bar. Fixed colour per kind of work (never by rank);
- *  six categorical slots checked for colour-blind separation. Three of them
+ *  seven categorical slots, in the bar's order, checked for colour-blind
+ *  separation between neighbours (dataviz validate_palette.js). On-demand
+ *  "all other" keeps the aqua on-demand had before it was split. Three of them
  *  sit under 3:1 against white, so the page always shows the numbers too. */
 export const BUCKET_COLOR: Record<Bucket, string> = {
   pm: '#2a78d6',
   rounds: '#eb6834',
-  on_demand: '#1baf7a',
+  odt_e: '#6250d6',
+  odt_r: '#008300',
+  odt_a: '#1baf7a',
   bms: '#eda100',
   work_order: '#e87ba4',
-  other: '#008300',
 };
 
 /** PM / ODT / WO on the scorecard — the same hues the Week tab uses for
  *  scheduled PMs, on-demand tasks and work orders. */
 export const WORK_TYPE_COLOR: Record<WorkType, string> = {
   pm: BUCKET_COLOR.pm,
-  odt: BUCKET_COLOR.on_demand,
+  odt: BUCKET_COLOR.odt_a,
   wo: BUCKET_COLOR.work_order,
 };

@@ -472,3 +472,14 @@ work orders carry 76 h, which only arrive at close. Fixed (1), with the manager'
 out, and `pm12_poller.fetch_manager_tasks` pulls their tasks for labor entries only (never `pm_rows` or
 `pm_close_events`). The UPark manager's `cove_user_id` was filled in from the task list. (2) is left: an
 open order's hours are a running total with no day on it.
+
+**On-demand split three ways (manager 2026-11-23): ODT-E · ODT-R · ODT-A.** The Week tab's columns by kind
+of work are now PMs · Rounds · ODT-E (escort) · ODT-R (repair) · ODT-A (all other on-demand: the
+unscheduled-task tasks, meetings, training and coverage included) · BMS · WOs; the old "Other" column is
+gone. `bucketOf(kind, taskName)` does it on the client, no view change. Escort is the view's `escort` kind
+(the name says "escort"). Repair has no field in Cove — on-demand tasks are named in free text — so
+`REPAIR_RE` reads it from the name: repair, replace, leak, fix, broken, trip, fail, fault, troubleshoot,
+rebuild, seal, "not working", "no heat / cool / run / power / status / flow". Only the view's `on_demand`
+kind is tested. On real rows (Binney, week keys 11-09 and 11-16): ODT-E 15–17 h, ODT-R 14–35 h, ODT-A
+175–195 h; UPark has no ODT-R, its on-demand names say "maintenance", "tube punching", "cleaning". Colours:
+seven slots in bar order, validated — escort violet, repair green, all-other keeps on-demand's aqua.

@@ -631,25 +631,35 @@ export function weeksEnding(lastWeek: string, n: number): string[] {
 // ---------- how the week was spent ----------
 
 /** What kind of work a labor entry is. The database names the task's kind
- *  from its name (v_audit_labor_items.bucket); the page folds the small ones
- *  together so the bar has six parts, not eight. */
-export type Bucket = 'pm' | 'rounds' | 'on_demand' | 'bms' | 'work_order' | 'other';
+ *  from its name (v_audit_labor_items.bucket); the page folds them into seven. */
+export type Bucket = 'pm' | 'rounds' | 'odt_e' | 'odt_r' | 'odt_a' | 'bms' | 'work_order';
 
+/** On-demand work is split three ways (manager 2026-11-23): ODT-E escort,
+ *  ODT-R repair, ODT-A all other — the unscheduled-task tasks, meetings,
+ *  training and coverage included. */
 export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
   { key: 'pm', label: 'Scheduled PMs', short: 'PMs' },
   { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
-  { key: 'on_demand', label: 'On-demand and unscheduled tasks', short: 'On-demand' },
+  { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E' },
+  { key: 'odt_r', label: 'On-demand · repair', short: 'ODT-R' },
+  { key: 'odt_a', label: 'On-demand · all other', short: 'ODT-A' },
   { key: 'bms', label: 'BMS checks', short: 'BMS' },
   { key: 'work_order', label: 'Work orders', short: 'WOs' },
-  { key: 'other', label: 'Escort, meetings, training, coverage', short: 'Other' },
 ];
 
-/** The database's task kind → the page's bucket. */
-export function bucketOf(raw: string | null | undefined): Bucket {
+/** What makes an on-demand task a repair. Cove has no field for it — these
+ *  tasks are named in free text ("pump leak", "rtu 1 condenser fan
+ *  replacement", "215 lef 1b no run command") — so it is read from the name:
+ *  a word for fixing something or for something having gone wrong. */
+export const REPAIR_RE = /\b(?:repair\w*|replac\w*|leak\w*|fix(?:ed|es|ing)?|broken|broke|trip(?:ped|s|ping)?|fail\w*|fault\w*|troubleshoot\w*|rebuil[dt]\w*|seals?|not working|no (?:heat|cool\w*|run|power|status|flow))\b/i;
+
+/** The database's task kind (and the task's name, for repairs) → the page's bucket. */
+export function bucketOf(raw: string | null | undefined, taskName?: string | null): Bucket {
   switch (raw) {
     case 'pm': case 'rounds': case 'bms': case 'work_order': return raw;
-    case 'escort': case 'meeting': return 'other';
-    default: return 'on_demand'; // on_demand, unscheduled, anything new
+    case 'escort': return 'odt_e';
+    case 'meeting': case 'unscheduled': return 'odt_a';
+    default: return taskName && REPAIR_RE.test(taskName) ? 'odt_r' : 'odt_a'; // on_demand, anything new
   }
 }
 
@@ -658,6 +668,10 @@ export const KIND_LABEL: Record<string, string> = {
   pm: 'Scheduled PM', rounds: 'Building rounds', bms: 'BMS', work_order: 'Work order',
   escort: 'Vendor escort', meeting: 'Meeting · training · coverage', unscheduled: 'Unscheduled tasks', on_demand: 'On-demand task',
 };
+
+export function kindLabel(it: { bucket: string; task_name: string | null }): string {
+  return bucketOf(it.bucket, it.task_name) === 'odt_r' ? 'On-demand repair' : KIND_LABEL[it.bucket] ?? it.bucket;
+}
 
 /** v_audit_labor_items: one labor entry on a PM task (by the person who did
  *  the work, on the day it was done), or one closed work order. */
@@ -859,7 +873,7 @@ export function dayMarks(
 }
 
 function emptyBuckets(): Record<Bucket, number> {
-  return { pm: 0, rounds: 0, on_demand: 0, bms: 0, work_order: 0, other: 0 };
+  return { pm: 0, rounds: 0, odt_e: 0, odt_r: 0, odt_a: 0, bms: 0, work_order: 0 };
 }
 
 function dayIndex(weekStart: string, day: string): number {
@@ -905,7 +919,7 @@ export function buildWeekTime(
     const r = row(it.site_code, it.performer);
     const hrs = Number(it.hours ?? 0);
     r.placed += hrs;
-    r.byBucket[bucketOf(it.bucket)] += hrs;
+    r.byBucket[bucketOf(it.bucket, it.task_name)] += hrs;
     const d = dayIndex(firstDay, it.day_local);
     if (d >= 0 && d < nDays) r.byDay[d] += hrs;
     if (it.kind === 'pm' && it.assignee_name && it.assignee_name !== it.performer) r.onOthers += hrs;
