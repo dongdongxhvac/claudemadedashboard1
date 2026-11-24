@@ -3,7 +3,7 @@
 // by kind of task, on which days, and how their closed PMs audited. Hours are
 // counted on the person who did the work and the day it was done — half of
 // all entries are logged on a task assigned to someone else.
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
@@ -361,6 +361,20 @@ export default function AuditWeek() {
   const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
   const [splitOf, setSplitOf] = useState<Bucket | null>(null);
+  // Each engineer's row locks under the header row while their entries scroll
+  // (index.css .audit-week-row); it needs the header's height, which changes
+  // with the columns and the width.
+  const [headH, setHeadH] = useState(58);
+  const headWatch = useRef<ResizeObserver | null>(null);
+  const headRef = useCallback((el: HTMLTableSectionElement | null) => {
+    headWatch.current?.disconnect();
+    headWatch.current = null;
+    if (!el) return;
+    const measure = () => setHeadH(Math.round(el.getBoundingClientRect().height));
+    measure();
+    headWatch.current = new ResizeObserver(measure);
+    headWatch.current.observe(el);
+  }, []);
   const cols = useMemo(() => (week ? weekDays(week, p.site) : null), [week, p.site]);
   const firstDay = cols?.first ?? null;
   const days = cols?.names ?? [];
@@ -490,8 +504,8 @@ export default function AuditWeek() {
             siteLabel={p.site === 'both' ? '' : SITE_LABEL[p.site]} showSite={p.site === 'both'} inProgress={week === current} />
 
           <div className="audit-table-box audit-table-card" style={cardStyle}>
-            <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
+            <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 13, '--audit-head-h': `${headH}px` } as CSSProperties}>
+              <thead ref={headRef}>
                 <tr>
                   <th style={thText}>Engineer</th>
                   <th style={thNum} title={`The week's hours on the Cove labor report, less double-booked hours — highlighted under ${LOW_WEEK_HOURS} h once the week is over`}>Logged</th>
@@ -516,7 +530,7 @@ export default function AuditWeek() {
                   const attention = attentionOf(t, marks, week === current, ptoHours);
                   return (
                     <Fragment key={key}>
-                      <tr>
+                      <tr className="audit-week-row">
                         <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>
                           <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : key)}
                             style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 600, color: A.ink, cursor: 'pointer', textAlign: 'left' }}>

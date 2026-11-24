@@ -511,3 +511,9 @@ bar) opens a pop-up: the kind's total and share, then **by engineer** (hours, a 
 many tasks) and **by task** (hours, title, task number, building, entries, who) — `bucketSplit` over the
 rows on the page, so it follows the site, the week and the engineers-only rule. Closes with Esc, the Close
 button or a click outside. It is rendered inside the page, so the print sheet's CSS hides it.
+
+**The engineer's row locks too (manager 2026-11-24).** On the Week table every engineer row is sticky just
+under the header row (`.audit-week-row > td` in `index.css`, `top: var(--audit-head-h)`; `Week.tsx` measures
+the header with a ResizeObserver and sets the variable on the table). All rows stick at the same line and a
+later row paints over an earlier one, so an open engineer's totals stay in view while their entries scroll,
+until the next engineer's row arrives and takes the line.
