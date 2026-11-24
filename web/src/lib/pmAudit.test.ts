@@ -342,6 +342,7 @@ eq('yellow name: strong when the total is flagged, light when only a day is miss
 ], ['strong', 'light', null]);
 eq('on-demand: a title with the word PM counts as PMs, a time of day does not', ['EAHU Q4 PM', 'pm on ahu 3', 'Quarterly PMs 215', 'meet vendor 3 PM', 'vendor at 3pm', 'pump 2 alarm 2:30 pm', 'rpm sensor'].map(od),
   ['pm', 'pm', 'pm', 'odt_a', 'odt_a', 'odt_r', 'odt_r']);
+eq('on-demand: glycol and drip drums count as PMs', ['glycol', 'Glycol top off 215', 'drip drums', 'empty drip drum at 650', 'Drip-drums check'].map(od), ['pm', 'pm', 'pm', 'pm', 'pm']);
 // the pop-up behind a kind's hours: who and which tasks
 const wtSplit = buildWeekTime([
   li({ task_no: 'PM-R1', task_name: 'pump leak', bucket: 'on_demand', hours: 3 }),

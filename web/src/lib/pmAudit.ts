@@ -659,9 +659,10 @@ export const BUCKETS: { key: Bucket; label: string; short: string; note: string 
 
 /** PM work logged on an on-demand task: opening or closing a boiler or
  *  chiller ("ch1" too), tube punching, anything titled maintenance, cleaning
- *  or inspection ("cleaned up" a spill is not cleaning), and any title with
- *  the word PM in it ("EAHU Q4 PM" — but not a time of day, "3 PM"). */
-export const PM_LIKE_RE = /(?<!(?:^|[^\w:])\d{1,2}(?::\d{2})?\s?)\bpms?\b|\bpunch\w*|\bmaint\w*|\bclean(?:ing|ed|s)?\b(?! up\b)|\binspect\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
+ *  or inspection ("cleaned up" a spill is not cleaning), glycol, drip drums,
+ *  and any title with the word PM in it ("EAHU Q4 PM" — but not a time of
+ *  day, "3 PM"). */
+export const PM_LIKE_RE = /(?<!(?:^|[^\w:])\d{1,2}(?::\d{2})?\s?)\bpms?\b|\bpunch\w*|\bglycol\b|\bdrip[- ]?drums?\b|\bmaint\w*|\bclean(?:ing|ed|s)?\b(?! up\b)|\binspect\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
 
 export const ONCALL_RE = /\bon[- ]?call\b/i;
 
