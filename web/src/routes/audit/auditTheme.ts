@@ -80,15 +80,15 @@ export const tileGrid: CSSProperties = { display: 'grid', gridTemplateColumns: '
 
 /** Where-the-hours-went bar. Fixed colour per kind of work (never by rank);
  *  seven categorical slots, in the bar's order, checked for colour-blind
- *  separation between neighbours (dataviz validate_palette.js). On-demand
- *  "all other" keeps the aqua on-demand had before it was split. Three of them
+ *  separation between neighbours (dataviz validate_palette.js) before the
+ *  catch-all "all other" was set to gray at the manager's request. Three of them
  *  sit under 3:1 against white, so the page always shows the numbers too. */
 export const BUCKET_COLOR: Record<Bucket, string> = {
   pm: '#2a78d6',
   rounds: '#eb6834',
   odt_e: '#6250d6',
   odt_r: '#008300',
-  odt_a: '#1baf7a',
+  odt_a: '#7C838D',   // gray: the catch-all (manager 2026-11-23)
   bms: '#eda100',
   work_order: '#e87ba4',
 };
@@ -97,6 +97,6 @@ export const BUCKET_COLOR: Record<Bucket, string> = {
  *  scheduled PMs, on-demand tasks and work orders. */
 export const WORK_TYPE_COLOR: Record<WorkType, string> = {
   pm: BUCKET_COLOR.pm,
-  odt: BUCKET_COLOR.odt_a,
+  odt: '#1baf7a',
   wo: BUCKET_COLOR.work_order,
 };

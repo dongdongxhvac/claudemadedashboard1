@@ -634,32 +634,57 @@ export function weeksEnding(lastWeek: string, n: number): string[] {
  *  from its name (v_audit_labor_items.bucket); the page folds them into seven. */
 export type Bucket = 'pm' | 'rounds' | 'odt_e' | 'odt_r' | 'odt_a' | 'bms' | 'work_order';
 
-/** On-demand work is split three ways (manager 2026-11-23): ODT-E escort,
- *  ODT-R repair, ODT-A all other — the unscheduled-task tasks, meetings,
- *  training and coverage included. */
+/** On-demand work is split three ways (manager 2026-11-23, rules as he gave them):
+ *    PMs    a boiler or chiller opening / closing, and tube punching, are
+ *           seasonal PM work even when logged on an on-demand task
+ *    ODT-E  escort
+ *    ODT-R  repair: the title names a piece of equipment, or says on-call
+ *           (a word for fixing or a fault counts too)
+ *    ODT-A  all other: training, meetings, van service, the unscheduled-task
+ *           tasks, and titles that say nothing ("650", "home depot") */
 export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
-  { key: 'pm', label: 'Scheduled PMs', short: 'PMs' },
+  { key: 'pm', label: 'Scheduled PMs (with boiler / chiller opening, closing and tube punching)', short: 'PMs' },
   { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
   { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E' },
-  { key: 'odt_r', label: 'On-demand · repair', short: 'ODT-R' },
-  { key: 'odt_a', label: 'On-demand · all other', short: 'ODT-A' },
+  { key: 'odt_r', label: 'On-demand · repair (equipment or on-call)', short: 'ODT-R' },
+  { key: 'odt_a', label: 'On-demand · all other (training, meetings, van service)', short: 'ODT-A' },
   { key: 'bms', label: 'BMS checks', short: 'BMS' },
   { key: 'work_order', label: 'Work orders', short: 'WOs' },
 ];
 
-/** What makes an on-demand task a repair. Cove has no field for it — these
- *  tasks are named in free text ("pump leak", "rtu 1 condenser fan
- *  replacement", "215 lef 1b no run command") — so it is read from the name:
- *  a word for fixing something or for something having gone wrong. */
+/** Cove has no field for any of this — on-demand tasks are named in free text
+ *  ("pump leak", "boiler 5 closing", "215 lef 1b no run command") — so the
+ *  split is read from the title. */
+
+/** Seasonal PM work on an on-demand task: opening or closing a boiler or
+ *  chiller ("ch1" too), and tube punching. */
+export const PM_LIKE_RE = /\bpunch\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
+
+export const ONCALL_RE = /\bon[- ]?call\b/i;
+
+/** A piece of equipment named in the title. */
+export const EQUIPMENT_RE = new RegExp('\\b(?:' + [
+  'boilers?', 'chillers?', 'ch[- ]?\\d[\\d.]*', 'pumps?', 'c?hwp', 'cwp', 'ahus?', 'eahu\\w*', 'ahu[- ]?\\w+', 'air handl\\w+', 'rtus?', 'rtu[- ]?\\d+', 'fans?', 'lef', 'ef[- ]?\\d+\\w*',
+  'cooling towers?', 'towers?', 'cts?', 'ct[- ]?\\d+', 'vfds?', 'compressors?', 'condensers?', 'evaporators?', 'dampers?', 'generators?', 'ats', 'heat exchangers?', 'hx',
+  'water heaters?', 'gwh[#\\w-]*', 'hwh[#\\w-]*', 'valves?', 'motors?', 'belts?', 'coils?', 'sensors?', 'actuators?', 'humidifiers?', 'crac\\w*', 'fcus?', 'vavs?',
+  'eru[\\w-]*', 'mau[\\w-]*', 'sump\\w*', 'ejectors?', 'tanks?', 'strainers?', 'steam traps?', 'thermostats?', 'filters?', 'breakers?', 'panels?',
+  'transformers?', 'ups', 'elevators?', 'exhaust', 'detectors?', 'meters?', 'gauges?', 'dryers?', 'softeners?', 'heaters?',
+].join('|') + ')\\b', 'i');
+
+/** A word for fixing something, or for something having gone wrong. */
 export const REPAIR_RE = /\b(?:repair\w*|replac\w*|leak\w*|fix(?:ed|es|ing)?|broken|broke|trip(?:ped|s|ping)?|fail\w*|fault\w*|troubleshoot\w*|rebuil[dt]\w*|seals?|not working|no (?:heat|cool\w*|run|power|status|flow))\b/i;
 
-/** The database's task kind (and the task's name, for repairs) → the page's bucket. */
+/** The database's task kind (and, for on-demand tasks, the title) → the page's bucket. */
 export function bucketOf(raw: string | null | undefined, taskName?: string | null): Bucket {
   switch (raw) {
     case 'pm': case 'rounds': case 'bms': case 'work_order': return raw;
     case 'escort': return 'odt_e';
     case 'meeting': case 'unscheduled': return 'odt_a';
-    default: return taskName && REPAIR_RE.test(taskName) ? 'odt_r' : 'odt_a'; // on_demand, anything new
+    default: { // on_demand, anything new
+      const n = taskName ?? '';
+      if (PM_LIKE_RE.test(n)) return 'pm';
+      return ONCALL_RE.test(n) || EQUIPMENT_RE.test(n) || REPAIR_RE.test(n) ? 'odt_r' : 'odt_a';
+    }
   }
 }
 
@@ -670,7 +695,12 @@ export const KIND_LABEL: Record<string, string> = {
 };
 
 export function kindLabel(it: { bucket: string; task_name: string | null }): string {
-  return bucketOf(it.bucket, it.task_name) === 'odt_r' ? 'On-demand repair' : KIND_LABEL[it.bucket] ?? it.bucket;
+  if (it.bucket === 'on_demand') {
+    const b = bucketOf(it.bucket, it.task_name);
+    if (b === 'pm') return 'Opening / closing / punching (on-demand task, counted with PMs)';
+    if (b === 'odt_r') return 'On-demand repair';
+  }
+  return KIND_LABEL[it.bucket] ?? it.bucket;
 }
 
 /** v_audit_labor_items: one labor entry on a PM task (by the person who did

@@ -148,10 +148,15 @@ eq('note sources', [noteSourceLabel('note_added'), noteSourceLabel('completed'),
 // how the week was spent
 eq('bucketOf folds the kinds', ['pm', 'rounds', 'bms', 'work_order', 'escort', 'meeting', 'unscheduled', 'on_demand', 'new'].map((k) => bucketOf(k)),
   ['pm', 'rounds', 'bms', 'work_order', 'odt_e', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
-eq('on-demand repair is read from the task name', ['pump leak', 'RTU 1 condenser fan replacement', '215 LEF 1B no run command', '65; penthouse hot water pump 1 seals leaking', 'chiller 3 tripped on evap flow loss',
-  'troubleshoot 215 boiler-5', 'snow melt panel install', 'chiller 3 open', '650', 'pump training', 'boiler 5 closing', 'prefix the filters', null].map((n) => bucketOf('on_demand', n)),
-  ['odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
-eq('only on-demand tasks are tested for repair', [bucketOf('unscheduled', 'leak repairs November'), bucketOf('escort', 'escort for pump repair'), bucketOf('rounds', 'rounds - leak check'), bucketOf('pm', 'Pump seal PM')], ['odt_a', 'odt_e', 'rounds', 'pm']);
+const od = (n: string | null) => bucketOf('on_demand', n);
+eq('on-demand: boiler / chiller opening and closing, and punching, count as PMs', ['boiler 5 closing', 'Chiller 3 open', 'opening boiler 2', '35LS Chiller 1.3 tube punching', '300 CH1 TUBE PUNCHING', '26LS ch1 closed'].map(od),
+  ['pm', 'pm', 'pm', 'pm', 'pm', 'pm']);
+eq('on-demand: equipment or on-call in the title is repair', ['pump leak', 'RTU 1 condenser fan replacement', '215 LEF 1B no run command', 'Boiler 1 pump 21', '150 ahu static pressure', 'oncall respond',
+  '(ON-CALL) 40 Erie HW Leak Detector 1', 'Chiller 2 maintenance', 'cooling tower cleaning', 'snow melt panel install', '11/13/26; Gym Leak in ceiling.', 'GWH#2 troubleshooting', '26LS ch1 lockout', 'EAHU Q4 PM', '40 Erie CWP 2 and CWP 3 alarms'].map(od),
+  ['odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r']);
+eq('on-demand: what is left is all other', ['650', 'home depot', 'Van service', 'power shut down infra red', 'prefix the forms', 'installed chem aqua coupon rack at 21 erie', null].map(od),
+  ['odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
+eq('only on-demand tasks are read by title', [bucketOf('unscheduled', 'leak repairs November'), bucketOf('escort', 'escort for pump repair'), bucketOf('rounds', 'rounds - leak check'), bucketOf('pm', 'Pump seal PM'), bucketOf('meeting', 'pump training')], ['odt_a', 'odt_e', 'rounds', 'pm', 'odt_a']);
 const li = (over: Partial<LaborItem>): LaborItem => ({
   kind: 'pm', site_code: 'binney', task_no: 'PM-1', task_name: 'AHU Quarterly', cmms_type: 'recurring', building: '301 Binney',
   assignee_name: 'Ann Lee', task_closed: true, performer: 'Ann Lee', hours: 1, performed_at: '2026-11-09T17:00:00Z',

@@ -401,7 +401,7 @@ export default function AuditWeek() {
                       <span style={{ display: 'inline-block', paddingBottom: 3, borderBottom: `3px solid ${BUCKET_COLOR[b.key]}` }}>{b.short}</span>
                     </th>
                   ))}
-                  <th style={thNum} title="Hours Cove counts for the week that are on no task the dashboard holds, so their kind of work is unknown">Unknown</th>
+                  <th style={thNum} title="Hours Cove counts for the week that are on no task the dashboard holds, so their kind of work is unknown">Unk</th>
                   {days.map((d, i) => <th key={i} title={`${d} ${dayLabel(addDays(firstDay, i))}`} style={{ ...thNum, padding: '12px 4px', ...(i === 0 ? groupEdge : null) }}>{d}</th>)}
                   <th style={{ ...thNum, ...groupEdge }} title="Recurring PMs this engineer closed that week">PMs<br />closed</th>
                   <th style={thNum} title="Of those, how many the audit flagged">Flagged</th>
@@ -496,9 +496,10 @@ export default function AuditWeek() {
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Unknown</strong> is the rest: hours Cove counts
             that are on no task the dashboard holds — work orders still open, tasks assigned to someone off the roster or older than its window, and entries
-            edited in Cove after they were typed. The kind of work is read from the task's name. On-demand tasks split three ways: <strong>ODT-E</strong> escort, <strong>ODT-R</strong> repair
-            (the name has a word such as repair, replace, leak, fix, broken, tripped, failed, troubleshoot or "no heat"), and <strong>ODT-A</strong> all
-            other, the unscheduled-task tasks, meetings, training and coverage included. Click a name for the entries.
+            edited in Cove after they were typed. The kind of work is read from the task's name. On-demand tasks are sorted by their title: a boiler or chiller opening or closing, and tube punching,
+            count with <strong>PMs</strong>; <strong>ODT-E</strong> is escort; <strong>ODT-R</strong> is repair — the title names a piece of equipment or says on-call;
+            <strong>ODT-A</strong> is all other: training, meetings, van service and the unscheduled-task tasks. <strong>Unk</strong> = Unknown.{' '}
+            Click a name for the entries.
           </div>
         </>
       )}

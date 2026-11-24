@@ -483,3 +483,18 @@ rebuild, seal, "not working", "no heat / cool / run / power / status / flow". On
 kind is tested. On real rows (Binney, week keys 11-09 and 11-16): ODT-E 15–17 h, ODT-R 14–35 h, ODT-A
 175–195 h; UPark has no ODT-R, its on-demand names say "maintenance", "tube punching", "cleaning". Colours:
 seven slots in bar order, validated — escort violet, repair green, all-other keeps on-demand's aqua.
+
+**The manager's rules for the split (2026-11-23, replacing the keyword-only repair rule above).** For a
+task of the view's `on_demand` kind, by its title, in this order (`bucketOf`):
+
+1. boiler or chiller opening / closing, and tube punching → **PMs** (`PM_LIKE_RE`; "ch1" counts as a chiller);
+2. the title names a piece of equipment, or says on-call → **ODT-R** (`EQUIPMENT_RE`, `ONCALL_RE`; a repair
+   word from `REPAIR_RE` counts too, so "Gym leak in ceiling" is a repair);
+3. everything else → **ODT-A**: training, meetings, van service, the unscheduled-task tasks, and titles that
+   say nothing ("650", "home depot").
+
+Escort stays ODT-E; a title with "training" or "meeting" is ODT-A even when it names equipment (the view
+calls it `meeting` first). ODT-A is drawn gray (the catch-all); the scorecard's ODT keeps its aqua. The
+Unknown column's header is "Unk". Three weeks of real rows (keys 11-02 … 11-16): Binney PMs 695 · Rounds 585
+· ODT-E 39 · ODT-R 414 · ODT-A 224 · BMS 202 h; UPark PMs 268 · Rounds 197 · ODT-E 16 · ODT-R 40 · ODT-A 216 h
+(194 h of that is its unscheduled-task tasks). To add an equipment word or abbreviation, extend `EQUIPMENT_RE`.
