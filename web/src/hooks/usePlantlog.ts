@@ -46,7 +46,8 @@ export type PlantlogComplianceWindow = {
   deadlinePassed: boolean;
   /** Buildings expected today (after exclusion list). */
   expected: string[];
-  /** Buildings with at least one log entry today before the deadline. */
+  /** Buildings with a log entry today inside the window: AM = any entry at
+   *  or before the deadline, PM = an afternoon entry (noon to deadline). */
   synced: string[];
   /** Expected minus synced — what's late or missing. */
   missing: string[];
@@ -106,10 +107,13 @@ export function usePlantlogTodayCompliance() {
       }
       const expected = Array.from(expectedSet).sort();
 
+      // PM needs an afternoon round (user 2026-11-23): a morning entry no
+      // longer counts. Same rule as watcher/plantlog_compliance.py.
       const buildWindow = (
         key: 'am' | 'pm',
         deadlineHHMM: string,
         deadlineLabel: string,
+        fromHHMM = '00:00:00',
       ): PlantlogComplianceWindow => {
         const synced = new Set<string>();
         for (const r of (todayRes.data ?? []) as { building_inferred: string | null; performed_at_local: string | null }[]) {
@@ -118,7 +122,8 @@ export function usePlantlogTodayCompliance() {
           if (!b || !t) continue;
           if (isExcludedBuilding(b)) continue;
           // PostgREST returns 'HH:MM:SS'. Compare as zero-padded string.
-          if (String(t).slice(0, 8) <= deadlineHHMM) synced.add(b);
+          const hhmmss = String(t).slice(0, 8);
+          if (hhmmss >= fromHHMM && hhmmss <= deadlineHHMM) synced.add(b);
         }
         const syncedList = expected.filter((b) => synced.has(b));
         const missing = expected.filter((b) => !synced.has(b));
@@ -138,7 +143,7 @@ export function usePlantlogTodayCompliance() {
       return {
         isWeekend,
         am: buildWindow('am', '10:30:00', '10:30 AM'),
-        pm: buildWindow('pm', '17:55:00', '5:55 PM'),
+        pm: buildWindow('pm', '17:55:00', '5:55 PM', '12:00:00'),
       };
     },
     // Refresh once a minute — deadlines are 30-min granularity and the

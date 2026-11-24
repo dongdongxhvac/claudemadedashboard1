@@ -13,8 +13,11 @@ UNIQUE(et_day, window_key) + INSERT ... ON CONFLICT DO NOTHING tells
 us whether THIS poller-run is the one that should send the email.
 
 Windows (Eastern Time):
-  AM — 10:30am for the 7am crew
-  PM — 17:55   for the 9:30am crew
+  AM — 10:30am for the 7am crew: any entry today at or before 10:30
+  PM — 17:55   for the 9:30am crew: an AFTERNOON entry, noon to 17:55
+       (user 2026-11-23 — a morning entry no longer satisfies the PM
+       window; "afternoon = noon or later" is the same split migration
+       0081 uses for the dashboard's has_pm flag)
 
 AM recheck (user 2026-11-23): tablets often upload hours after the round,
 so the 11:00 AM alert lists buildings whose round was done on time but had
@@ -43,6 +46,7 @@ ALERT_RECIPIENT = "jie.lao@cwservices.com"
 # Eastern-Time deadlines for each window.
 AM_DEADLINE = time(10, 30)   # 10:30am — 7am crew morning rounds
 PM_DEADLINE = time(17, 55)   #  5:55pm — 9:30am crew afternoon rounds
+PM_ROUND_START = time(12, 0)  # an entry from noon on belongs to the PM round
 
 # Substring matchers — building_inferred strings are full street names
 # like "20 Sidney St" / "80 Landsdowne St" / "55 Franklin St". Match by
@@ -96,9 +100,13 @@ def _list_expected_buildings(client, et_day: date) -> list[str]:
     return sorted(seen)
 
 
-def _first_entries_today(client, et_day: date) -> dict[str, str]:
-    """building -> time of its earliest log entry today ('HH:MM:SS', ET)."""
+def _first_entries_today(client, et_day: date) -> tuple[dict[str, str], dict[str, str]]:
+    """(building -> time of its earliest log entry today,
+        building -> time of its earliest AFTERNOON entry today).
+    Times are 'HH:MM:SS' ET; a building with no such entry is absent."""
     first: dict[str, str] = {}
+    first_pm: dict[str, str] = {}
+    pm_start = PM_ROUND_START.strftime("%H:%M:%S")
     offset = 0
     while True:
         res = client.table("plantlog_log_records") \
@@ -114,17 +122,22 @@ def _first_entries_today(client, et_day: date) -> dict[str, str]:
             t = str(row.get("performed_at_local") or "")[:8]
             # PostgREST returns time as 'HH:MM:SS'; lexicographic compare
             # works because it is zero-padded 24h.
-            if t and (b not in first or t < first[b]):
+            if not t:
+                continue
+            if b not in first or t < first[b]:
                 first[b] = t
+            if t >= pm_start and (b not in first_pm or t < first_pm[b]):
+                first_pm[b] = t
         if len(data) < PAGE:
             break
         offset += PAGE
-    return first
+    return first, first_pm
 
 
 def _missing_buildings(expected: list[str], first: dict[str, str],
                        deadline_t: time) -> list[str]:
-    """Expected buildings with NO log entry today at or before the deadline.
+    """Expected buildings with NO entry in `first` at or before the deadline.
+    Pass the all-day map for the AM window, the afternoon map for PM.
     Empty list = everyone synced."""
     deadline_str = deadline_t.strftime("%H:%M:%S")
     return sorted(b for b in expected
@@ -199,15 +212,19 @@ def _send_email(window_label: str, et_day: date, deadline_t: time,
         f"(deadline {_h12(deadline_t)} ET) for {et_day.isoformat()}.",
         "",
     ]
+    if window_label == "PM":
+        what = f"an afternoon round ({_h12(PM_ROUND_START)} or later)"
+    else:
+        what = "a round"
     if missing:
         body_lines.extend([
-            f"{len(missing)} building(s) without a logged round before the deadline:",
+            f"{len(missing)} building(s) without {what} logged before the deadline:",
             "",
         ])
         for b in missing:
             body_lines.append(f"  • {b}")
     else:
-        body_lines.append("Every building has a logged round before the deadline.")
+        body_lines.append(f"Every building has {what} logged before the deadline.")
     body_lines.append("")
     if am_recheck is not None:
         am_listed, first = am_recheck
@@ -279,7 +296,7 @@ def run_compliance_checks(client) -> None:
         print("[skip] compliance: no expected buildings observed yet")
         return
 
-    first = _first_entries_today(client, et_day)
+    first, first_pm = _first_entries_today(client, et_day)
     pm_due = now_et.time() >= PM_DEADLINE
     # Read before the AM block below can claim a row in this same run: the
     # recheck is only worth sending for an alert that went out earlier.
@@ -303,7 +320,7 @@ def run_compliance_checks(client) -> None:
 
     # PM window — after 17:55. Also re-checks what the AM alert listed.
     if pm_due:
-        missing = _missing_buildings(expected, first, PM_DEADLINE)
+        missing = _missing_buildings(expected, first_pm, PM_DEADLINE)
         if missing or am_listed:
             if _try_claim_alert(client, et_day, "pm", missing):
                 try:
@@ -315,5 +332,5 @@ def run_compliance_checks(client) -> None:
                 print(f"[skip] PM compliance: already alerted today "
                       f"({len(missing)} still missing)")
         else:
-            print("[ok] PM compliance: all buildings synced before "
-                  "5:55pm ET")
+            print("[ok] PM compliance: every building has an afternoon "
+                  "round before 5:55pm ET")
