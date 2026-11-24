@@ -635,15 +635,16 @@ export function weeksEnding(lastWeek: string, n: number): string[] {
 export type Bucket = 'pm' | 'rounds' | 'odt_e' | 'odt_r' | 'odt_a' | 'bms' | 'work_order';
 
 /** On-demand work is split three ways (manager 2026-11-23, rules as he gave them):
- *    PMs    a boiler or chiller opening / closing, and tube punching, are
- *           seasonal PM work even when logged on an on-demand task
+ *    PMs    a boiler or chiller opening / closing, tube punching, and any
+ *           maintenance, cleaning or inspection, are PM work even when
+ *           logged on an on-demand task
  *    ODT-E  escort
  *    ODT-R  repair: the title names a piece of equipment, or says on-call
  *           (a word for fixing or a fault counts too)
  *    ODT-A  all other: training, meetings, van service, the unscheduled-task
  *           tasks, and titles that say nothing ("650", "home depot") */
 export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
-  { key: 'pm', label: 'Scheduled PMs (with boiler / chiller opening, closing and tube punching)', short: 'PMs' },
+  { key: 'pm', label: 'Scheduled PMs (with opening / closing, tube punching, maintenance, cleaning, inspection)', short: 'PMs' },
   { key: 'rounds', label: 'Building rounds', short: 'Rounds' },
   { key: 'odt_e', label: 'On-demand · escort', short: 'ODT-E' },
   { key: 'odt_r', label: 'On-demand · repair (equipment or on-call)', short: 'ODT-R' },
@@ -656,9 +657,10 @@ export const BUCKETS: { key: Bucket; label: string; short: string }[] = [
  *  ("pump leak", "boiler 5 closing", "215 lef 1b no run command") — so the
  *  split is read from the title. */
 
-/** Seasonal PM work on an on-demand task: opening or closing a boiler or
- *  chiller ("ch1" too), and tube punching. */
-export const PM_LIKE_RE = /\bpunch\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
+/** PM work logged on an on-demand task: opening or closing a boiler or
+ *  chiller ("ch1" too), tube punching, and anything titled maintenance,
+ *  cleaning or inspection ("cleaned up" a spill is not cleaning). */
+export const PM_LIKE_RE = /\bpunch\w*|\bmaint\w*|\bclean(?:ing|ed|s)?\b(?! up\b)|\binspect\w*|\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b.*\b(?:open\w*|clos\w*)\b|\b(?:open\w*|clos\w*)\b.*\b(?:boilers?|chillers?|ch[- ]?\d[\d.]*)\b/i;
 
 export const ONCALL_RE = /\bon[- ]?call\b/i;
 
@@ -697,7 +699,7 @@ export const KIND_LABEL: Record<string, string> = {
 export function kindLabel(it: { bucket: string; task_name: string | null }): string {
   if (it.bucket === 'on_demand') {
     const b = bucketOf(it.bucket, it.task_name);
-    if (b === 'pm') return 'Opening / closing / punching (on-demand task, counted with PMs)';
+    if (b === 'pm') return 'PM-type work on an on-demand task';
     if (b === 'odt_r') return 'On-demand repair';
   }
   return KIND_LABEL[it.bucket] ?? it.bucket;

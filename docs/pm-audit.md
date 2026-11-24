@@ -487,7 +487,8 @@ seven slots in bar order, validated — escort violet, repair green, all-other k
 **The manager's rules for the split (2026-11-23, replacing the keyword-only repair rule above).** For a
 task of the view's `on_demand` kind, by its title, in this order (`bucketOf`):
 
-1. boiler or chiller opening / closing, and tube punching → **PMs** (`PM_LIKE_RE`; "ch1" counts as a chiller);
+1. boiler or chiller opening / closing, tube punching, and (added the same day) any title with maintenance,
+   cleaning or inspection → **PMs** (`PM_LIKE_RE`; "ch1" counts as a chiller; "cleaned up" a spill does not);
 2. the title names a piece of equipment, or says on-call → **ODT-R** (`EQUIPMENT_RE`, `ONCALL_RE`; a repair
    word from `REPAIR_RE` counts too, so "Gym leak in ceiling" is a repair);
 3. everything else → **ODT-A**: training, meetings, van service, the unscheduled-task tasks, and titles that

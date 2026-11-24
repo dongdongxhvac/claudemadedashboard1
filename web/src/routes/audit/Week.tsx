@@ -496,8 +496,8 @@ export default function AuditWeek() {
             <strong> Placed</strong> hours come from the labor entries on PM tasks (scheduled, on-demand, rounds, BMS), counted on the person who did the
             work and the day it was done, plus work orders at the hours they closed with. <strong>Unknown</strong> is the rest: hours Cove counts
             that are on no task the dashboard holds — work orders still open, tasks assigned to someone off the roster or older than its window, and entries
-            edited in Cove after they were typed. The kind of work is read from the task's name. On-demand tasks are sorted by their title: a boiler or chiller opening or closing, and tube punching,
-            count with <strong>PMs</strong>; <strong>ODT-E</strong> is escort; <strong>ODT-R</strong> is repair — the title names a piece of equipment or says on-call;
+            edited in Cove after they were typed. The kind of work is read from the task's name. On-demand tasks are sorted by their title: a boiler or chiller opening or closing, tube punching, and any
+            maintenance, cleaning or inspection count with <strong>PMs</strong>; <strong>ODT-E</strong> is escort; <strong>ODT-R</strong> is repair — the title names a piece of equipment or says on-call;
             <strong>ODT-A</strong> is all other: training, meetings, van service and the unscheduled-task tasks. <strong>Unk</strong> = Unknown.{' '}
             Click a name for the entries.
           </div>

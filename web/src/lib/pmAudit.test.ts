@@ -151,8 +151,10 @@ eq('bucketOf folds the kinds', ['pm', 'rounds', 'bms', 'work_order', 'escort', '
 const od = (n: string | null) => bucketOf('on_demand', n);
 eq('on-demand: boiler / chiller opening and closing, and punching, count as PMs', ['boiler 5 closing', 'Chiller 3 open', 'opening boiler 2', '35LS Chiller 1.3 tube punching', '300 CH1 TUBE PUNCHING', '26LS ch1 closed'].map(od),
   ['pm', 'pm', 'pm', 'pm', 'pm', 'pm']);
+eq('on-demand: maintenance, cleaning and inspection count as PMs', ['Chiller 2 maintenance', '26LS Chiller 1 Maintenance', 'cooling tower cleaning', 'East CTs cleaning Cham aqua', 'Boiler inspection', 'support cooling towers cleaning', 'clean strainers', 'Cleaned up water on floor at 301'].map(od),
+  ['pm', 'pm', 'pm', 'pm', 'pm', 'pm', 'pm', 'odt_a']);
 eq('on-demand: equipment or on-call in the title is repair', ['pump leak', 'RTU 1 condenser fan replacement', '215 LEF 1B no run command', 'Boiler 1 pump 21', '150 ahu static pressure', 'oncall respond',
-  '(ON-CALL) 40 Erie HW Leak Detector 1', 'Chiller 2 maintenance', 'cooling tower cleaning', 'snow melt panel install', '11/13/26; Gym Leak in ceiling.', 'GWH#2 troubleshooting', '26LS ch1 lockout', 'EAHU Q4 PM', '40 Erie CWP 2 and CWP 3 alarms'].map(od),
+  '(ON-CALL) 40 Erie HW Leak Detector 1', 'Chiller 2 tripped', 'cooling tower fan vfd', 'snow melt panel install', '11/13/26; Gym Leak in ceiling.', 'GWH#2 troubleshooting', '26LS ch1 lockout', 'EAHU Q4 PM', '40 Erie CWP 2 and CWP 3 alarms'].map(od),
   ['odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r', 'odt_r']);
 eq('on-demand: what is left is all other', ['650', 'home depot', 'Van service', 'power shut down infra red', 'prefix the forms', 'installed chem aqua coupon rack at 21 erie', null].map(od),
   ['odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a', 'odt_a']);
