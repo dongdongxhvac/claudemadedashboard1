@@ -364,15 +364,16 @@ def post_gql(body: dict) -> dict:
     return resp.status_code, resp
 
 
-def fetch_unassigned_pm_tasks(statuses: list[str]) -> list[dict]:
-    """Open PMs with no assignee. Tries each UNASSIGNED_VALUES spelling until
+def fetch_unassigned_pm_tasks(statuses: list[str], due_floor: bool = False) -> list[dict]:
+    """PMs with no assignee. Tries each UNASSIGNED_VALUES spelling until
     one is accepted; whatever comes back is filtered client-side to items
     whose assignee really is empty, so a misread filter can never leak the
-    rest of the network into the snapshot."""
+    rest of the network into the snapshot. The open fetch takes them however
+    old; due_floor=True keeps the rolling due-date window (completed ones)."""
     last_err: Exception | None = None
     for value in UNASSIGNED_VALUES:
         try:
-            items = fetch_all_pm_tasks(statuses, None, assignee_value=value, due_floor=False)
+            items = fetch_all_pm_tasks(statuses, None, assignee_value=value, due_floor=due_floor)
         except RuntimeError as e:
             last_err = e
             print(f"  unassigned filter {value!r} rejected: {e}", file=sys.stderr)
@@ -381,7 +382,7 @@ def fetch_unassigned_pm_tasks(statuses: list[str]) -> list[dict]:
         if len(kept) != len(items):
             print(f"  WARN: unassigned filter {value!r} returned {len(items) - len(kept)} assigned task(s) — "
                   f"filter not honoured as expected; kept the {len(kept)} truly unassigned", file=sys.stderr)
-        print(f"  unassigned open PMs: {len(kept)} (filter {value!r})")
+        print(f"  unassigned PMs {statuses}: {len(kept)} (filter {value!r})")
         return kept
     raise RuntimeError(f"every unassigned-filter spelling was rejected: {last_err}")
 
@@ -552,7 +553,7 @@ def main() -> int:
     # ----- pm_task_details: audit evidence + labor entries -----
     # docs/pm-audit.md §3 and §9. After the snapshot's bookkeeping on purpose: a
     # slow or failing detail pull must never cost the poll its snapshot.
-    pull_task_details(client, open_items, closed_items, events)
+    pull_task_details(client, open_items, closed_items, events, labor_only=fetch_unassigned_closed())
     return 0
 
 
@@ -645,17 +646,42 @@ def _pull_details(session: requests.Session, client, items: list[dict], label: s
     return ok, err
 
 
-def pull_task_details(client, open_items: list[dict], closed_items: list[dict], events: list[dict]) -> None:
+def fetch_unassigned_closed() -> list[dict]:
+    """Completed tasks that never had an assignee, inside the due-date window.
+
+    Engineers open an on-demand task for a job, log their hours on it and
+    complete it the same day without assigning it to anyone ("650", "Chiller 3
+    open": 17 h and 16 h in one week of 2026-11). The roster filter never sees
+    those, and the open-unassigned fetch only catches a task while it is open,
+    so their hours were on the labor report and on no task we hold (the Week
+    tab's "Not placed"). They are pulled for their labor entries only: never
+    written to pm_rows or pm_close_events. Best effort."""
+    try:
+        return fetch_unassigned_pm_tasks(CLOSED_STATUSES, due_floor=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: completed-unassigned fetch failed (their hours stay unplaced this run): {e}", file=sys.stderr)
+        return []
+
+
+def pull_task_details(client, open_items: list[dict], closed_items: list[dict], events: list[dict],
+                      labor_only: list[dict] | None = None) -> None:
     """After a poll: (1) steps / photos / notes / history for the recurring PMs
     this run just logged as closed — the audit's evidence, always pulled; then
     (2) every task, open or closed, recurring or on-demand, whose logged labor
-    changed since we last pulled it. The list fetch already carries Cove's
-    internal id per task, so no pm_rows lookup."""
+    changed since we last pulled it. `labor_only` are tasks outside the roster
+    lists (fetch_unassigned_closed) that are pulled for their labor alone. The
+    list fetch already carries Cove's internal id per task, so no pm_rows lookup."""
     try:
         new_closes = {ev["task_no"] for ev in events if ev.get("cmms_type") == "recurring"}
         must = [it for it in closed_items if it.get("id") and it.get("altId") in new_closes]
         must_ids = {it["id"] for it in must}
-        stale = [it for it in _labor_stale(open_items + closed_items, _detail_stamps(client)) if it["id"] not in must_ids]
+        seen_ids: set[str] = set()
+        candidates = []
+        for it in open_items + closed_items + (labor_only or []):
+            if it.get("id") and it["id"] not in seen_ids:
+                seen_ids.add(it["id"])
+                candidates.append(it)
+        stale = [it for it in _labor_stale(candidates, _detail_stamps(client)) if it["id"] not in must_ids]
         todo = (must + stale)[:DETAILS_INLINE_MAX]
         if not todo:
             return
@@ -710,8 +736,10 @@ def backfill_details(days: int = 180) -> int:
                if it.get("id") and it.get("completedOn") and it.get("altId") in logged and it["id"] not in stamps]
     missing.sort(key=lambda it: it["completedOn"], reverse=True)
     missing_ids = {it["id"] for it in missing}
-    stale = [it for it in _labor_stale(open_items + closed, stamps) if it["id"] not in missing_ids]
-    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} open={len(open_items)} "
+    known = {it.get("id") for it in open_items + closed}
+    unassigned = [it for it in fetch_unassigned_closed() if it.get("id") not in known]
+    stale = [it for it in _labor_stale(open_items + closed + unassigned, stamps) if it["id"] not in missing_ids]
+    print(f"[backfill-details] site={SITE} closed in Cove={len(closed)} open={len(open_items)} completed-unassigned={len(unassigned)} "
           f"logged closes={len(logged)} | to fetch: {len(missing)} closed without details + {len(stale)} with new labor")
 
     ok, err = _pull_details(_details_session(), client, missing + stale, "backfill")

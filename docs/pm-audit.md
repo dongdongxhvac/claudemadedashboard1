@@ -437,3 +437,23 @@ against 132 h in entries.
 
 **Two yellows (manager, same day).** `attentionOf`: strong yellow when the week's total is flagged; very
 light yellow when the total is fine but a scheduled day has no hours.
+
+### What "Not placed" was made of, and the unassigned tasks (2026-11-23)
+
+The manager exported Cove's Labor Analytics report for Binney, Nov 15–21 (672 entries, 696 h) and every
+entry was matched against what the dashboard holds: 631 h matched, about 65 h did not.
+
+| hours | what | why it was missed |
+|---|---|---|
+| ~41.5 | on-demand tasks created with no assignee and completed the same day | the roster filter never sees them; the open-unassigned fetch only catches a task while it is open |
+| 9 | entries edited in Cove after they were typed | `labor_item_updated` carries no id (see 0168) |
+| ~7 | work orders: two open, five never seen | hours arrive at close; the five were not looked into |
+| 4 | an on-call task assigned to someone off the roster | roster filter |
+| 2.25 | an old on-demand task (due March) that still collects time daily | outside the 60-day due-date window |
+| ~1 | small entries on old tasks assigned off the roster | roster filter |
+
+Fixed, with the manager's go-ahead: `fetch_unassigned_closed` in `pm12_poller.py` reads completed tasks
+with no assignee inside the due-date window (111 at Binney, 1 at UPark on the day) and hands them to
+`pull_task_details(…, labor_only=…)`, so their labor entries land in `pm_task_details`. They are never
+written to `pm_rows` or `pm_close_events`. `backfill-details` includes them. The other rows of the table are
+left as they are: widening the roster filter would pull other departments' tasks.
