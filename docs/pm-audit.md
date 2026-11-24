@@ -505,3 +505,9 @@ Unknown column's header is "Unk". Three weeks of real rows (keys 11-02 … 11-16
 crew, split by kind of work, then a cell per kind under it in the same order: colour square and short name
 (PMs, Rounds, ODT-E, ODT-R, ODT-A, BMS, WOs), the hours large with the share beside them, and a one-line
 note (`BUCKETS[].note`). The long descriptions moved to tooltips.
+
+**Click a kind's hours for its split (manager 2026-11-24).** Each cell of the panel (and each segment of the
+bar) opens a pop-up: the kind's total and share, then **by engineer** (hours, a bar against the largest, how
+many tasks) and **by task** (hours, title, task number, building, entries, who) — `bucketSplit` over the
+rows on the page, so it follows the site, the week and the engineers-only rule. Closes with Esc, the Close
+button or a click outside. It is rendered inside the page, so the print sheet's CSS hides it.

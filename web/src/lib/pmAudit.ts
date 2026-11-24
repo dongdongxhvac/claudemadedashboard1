@@ -1056,6 +1056,38 @@ export function buildWeekTime(
   return { techs, others, team, asOf };
 }
 
+/** What one kind of work is made of, for the pop-up behind its hours
+ *  (manager 2026-11-24): who logged it and on which tasks, biggest first. */
+export type BucketSplit = {
+  total: number;
+  byEngineer: { tech: string; site_code: string; hours: number; tasks: number }[];
+  byTask: { task_no: string; task_name: string | null; building: string | null; site_code: string | null; hours: number; entries: number; people: string[] }[];
+};
+
+export function bucketSplit(techs: TechWeek[], bucket: Bucket): BucketSplit {
+  const tasks = new Map<string, BucketSplit['byTask'][number]>();
+  const byEngineer: BucketSplit['byEngineer'] = [];
+  let total = 0;
+  for (const t of techs) {
+    let hours = 0;
+    const mine = new Set<string>();
+    for (const it of t.items) {
+      if (bucketOf(it.bucket, it.task_name) !== bucket) continue;
+      const h = Number(it.hours ?? 0);
+      hours += h;
+      mine.add(it.task_no);
+      let row = tasks.get(it.task_no);
+      if (!row) { row = { task_no: it.task_no, task_name: it.task_name, building: it.building, site_code: it.site_code, hours: 0, entries: 0, people: [] }; tasks.set(it.task_no, row); }
+      row.hours += h; row.entries++;
+      if (!row.people.includes(t.tech)) row.people.push(t.tech);
+    }
+    if (hours > 0) { byEngineer.push({ tech: t.tech, site_code: t.site_code, hours: r2(hours), tasks: mine.size }); total += hours; }
+  }
+  byEngineer.sort((a, b) => b.hours - a.hours || a.tech.localeCompare(b.tech));
+  const byTask = [...tasks.values()].map((x) => ({ ...x, hours: r2(x.hours) })).sort((a, b) => b.hours - a.hours || a.task_no.localeCompare(b.task_no));
+  return { total: r2(total), byEngineer, byTask };
+}
+
 /** A week's total under this many hours is highlighted (manager 2026-11-23). */
 export const LOW_WEEK_HOURS = 32;
 

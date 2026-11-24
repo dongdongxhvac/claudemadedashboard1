@@ -3,13 +3,13 @@
 // by kind of task, on which days, and how their closed PMs audited. Hours are
 // counted on the person who did the work and the day it was done — half of
 // all entries are logged on a task assigned to someone else.
-import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuditEngineers, useAuditPto, useAuditWeekRange, useAuditWeekTime } from '../../hooks/usePmAudit';
 import {
-  BUCKETS, LOW_WEEK_HOURS, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, attentionOf, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, kindLabel, lowWeek, netTotal, pct, ptoHoursInWeek,
+  BUCKETS, LOW_WEEK_HOURS, bucketSplit, SITE_LABEL, addDays, auditWeekLabel, bucketOf, buildWeekTime, attentionOf, dayLabel, dayMarks, easternDay, expectedEngineers, fmtH, fmtStamp, kindLabel, lowWeek, netTotal, pct, ptoHoursInWeek,
   rosterKey, shortName, weekDays, weekFirstDay, weekLabel, weekTotal,
-  type Bucket, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
+  type Bucket, type BucketSplit, type DayMark, type LaborItem, type OtherPerson, type PtoRow, type TechWeek,
 } from '../../lib/pmAudit';
 import { AuditShell, Notice, Panel, Soft, StatTile } from './AuditUi';
 import { A, BUCKET_COLOR, buttonStyle, cardStyle, tdStyle, thStyle, tileGrid } from './auditTheme';
@@ -172,6 +172,83 @@ function Entries({ t, firstDay, days }: { t: TechWeek; firstDay: string; days: s
   );
 }
 
+/** The pop-up behind a kind's hours (manager 2026-11-24): what that number is
+ *  made of — who logged it, and on which tasks, biggest first. Rendered inside
+ *  the page (not a portal) so the print sheet's CSS hides it with the rest. */
+function SplitDialog({ bucket, split, placed, showSite, onClose }: {
+  bucket: Bucket; split: BucketSplit; placed: number; showSite: boolean; onClose: () => void;
+}) {
+  const meta = BUCKETS.find((b) => b.key === bucket)!;
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const most = Math.max(0, ...split.byEngineer.map((e) => e.hours));
+  const head = { fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: A.muted, padding: '0 0 8px' };
+  const list = { overflowY: 'auto' as const, minHeight: 0, paddingRight: 4 };
+  return (
+    <div onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20, 20, 19, 0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '7vh 16px 16px' }}>
+      <div role="dialog" aria-modal="true" aria-label={`${meta.short}: what the hours are made of`} onClick={(e) => e.stopPropagation()}
+        style={{ ...cardStyle, width: 'min(960px, 100%)', maxHeight: '86vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(20, 20, 19, 0.28)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '18px 22px 14px', borderBottom: `1px solid ${A.line}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: A.muted }}><Swatch bucket={bucket} />{meta.short}</div>
+            <div style={{ marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 26, fontWeight: 700 }}>{fmtH(split.total, false)}</span>
+              <span style={{ fontSize: 14, color: A.muted }}> h · {pct(split.total, placed) ?? 0}% of placed hours · {split.byEngineer.length} engineer{split.byEngineer.length === 1 ? '' : 's'} · {split.byTask.length} task{split.byTask.length === 1 ? '' : 's'}</span>
+            </div>
+            <div style={{ marginTop: 2, fontSize: 13, color: A.muted }}>{meta.label}</div>
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" style={{ ...buttonStyle, height: 36, padding: '0 12px' }}>Close</button>
+        </div>
+        {split.total <= 0 ? (
+          <div style={{ padding: '22px', fontSize: 14, color: A.muted }}>No hours of this kind this week.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) minmax(0, 1.7fr)', gap: 24, padding: '16px 22px 20px', minHeight: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={head}>By engineer</div>
+              <div style={list}>
+                {split.byEngineer.map((e) => (
+                  <div key={`${e.site_code}|${e.tech}`} style={{ display: 'grid', gridTemplateColumns: '1fr 52px', gap: '2px 10px', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${A.lineSoft}`, fontSize: 13 }}>
+                    <span style={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>
+                      {e.tech}{showSite && <span style={{ color: A.muted, fontWeight: 400 }}> · {SITE_LABEL[e.site_code as 'upark' | 'binney'] ?? e.site_code}</span>}
+                    </span>
+                    <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtH(e.hours, false)}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <span aria-hidden="true" style={{ height: 6, borderRadius: 3, background: BUCKET_COLOR[bucket], width: `${most > 0 ? Math.max(2, (100 * e.hours) / most) : 0}%` }} />
+                    </span>
+                    <span style={{ textAlign: 'right', fontSize: 12, color: A.muted, whiteSpace: 'nowrap' }}>{e.tasks} task{e.tasks === 1 ? '' : 's'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={head}>By task</div>
+              <div style={list}>
+                {split.byTask.map((t) => (
+                  <div key={t.task_no} style={{ display: 'grid', gridTemplateColumns: '52px 1fr', gap: 10, alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${A.lineSoft}`, fontSize: 13 }}>
+                    <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtH(t.hours, false)} h</span>
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                      <span style={{ fontWeight: 600 }}>{t.task_name ?? '—'}</span>
+                      <span style={{ color: A.muted }}>
+                        {' '}· {t.task_no}{t.building ? ` · ${t.building}` : ''} · {t.entries} entr{t.entries === 1 ? 'y' : 'ies'} · {t.people.map((n) => shortName(n)).join(', ')}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** What prints: the sheet the manager posts in the shop each Wednesday for the
  *  week before. Just the table — the engineer, the hours per day and the
  *  total — with no title block and no footnote, thin margins, and type as
@@ -283,6 +360,7 @@ export default function AuditWeek() {
   const dataQ = useAuditWeekTime(week, p.site);
   const rosterQ = useAuditEngineers();
   const [open, setOpen] = useState<string | null>(null);
+  const [splitOf, setSplitOf] = useState<Bucket | null>(null);
   const cols = useMemo(() => (week ? weekDays(week, p.site) : null), [week, p.site]);
   const firstDay = cols?.first ?? null;
   const days = cols?.names ?? [];
@@ -378,8 +456,9 @@ export default function AuditWeek() {
               <div role="img" aria-label={`Hours by kind of work: ${BUCKETS.map((b) => `${b.short} ${fmtH(team.byBucket[b.key], false)} h`).join(', ')}`}
                 style={{ display: 'flex', gap: 2, height: 14 }}>
                 {BUCKETS.filter((b) => team.byBucket[b.key] > 0).map((b) => (
-                  <div key={b.key} title={`${b.label} · ${fmtH(team.byBucket[b.key], false)} h · ${pct(team.byBucket[b.key], team.placed) ?? 0}%`}
-                    style={{ flex: `${team.byBucket[b.key]} 0 0`, minWidth: 3, background: BUCKET_COLOR[b.key], borderRadius: 3 }} />
+                  <div key={b.key} title={`${b.label} · ${fmtH(team.byBucket[b.key], false)} h · ${pct(team.byBucket[b.key], team.placed) ?? 0}% — click for who and which tasks`}
+                    onClick={() => setSplitOf(b.key)}
+                    style={{ flex: `${team.byBucket[b.key]} 0 0`, minWidth: 3, background: BUCKET_COLOR[b.key], borderRadius: 3, cursor: 'pointer' }} />
                 ))}
               </div>
             )}
@@ -387,7 +466,9 @@ export default function AuditWeek() {
               {BUCKETS.map((b) => {
                 const h = team.byBucket[b.key];
                 return (
-                  <div key={b.key} title={b.label} style={{ minWidth: 0, opacity: h > 0 ? 1 : 0.55 }}>
+                  <button key={b.key} type="button" onClick={() => setSplitOf(b.key)} title={`${b.label} — click for who and which tasks`}
+                    className="audit-split-cell"
+                    style={{ minWidth: 0, opacity: h > 0 ? 1 : 0.55, textAlign: 'left', font: 'inherit', color: 'inherit', background: 'none', border: 0, borderRadius: 8, padding: '6px 8px', margin: '-6px -8px', cursor: 'pointer' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: A.muted, whiteSpace: 'nowrap' }}>
                       <Swatch bucket={b.key} />{b.short}
                     </div>
@@ -396,11 +477,14 @@ export default function AuditWeek() {
                       <span style={{ fontSize: 13, color: A.muted }}> h · {pct(h, team.placed) ?? 0}%</span>
                     </div>
                     <div style={{ marginTop: 2, fontSize: 12, lineHeight: 1.35, color: A.muted }}>{b.note}</div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           </Panel>
+          {splitOf && (
+            <SplitDialog bucket={splitOf} split={bucketSplit(wt.techs, splitOf)} placed={team.placed} showSite={p.site === 'both'} onClose={() => setSplitOf(null)} />
+          )}
 
           <PrintSheet rows={rows} days={days} firstDay={firstDay} rangeLabel={auditWeekLabel(week, p.site)}
             siteLabel={p.site === 'both' ? '' : SITE_LABEL[p.site]} showSite={p.site === 'both'} inProgress={week === current} />

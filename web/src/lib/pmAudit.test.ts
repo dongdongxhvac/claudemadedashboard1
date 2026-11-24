@@ -5,7 +5,7 @@ declare const process: { exitCode?: number };
 
 import {
   addDays, weekLabel, weeksEnding, fmtHours, shortName, fmtClosed, coveTaskUrl, flagChip, goodChip, rowChips, joinQueue, filterQueue, nextOpen,
-  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, attentionOf, expectedEngineers, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
+  weekStats, ratesOf, buildScorecard, buildTimeline, noteSourceLabel, parsePill, weekStartOf, bucketOf, buildWeekTime, engineerKeys, rosterKey, easternDay, weekFirstDay, weekDays, auditWeekLabel, auditWeekKeyOf, rosterPeople, worksOn, dayMarks, weekTotal, netTotal, lowWeek, ptoHoursInWeek, missingDays, needsAttention, attentionOf, expectedEngineers, bucketSplit, fmtH, workTypeOf, sumTypeHours, buildHoursSplit,
   type FlagRow, type QueueEntry, type Review, type ScoreClose, type ScoreRow, type LaborItem,
 } from './pmAudit.ts';
 
@@ -342,6 +342,18 @@ eq('yellow name: strong when the total is flagged, light when only a day is miss
 ], ['strong', 'light', null]);
 eq('on-demand: a title with the word PM counts as PMs, a time of day does not', ['EAHU Q4 PM', 'pm on ahu 3', 'Quarterly PMs 215', 'meet vendor 3 PM', 'vendor at 3pm', 'pump 2 alarm 2:30 pm', 'rpm sensor'].map(od),
   ['pm', 'pm', 'pm', 'odt_a', 'odt_a', 'odt_r', 'odt_r']);
+// the pop-up behind a kind's hours: who and which tasks
+const wtSplit = buildWeekTime([
+  li({ task_no: 'PM-R1', task_name: 'pump leak', bucket: 'on_demand', hours: 3 }),
+  li({ task_no: 'PM-R1', task_name: 'pump leak', bucket: 'on_demand', hours: 1, day_local: '2026-11-10', performed_at: '2026-11-10T15:00:00Z' }),
+  li({ task_no: 'PM-R2', task_name: 'boiler 2 no heat', bucket: 'on_demand', hours: 2, building: '40LS' }),
+  li({ task_no: 'PM-R1', task_name: 'pump leak', bucket: 'on_demand', hours: 5, performer: 'Bob Roy' }),
+  li({ task_no: 'PM-V', task_name: 'Van service', bucket: 'on_demand', hours: 9, performer: 'Bob Roy' }),
+], [], [], '2026-11-09');
+const sp = bucketSplit(wtSplit.techs, 'odt_r');
+eq('split: total, people biggest first with their task count', [sp.total, sp.byEngineer.map((x) => [x.tech, x.hours, x.tasks])], [11, [['Ann Lee', 6, 2], ['Bob Roy', 5, 1]]]);
+eq('split: tasks biggest first, with entries and who', sp.byTask.map((x) => [x.task_no, x.hours, x.entries, x.people]), [['PM-R1', 9, 3, ['Bob Roy', 'Ann Lee']], ['PM-R2', 2, 1, ['Ann Lee']]]);
+eq('split: an empty kind', bucketSplit(wtSplit.techs, 'bms'), { total: 0, byEngineer: [], byTask: [] });
 // day columns from Cove's labor report: a day logged on work we hold no entry for is not empty
 const dh = (day: string, hours: number, name = 'Ann Lee', site = 'binney') => ({ site_code: site, day, assigned_to_name: name, hours });
 const wtRep = buildWeekTime([
