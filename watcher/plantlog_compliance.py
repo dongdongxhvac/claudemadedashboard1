@@ -27,6 +27,11 @@ when their first entry was) and which still have nothing. That email goes
 out whenever an AM alert was sent that day, even with nothing missing in
 the PM window.
 
+History (user 2026-11-23, "keep the log too by buildings"): every run also
+rewrites plantlog_compliance_log (migration 0170) for the past 7 days — one
+row per (day, window, building) with on_time / synced_late / late / missing,
+the first entry time and when it reached the dashboard.
+
 Excluded short-codes (per user direction 2026-06-04): 20, 55, 80
 (and their G- garage variants). Building plant log isn't expected
 from these locations.
@@ -47,6 +52,12 @@ ALERT_RECIPIENT = "jie.lao@cwservices.com"
 AM_DEADLINE = time(10, 30)   # 10:30am — 7am crew morning rounds
 PM_DEADLINE = time(17, 55)   #  5:55pm — 9:30am crew afternoon rounds
 PM_ROUND_START = time(12, 0)  # an entry from noon on belongs to the PM round
+
+# The deadline check runs on the first hourly poll after each deadline. When
+# no alert row records the exact moment, the log assumes these.
+NOMINAL_CHECK = {"am": time(11, 5), "pm": time(18, 5)}
+# The records report reaches back 7 days; older days cannot change any more.
+LOG_LOOKBACK_DAYS = 7
 
 # Substring matchers — building_inferred strings are full street names
 # like "20 Sidney St" / "80 Landsdowne St" / "55 Franklin St". Match by
@@ -169,6 +180,7 @@ def _am_recheck_lines(am_listed: list[str], first: dict[str, str]) -> tuple[list
     """Body lines re-checking the buildings the AM alert listed, and how
     many of them turned out to be logged before the AM deadline."""
     am_deadline_str = AM_DEADLINE.strftime("%H:%M:%S")
+    pm_start = PM_ROUND_START.strftime("%H:%M:%S")
     on_time = 0
     lines = [
         f"AM recheck: this morning's alert listed "
@@ -182,9 +194,12 @@ def _am_recheck_lines(am_listed: list[str], first: dict[str, str]) -> tuple[list
         elif t <= am_deadline_str:
             on_time += 1
             lines.append(f"  • {b}: in, first entry {_h12(t)} (synced late)")
-        else:
+        elif t < pm_start:
             lines.append(f"  • {b}: late, first entry {_h12(t)} "
                          f"(after the {_h12(AM_DEADLINE)} deadline)")
+        else:
+            lines.append(f"  • {b}: no morning round "
+                         f"(first entry today {_h12(t)})")
     lines.extend([
         "",
         f"{on_time} of {len(am_listed)} were logged before "
@@ -256,6 +271,125 @@ def _send_email(window_label: str, et_day: date, deadline_t: time,
         s.send_message(msg)
     print(f"[ok] sent {window_label} compliance email to {ALERT_RECIPIENT}: "
           f"{len(missing)} missing")
+
+
+def window_status(entries: list[tuple[str, datetime]], window_key: str,
+                  checked_at: datetime) -> dict:
+    """Pure. One building, one day, one window.
+
+    entries    — (performed_at_local 'HH:MM:SS', inserted_at) for every log
+                 entry of the building that day
+    checked_at — when the deadline check for this window ran
+    Returns {status, first_entry, synced_at} as stored in
+    plantlog_compliance_log."""
+    pm_start = PM_ROUND_START.strftime("%H:%M:%S")
+    if window_key == "am":
+        deadline = AM_DEADLINE.strftime("%H:%M:%S")
+        mine = [e for e in entries if e[0] < pm_start]
+    else:
+        deadline = PM_DEADLINE.strftime("%H:%M:%S")
+        mine = [e for e in entries if e[0] >= pm_start]
+    if not mine:
+        return {"status": "missing", "first_entry": None, "synced_at": None}
+    in_time = [e for e in mine if e[0] <= deadline]
+    pool = in_time or mine
+    synced_at = min(e[1] for e in pool)
+    if not in_time:
+        status = "late"
+    elif synced_at > checked_at:
+        status = "synced_late"
+    else:
+        status = "on_time"
+    return {"status": status,
+            "first_entry": min(e[0] for e in pool),
+            "synced_at": synced_at.isoformat()}
+
+
+def build_log_rows(records: list[dict], alert_sent: dict[tuple[str, str], datetime],
+                   expected: list[str], now_et: datetime, since: date) -> list[dict]:
+    """Pure. Rows for plantlog_compliance_log: every weekday from `since` to
+    today x every window whose deadline has passed x every expected building.
+
+    records    — plantlog_log_records rows (performed_on, performed_at_local,
+                 building_inferred, inserted_at)
+    alert_sent — (et_day iso, window_key) -> sent_at of that alert email"""
+    by_day_building: dict[tuple[str, str], list[tuple[str, datetime]]] = {}
+    for r in records:
+        t = str(r.get("performed_at_local") or "")[:8]
+        ins = r.get("inserted_at")
+        if not t or not ins or not r.get("building_inferred"):
+            continue
+        by_day_building.setdefault((r["performed_on"], r["building_inferred"]), []) \
+            .append((t, datetime.fromisoformat(ins.replace("Z", "+00:00"))))
+
+    today = now_et.date()
+    stamp = now_et.astimezone(ZoneInfo("UTC")).isoformat()
+    out: list[dict] = []
+    d = since
+    while d <= today:
+        if d.weekday() < 5:
+            for key, deadline_t in (("am", AM_DEADLINE), ("pm", PM_DEADLINE)):
+                if d == today and now_et.time() < deadline_t:
+                    continue
+                checked_at = alert_sent.get((d.isoformat(), key)) or \
+                    datetime.combine(d, NOMINAL_CHECK[key], EASTERN)
+                for b in expected:
+                    row = window_status(by_day_building.get((d.isoformat(), b), []),
+                                        key, checked_at)
+                    row.update(et_day=d.isoformat(), window_key=key, building=b,
+                               updated_at=stamp)
+                    out.append(row)
+        d += timedelta(days=1)
+    return out
+
+
+def log_building_history(client, now_et: datetime, expected: list[str],
+                         days: int = LOG_LOOKBACK_DAYS) -> int:
+    """Rewrite plantlog_compliance_log for the last `days` days. Returns the
+    number of rows written."""
+    since = now_et.date() - timedelta(days=days)
+    records: list[dict] = []
+    offset = 0
+    while True:
+        res = client.table("plantlog_log_records") \
+            .select("id, performed_on, performed_at_local, building_inferred, inserted_at") \
+            .gte("performed_on", since.isoformat()) \
+            .not_.is_("building_inferred", "null") \
+            .order("id") \
+            .range(offset, offset + PAGE - 1) \
+            .execute()
+        data = res.data or []
+        records.extend(data)
+        if len(data) < PAGE:
+            break
+        offset += PAGE
+
+    alert_sent: dict[tuple[str, str], datetime] = {}
+    offset = 0
+    while True:
+        res = client.table("plantlog_compliance_alerts") \
+            .select("et_day, window_key, sent_at") \
+            .gte("et_day", since.isoformat()) \
+            .order("et_day").order("window_key") \
+            .range(offset, offset + PAGE - 1) \
+            .execute()
+        data = res.data or []
+        for a in data:
+            alert_sent[(a["et_day"], a["window_key"])] = \
+                datetime.fromisoformat(a["sent_at"].replace("Z", "+00:00"))
+        if len(data) < PAGE:
+            break
+        offset += PAGE
+
+    rows = build_log_rows(records, alert_sent, expected, now_et, since)
+    CHUNK = 500
+    for i in range(0, len(rows), CHUNK):
+        client.table("plantlog_compliance_log").upsert(
+            rows[i:i + CHUNK],
+            on_conflict="et_day,window_key,building",
+            returning="minimal",
+        ).execute()
+    return len(rows)
 
 
 def _try_claim_alert(client, et_day: date, window_key: str,
@@ -334,3 +468,12 @@ def run_compliance_checks(client) -> None:
         else:
             print("[ok] PM compliance: every building has an afternoon "
                   "round before 5:55pm ET")
+
+    # Per-building history. After the alerts so this run's alert time is on
+    # record; its own failure never touches them.
+    try:
+        n = log_building_history(client, now_et, expected)
+        print(f"[ok] compliance log: {n} building rows for the last "
+              f"{LOG_LOOKBACK_DAYS} days")
+    except Exception as e:
+        print(f"WARN: compliance log write failed: {e}", file=sys.stderr)
